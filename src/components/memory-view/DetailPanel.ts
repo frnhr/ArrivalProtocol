@@ -277,7 +277,7 @@ export const BEAM_SEED_INSPECT = {
 function logHtml(seg: LogSegment, state: Readonly<GameState>): string {
   const chip = logChip(state);
   const found = chip.known
-    ? `<div class="detail-row"><span class="k">entries</span><span class="v${chip.glow ? ' good' : ''}">${LOG_UI_TEXT.found(chip.found)}${chip.unread > 0 ? ` · ${chip.unread} ${LOG_UI_TEXT.unread}` : ''}</span></div>`
+    ? `<div class="detail-row"><span class="k">entries</span><span class="v${chip.glow ? ' good' : ''}">${LOG_UI_TEXT.found(chip.found, chip.total)}${chip.unread > 0 ? ` · ${chip.unread} ${LOG_UI_TEXT.unread}` : ''}</span></div>`
     : '';
   return `
     <div class="detail-title log-title">${escapeHtml(chip.name)}</div>

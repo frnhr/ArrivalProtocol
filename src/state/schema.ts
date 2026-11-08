@@ -11,6 +11,7 @@ import type { MemoryClass, RunMapState, Hop, DeskWindowId } from '@/types/map';
 import type { HollowDef, RunThreatState, ShipThreat } from '@/types/threat';
 import type { UpgradeId, DraftCard, DraftCardId } from '@data/upgrades';
 import type { LastUnit, NextLaunch } from '@/types/lineage';
+import type { LogBook, RunTraces, TraceBootLine } from '@/types/trace';
 import type { SaveState } from '@/types/save';
 import type { DeliveryChip, ArrivalDelivery, RunRepoState } from '@/types/repo';
 import type { RunInboxState } from '@/types/inbox';
@@ -358,6 +359,13 @@ export interface ArrivalReport {
   // Slice 4 (plan §2.14): the skill files that crossed, as laid out: trained or restored at the desk, packed lower (PACK
   // AS), carried as they were, or granted (slice 5). The boot's TRAINED / RETRAINED lines read it. Empty on ship 1.
   skills: ArrivalSkill[];
+  // Slice 7c (RUN_SAVE_VERSION 8): the traces this arrival applied, as the boot's lines say them (a gift, PURGE's wiped dish,
+  // the wild seed), in the order they type; Track TRACE fills it at the TRANSMIT (systems/trace-gifts.ts arrivalTraceLines).
+  // Empty while no trace is built (ship 1 has no arrival: trace-gifts.ts traceBootLines reads a first ship's itself).
+  traceLines: TraceBootLine[];
+  // Slice 7c (R32): the REPAIR CHARGE a trace gave on this arrival (systems/trace-gifts.ts traceGiftCharge, in arrivalCharge's
+  // sum, so the charge line and the overflow count it); 0 while no trace is built.
+  giftCharge: number;
 }
 
 // One skill file as it arrived (its file's id, the skill, its level, and how it came).
@@ -422,6 +430,10 @@ export interface RunLogState {
   // Phase 3 slice 3b (05 §3.5): HOLLOW's `> you're reading my log. good. read it slowly.` has been said this run (the boot's
   // 'reading' line, at the first boot after entry 05 is read; systems/boot.ts marks it as it is said).
   toldReading: boolean;
+  // Slice 7c (R37, RUN_SAVE_VERSION 8): which book the `???` file holds this run (types/trace.ts LogBook), chosen once at RUN
+  // START (systems/traces.ts logBookOf): 046.log on run 1 and until LINEAGE_BUILT, then the stranger's or the last unit's.
+  // The segment id stays log046 (saves and hint targets key on it); only the shown name and the entries follow the book.
+  book: LogBook;
 }
 
 export interface RunState {
@@ -501,6 +513,10 @@ export interface RunState {
   // Phase 3 slice 5 (plan §2.2): every resident met (one record per resident ship ended, systems/residents.ts
   // residentShipEnd) and the signal fragments found in departed residents' notes.
   residents: RunResidentState;
+  // Slice 7c (R30, RUN_SAVE_VERSION 8): what the last unit's ending leaves this run, and where its gifts wait (types/trace.ts
+  // RunTraces), rolled once at RUN START on the run's own 'traces' stream (systems/traces.ts runTracesOf; R4: no stored arm
+  // moves). Only `places[].given` changes after (Track TRACE marks a gift given at its ship's boot).
+  traces: RunTraces;
 }
 
 // --- HOLLOW (systems/hollow.ts, §6.6) -----------------------------------------------------------

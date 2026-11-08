@@ -9,7 +9,7 @@
 import { check, finish } from '../landing/checks';
 import {
   planThreat, boardsOnBeam, stageForAge, rootBlocksFor, createRunThreat, applyThreat, threatInputFor, nominalRunThreat,
-  nominalShipThreat, fixedShipFacts, type ShipThreatFacts,
+  nominalShipThreat, fixedShipFacts, NO_FINAL_TRACES, type ShipThreatFacts,
 } from '@systems/threat-plan';
 import { HOLLOW_STAGES, SEEDS_ONLY_DEF, CALM_DEF, foldArrivalWalls } from '@data/threats';
 import { PRE_FINAL_ROOT_CAP, TRACE_BOARD_AT, BOARD_MIN_DEPTH } from '@data/tuning';
@@ -32,7 +32,7 @@ function fly(route: readonly RouteShip[]): { plans: ShipThreat[]; threats: RunTh
   const plans: ShipThreat[] = [];
   const threats: RunThreatState[] = [];
   for (const ship of route) {
-    const plan = planThreat(threatInputFor(threat, ship.facts, dealDone));
+    const plan = planThreat(threatInputFor(threat, ship.facts, dealDone, NO_FINAL_TRACES));
     plans.push(plan);
     threat = applyThreat(threat, plan);
     if (plan.hollow.deal) dealDone = true;
@@ -89,7 +89,7 @@ const shape = (plan: ShipThreat): string => `${plan.act}${plan.stage ? `:${plan.
 
 // --- The boarding conditions ---------------------------------------------------------------------------------------
 {
-  const base: ThreatInput = { depth: 4, isFinal: false, oneHopFromFinal: false, beamSeeds: NOISY, trace: 0, aboard: false, age: 0, dealDone: false, fed: 0 };
+  const base: ThreatInput = { depth: 4, isFinal: false, oneHopFromFinal: false, beamSeeds: NOISY, trace: 0, aboard: false, age: 0, dealDone: false, fed: 0, traces: NO_FINAL_TRACES };
   check(`never below depth ${BOARD_MIN_DEPTH}, whatever TRACE or the final ship`,
     boardsOnBeam({ ...base, depth: 3, trace: 9, oneHopFromFinal: true }) === null);
   check(`earned at TRACE ${TRACE_BOARD_AT} from depth 4`, boardsOnBeam({ ...base, trace: TRACE_BOARD_AT }) === 'trace'
@@ -110,7 +110,7 @@ const shape = (plan: ShipThreat): string => `${plan.act}${plan.stage ? `:${plan.
 {
   check('stageForAge: arrival, walls, seeds, then hunt for good', [1, 2, 3, 4, 7].map(stageForAge).join() === 'arrival,walls,seeds,hunt,hunt');
   check('each stage plays its own def (aboard, not folded)', (['walls', 'seeds', 'hunt'] as const).every((stage, index) => {
-    const plan = planThreat({ depth: 6, isFinal: false, oneHopFromFinal: false, beamSeeds: NOISY, trace: 3, aboard: true, age: index + 1, dealDone: true, fed: 0 });
+    const plan = planThreat({ depth: 6, isFinal: false, oneHopFromFinal: false, beamSeeds: NOISY, trace: 3, aboard: true, age: index + 1, dealDone: true, fed: 0, traces: NO_FINAL_TRACES });
     return plan.stage === stage && JSON.stringify(plan.hollow) === JSON.stringify(HOLLOW_STAGES[stage].hollow) && plan.rootBlocks === HOLLOW_STAGES[stage].rootBlocks;
   }));
   check('roots: 8, 10, 12, 14, 16; a fold takes the larger stage\'s root', rootBlocksFor('arrival', [], 0) === 8 && rootBlocksFor('walls', [], 0) === 10
@@ -118,7 +118,7 @@ const shape = (plan: ShipThreat): string => `${plan.act}${plan.stage ? `:${plan.
     && rootBlocksFor('arrival', ['walls'], 0) === 10);
   check(`what it was fed grows the root up to ${PRE_FINAL_ROOT_CAP} before the final ship; the FINALE's stays 16`,
     rootBlocksFor('arrival', [], 3) === 11 && rootBlocksFor('seeds', [], 5) === PRE_FINAL_ROOT_CAP && rootBlocksFor('finale', [], 9) === 16);
-  const dealt = planThreat({ depth: 5, isFinal: true, oneHopFromFinal: false, beamSeeds: CLEAN, trace: 0, aboard: true, age: 1, dealDone: true, fed: 0 });
+  const dealt = planThreat({ depth: 5, isFinal: true, oneHopFromFinal: false, beamSeeds: CLEAN, trace: 0, aboard: true, age: 1, dealDone: true, fed: 0, traces: NO_FINAL_TRACES });
   check('a run that had THE DEAL gets a plain FINALE', dealt.folded.length === 0 && !dealt.hollow.deal && dealt.hollow.verbs !== null);
 }
 

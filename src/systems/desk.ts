@@ -13,6 +13,7 @@ import { unitName } from '@data/hollow-text';
 import { hopBetween, reachable, reachableFrom, hitsLanding } from '@systems/map-hop';
 import { layerOf, solLy } from '@systems/map-geometry';
 import { seedAllowance } from '@systems/map-noise';
+import { traceSeedAllowance } from '@systems/trace-gifts';
 import { unitArrival } from '@systems/arrival-preview';
 import { deliveriesForHop, hopOutlook, recommendation, setRequest, type OutlookEntry } from '@systems/repository';
 import { inboxUnread } from '@systems/inbox';
@@ -20,6 +21,7 @@ import { playsTutorial } from '@systems/meta';
 import { shipsLeft } from '@systems/map-route';
 import { mapFacts } from '@systems/map-facts';
 import { planThreat, threatInputFor } from '@systems/threat-plan';
+import { finalTraceInput } from '@systems/traces';
 import { noWorkingRm } from '@state/threat-selectors';
 import { swapAboard } from '@state/selectors';
 import { layoutFor } from '@data/memory';
@@ -38,6 +40,8 @@ import { trainingModel, trainingArmed, cellKey, TRAINING_HOLD_SEC } from '@syste
 import { TRAINING_TEXT } from '@data/training-text';
 import { residentCardRow, signalGlyph } from '@systems/resident-hud';
 import { surveyCardRow } from '@systems/survey-hud';
+import { traceCardRow, traceOnChart } from '@systems/trace-hud';
+import { TRACE_HUD_TEXT } from '@data/trace-text';
 import { siteDataOf } from '@data/survey';
 import { RESIDENT_UI_TEXT } from '@data/resident-ui-text';
 
@@ -84,6 +88,9 @@ export interface ChartNode {
   // Slice 5 (plan R18): a ship ahead whose departed resident's note carries a signal fragment, once the run has found one
   // (the `▓░` glyph beside its node; systems/resident-hud.ts signalGlyph).
   signal: boolean;
+  // Slice 7c (R38): a built trace's gift waits on this ship (the `◆`, the legend's TRACE; systems/trace-hud.ts traceOnChart,
+  // Track CHART's; false until built).
+  trace: boolean;
 }
 
 export interface ChartLine {
@@ -164,7 +171,7 @@ export interface ChartModel {
 // this ship's world: what the hover says on a desktop, readable on a phone, whose chart has no hover).
 export interface CardRow {
   key: 'problems' | 'resident' | 'memory' | 'fit' | 'planet' | 'site' | 'lzs' | 'nogo' | 'beam' | 'noise' | 'range'
-    | 'noswap' | 'deliveries' | 'threat' | 'norm' | 'only' | 'run' | 'history' | 'trail';
+    | 'noswap' | 'deliveries' | 'threat' | 'norm' | 'only' | 'run' | 'history' | 'trail' | 'trace';
   label: string;
   value: string;
   tone: 'plain' | 'good' | 'warn';
@@ -412,6 +419,7 @@ export function chartModel(state: Readonly<GameState>): ChartModel {
       history,
       tag: history === MAP_TEXT.chart.reportedHome && seen.state !== 'current' ? history : null,
       signal: signalGlyph(state, slot),
+      trace: traceOnChart(state, slot),
     };
   });
   const lines = offered.map((to): ChartLine => {
@@ -427,7 +435,7 @@ export function chartModel(state: Readonly<GameState>): ChartModel {
 
 // The chart's key for the slice-3c marks (the desk shows it in a corner): one entry per kind of mark the chart has now, in a
 // fixed order. The hover and the card carry each mark's own words; the key says what the glyphs are.
-export type ChartLegendKind = 'taken' | 'colony' | 'lost' | 'new' | 'older' | 'signal';
+export type ChartLegendKind = 'taken' | 'colony' | 'lost' | 'new' | 'older' | 'signal' | 'trace';
 
 export interface ChartLegendItem {
   kind: ChartLegendKind;
@@ -445,6 +453,8 @@ export function chartLegend(model: Readonly<ChartModel>): ChartLegendItem[] {
   if (model.older.length > 0) items.push({ kind: 'older', words: MAP_TEXT.chart.legendOlder });
   if (model.nodes.some((node) => node.tag !== null)) items.push({ kind: 'new', words: MAP_TEXT.chart.reportedHome });
   if (model.nodes.some((node) => node.signal)) items.push({ kind: 'signal', words: RESIDENT_UI_TEXT.chart.legend });
+  // Slice 7c (R38): the `◆` of a gift ship (Track CHART's nodes).
+  if (model.nodes.some((node) => node.trace)) items.push({ kind: 'trace', words: TRACE_HUD_TEXT.legend });
   return items;
 }
 
@@ -483,7 +493,7 @@ export function cardModel(state: Readonly<GameState>, slot: number): CardModel {
   // The ladder's verdict for this beam, from the run's threat with this ship's tally done: HOLLOW's line and the seeds the
   // beam may bring (the PACKET's own rule: systems/map-noise.ts seedAllowance), for any beam in range.
   const verdict = hop !== null && (isReachable || (arm && hop.inRange))
-    ? planThreat(threatInputFor(state.run.threat, mapFacts(map, from, slot, depth), state.run.stats.deal !== null))
+    ? planThreat(threatInputFor(state.run.threat, mapFacts(map, from, slot, depth), state.run.stats.deal !== null, finalTraceInput(state.run)))
     : null;
   // The fit line only for a ship SET COURSE can go to (an out-of-range or TOO LATE hop has no packet to fit).
   let fit: RoomFit | null = null;
@@ -517,7 +527,9 @@ export function cardModel(state: Readonly<GameState>, slot: number): CardModel {
   row('lzs', MAP_TEXT.card.lzLabel, MAP_TEXT.card.lzs(ship.lzCount, siteDataOf({ site: ship.reserved?.site ?? 'good' })));
 
   if (hop !== null && hop.inRange) {
-    const seeds = verdict === null ? null : seedAllowance(verdict, playsTutorial(state.run));
+    const allowance = verdict === null ? null : seedAllowance(verdict, playsTutorial(state.run));
+    // Slice 7c: the traces' seed rules into this ship (Track TRACE's, neutral until built), as the PACKET counts them.
+    const seeds = allowance === null ? null : traceSeedAllowance(state, slot, allowance);
     row('beam', MAP_TEXT.card.beamLabel, MAP_TEXT.card.beam(hop.distanceLy, hop.linkBlocks));
     row('noise', '', MAP_TEXT.card.noise(hop.noise, MAP_TEXT.card.seeds(seeds)), hop.noise > 0 ? 'warn' : 'plain');
   } else if (hop !== null) {
@@ -540,6 +552,9 @@ export function cardModel(state: Readonly<GameState>, slot: number): CardModel {
   if (history !== null) row('history', MAP_TEXT.card.historyLabel, history);
   const mark = chartTrail(state.run)?.marks.find((candidate) => candidate.offset && candidate.slot === worldSlotOf(map, slot));
   if (mark !== undefined) row('trail', MAP_TEXT.card.trailLabel, mark.label, mark.kind === 'colony' ? 'good' : 'plain');
+  // Slice 7c (R38): the trace row (the last ending on the final ship, a gift ship's cache; Track CHART's, none until built).
+  const trace = traceCardRow(state, slot);
+  if (trace !== null) row('trace', trace.label, trace.value, trace.tone);
 
   if (isReachable || slot === from) {
     const [min, max] = shipsLeft(map, slot);

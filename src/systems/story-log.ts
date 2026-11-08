@@ -1,13 +1,14 @@
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
-import { logDisplayName } from '@state/log-selectors';
+import type { RunLogState } from '@state/schema';
+import { logDisplayName, bookShape, rootEntryLines } from '@state/log-selectors';
 import { onPostTick } from '@systems/clock';
 import { onWorldReset } from '@systems/reset';
 import { on } from '@systems/events';
 import { say } from '@systems/say';
 import { playsTutorial } from '@systems/meta';
 import { FRESH_UNIT_CHARGE } from '@data/memory';
-import { LOG_ENTRY_COUNT, LOG_NAME, LOG_DESC, LOG_TEXT, logEntryLines } from '@data/log-text';
+import { LOG_NAME, LOG_DESC, LOG_TEXT } from '@data/log-text';
 
 // 046.log through the run (docs/phase3/05-story.md §3.2, §3.5; slice-2-plan §1.1 items 14–15), stateful: the keys found
 // at the boots (`> 046.log · KEY FOUND · ENTRY 0n`), the SCAN reaction (the header, CONTROL's ignore line, the file
@@ -18,14 +19,16 @@ import { LOG_ENTRY_COUNT, LOG_NAME, LOG_DESC, LOG_TEXT, logEntryLines } from '@d
 
 // --- The LOG READER's actions (05 §4): story-log opens it, the reader view (Track UI) closes it and records what it typed.
 
-function assertEntry(entry: number, who: string): void {
-  if (!(Number.isInteger(entry) && entry >= 1 && entry <= LOG_ENTRY_COUNT)) throw new Error(`${who}: no entry ${entry} in 046.log`);
+// Slice 7c (R37): by the run's book (state/log-selectors.ts bookShape; every book is 046.log until LINEAGE_BUILT).
+function assertEntry(log: Readonly<RunLogState>, entry: number, who: string): void {
+  const count = bookShape(log.book).count;
+  if (!(Number.isInteger(entry) && entry >= 1 && entry <= count)) throw new Error(`${who}: no entry ${entry} in a ${count}-entry log`);
 }
 
 // Opens the reader on `entry` (ui.logReader). An entry the run has not found yet can't be opened: the reader shows it as
 // `[NOT FOUND YET]` in its rows, but never opens on it.
 export function openLogReader(store: Store<GameState>, entry: number): void {
-  assertEntry(entry, 'openLogReader');
+  assertEntry(store.getState().run.log, entry, 'openLogReader');
   if (!store.getState().run.log.found.includes(entry)) throw new Error(`openLogReader: entry ${entry} is not found yet`);
   store.update((draft) => { draft.ui.logReader = { entry }; });
 }
@@ -38,8 +41,8 @@ export function closeLogReader(store: Store<GameState>): void {
 // The reader typed an entry out (it types itself the first time, 05 §4): run.log.read records it, so the chip's glow and
 // the idle line know it is read. Once per entry; a found entry only.
 export function markLogEntryRead(store: Store<GameState>, entry: number): void {
-  assertEntry(entry, 'markLogEntryRead');
   const log = store.getState().run.log;
+  assertEntry(log, entry, 'markLogEntryRead');
   if (!log.found.includes(entry)) throw new Error(`markLogEntryRead: entry ${entry} is not found yet`);
   if (log.read.includes(entry)) return;
   store.update((draft) => { draft.run.log.read.push(entry); });
@@ -63,7 +66,7 @@ function firstLandingKeyDue(state: Readonly<GameState>): boolean {
 // Entry 12 types from the root at its last block (05 §3.5: `> 047. wait.`, then entry 12): finale.ts rootGone moves the
 // duel to its choice in the AI tick, after HOLLOW's last words, and this post tick follows it.
 function rootKeyDue(state: Readonly<GameState>): boolean {
-  return state.hollow.finale.phase === 'step1' && state.hollow.finale.rootFell && !state.run.log.found.includes(12);
+  return state.hollow.finale.phase === 'step1' && state.hollow.finale.rootFell && !state.run.log.found.includes(bookShape(state.run.log.book).root);
 }
 
 // The log's chip says what the run knows (logKnown): `???`, or `046.log` from the SCAN or the first key on.
@@ -77,7 +80,7 @@ function syncLogName(store: Store<GameState>): void {
     const live = draft.memory[index];
     if (live === undefined || live.type !== 'log') throw new Error('story-log: the log segment moved during its rename');
     live.name = name;
-    live.desc = name === LOG_NAME.known ? LOG_DESC.known : LOG_DESC.unknown;
+    live.desc = name === LOG_NAME.unknown ? LOG_DESC.unknown : LOG_DESC.known;
     draft.ui.memoryRev++;
   });
 }
@@ -103,12 +106,12 @@ function step(store: Store<GameState>): void {
   // On run 1 entry 01 opens the reader by itself, once (05 §3.2); a returning unit's chip just glows (Track UI).
   const autoOpen = entry01 && playsTutorial(state.run) && !log.autoOpened;
   if (keys.length > 0 || scan || entry01 || entry12) {
-    for (const entry of keys) assertEntry(entry, 'story-log log-key');
+    for (const entry of keys) assertEntry(log, entry, 'story-log log-key');
     store.update((draft) => {
       const found = draft.run.log.found;
       found.push(...keys);
       if (entry01) found.push(1);
-      if (entry12) found.push(12);
+      if (entry12) found.push(bookShape(draft.run.log.book).root);
       found.sort((a, b) => a - b);
       if (scan) draft.run.log.scanned = true;
       if (autoOpen) draft.run.log.autoOpened = true;
@@ -117,8 +120,7 @@ function step(store: Store<GameState>): void {
   // The first SCAN (05 §3.5): the op has echoed the header; CONTROL answers it, once a run.
   if (scan) say('control', LOG_TEXT.control, { critical: true });
   if (entry12) {
-    const lines = logEntryLines(12, { charge: FRESH_UNIT_CHARGE });
-    if (lines === null) throw new Error('story-log: entry 12 is not written');
+    const lines = rootEntryLines(state.run.log, { charge: FRESH_UNIT_CHARGE });
     for (const line of lines) say('hollow', LOG_TEXT.rootLine(line), { critical: true });
   }
   if (autoOpen) openLogReader(store, 1);

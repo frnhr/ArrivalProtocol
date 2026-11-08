@@ -9,7 +9,9 @@ import type {
 import type { Meta, RunLineage } from '@systems/meta';
 import type { LzState } from '@/types/landing';
 import type { SurveyState } from '@/types/survey';
-import { parseLastUnit, MetaCorrupt, endingOfV3LastUnit, parseEnding } from '@systems/meta-parse';
+import { parseLastUnit, MetaCorrupt, endingOfV3LastUnit, parseEnding, parseEvent } from '@systems/meta-parse';
+import type { TraceKind } from '@/types/trace';
+import { traceRefusal, noTraces } from '@systems/traces';
 import { hasUsableTool } from '@state/selectors';
 import { shipOnTarget } from '@systems/ending-rules';
 import { podsOnTarget } from '@systems/landing-rules';
@@ -36,7 +38,7 @@ import { REPO_CATALOGUE_VERSION } from '@data/repository';
 import { shipDefOf, validateShipDef } from '@data/ships';
 import { shipSummaryAt } from '@systems/map-run';
 import { currentSlot } from '@systems/map-streams';
-import { RUN_SAVE_VERSION, FIRST_UNIT_NUMBER, CYCLES_ARRIVED, FIRST_PICK_FLOOR_CYCLES, SURVEY_CELLS } from '@data/tuning';
+import { RUN_SAVE_VERSION, FIRST_UNIT_NUMBER, CYCLES_ARRIVED, FIRST_PICK_FLOOR_CYCLES, SURVEY_CELLS, NOTABLE_EVENTS_MAX } from '@data/tuning';
 import { shipCycles } from '@systems/run-score';
 import { bankOf } from '@systems/skill-tree';
 import { SKILL_IDS, levelPrice } from '@data/skills';
@@ -231,7 +233,7 @@ let references: { run: RunState; slices: ShipSlices; shipThreat: Readonly<Record
 
 const REFERENCE_LINEAGE: Readonly<RunLineage> = {
   unitNumber: FIRST_UNIT_NUMBER, wave: 1, lastUnit: null, hollowUnits: [FIRST_UNIT_NUMBER - 1], tutorialDone: false, armSeed: null,
-  arm: null, history: { lastUnitNumber: null, colonies: [], routes: [] },
+  arm: null, history: { lastUnitNumber: null, colonies: [], routes: [] }, events: [],
 };
 
 function refs(): NonNullable<typeof references> {
@@ -281,7 +283,54 @@ const checkArrival: Check = (value, at) => {
     anyRecord(seed, where);
     nullable(name)((seed as Record<string, unknown>).disguise, `${where}.disguise`);
   })(arrival.seeds, `${at}.seeds`);
+  // Slice 7c (RUN_SAVE_VERSION 8): the traces this arrival applied, as its boot lines say them, and their charge.
+  list(rec({ kind: oneOf('trace-gift', 'dish-wiped', 'dish-wild'), trace: TRACE_KIND_CHECK, text: str }))(arrival.traceLines, `${at}.traceLines`);
+  whole(arrival.giftCharge, `${at}.giftCharge`);
 };
+
+// --- Slice 7c: the traces and the log's book (RUN_SAVE_VERSION 8, plan §2.2 7c) ------------------------------------------
+
+const TRACE_KINDS: readonly TraceKind[] = ['purge', 'merge', 'spare', 'sunset', 'stay', 'reassignment', 'contact'];
+const TRACE_KIND_CHECK = oneOf(...TRACE_KINDS);
+const checkEndingRecord: Check = (value, at) => {
+  try {
+    if (parseEnding(value, at) === null) shapeFail(at, 'is not an ending record (null)');
+  } catch (error) {
+    if (error instanceof MetaCorrupt) shapeFail(at, `is not an ending record (${error.message})`);
+    throw error;
+  }
+};
+const checkTraces = rec({
+  from: nullable(rec({ unit: whole, ending: checkEndingRecord })),
+  kinds: list(TRACE_KIND_CHECK),
+  places: list(rec({ kind: oneOf('spare', 'sunset', 'stay', 'contact'), slot: whole, given: bool })),
+  extraSeed: bool,
+});
+
+// The `???` file's book (R37): 046.log, a stranger's (its unit), or the last unit's (its unit, its step 1 and at most
+// NOTABLE_EVENTS_MAX notable events, read as the archive reads them).
+function checkLogBook(value: unknown, at: string): void {
+  anyRecord(value, at);
+  const book = value as Record<string, unknown>;
+  if (book.kind === '046') return rec({ kind: oneOf('046') })(value, at);
+  if (book.kind === 'stranger') return rec({ kind: oneOf('stranger'), unit: whole })(value, at);
+  rec({
+    kind: oneOf('last'), unit: whole, step1: oneOf(...HOLLOW_PIECES, 'followed'),
+    events: (events, where) => {
+      list(anyRecord)(events, where);
+      const kept = events as unknown[];
+      if (kept.length > NOTABLE_EVENTS_MAX) shapeFail(where, `holds ${kept.length} events, over ${NOTABLE_EVENTS_MAX}`);
+      kept.forEach((event, index) => {
+        try {
+          parseEvent(event, `${where}[${index}]`);
+        } catch (error) {
+          if (error instanceof MetaCorrupt) shapeFail(`${where}[${index}]`, `is not a notable event (${error.message})`);
+          throw error;
+        }
+      });
+    },
+  })(value, at);
+}
 
 // The first ship that met a seed (slice 4d's lasting record, R11): null, or a depth on the route so far.
 function checkSeedsMet(run: Readonly<RunState>, at: string): void {
@@ -413,7 +462,13 @@ function checkSavedRun(value: unknown, at: string): void {
     inbox: rec({ read: list(str) }),
     next: nullable(rec({ unit: whole, run: whole, startYear: whole, gap: whole, valveYears: whole })),
     residents: rec({ met: list(checkResidentRecord), signals: list(rec({ slot: whole, depth: whole })) }),
+    traces: checkTraces,
   })(value, at);
+  // Slice 7c: the log's book field by field, and the traces by their rules (systems/traces.ts traceRefusal: from the last
+  // unit's own ending, tracesOf's kinds, every place a ship its kind's rule allows).
+  checkLogBook((value as RunState).log.book, `${at}.log.book`);
+  const traces = traceRefusal(value as RunState);
+  if (traces !== null) shapeFail(`${at}.traces`, traces);
   // Every key of a fresh run is in the spec above (a field a slice adds fails here first, in the round-trip suite).
   const known = Object.keys(refs().run);
   const have = Object.keys(value as Record<string, unknown>);
@@ -921,6 +976,27 @@ function migrateRunSave6(save: Record<string, unknown>): Record<string, unknown>
   return next;
 }
 
+// 7 → 8 (slice 7c, one bump for its three tracks: slice-7-plan R2, §2.2 7c). No v7 run played a trace or another book:
+// • run.traces: none (noTraces): a v7 run started before traces existed played without them;
+// • run.log.book: 046.log, the book every v7 run read (keeping the book the kid was reading is the truth);
+// • run.arrival (a boot point's, when set): no trace line, no gift charge.
+// run.hollowUnits keeps its meaning (who HOLLOW is mid-run), so a v7 run 2 resumed under v8 keeps the HOLLOW it met.
+function migrateRunSave7(save: Record<string, unknown>): Record<string, unknown> {
+  const next = structuredClone(save);
+  const payload = isRecord(next.payload) ? next.payload : null;
+  const run = payload !== null && isRecord(payload.run) ? payload.run : null;
+  if (run !== null) {
+    run.traces = noTraces();
+    if (isRecord(run.log)) run.log.book = { kind: '046' };
+    if (isRecord(run.arrival)) {
+      run.arrival.traceLines = [];
+      run.arrival.giftCharge = 0;
+    }
+  }
+  next.saveVersion = 8;
+  return next;
+}
+
 export const RUN_SAVE_MIGRATIONS: Readonly<Record<number, (save: Record<string, unknown>) => Record<string, unknown>>> = {
   1: migrateRunSave1,
   2: migrateRunSave2,
@@ -928,6 +1004,7 @@ export const RUN_SAVE_MIGRATIONS: Readonly<Record<number, (save: Record<string, 
   4: migrateRunSave4,
   5: migrateRunSave5,
   6: migrateRunSave6,
+  7: migrateRunSave7,
 };
 
 export function migrateRunSave(save: Record<string, unknown>): Record<string, unknown> {

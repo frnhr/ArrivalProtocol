@@ -5,6 +5,7 @@ import type { GameState, ShipOutcome, TransitPlan } from '@state/schema';
 import type { Segment } from '@/types/segment';
 import type { RoomFit } from '@/types/map';
 import { unitFilesIn, dropLock, toolKindOf, arrivalCharge, crashCoreToll, type DropLock, type Packet } from '@systems/carry';
+import { traceGiftCharge } from '@systems/trace-gifts';
 import { transitPacket, pickCharge, cardFiles, PREVIEW_ID } from '@systems/draft';
 import { skillPacketPlan, lowerLevels } from '@systems/skill-files';
 import { held, restoreCostOf } from '@systems/skill-tree';
@@ -415,7 +416,7 @@ export function transmitModel(state: Readonly<GameState>): TransmitModel {
   if (!core) throw new Error('transmitModel: the unit has no AI Core');
   // What arrives before the room has its say, on the destination's own floor (01 §3.16: none on a TIGHT ship), as the
   // arrival counts it; roomFit's `wanted` is the same number (asserted: the room bar and this line must agree).
-  const charge = arrivalCharge(packet.chargeCarried, state.run.pendingStarCredit, pickCharge(plan.pick), plan.hop.chargeFloor);
+  const charge = arrivalCharge(packet.chargeCarried, state.run.pendingStarCredit, pickCharge(plan.pick), plan.hop.chargeFloor, traceGiftCharge(state, plan.toSlot));
   if (charge.blocks !== fit.wanted) throw new Error(`transmitModel: arrival charge ${charge.blocks} but the room bar wants ${fit.wanted}`);
   const infectedCount = chips.filter((chip) => chip.infected && !chip.dropped).length;
   const arm = state.run.map.world === 'arm';

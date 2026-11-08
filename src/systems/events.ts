@@ -1,3 +1,5 @@
+// Slice 7c: the lead owns this file (slice-7-plan.md §2.5, §4.3): the `7c NEXT RUN` block is complete; Track TRACE and Track
+// LINEAGE emit it, and either may change its cues in audio-cues.ts's 7c block only (each on its own events' lines).
 // Slice 7b: the lead owns this file (slice-7-plan.md §2.5, §4.2): the `7b LAST LANDING` block is complete; Track DROP emits
 // it, and VIEW may change its cues in audio-cues.ts's 7b block only.
 // Slice 7a: the lead owns this file (slice-7-plan.md §2.5, §4.1): the `7 ENDING` block is complete; Track CARD and Track
@@ -5,6 +7,7 @@
 // Slice 6: the lead owns this file (docs/phase3/impl/slice-6-plan.md §2.5, §5); every slice 4c–4e, slice 5 and slice 6 event is
 // named in the blocks at the end of GameEvents, and a track emits its own. Others ask by message.
 import type { HollowFate, YouChoice, LastLandingState } from '@/types/ending';
+import type { TraceKind } from '@/types/trace';
 import type {
   FiringSource, ViewMode, TransitHit, AutoburnPhase, AutoburnEnd, DealOutcome, VerbKind,
 } from '@state/schema';
@@ -307,6 +310,22 @@ export interface GameEvents {
   // It ended (every restored pod down, or parked): `landed`, the restored pods that came down in an LZ with room.
   'last-landing-end': { landed: number };
   // --- end of 7b LAST LANDING ---
+
+  // === Slice 7c (docs/phase3/impl/slice-7-plan.md §2.5): the FOUNDATION named all four; Track TRACE emits the first three
+  // (systems/trace-gifts.ts traceBootLineSaid, as the boot's trace lines are said), Track LINEAGE the last
+  // (systems/lineage-boot.ts lineageBootLineSaid, at the face's first line).
+
+  // --- 7c NEXT RUN ---
+  // A trace's gift was given at the ship in `slot` (R32: SPARE's and SUNSET's caches, STAY's supply packet; at the final
+  // ship MERGE's thread and REASSIGNMENT's allowance).
+  'trace-gift': { kind: TraceKind; slot: number };
+  // PURGE's wiped dish (R33): the seeds the unit carried into the final ship are gone.
+  'dish-wiped': { seeds: number };
+  // A non-compliant trace's wild dish (R33): the seed(s) that came in at the final boot.
+  'dish-wild': { seeds: number };
+  // The last unit took the final root over (R35): its unit number.
+  'root-face': { unit: number };
+  // --- end of 7c NEXT RUN ---
 }
 
 export type ZoneForecast = 'hit' | 'clear' | 'unknown';

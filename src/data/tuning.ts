@@ -403,11 +403,11 @@ export const BEEP_JUMP_TAC = 1.5;
 // all on the same 1.3 s step (boot.ts checks at load that every possible line has its time). Slice 4d four more: up to three
 // SENTRY `> ECC: cache.tmp IS A SEED` lines (a beam brings at most three seeds, BEAM_SEED_ODDS) and its FIREWALL line (22).
 // Slice 5 one more: the resident ship's `> RECEIVER CLOSED` line (23). Slice 6 one more: a POOR planet's `> SITE DATA POOR`
-// line (24).
+// line (24). Slice 7c six more: the traces' lines (up to three on one boot) and the lineage's face lines and CONTROL's (30).
 export const BOOT_ASSEMBLE_SEC = 1.5;
 export const BOOT_LINE_AT_SEC: readonly number[] = [
   0.5, 1.8, 3.1, 4.4, 5.7, 7.0, 8.3, 9.6, 10.9, 12.2, 13.5, 14.8, 16.1, 17.4, 18.7, 20.0, 21.3, 22.6, 23.9, 25.2, 26.5, 27.8,
-  29.1, 30.4,
+  29.1, 30.4, 31.7, 33.0, 34.3, 35.6, 36.9, 38.2,
 ];
 export const BOOT_KLAXON_AFTER_LAST_LINE_SEC = 1.4;
 export const BOOT_END_AFTER_KLAXON_SEC = 0.4;
@@ -2018,7 +2018,9 @@ export const RUN_SAVE_KEY = 'arrival-protocol/run/v1';
 // LzGround, run.ships[].survey (RUN_SAVE_MIGRATIONS[5]).
 // 7 (slice 7a, one bump for its three tracks and 7b: slice-7-plan R2): the FINALE's two steps (hollow.finale v7),
 // landing.lastLanding (7b's, always null), FeaturedColonist.line, run.lastUnit.ending (RUN_SAVE_MIGRATIONS[6]).
-export const RUN_SAVE_VERSION = 7;
+// 8 (slice 7c, one bump for its three tracks: slice-7-plan R2, §2.2): run.traces, run.log.book, arrival.traceLines
+// (RUN_SAVE_MIGRATIONS[7]).
+export const RUN_SAVE_VERSION = 8;
 // The archive (§4.5; 02 §3.12: v2 holds the arm, the trail, colonies, routes, events and traces). From slice 3c the key
 // stays `meta/v2` and versions migrate in place (systems/meta.ts migrateMeta, META_VERSION the record's); a new key is
 // only ever a deliberate reset. v1's key (phase 2's archive) was the one such reset: never written, read only to detect it
@@ -2504,3 +2506,63 @@ export const LAST_LANDING_SKIP_MAX_STEPS = 200_000;
 // (none yet: VIEW's new numbers go here)
 
 // --- end of 7b VIEW --------------------------------------------------------------------------------------------------
+
+
+// =====================================================================================================================
+// --- Phase 3 slice 7c, NEXT RUN (docs/phase3/impl/slice-7-plan.md §2.6, R30–R38; 05-story §3.8, 02-map §3.12, 04 §5). The
+// FOUNDATION wrote every number below: every trace number sits in the 7c lead block, for slice 8 to tune in one place
+// (§2.11). Track TRACE, Track LINEAGE and Track CHART each edit values only in their own block, and a new number goes at
+// the end of its own block. RUN_SAVE_VERSION (8) stays with the save's keys above (3c SAVE).
+// =====================================================================================================================
+
+// --- 7c lead ---------------------------------------------------------------------------------------------------------
+
+// Every gift's REPAIR CHARGE (R32; 05 §3.8, decision round 3 item 4): SPARE's cache, SUNSET's cache, STAY's supply packet
+// and REASSIGNMENT's allowance at the final boot. Through the arrival path (systems/carry.ts arrivalCharge's giftCharge), so
+// a squeezed receiver loses it as loudly as any charge.
+export const TRACE_GIFT_CHARGE = 15;
+// PURGE's cost (R33; 05 §3.8): the FINALE's bite interval times this (HOLLOW is hungrier: the hunger is all its own).
+// Verbs and the duel are unchanged (systems/threat-plan.ts planThreat's final rule).
+export const TRACE_PURGE_BITE_MULT = 0.85;
+// MERGE's gain (R33): the Core's thread capacity is this much more from the final ship's boot (`> A THREAD IN THE DISH`).
+export const TRACE_MERGE_THREADS = 1;
+// MERGE's cost (R33; 04 §3.10): the final root is this many blocks bigger than the FINALE's own 16, FINAL_ROOT_MAX_BLOCKS
+// (18, the slot every final ship's layout already holds: checked at load in systems/threat-plan.ts).
+export const TRACE_MERGE_ROOT_EXTRA = 2;
+// The non-compliant traces' one cost (R33; 05 §3.8, decision round 3 item 3): this many wild seeds at the final boot, once
+// a run however many such traces are held.
+export const TRACE_EXTRA_SEEDS = 1;
+// Where the placed gifts wait, by layer (R31; 02 §3.12), both ends included: SPARE's cache and STAY's supply packet in
+// layers 3–6, CONTACT's signal stops in 5–7 (7d). SPARE with no ship in its layers (and no 046 trail world) falls back to
+// any ship in TRACE_SPARE_FALLBACK_LAYERS.
+export const TRACE_LAYERS: Readonly<{ spare: readonly [number, number]; stay: readonly [number, number]; contact: readonly [number, number] }> = {
+  spare: [3, 6],
+  stay: [3, 6],
+  contact: [5, 7],
+};
+export const TRACE_SPARE_FALLBACK_LAYERS: readonly [number, number] = [2, 6];
+// The face line's wait (R35; 05 §3.5 `i've been at this dish 3 years`): this final ship's year minus the last one's, at
+// least this many years (02 §3.4: the next final ship approaches at least a gap's worth of years later).
+export const TRACE_ROOT_WAIT_MIN_YEARS = 1;
+
+// --- end of 7c lead --------------------------------------------------------------------------------------------------
+
+// --- 7c TRACE (Track TRACE: systems/trace-gifts.ts, systems/trace-hunt.ts) -------------------------------------------
+
+// REASSIGNMENT's hunt (R33): the root's RM takes the highest-version skill first while it is a fair target, with this
+// weight (1: always first). A weight, so slice 8 can soften it.
+export const HUNT_PREFER_WEIGHT = 1;
+
+// --- end of 7c TRACE -------------------------------------------------------------------------------------------------
+
+// --- 7c LINEAGE (Track LINEAGE: the strangers, the face line, the books) ----------------------------------------------
+
+// (none yet: LINEAGE's new numbers go here)
+
+// --- end of 7c LINEAGE -----------------------------------------------------------------------------------------------
+
+// --- 7c CHART (Track CHART: systems/trace-hud.ts, the chart's ◆, the final card's NEXT RUN: lines) --------------------
+
+// (none yet: CHART's new numbers go here)
+
+// --- end of 7c CHART -------------------------------------------------------------------------------------------------

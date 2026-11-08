@@ -20,6 +20,7 @@ import { hurtDriversFor } from '@data/driver-damage';
 import { classicRunMap, shipDefAt, currentSlot, shipRng } from '@systems/map-run';
 import { nominalRunThreat, nominalShipThreat, createRunThreat, applyThreat } from '@systems/threat-plan';
 import { createRunLog } from '@state/log-selectors';
+import { noTraces, runTracesOf, logBookOf } from '@systems/traces';
 import { isDriver } from '@state/selectors';
 import { createFlight, createMissionMeta, createClockState } from '@data/mission';
 import { hollowLabel } from '@systems/say';
@@ -116,7 +117,8 @@ export function createRunState(
     threat: threat === undefined
       ? nominalRunThreat(shipIndex)
       : applyThreat(shipIndex === 0 ? createRunThreat() : nominalRunThreat(shipIndex - 1), threat),
-    log: createRunLog(),
+    // Slice 7c (R37): the `???` file's book, chosen once here, at RUN START (046.log until LINEAGE_BUILT).
+    log: createRunLog(logBookOf(lineage.wave, lineage.lastUnit, lineage.events)),
     // Phase 3 slice 3b: no request yet (the first desk's pick is the first), no mail opened.
     repo: { pick: null, requests: [], nextId: 1 },
     inbox: { read: [] },
@@ -124,7 +126,17 @@ export function createRunState(
     next: null,
     // Phase 3 slice 5: no resident met yet.
     residents: createRunResidents(),
+    // Slice 7c (R30): the classic map holds no traces; a run on the arm places them with its map (withRunMap).
+    traces: noTraces(),
   };
+}
+
+// A fresh run (createRunState's) on `map`, its traces placed there (slice 7c, R30: from the last unit's ending, on the run's
+// own 'traces' stream, systems/traces.ts runTracesOf). Every RUN START on the arm comes through here: the page's first
+// title (createInitialState), NEW RUN (systems/run.ts startRun) and ?debug's runs.
+export function withRunMap(run: Readonly<RunState>, map: Readonly<RunMapState>): RunState {
+  const placed = structuredClone(map) as RunMapState;
+  return { ...run, map: placed, traces: runTracesOf(run.lastUnit, placed, run.seed) };
 }
 
 // A run that has met no resident and found no signal (slice 5, plan §2.2): every new run, and the v4 → v5 migration (no
@@ -348,7 +360,7 @@ export function createInitialState(opts: InitialStateOpts): GameState {
   if (opts.map !== undefined && (opts.map.route.length !== 1 || (opts.shipIndex ?? 0) !== 0)) {
     throw new Error('createInitialState: a map is given for ship 1 only (a later arm ship is reached by its hop)');
   }
-  const run = opts.map === undefined ? created : { ...created, map: structuredClone(opts.map) as RunMapState };
+  const run = opts.map === undefined ? created : withRunMap(created, opts.map);
   return {
     ...createShipSlices(run, opts.carried ?? null, opts.threat ?? nominalShipThreat(run.shipIndex)),
     run,

@@ -77,6 +77,10 @@ import { segmentStarts } from '@systems/memory-ops';
 import { rackOf, layoutOf } from '@data/memory';
 import { canStartOp, getOps } from '@systems/ops-core';
 import { TOOL_HINT_TARGET } from '@data/fs-tools';
+import { TRACE_TEXT } from '@data/trace-text';
+import type { TraceBootLine } from '@/types/trace';
+import { traceBootLines, traceBootLineText } from '@systems/trace-gifts';
+import { faceBootLines, lineageControlLine, strangerBootLine, type LineageBootLineKind } from '@systems/lineage-boot';
 import {
   MIND_CLEAR_IDLE_SEC, MAX_LINE_CHARS, NAME_MAX_CHARS, ENGINE_FAULT_AFTER_TAC, ENGINE_FAULT_INTEGRITY,
   ENGINE_WEAK_MAX_SHOWN_SEC, COUNTDOWN_RED_TAC,
@@ -685,10 +689,12 @@ export const SHIP_OUTCOME_WORD: Readonly<Record<ShipOutcome, string>> = {
 // would do. The send's words are the moment itself (22 light-years ticking past).
 // The sum the arrival line adds up (`36 CARRIED + 18 (★★★) + 12 (CARD)`): TRANSMIT_TEXT.arrival's, and the arm's room
 // line's (systems/arrival-preview.ts: `… = 54 · ROOM FOR 20`), so both say the same parts.
-export function arrivalParts(carried: number, starCredit: number, stars: number, floorAdded: number, cardCharge = 0): string {
+// Slice 7c: `giftCharge`, a trace's gift (the words are Track TRACE's, data/trace-text.ts).
+export function arrivalParts(carried: number, starCredit: number, stars: number, floorAdded: number, cardCharge = 0, giftCharge = 0): string {
   const parts = [`${carried} CARRIED`];
   if (starCredit > 0) parts.push(`+ ${starCredit} (${'★'.repeat(stars)})`);
   if (cardCharge > 0) parts.push(`+ ${cardCharge} (CARD)`);
+  if (giftCharge > 0) parts.push(TRACE_TEXT.arrivalPart(giftCharge));
   if (floorAdded > 0) parts.push(`+ ${floorAdded} FLOOR`);
   return parts.join(' ');
 }
@@ -902,6 +908,8 @@ export function chargeLine(arrival: Readonly<ArrivalReport>, total: number): str
   if (arrival.starCredit > 0) parts.push(`+${arrival.starCredit} CHARGE (${'★'.repeat(arrival.stars)})`);
   // The +12 REPAIR CHARGE card picked at the TRANSMIT (WP8).
   if (arrival.cardCharge > 0) parts.push(`+${arrival.cardCharge} CHARGE (CARD)`);
+  // Slice 7c: a trace's gift (Track TRACE's words).
+  if (arrival.giftCharge > 0) parts.push(TRACE_TEXT.chargePart(arrival.giftCharge));
   if (arrival.chargeFloorAdded > 0) parts.push(`+${arrival.chargeFloorAdded} CHARGE (FLOOR)`);
   parts.push(`REPAIR CHARGE ${total}`);
   return `> ${parts.join(ECC_SEPARATOR)}`;
@@ -964,9 +972,17 @@ export function scriptedDamageLine(hits: readonly TransitHit[]): string {
 // Slice 6 (plan §2.4): 'site-data', `> SITE DATA POOR · ARRIVAL CONTROL GUESSED 2 LZs`, on a planet that plays POOR
 // (systems/map-boot.ts), right after the ship's own arrival-damage lines (02 §4, the end of line group 5) and before the
 // deliveries.
+// Slice 7c (plan §2.4; the lead's kinds, the tracks' conditions and words):
+// • 'trace-gift', 'dish-wiped', 'dish-wild': Track TRACE's (systems/trace-gifts.ts traceBootLines), after the deliveries and
+//   before the charge line (the gift's charge is in it), each repeating with its ordinal among its kind; a first ship's
+//   after the site-data line;
+// • 'face' (repeats), 'lineage-control', 'stranger': Track LINEAGE's (systems/lineage-boot.ts), after the INBOX line and
+//   before HOLLOW's own line, in that order: the last unit's face taking the root over, CONTROL's lineage line, the
+//   stranger's `> another one. they keep sending you.`.
 export type BootLineKind =
   | 'sleep' | 'receiver-closed' | 'unpack' | 'board' | 'host' | 'receiver' | 'ecc-sleep' | 'ecc' | 'seeds' | 'sentry-seed'
-  | 'scripted' | 'site-data' | 'delivery' | 'charge' | 'firewall' | 'overflow' | 'skill' | 'reading' | 'log' | 'inbox' | 'hollow';
+  | 'scripted' | 'site-data' | 'delivery' | 'charge' | 'firewall' | 'overflow' | 'skill' | 'reading' | 'log' | 'inbox' | 'hollow'
+  | TraceBootLine['kind'] | LineageBootLineKind;
 
 // The entries this boot's keys open (05 §3.2, the interim keys of state/log-selectors.ts logEntriesAtBoot) that the run has
 // not found yet. Pure in the state: the boot plans its 'log' line from it, before anything marks them found.
@@ -1000,8 +1016,15 @@ export function bootLinePlan(state: Readonly<GameState>, skillLines: number): Bo
   const arm = state.run.map.world === 'arm';
   const reading: BootLineKind[] = arm && readingLineDue(state) ? ['reading'] : [];
   const inbox: BootLineKind[] = arm && newMessagesAtBoot(state).length > 0 ? ['inbox'] : [];
-  const story: BootLineKind[] = [...reading, ...log, ...inbox, ...hollow];
-  if (arrival === null) return [...sleep, 'unpack', 'host', ...receiver, 'ecc', ...siteData, ...story];
+  // Slice 7c: the traces' lines (Track TRACE's) and the lineage's (Track LINEAGE's); none until their tracks build them.
+  const traces: BootLineKind[] = traceBootLines(state).map((line) => line.kind);
+  const lineage: BootLineKind[] = [
+    ...faceBootLines(state).map((): BootLineKind => 'face'),
+    ...(lineageControlLine(state) !== null ? ['lineage-control' as const] : []),
+    ...(strangerBootLine(state) !== null ? ['stranger' as const] : []),
+  ];
+  const story: BootLineKind[] = [...reading, ...log, ...inbox, ...lineage, ...hollow];
+  if (arrival === null) return [...sleep, 'unpack', 'host', ...receiver, 'ecc', ...siteData, ...traces, ...story];
   const unpack: BootLineKind = arrival.boarded !== null ? 'board' : 'unpack';
   const plan: BootLineKind[] = [...sleep, unpack, 'host', ...receiver, ...eccSleep, 'ecc'];
   // A disguised seed is left off the ECC seeds line (04 §3.6): with only disguised ones the line is not said at all.
@@ -1010,6 +1033,7 @@ export function bootLinePlan(state: Readonly<GameState>, skillLines: number): Bo
   if (arrival.scripted.length > 0) plan.push('scripted');
   plan.push(...siteData);
   for (let line = 0; line < deliveryBootLines(state).length; line++) plan.push('delivery');
+  plan.push(...traces);
   plan.push('charge');
   if (firewallBootLineDue(state)) plan.push('firewall');
   // A TIGHT arrival with no charge laid out says its loss on the charge line itself (M1: one honest line, not `REPAIR
@@ -1025,7 +1049,7 @@ export function bootLinePlan(state: Readonly<GameState>, skillLines: number): Bo
 function zeroChargeArrival(state: Readonly<GameState>): boolean {
   const arrival = state.run.arrival;
   if (arrival === null || state.run.map.world !== 'arm' || layoutOf(state).chargeFloor !== 0) return false;
-  const laid = arrival.chargeCarried + arrival.starCredit + arrival.cardCharge + arrival.chargeFloorAdded - arrival.chargeOverflowLost;
+  const laid = arrival.chargeCarried + arrival.starCredit + arrival.cardCharge + arrival.giftCharge + arrival.chargeFloorAdded - arrival.chargeOverflowLost;
   return laid === 0;
 }
 
@@ -1035,9 +1059,11 @@ function looseSeedRack(state: Readonly<GameState>, segId: string): string | null
   return index < 0 ? null : rackOf(segmentStarts(state.memory)[index]!, layoutOf(state));
 }
 
-// Who says a boot line: HOLLOW its own and its reading line (slow, pink), the unit every other.
+// Who says a boot line: HOLLOW its own and its reading line (slow, pink), the unit every other. Slice 7c: the face and the
+// stranger are HOLLOW's voice, CONTROL's lineage line CONTROL's.
 export function bootLineSpeaker(kind: BootLineKind): Speaker {
-  return kind === 'hollow' || kind === 'reading' ? 'hollow' : 'mind-sys';
+  if (kind === 'lineage-control') return 'control';
+  return kind === 'hollow' || kind === 'reading' || kind === 'face' || kind === 'stranger' ? 'hollow' : 'mind-sys';
 }
 
 // How a boot line is coloured beyond its speaker (slice 5): the RECEIVER CLOSED line types in amber ('resident', plan R9:
@@ -1058,7 +1084,8 @@ export function bootLicensesRepair(state: Readonly<GameState>): boolean {
 // own group by it.
 export function bootLine(kind: BootLineKind, state: Readonly<GameState>, vars: LineVars, ordinal = 0): string {
   const arrival = state.run.arrival;
-  if (kind !== 'delivery' && kind !== 'skill' && kind !== 'sentry-seed' && ordinal !== 0) {
+  const repeats: readonly BootLineKind[] = ['delivery', 'skill', 'sentry-seed', 'trace-gift', 'dish-wiped', 'dish-wild', 'face'];
+  if (!repeats.includes(kind) && ordinal !== 0) {
     throw new Error(`bootLine: a '${kind}' line never repeats (ordinal ${ordinal})`);
   }
   switch (kind) {
@@ -1113,14 +1140,34 @@ export function bootLine(kind: BootLineKind, state: Readonly<GameState>, vars: L
       if (line === null) throw new Error(`bootLine: ${state.level.shipName}'s HOLLOW has no boot line`);
       return line;
     }
+    // Slice 7c: the traces' and the lineage's lines, the tracks' words.
+    case 'trace-gift':
+    case 'dish-wiped':
+    case 'dish-wild': return traceBootLineText(state, kind, ordinal);
+    case 'face': {
+      const line = faceBootLines(state)[ordinal];
+      if (line === undefined) throw new Error(`bootLine: no face line ${ordinal} at this boot`);
+      return line;
+    }
+    case 'lineage-control': {
+      const line = lineageControlLine(state);
+      if (line === null) throw new Error('bootLine: a lineage line from CONTROL that is not due');
+      return line;
+    }
+    case 'stranger': {
+      const line = strangerBootLine(state);
+      if (line === null) throw new Error('bootLine: a stranger\'s line that is not due');
+      return line;
+    }
   }
 }
 // The most a boot ever says (a later ship with the beam's seeds, arrival damage, an overflow, a skill trained, a log key
 // and HOLLOW's line; on the arm also the sleep, receiver and ECC-while-asleep lines, and since slice 3b up to
 // DELIVERY_BOOT_LINES_MAX delivery lines, the INBOX line and HOLLOW's reading line; since slice 4d up to three SENTRY seed
 // lines and its FIREWALL line: foundation review m4; since slice 5 the RECEIVER CLOSED line; since slice 6 the SITE DATA POOR
-// line).
-export const BOOT_LINE_MAX = 24;
+// line; since slice 7c six more: up to three trace lines on a final ship that is also STAY's gift ship (MERGE's thread, the
+// wild dish, the supply packet), two face lines and CONTROL's lineage line).
+export const BOOT_LINE_MAX = 30;
 
 // --- Beats: lines spoken on a moment (§6.3) ---------------------------------------------------
 

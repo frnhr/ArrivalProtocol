@@ -19,8 +19,9 @@ import { SEED_BLOCKS, BEAM_SEED_ODDS, SEED_GAP_TO_TARGET_BLOCKS, WALL_MIN_BLOCKS
 // target, and endShip tallies what is left (state/threat-selectors.ts tallyPreview).
 //
 // Slice 3: `source` becomes { kind: 'noise', noise: hop.noise } for every hop. Slice 4d: seedTargetsOf weighs skills by
-// size, and a disguised seed is a flag on the segment. Slice 7: a `finalShipSeedMods` hook here (PURGE's wipe, the extra
-// seed on a final ship).
+// size, and a disguised seed is a flag on the segment. Slice 7c: the traces' seed rules (PURGE's wipe, SPARE's seedless beam,
+// the wild seed) are Track TRACE's (systems/trace-gifts.ts traceSeedMods, called by transmitNext on the seeds rolled here, so
+// this file's rolls stay byte-identical); rollExtraSeeds is the wild seed's target rule.
 
 // The packed files a beam seed may ride behind (04 §3.4): the unit's infectable files (they have integrity to eat),
 // never the Core, REPAIR CHARGE, a FIREWALL or 046.log (none of them is infectable), and never Engine I/O or Nav Plotter
@@ -77,6 +78,25 @@ export function rollBeamSeeds(
     const pick = scripted?.[index];
     const named = pick === undefined ? undefined : pool.find((seg) => matchesPick(seg, pick));
     const target = named ?? pickWeighted(pool, rng);
+    const words = SEED_WORDS_POOL[Math.floor(rng() * SEED_WORDS_POOL.length)]!;
+    if (target === null) break;
+    pool.splice(pool.indexOf(target), 1);
+    plans.push({ targetId: target.id, targetName: target.name, words, disguise: null });
+  }
+  return plans;
+}
+
+// Slice 7c (R33; the lead's helper for Track TRACE's wild seed, systems/trace-gifts.ts traceSeedMods): `count` seeds by the
+// beam-seed target rule (rollBeamSeeds' own: a packed infectable file, weighted by size, never Engine I/O or Nav Plotter),
+// each behind a file no seed in `excludeIds` already rides (one seed a file), with words from 05 §3.5's pool; the target
+// draw and the words draw are taken for every seed. On `rng`, the hop's own 'traces' stream, so the beam's seeds never move.
+// Fewer when the packet runs out of targets. Pure. Nothing calls it until TRACE builds the wild seed.
+export function rollExtraSeeds(packet: Readonly<Packet>, count: number, rng: Rng, excludeIds: readonly string[]): BeamSeedPlan[] {
+  if (!(Number.isInteger(count) && count >= 0)) throw new Error(`rollExtraSeeds: ${count} seeds`);
+  const pool = seedTargetsOf([...packet.rackE, ...packet.rackF]).filter((seg) => !excludeIds.includes(seg.id));
+  const plans: BeamSeedPlan[] = [];
+  for (let index = 0; index < count; index++) {
+    const target = pickWeighted(pool, rng);
     const words = SEED_WORDS_POOL[Math.floor(rng() * SEED_WORDS_POOL.length)]!;
     if (target === null) break;
     pool.splice(pool.indexOf(target), 1);

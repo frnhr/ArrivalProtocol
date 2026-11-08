@@ -1,3 +1,4 @@
+// Slice 7c: the lead owns this file (slice-7-plan.md §4.3): Tracks TRACE and LINEAGE change cues in the 7c NEXT RUN block.
 // Slice 7b: the lead owns this file (slice-7-plan.md §4.2): Track VIEW changes cues in the 7b LAST LANDING block.
 // Slice 7a: the lead owns this file (slice-7-plan.md §4.1): Track CARD and Track NIGHT change cues in the 7 ENDING block.
 // Slice 6: the lead owns this file (docs/phase3/impl/slice-6-plan.md §5); a track may change the cue on its own events'
@@ -404,6 +405,18 @@ export function mountAudioCues(store: Store<GameState>): () => void {
     // Track VIEW: under the radio's sweep, the header strip lands on a light stamp (LastLanding.ts's ll-arrive).
     on('last-landing-start', () => { play('transmitIn'); play('stampHit', { heavy: false }); }),
     // --- end of 7b LAST LANDING ---
+
+    // === Slice 7c (slice-7-plan §2.5): existing cues only; Track TRACE may change its three lines, Track LINEAGE its one.
+
+    // --- 7c NEXT RUN. A gift chimes like a delivery; the wiped dish fizzles like a bite held by a WALL; the wild dish's seed
+    // drops as HOLLOW's own seeds do; the last unit's face glitches its name in, as HOLLOW naming itself does.
+    // Track TRACE's cues:
+    on('trace-gift', () => play('chime', { falling: false })),
+    on('dish-wiped', () => play('fizzle')),
+    on('dish-wild', () => play('seedDrop')),
+    // Track LINEAGE's cue:
+    on('root-face', () => play('nameGlitch')),
+    // --- end of 7c NEXT RUN ---
   ];
   offs.push(onPostTick(() => playedThisTick.clear()));
 

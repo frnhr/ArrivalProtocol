@@ -30,6 +30,7 @@ import { skillFilesOf, isSkillFile } from '@state/selectors';
 import { rollTransitHits, toolKindOf } from '@systems/carry';
 import { rmTargets } from '@systems/hollow';
 import { createRng } from '@systems/rng';
+import { currentSlot } from '@systems/map-streams';
 import { PACKET_SKILL_TEXT } from '@data/training-text';
 import { armRun, toDesk } from '../map/repo-fixture';
 import { pickFirstSkill } from '../support/skills';
@@ -189,7 +190,7 @@ toDesk(store);
 {
   const state = store.getState();
   const files = transitPacket(state, { linkBlocks: 200, dropped: [], pick: null, deliveries: [], packAs: {} }).filesBlocks;
-  const hop = { linkBlocks: 200, room: files - 1, chargeFloor: 0 };
+  const hop = { to: currentSlot(state.run), linkBlocks: 200, room: files - 1, chargeFloor: 0 };
   const plan = { hop, threat: { act: 'calm' as const, beamSeeds: { kind: 'none' as const } }, dropped: [], pick: null, deliveries: [] };
   const fit = unitArrival(state, plan).fit;
   check('a TIGHT room one block short of the files: the room binds, not the link (the skills counted in the files)',

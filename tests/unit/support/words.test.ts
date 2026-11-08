@@ -35,6 +35,8 @@ import { FINALE_TEXT } from '@data/finale-text';
 import { EPILOGUE_TEXT, ENDING_TITLE, SPARE_RUN_END, PAYOFF_OF, WALKED_IN } from '@data/epilogue-text';
 // Slice 7b (the 7b blocks below).
 import { LAST_LANDING_TEXT } from '@data/last-landing-text';
+import { TRACE_TEXT, TRACE_HUD_TEXT } from '@data/trace-text';
+import { LINEAGE_TEXT } from '@data/lineage-text';
 
 const DATA = join(import.meta.dirname, '..', '..', '..', 'src', 'data');
 
@@ -501,5 +503,60 @@ const SLICE7_BASE: Readonly<Record<string, unknown>> = {
 }
 
 // --- end of 7b VIEW --------------------------------------------------------------------------------------------------------
+
+// === Slice 7c (slice-7-plan §2.9): each track's pools, rendered at their worst case by slice 6's renderer over the 7a base
+// (SLICE7_BASE) and each track's own table inside its own block. The FOUNDATION seeded every pool and its block; a track
+// edits only its own.
+
+// --- 7c TRACE (data/trace-text.ts TRACE_TEXT): Track TRACE adds its checks here ----------------------------------------------
+{
+  // The widest unit name a cache names (a MERGE root's two), the longest upgrade file, the widest colony, three-digit charge
+  // and the most seeds a beam brings.
+  const TRACE_WORST: Readonly<Record<string, unknown>> = {
+    unitName: 'UNIT-046·047', charge: 999, what: 'FIREWALL.sys', seeds: 3, threads: 9, years: 999,
+  };
+  const { stayLetter, ...rest } = TRACE_TEXT;
+  const lines = [
+    ...renderSlice6({ ...rest, from: stayLetter.from }, [], 'TRACE_TEXT', { ...SLICE7_BASE, ...TRACE_WORST }),
+    ...stayLetter.lines(String(SLICE7_BASE.colony), 999),
+  ];
+  const bad = lines.filter((text) => text.length > MAX_LINE_CHARS || RULES.some((rule) => rule.re.test(text)));
+  check(`7c TRACE words: every line (${lines.length}) fits (≤ ${MAX_LINE_CHARS}) at its worst case and says no never-say word`,
+    lines.length > 0 && bad.length === 0 && stayLetter.lines('X', 1).length <= 6, JSON.stringify(bad));
+}
+
+// --- end of 7c TRACE -------------------------------------------------------------------------------------------------------
+
+
+
+// --- 7c LINEAGE (data/lineage-text.ts LINEAGE_TEXT; the books' words in data/log-books.ts): Track LINEAGE adds its checks here
+{
+  // Three-digit units (UNIT-147 is the widest a long lineage reaches), a three-digit wait and charge.
+  const LINEAGE_WORST: Readonly<Record<string, unknown>> = {
+    unit: 147, next: 148, us: 147, rooted: 146, first: 146, second: 147, years: 999, charge: 999,
+  };
+  const lines = renderSlice6(LINEAGE_TEXT, [], 'LINEAGE_TEXT', { ...SLICE7_BASE, ...LINEAGE_WORST });
+  const bad = lines.filter((text) => text.length > MAX_LINE_CHARS || RULES.some((rule) => rule.re.test(text)));
+  check(`7c LINEAGE words: every line (${lines.length}) fits (≤ ${MAX_LINE_CHARS}) at its worst case and says no never-say word`,
+    lines.length > 0 && bad.length === 0, JSON.stringify(bad));
+}
+
+// --- end of 7c LINEAGE -----------------------------------------------------------------------------------------------------
+
+
+
+// --- 7c CHART (data/trace-text.ts TRACE_HUD_TEXT): Track CHART adds its checks here ------------------------------------------
+{
+  // The longest piece, the widest unit name and colony, and a NEXT RUN: line's body at the room the final card keeps.
+  const CHART_WORST: Readonly<Record<string, unknown>> = {
+    piece: 'REASSIGNMENT', unitName: 'UNIT-046·047', line: 'THE NEXT FINAL ROOT IS YOU · 15 REPAIR CHARGE WAITS',
+  };
+  const lines = renderSlice6(TRACE_HUD_TEXT, [], 'TRACE_HUD_TEXT', { ...SLICE7_BASE, ...CHART_WORST });
+  const bad = lines.filter((text) => text.length > MAX_LINE_CHARS || RULES.some((rule) => rule.re.test(text)));
+  check(`7c CHART words: every line (${lines.length}) fits (≤ ${MAX_LINE_CHARS}) at its worst case and says no never-say word`,
+    lines.length > 0 && bad.length === 0, JSON.stringify(bad));
+}
+
+// --- end of 7c CHART -------------------------------------------------------------------------------------------------------
 
 finish();

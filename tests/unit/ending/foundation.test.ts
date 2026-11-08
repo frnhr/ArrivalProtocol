@@ -53,8 +53,9 @@ const threw = (fn: () => unknown): string => {
 // --- The gates, the tables ------------------------------------------------------------------------------------------------
 // The one gate left (the 7a fix pass dropped twoStep and night, review (e)): 7d's CONTACT.
 check('built: CONTACT not yet (7d)', !ENDINGS_BUILT.contact && JSON.stringify(Object.keys(ENDINGS_BUILT)) === '["contact"]');
-check(`RUN_SAVE_VERSION 7, META_VERSION 4, EMPTY_SHIP_FUEL_PCT = STAR_FUEL_PCT (${STAR_FUEL_PCT}: one ★ notch, R8)`,
-  RUN_SAVE_VERSION === 7 && META_VERSION === 4 && EMPTY_SHIP_FUEL_PCT === STAR_FUEL_PCT);
+// (7c bumped the save to 8: traces/foundation pins it; this suite's v6 fixtures migrate through 7 to it.)
+check(`RUN_SAVE_VERSION 7 or later, META_VERSION 4, EMPTY_SHIP_FUEL_PCT = STAR_FUEL_PCT (${STAR_FUEL_PCT}: one ★ notch, R8)`,
+  RUN_SAVE_VERSION >= 7 && META_VERSION === 4 && EMPTY_SHIP_FUEL_PCT === STAR_FUEL_PCT);
 check('the pieces: seven, and six built while CONTACT is down (ENDINGS n/6, R22)',
   ENDING_PIECES.length === 7 && builtPieces().length === 6 && !builtPieces().includes('contact'));
 check('step 1 is PURGE MERGE SPARE on keys 1–3, SPARE rules out SUNSET; step 2 is SUNSET STAY REASSIGNMENT CONTACT, CONTACT absent (R11)',
@@ -153,7 +154,7 @@ const v6Ending = fixture('run-save-v6-ending-chosen-lastlight.json');
   const migrated = migrateRunSave(v6Ending.save) as Raw;
   const finale = migrated.payload.slices.hollow.finale;
   const decoded = decodeRunSave(JSON.stringify(v6Ending.save));
-  check('the v6 ENDING CHOSEN (LAST LIGHT, PURGE) migrates to v7 and decodes', v6Ending.save.saveVersion === 6 && migrated.saveVersion === 7 && decoded.ok,
+  check('the v6 ENDING CHOSEN (LAST LIGHT, PURGE) migrates to v7 (and on to this build\'s version) and decodes', v6Ending.save.saveVersion === 6 && migrated.saveVersion === RUN_SAVE_VERSION && decoded.ok,
     decoded.ok ? '' : `${decoded.refusal.kind}: ${decoded.refusal.detail}`);
   check('…its finale is done: PURGE + REASSIGNMENT, the root fallen, nothing restored, no STAY, no card second (R16)',
     finale.phase === 'done' && finale.hollow === 'purge' && finale.you === 'reassignment' && finale.rootFell === true
@@ -176,7 +177,7 @@ const v6Run2 = fixture('run-save-v6-ship-done-run2.json');
   const migrated = migrateRunSave(v6Run2.save) as Raw;
   const ending = migrated.payload.run.lastUnit.ending;
   const decoded = decodeRunSave(JSON.stringify(v6Run2.save));
-  check('the v6 run 2 desk migrates to v7 and decodes', v6Run2.save.saveVersion === 6 && migrated.saveVersion === 7 && decoded.ok,
+  check('the v6 run 2 desk migrates to v7 (and on to this build\'s version) and decodes', v6Run2.save.saveVersion === 6 && migrated.saveVersion === RUN_SAVE_VERSION && decoded.ok,
     decoded.ok ? '' : `${decoded.refusal.kind}: ${decoded.refusal.detail}`);
   const lastStop = v6Run2.save.payload.run.lastUnit.trail.stops.at(-1);
   check('…its last unit\'s ending is MERGE + REASSIGNMENT, the root its HOLLOW, the final ship the trail\'s last stop (R16)',

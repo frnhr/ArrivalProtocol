@@ -17,6 +17,8 @@ import { skillBootLines, applySkillBootLine, type SkillBootLine } from '@systems
 import { bootLine, bootLinePlan, bootLineSpeaker, bootLineTone, bootLogEntries, lineVars, BOOT_LINE_MAX, type BootLineKind } from '@data/script';
 import type { Speaker } from '@state/schema';
 import { beamSeedTarget } from '@systems/beam-seeds';
+import { traceBootLineSaid } from '@systems/trace-gifts';
+import { lineageBootLineSaid } from '@systems/lineage-boot';
 import { sentrySeedSaid, compileFirewall } from '@systems/sentry';
 import { receiveDeliveryAtBoot } from '@systems/delivery-boot';
 import { newMessagesAtBoot } from '@systems/inbox';
@@ -290,6 +292,10 @@ function sayNextLine(store: Store<GameState>): void {
   // FIREWALL.sys as its line is said (a line that said NO ROOM writes nothing).
   if (kind === 'sentry-seed') sentrySeedSaid(store, ordinal);
   if (kind === 'firewall') compileFirewall(store);
+  // Slice 7c: a trace's line gives what it says (Track TRACE's), a lineage line does its own (Track LINEAGE's: the face takes
+  // the root over). finishBoot says every line, so a skipped boot still gives its gifts.
+  if (kind === 'trace-gift' || kind === 'dish-wiped' || kind === 'dish-wild') traceBootLineSaid(store, kind, ordinal);
+  if (kind === 'face' || kind === 'lineage-control' || kind === 'stranger') lineageBootLineSaid(store, kind, ordinal);
   linesSaid++;
 }
 

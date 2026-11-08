@@ -22,6 +22,7 @@ import { podCode } from '@data/landing-text';
 import { IS_DEV } from '@/env';
 import { GLITCH_BURST_LEVEL, GLITCH_BURST_MS } from '@data/tuning';
 import { visitRng } from '@systems/map-streams';
+import { huntTarget } from '@systems/trace-hunt';
 
 // HOLLOW's verbs (§1 finale, §5.3 moment 13, §6.6, §9 WP11 item 2), DOM-free: on a ship whose HOLLOW has verbs (LAST
 // LIGHT) it fights with your own tools.
@@ -102,7 +103,7 @@ function unlinksLastRepairSpare(memory: readonly Segment[], telegraph: Readonly<
 function startVerb(store: Store<GameState>, cfg: Readonly<VerbDef>): VerbTelegraph | null {
   const state = store.getState();
   const verb = canStartOp()
-    ? chooseVerb(state.memory, rngFor(state), verbWeights(state.run.lastUnit), state.hollow.untriedTools)
+    ? chooseVerb(state.memory, rngFor(state), verbWeights(state.run.lastUnit), state.hollow.untriedTools, huntTarget(state))
     : null;
   const target = verb === null ? undefined : state.memory.find((seg) => seg.id === verb.targetId);
   if (verb !== null && target === undefined) throw new Error(`hollow-verbs: chose ${verb.targetId}, which is not in memory`);

@@ -7,6 +7,7 @@ import type { LetterSource } from '@/types/lineage';
 import type { FeaturedColonist } from '@/types/landing';
 import { lightArrival, type LightSource } from '@systems/delivery-rule';
 import { letterSourcesFromTrail } from '@systems/lineage';
+import { traceMessages } from '@systems/trace-gifts';
 import { armShipAt, isEndSlot, worldSlotOf } from '@systems/map-streams';
 import { solLy, ringsCrossed } from '@systems/map-geometry';
 import { WORLDS, RING_LY } from '@data/arm';
@@ -60,7 +61,10 @@ function derivationKey(run: Readonly<RunState>): string {
   const trail = last?.trail ?? null;
   const stops = trail === null ? '' : trail.stops.map((stop) => `${stop.slot}:${stop.year}:${stop.landed}:${stop.colony ?? ''}:${stop.writer?.name ?? ''}`).join(',');
   const lineage = last === null ? '-' : `${last.number}:${last.cause}:${trail?.run ?? ''}:${trail?.stops.length ?? 0}:${stops}`;
-  return `${map.run}|${map.armSeed}|${map.startYear}|${run.unitNumber}|${route}|${ships}|${lineage}`;
+  // Slice 7c: the traces (STAY's letter, systems/trace-gifts.ts traceMessages) are rolled at RUN START and only their
+  // `given` marks move.
+  const traces = JSON.stringify(run.traces);
+  return `${map.run}|${map.armSeed}|${map.startYear}|${run.unitNumber}|${route}|${ships}|${lineage}|${traces}`;
 }
 
 // Every message the unit has received so far this run, oldest boot first (within a boot, by year received).
@@ -83,6 +87,8 @@ function deriveMessages(run: Readonly<RunState>): InboxMessage[] {
     ...replies(run, policies),
     ...postcards(run),
     ...letters(run),
+    // Slice 7c (R32): STAY's supply packet's letter (Track TRACE's; none until built).
+    ...traceMessages(run),
   ];
   const order: Readonly<Record<InboxMessage['kind'], number>> = {
     welcome: 0, policy: 1, 'arm-complete': 2, reply: 3, postcard: 4, letter: 5, 'no-address': 6,

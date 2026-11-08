@@ -44,8 +44,10 @@ import { archiveShipStarted, archiveShipDone, archiveRunEnded, archiveTutorialDo
 import { writeRunSave, clearRunSave } from '@systems/save-write';
 import { finaleRunCause } from '@systems/ending-rules';
 import { newSegId } from '@systems/memory-ops';
-import { createRunState, createShipSlices, createUiState, createRunStats } from '@state/initial';
+import { createRunState, createShipSlices, createUiState, createRunStats, withRunMap } from '@state/initial';
 import { planThreat, threatInputFor, applyThreat, nominalShipThreat, nominalRunThreat } from '@systems/threat-plan';
+import { finalTraceInput } from '@systems/traces';
+import { traceSeedMods, traceGiftCharge, arrivalTraceLines } from '@systems/trace-gifts';
 import { inOrbitOutcome, landingResult } from '@systems/landing-rules';
 import {
   currentShip, currentSlot, shipDefAt, mapAtShip, mapAtFirstShip, hopRng, createRunMap, classicRunMap,
@@ -235,7 +237,7 @@ function doneForNextShip(state: Readonly<GameState>): string[] {
 export function startRun(store: Store<GameState>, seed: number, lineage: Readonly<RunLineage>, world: RunMapState['world'] = store.getState().run.map.world): void {
   const map = world === 'arm' ? createRunMap(lineage, seed) : classicRunMap(seed, 0, lineage.wave);
   resetWorldForShip(store, {
-    phase: 'title', run: { ...createRunState(seed, 'title', 0, lineage), map }, carried: null,
+    phase: 'title', run: withRunMap(createRunState(seed, 'title', 0, lineage), map), carried: null,
     threat: nominalShipThreat(0), freshLog: true, done: [],
   });
 }
@@ -427,7 +429,7 @@ export function goTransmit(store: Store<GameState>, toSlot: number): void {
   const extra = state.run.map.pendingExtra ?? { extraHits: 0, coreHit: 0, coreReset: false };
   // The ladder's verdict for the next ship, from the run's threat once this ship's tally is done (Track THREAT's endShip).
   const facts = mapFacts(state.run.map, fromSlot, toSlot, toShipIndex + 1);
-  const threat = planThreat(threatInputFor(state.run.threat, facts, state.run.stats.deal !== null));
+  const threat = planThreat(threatInputFor(state.run.threat, facts, state.run.stats.deal !== null, finalTraceInput(state.run)));
   // Phase 3 slice 3b: the deliveries that catch up at the destination ride this hop (02 §3.9; their seed chance reads the
   // verdict), packed by planPacket with the unit's files, so the plan's numbers count them from the start.
   const deliveries = deliveriesForHop(state, fromSlot, toSlot, threat);
@@ -491,7 +493,13 @@ export function transmitNext(store: Store<GameState>): void {
   const scriptedSeeds = source.kind === 'scripted' && playsTutorial(state.run);
   const beamSeeds = scriptedSeeds ? rolled : rollDisguises(rolled, plan.threat.depth, hopRng(state.run, fromSlot, plan.toSlot, 'disguise'));
   const deliverySeeds = rollDeliverySeeds(plan.deliveries, packet, hopRng(state.run, fromSlot, plan.toSlot, 'delivery-seeds'));
-  packet.seeds = [...beamSeeds, ...deliverySeeds];
+  // Slice 7c (R32, R33): the traces have their say on the seeds as rolled (SPARE's gift ship's beam carries none; into the
+  // final ship PURGE's wipe, and a non-compliant trace's wild seed), on the hop's own 'traces' stream (Track TRACE's;
+  // the identity until built). The delivery seeds the wipe takes are no longer the deliveries' (arrivalDeliveries reads the
+  // seeds that ride).
+  const traceMods = traceSeedMods(state, plan.toSlot, { beam: beamSeeds, delivery: deliverySeeds }, packet, hopRng(state.run, fromSlot, plan.toSlot, 'traces'));
+  packet.seeds = traceMods.seeds;
+  const ridingIds = new Set(packet.seeds.map((seed) => seed.targetId));
   const files = packedFiles(packet);
   // The arrival as the PACKET previewed it (systems/arrival-preview.ts), for the seeds the beam really rolled (the
   // deliveries' included). TRANSMIT ▸ waits while files (deliveries included) are over the link or files and the floor over
@@ -512,7 +520,9 @@ export function transmitNext(store: Store<GameState>): void {
   const landing = hitsLanding(plan.hop, plan.extraHits);
   hits.push(...rollTransitHits(files, landing, hopRng(state.run, fromSlot, plan.toSlot, 'transit')));
   const cardCharge = pickCharge(plan.pick);
-  const charge = arrivalCharge(packet.chargeCarried, state.run.pendingStarCredit, cardCharge, plan.hop.chargeFloor);
+  // Slice 7c (R32): a trace's gift arrives with the charge (Track TRACE's; 0 until built).
+  const giftCharge = traceGiftCharge(state, plan.toSlot);
+  const charge = arrivalCharge(packet.chargeCarried, state.run.pendingStarCredit, cardCharge, plan.hop.chargeFloor, giftCharge);
   const layout = layoutCarried(packet, charge.blocks, ship, plan.threat, hollowLabel(state.run));
   // Every arrival number the kid read must be the one that happens (the review's M1): the charge laid out and lost.
   if (charge.blocks !== fit.wanted || layout.chargeBlocks !== fit.chargeArrives || layout.overflowLost !== fit.wanted - fit.chargeArrives) {
@@ -534,9 +544,12 @@ export function transmitNext(store: Store<GameState>): void {
     // The root lands in the slot as the ship is built (createShipSlices, from the verdict's rootBlocks).
     seeds: layout.seeds,
     boarded: boardedBy(plan.threat),
-    deliveries: arrivalDeliveries(plan.deliveries, packet.deliveries, deliverySeeds.map((seed) => seed.targetId)),
+    deliveries: arrivalDeliveries(plan.deliveries, packet.deliveries, deliverySeeds.map((seed) => seed.targetId).filter((id) => ridingIds.has(id))),
     // Slice 4 (plan §2.14): the skill files as laid out, and how each came (the boot's TRAINED / RETRAINED lines).
     skills: arrivalSkills(state, packet, layout.racks.segs),
+    // Slice 7c: what the traces did to this arrival, as the boot says it (Track TRACE's; none until built), and their charge.
+    traceLines: arrivalTraceLines(state, plan.toSlot, traceMods, giftCharge),
+    giftCharge,
   };
   // The tool kinds this send brought for the first time (run.licences: "the kinds that have reached the unit", plan §2.2).
   const firstKinds = plan.deliveries.filter((chip) => chip.firstOfKind).map((chip) => repoToolKind(chip.file))
