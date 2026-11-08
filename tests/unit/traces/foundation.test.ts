@@ -355,9 +355,12 @@ for (const [what, file, raw] of [['run 2\'s first desk', 'run-save-v7-ship-done-
 }
 // (Track CHART's stubs:)
 {
+  // Built by Track CHART (traces/ui-models has the rest): the classic world holds no traces, so no row and no ◆; the final
+  // card's lines follow the gates (one a built kind, none while both are down).
   const state = createInitialState({ seed: 7 });
-  check('CHART\'s stubs, neutral: no card row, no ◆, no NEXT RUN: line', traceCardRow(state, 0) === null && !traceOnChart(state, 0)
-    && traceNextLines(ending('purge', 'reassignment')).length === 0);
+  const want = (['purge', 'reassignment'] as const).filter((kind) => TRACES_BUILT[kind]).length;
+  check('CHART\'s models: no card row or ◆ on the classic world; a NEXT RUN: line per built trace', traceCardRow(state, 0) === null && !traceOnChart(state, 0)
+    && traceNextLines(ending('purge', 'reassignment')).length === want);
 }
 
 finish();
