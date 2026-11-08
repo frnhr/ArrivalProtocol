@@ -14,6 +14,7 @@
 // • { after: s }: the landing stands for s AI seconds (HOLLOW keeps biting meanwhile: about what a landing by the strip
 //   takes), then lands as 'instant' does;
 // • 'manual': never; the suite calls landInstantly (or flies the landing) itself.
+// In every mode, THE LAST LANDING after MERGE is left to fly itself (slice 7b review; tick below).
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import { forceLandAll } from '@systems/landing';
@@ -62,6 +63,11 @@ function tick(store: Store<GameState>, dtAi: number): void {
   const state = store.getState();
   if (state.run.phase !== 'landing') { landingAiSec = 0; return; }
   if (state.landing.ended !== null || mode === 'manual') return;
+  // Slice 7b review: THE LAST LANDING (MERGE's restored pods, landing.lastLanding set) flies by R27's rules on its own, with
+  // its own SKIPs and its own end, so the harnesses that reach MERGE (wp11/full-run, wp12/playthrough, wp11/p2/views) play
+  // it as a kid would watch it: landing its radio pods here would hide its flier, its blind drops and its stuck rules, and
+  // score every restored pod soft in an LZ with room.
+  if (state.landing.lastLanding !== null) return;
   landingAiSec += dtAi;
   const standFor = typeof mode === 'object' ? mode.after : 0;
   if (landingAiSec < standFor) return;
