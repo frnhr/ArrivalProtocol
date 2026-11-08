@@ -1501,3 +1501,176 @@ follow-up and replaces the ones above.
 - **The lead:** the merge probe was not re-run here (this worktree's isolation refuses a scratch clone's commits and
   merges). `scratchpad/probe7.py <FINALE|CARD|NIGHT>` tags each track's lines at this follow-up's numbers, for the review's
   probe to re-run before the tracks branch.
+
+## Deviations (Track FINALE)
+
+Recorded by Track FINALE (branch `finale-7a`, from 2625aa4, the head of `found-7a`). `ENDINGS_BUILT.twoStep` is raised:
+the FINALE plays its two steps on both worlds. This track gates nothing else. The unit tier is green: 209 passed, 0 failed, 11
+balance-only skipped, 218 s on 4 workers (other agents loading the machine), with `npm run typecheck` and the tests' tsc clean.
+
+### What is built
+
+- **`systems/ending-rules.ts`** (pure):
+  - `emptyShip` (R8): the final ship in orbit after its landing (locked or accepted), with no pod aboard or falling, and
+    FUEL as shown at the landing's end ≥ `EMPTY_SHIP_FUEL_PCT`.
+  - `stayCandidates` (R9): the final ship by its live tally (while its result is not yet recorded), then `run.ships`
+    newest first, judged by `shipOnTarget` (exported for the codec). At most `STAY_PICK_MAX`, each with its colony and
+    its `routeYear`.
+  - `optionState` (R11, M2): the meters (charge, fuel), MERGE's `NOW:`, the need lines, and `named` from `seen`.
+  - `mergeRestorable`.
+  - `reportEndingLine`: `ENDING · <step 1> · <ENDING_TITLE>`, using NIGHT's table (B1).
+  - `endingRecordAt`, with STAY through `stayCandidates`.
+- **`systems/finale.ts`:**
+  - the asleep line (R6), and the card opening once the landing settles;
+  - `pickStep1`, `backToStep1`, `pickStep2` (with M6's re-check), `pickStay` (M3) and `continueFollowed` (R10);
+  - the apply:
+    - PURGE and SPARE: every block of HOLLOW leaves memory, and its eaten pods stay parked;
+    - MERGE: R15's in-place restore;
+    - UNRESOLVED: nothing leaves (it comes with you);
+  - the verdict, `finaleVerdictLines` (R13), exported so the suites can check its worst cases;
+  - the phases after the confirm:
+    - `'verdict'` → `'done'`;
+    - for a MERGE that gave drivers back: `'verdict'` → `'last-landing'` (the landing reopened) → `'done'`;
+  - `record`, written at every confirm (M4);
+  - `decideFinaleNow`, the body of `__ap.ending`.
+- **`data/finale-text.ts`:** adds `echo`, `nowInterim`, `followedWord`, and `fuelStar` (for CARD's B2 hook).
+- **`tests/unit/support/finale.ts`** (m7):
+  - `finaleAtStep1` and `settleFinale` wait for `cardAtAi`;
+  - `chooseEnding` takes `verdict: 'type'`, for the suites that time the verdict;
+  - `decidedAs` also reads `'verdict'` and `'last-landing'`;
+  - `reportDue` is new;
+  - `openFinaleStep1` leaves a hand-built card up (`cardAtAi ??= 0`).
+- **Suites:**
+  - `ending/rules`: pure, 29 checks;
+  - `ending/finale-flow`: 38 checks, on seed 7's arm LAST LIGHT (by flyOnce) and on the classic LAST LIGHT once.
+
+### Deviations
+
+1. **MERGE's landing reopens when the verdict ends, not in the apply's update.**
+   - At the confirm, the drivers come back in place and their records are marked restored.
+   - The pods stay parked while the verdict types.
+   - The move from `'verdict'` to `'last-landing'` unparks them and reopens the landing. This follows §2.7's order: the
+     verdict types over a settled ship, not under launches.
+   - With `twoStep` down, WP11's reopen in the same update still applies.
+2. **The open delay is a rule.** Before `cardAtAi`, `pickStep1` and `continueFollowed` refuse with `NOT NOW`. A pick under
+   the tear is never a choice, and neither the debug hooks nor the suites can pick before the card is up.
+3. **A skipped verdict moves on at once.** `skipFinaleEnding` on `'verdict'` moves to `'last-landing'` or `'done'` in the
+   same call. The card's skip and the phase never disagree for a tick.
+4. **CONTROL's verdict follows CONTROL's orders.**
+   - It is compliant (`Thank you, Unit 47. Your next post is RELAY 20. :)`) only for PURGE or UNRESOLVED with
+     REASSIGNMENT.
+   - Every other ending gets `Unit 47 is non-compliant. :)`:
+     - MERGE and SPARE disobey `Please delete UNIT-046. :)`;
+     - SUNSET, STAY and CONTACT disobey `stand by`.
+   - So MERGE + REASSIGNMENT is non-compliant, as WP11's MERGE was.
+   - This split is not R33's. R33's rule decides traces; this one follows CONTROL's orders.
+5. **UNRESOLVED's card quiets HOLLOW.**
+   - When IT FOLLOWED YOU opens, HOLLOW goes dormant: no bites, seeds or verbs, and its infections are cured. This is what
+     happens when the root falls.
+   - **Why:** a root that bites under a modal card starts a fight nobody can fight.
+   - The root stays in memory through the confirm.
+6. **MERGE's `NOW:` line fits R15 in 7a.**
+   - `FINALE_TEXT.nowInterim` reads `NOW: + 2 eaten drivers come back · launch their pods`.
+   - It counts the eaten drivers whose blocks still stand (`mergeRestorable`), which are the ones the interim gives back.
+   - `FINALE_TEXT.now` (`their pods land on their own`) stays for 7b.
+   - **Why:** in 7a, a `NOW:` line promising that the pods land by themselves would be a lie.
+7. **`EmptyShip` gains `inOrbit` and `aboard`.**
+   - They choose the need line: `NEEDS THE SHIP IN ORBIT, EMPTY`, or the FUEL need.
+   - Before the landing ends, the FUEL meter reads the live tank.
+8. **The card's charge need is `FINALE_TEXT.needs.charge`** (`NEEDS 20 CHARGE · you have 14`), as the foundation's
+   Deviation 12 said. WP11's `finaleChoiceRefusal` and `HOLLOW_FINALE.mergeNeeds` are kept for the old card (M5).
+9. **`pickStay` refuses a stray slot with `NOT NOW`.**
+   - There are no words for it, since the card only offers candidates.
+   - It also runs M6's re-check of step 1.
+10. **CONTACT's `optionState` throws if `ENDINGS_BUILT.contact` is raised.**
+    - The row is 7d's, and raising the gate before its price exists is a bug.
+    - While the gate is down, the row is `hidden`.
+11. **The record is written in the confirm's update, with phase `'verdict'`, not `'done'`.**
+    - M4's "in the same update as `'done'`" was written before the verdict phase existed.
+    - The codec still refuses a record before `'done'`.
+    - No save point falls in `'verdict'` or `'last-landing'` (R14), so that check never meets one, but its comment should
+      say so (patch 2).
+12. **`__ap.ending` lands first.**
+    - It lands the landing with `forceLandAll`, as `landAll` does.
+    - It decides through the real picks, so a refused price throws.
+    - It skips the duel, the open delay and the verdict.
+    - It lands MERGE's reopened landing too.
+    - The report then follows the linger.
+13. **`rootKeyDue` (`story-log.ts:66`) is unchanged.** It already reads `'step1' && rootFell`, so UNRESOLVED, which has no
+    `rootFell`, finds no entry 12.
+14. **Lines touched beyond the named ones.** Each is forced by a named change:
+    - `ending/foundation.test.ts`: its import of `HOLLOW_FINALE` became `FINALE_TEXT`, for the words at `:129–132`;
+    - `debug.ts`:
+      - the finale import gained `decideFinaleNow`;
+      - its unused `notBuilt` import was removed (the `ending` body is FINALE's);
+    - `words.test.ts`:
+      - the typed-endings check ran on to `:164`;
+      - `FINALE_WORST` gained `command`, the worst case of the verdict's echo;
+    - `hollow-text.ts`: HOLLOW_FINALE got a comment only, and no key was deleted (M5).
+
+### The movers (R5's six, plus R13's churn), re-baselined
+
+No check was dropped. Each one now checks the two-step flow, mostly through `support/finale.ts`.
+
+- **`ending/foundation.test.ts`:**
+  - `:56`: the gate is raised.
+  - `:78–85`: the built rules on a fresh world:
+    - SPARE, SUNSET and STAY are out of reach and unnamed;
+    - CONTACT is hidden;
+    - `pickStay` and `continueFollowed` refuse when the card is not up.
+  - `:129–132`: M6's refusal now uses the card's words.
+- **`wp11/merge-test.test.ts`:**
+  - the root's fall is `'asleep'` (with its line), and `settleFinale` brings up the card;
+  - MERGE's refusal and PURGE's state come from `optionState`;
+  - MERGE leaves `'last-landing'`, with the landing reopened;
+  - the PURGE case lands its pods first, then settles;
+  - CONTROL's compliant line is the new one;
+  - UNRESOLVED goes through IT FOLLOWED YOU (no entry 12), CONTINUE and step 2 before its report;
+  - the zero-landed PURGE settles first (`opts.step`);
+  - the worn-Core duel ends `'asleep'`.
+- **`wp11/fix1/fix1.test.ts`:**
+  - the one-update listener reads `'verdict'` and leaves it to type;
+  - MERGE's verdict names POD 12 through `finale.restored`;
+  - UNRESOLVED's line now holds its card (and so the report) until it has typed, then step 2 follows;
+  - the 1-thread duel ends `'asleep'`;
+  - the nobody-landed loop settles first.
+- **`wp11/p2/views.test.ts`:**
+  - `:55–58`:
+    - every ending's verdict (11 combinations) fits at its worst-case names;
+    - each one speaks only as echoes, then CONTROL.
+  - `:173`: the biggest tear, then `'asleep'`.
+  - `:188`: settles first.
+  - PURGE's and MERGE's typed endings are now their verdicts. MERGE's restored pods come from `finale.restored`.
+- **`wp11/p2/purge-fleet.test.ts`:**
+  - `:44`: the verdict's worst words.
+  - `:95–101`: PURGE is taken after the settle. The verdict makes no fleet claim at all; the `4 OF 5` claim stays checked
+    on RUN END's title below.
+- **`threat/arrival-story.test.ts:260`:** the duel runs to the root's fall, then `settleFinale`, with no deal UI at any
+  point.
+- **`support/words.test.ts:150–164`:**
+  - the purge and merge card words are still checked, because WP11's card stays mounted until CARD merges;
+  - the typed-endings check became the verdict's: the commands echoed, the card counting drivers, never souls.
+- **`landing/hollow-landing.test.ts`:** no line changed. It passes through `openFinaleStep1`'s card-up default and
+  `decidedAs`'s widening.
+- **Not run** (outside the quick tier):
+  - the BALANCE_ONLY suites `wp11/full-run` and `wp12/playthrough`:
+    - both wait for `finaleAtStep1`, which now comes after the landing settles;
+    - their instant landing also lands a reopened landing.
+  - the e2e. Plan §6.4's edits are the lead's.
+
+### Patches requested (lead)
+
+1. **The codec's STAY check** (`save-codec.ts finaleRefusal`). A STAY ship that is in `run.ships` must pass
+   `ending-rules.ts shipOnTarget`. The final ship is not in `run.ships` at ENDING CHOSEN, so it must pass the same rule on
+   its slices' `landing.pods`. A small pods-only twin of `onTargetTally` would serve both.
+2. **The codec's record comment.** The record is written at the confirm, in `'verdict'` (Deviation 11). The check "a
+   record before `'done'`" holds only because no save point falls in `'verdict'` or `'last-landing'`.
+3. **e2e (§6.4).** `playthrough.mjs`, `run-flow.mjs` and `resume.mjs` must drive the two steps. A MERGE that gave drivers
+   back now reopens the landing after the verdict (`'last-landing'`) before the report.
+4. **Between FINALE's merge and CARD's**, WP11's card falls short:
+   - it closes at `'verdict'`, so it never shows the verdict;
+   - it cannot show UNRESOLVED's IT FOLLOWED YOU card, so a run that ends UNRESOLVED waits there with no UI until CARD
+     merges.
+   - CARD's card should treat `'verdict'` as up (`finaleCardUp`) and know that `skipFinaleEnding` advances the phase.
+5. **The strip (`script.ts:2398`)** shows `FINALE_TEXT.strip` only at `'step1' | 'step2'`. Whether `'verdict'` needs a
+   strip line is the lead's call.
