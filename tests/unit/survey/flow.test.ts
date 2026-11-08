@@ -15,6 +15,7 @@
 //   MAPPED, the thread released at 100%, SHIP DONE at rest in a save that decodes, the record (moved off ROCKY, unknown).
 // • v2: the bad guess revealed as the swath passes it (`> SURVEY: LZ-B IS ROCKY ✕`, CONTROL's line), every found site rated,
 //   the strip's `survey-swap` row naming SITE 5, gone once the kid moves LZ-B there.
+// • R11: sites found at v1 are rated once v2 works, even with the rim mapped.
 // • v3: no thread, `NO THREAD (v3)`, mapped % at the capture inside 46–56%; bitten to DAMAGED it works as v2: it claims a
 //   thread; REPAIRed back to OK it lets the thread go.
 // • R8: a preempting claim (AUTOBURN's and AUTODROP's: ops-core reserveThread preempt) takes SURVEY's thread when the kid's op
@@ -36,7 +37,7 @@ import { mappedPct } from '@state/survey-selectors';
 import { freeSegment, mergeAdjacentFree } from '@systems/memory-ops';
 import { threadsBusy, threadsTotal, holdsThread, reserveThread, releaseThread, canStartOp } from '@systems/ops-core';
 import { capabilitiesNow } from '@systems/capabilities';
-import { assignSite, toggleSurveyPause, surveyStatus, SURVEY_THREAD_OWNER } from '@systems/survey';
+import { assignSite, toggleSurveyPause, surveyStatus, mapNow, SURVEY_THREAD_OWNER } from '@systems/survey';
 import { surveyRunning, swathHalfRad } from '@systems/survey-model';
 import { openBranchesAt } from '@systems/skill-tree';
 import { visitNow } from '@systems/skill-levels';
@@ -228,6 +229,20 @@ withSurveyBuilt(() => {
     const moved = assignSite(h.store, 'LZ-B', siteId(5));
     check(`…with no window open the strip offers the swap (\`${strip}\`), and drops it once LZ-B is moved there`,
       strip === SWATH_TEXT.strip.swap('LZ-B', 'rocky', 'SITE 5') && moved === null && ruleLine('survey-swap') === null, String(strip));
+  }
+
+  // --- R11 latched: a site found at v1 is rated once v2 works, with nothing left to map --------------------------------------
+  {
+    fromStart(1);
+    h.step();
+    mapNow(h.store, 100);
+    const unrated = survey().sites.every((site) => site.found && !site.groundKnown);
+    h.step();
+    giveSkillFile(h.store, 'survey', 2);
+    h.step();
+    check('R11: every site found at v1 (the whole rim mapped: done, no thread) is rated as soon as SURVEY works at v2',
+      unrated && survey().sites.every((site) => site.groundKnown) && surveyRunning(s()) === 'done' && !survey().claimed
+      && said('mind-sys', SWATH_TEXT.terminal.revealed('LZ-B', 'rocky')) === 1);
   }
 
   // --- v3 SWEEP: no thread; damage makes it v2 again ------------------------------------------------------------------------------

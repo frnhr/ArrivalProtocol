@@ -3,7 +3,7 @@ import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import type { AssignRefusal, BadGround, SurveyRecord, SurveySite, SurveyState } from '@/types/survey';
 import type { EffectiveVersion } from '@/types/skill';
-import { onGameTick, onPostTick } from '@systems/clock';
+import { onGameTick, onPostTick, isLivePhase } from '@systems/clock';
 import { onWorldReset } from '@systems/reset';
 import { on, emit } from '@systems/events';
 import { say } from '@systems/say';
@@ -187,6 +187,11 @@ function postTick(store: Store<GameState>): void {
   }
   const running = surveyRunning(state);
   if (running !== 'running' && survey.lastRad !== null) store.mutate((draft) => { draft.landing.survey.lastRad = null; });
+  // R11: while SURVEY works at v2+, every site it found is rated, mapped this tick or before (a site found at v1, rated once a
+  // REPAIR brings v2 back, whether or not anything is left to map).
+  if (isLivePhase(state) && surveyVersion(state) >= SURVEY_RATE_VERSION && survey.sites.some((site) => site.found && !site.groundKnown)) {
+    afterMapping(store);
+  }
   // CONTROL's boot quip (R21): at the first flight tick of a POOR planet, SURVEY aboard or not.
   if (!survey.lines.controlBoot && state.run.phase === 'flight' && !state.clock.paused) {
     store.update((draft) => { draft.landing.survey.lines.controlBoot = true; });
