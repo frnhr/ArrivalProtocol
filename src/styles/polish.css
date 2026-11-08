@@ -1,0 +1,17 @@
+/* Slice 8 POLISH (docs/phase3/impl/slice-8-plan.md §2.11, §2.12; OPEN-DECISIONS 20, 66): imported from main.ts after
+   resident.css.
+   • [ENTER]'s skip over frames: the header's hint `SKIPPING… n LEFT` pulsing in the accent, the page's pointer a wait. */
+
+/* ── [ENTER]'s skip over frames ───────────────────────────────────────────────────────────────────────────────────────── */
+body.ll-skipping, body.ll-skipping * { cursor: progress !important; }
+.ll-skip.skipping:disabled {
+  opacity: 1;
+  color: var(--accent-bright);
+  border-color: var(--accent);
+  animation: ll-skipping 0.9s ease-in-out infinite alternate;
+}
+@keyframes ll-skipping {
+  0% { box-shadow: 0 0 0 transparent; }
+  100% { box-shadow: 0 0 10px var(--resident-glow); }
+}
+body.reduced-motion .ll-skip.skipping { animation: none; }

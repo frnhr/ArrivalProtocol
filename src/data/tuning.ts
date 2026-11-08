@@ -2596,3 +2596,17 @@ export const CONTACT_STOP_FRAGMENTS = 1;
 export const SIGNAL_FILE_BLOCKS = 1;
 
 // --- end of 7d lead ----------------------------------------------------------------------------------------------------
+
+
+// =====================================================================================================================
+// --- Phase 3 slice 8 POLISH (docs/phase3/impl/slice-8-plan.md §2.11, §2.12; OPEN-DECISIONS 20, 66). No balance number:
+// the [ENTER] skip's frames and the receiver bypass's look.
+// =====================================================================================================================
+
+// [ENTER] in THE LAST LANDING flies the rest of the landing in slices (systems/last-landing.ts skipLastLandingFrames): at
+// most this much wall time of clock steps per slice, each slice its own task, so the page paints and takes input between
+// two. WHY 12: under a 60 Hz frame's 16.7 ms, so a slice never costs the page a frame by itself, and far under the 50 ms a
+// long task starts at even with the one step that crosses it (a step is a few ms in Chromium).
+export const LAST_LANDING_SKIP_FRAME_MS = 12;
+
+// --- end of 8 POLISH -------------------------------------------------------------------------------------------------

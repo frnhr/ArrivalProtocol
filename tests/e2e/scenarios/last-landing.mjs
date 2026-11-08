@@ -5,7 +5,10 @@
 //   header strip (`THE LAST LANDING`, `3 OF 3 PODS TO LAND`, who flies them, `[ENTER] SKIP TO THE END`), the SHIP view held
 //   (TAB does nothing), the POD BAY's `RESTORED 3` row with its pips and `DRIVERS BY RADIO · 80%`, a steady amber
 //   `.np-beacon.restored` per pod on the NAV PLOT; the kid's launch refused ([L] shut by the layer, __ap.launch MERGE FLYING).
-// • [ENTER]: skipped to the end in that keypress (the machine cleared, 'done'), the strip gone, the restored pods down.
+// • [ENTER]: skipped to the end over frames (slice 8 POLISH, OD 66): the hint reads `SKIPPING… n LEFT`, no long task over
+//   100 ms (a PerformanceObserver on 'longtask'; the one-call skip was one task of about 2 s), a click on the header's
+//   pause, TAB and a second [ENTER] change nothing while it runs, then the machine cleared, 'done', the strip gone, the
+//   restored pods down, and the report's RESTORED row counts as many LANDED as the pods' own fates.
 // • The final LANDING REPORT: `.lr-row.kind-restored` (`RESTORED BY MERGE · 3 RESTORED · …`), `(restored)` on the credits.
 // • The night: the RUN TALLY → EPILOGUE → FINAL CARD → NEW RUN, to the title.
 // MERGE + SUNSET with the engine shut is ending.mjs's part 2.
@@ -148,17 +151,44 @@ check('…the kid\'s launch refused: [L] launches nothing, __ap.launch is MERGE 
 // ======================================================================================================================
 // [ENTER] skips to the end.
 // ======================================================================================================================
+await st(() => {
+  window.__llTasks = [];
+  new PerformanceObserver((list) => { for (const entry of list.getEntries()) window.__llTasks.push(Math.round(entry.duration)); }).observe({ type: 'longtask' });
+  window.__llEnd = null;
+  window.__llHints = new Set();
+  // Every hint the strip shows while the skip runs, sampled each frame.
+  const sample = () => {
+    const words = document.querySelector('#lastLanding .ll-skip-words')?.textContent ?? '';
+    if (!document.getElementById('lastLanding').hidden) window.__llHints.add(words);
+    if (window.__ap.store.getState().landing.lastLanding !== null) requestAnimationFrame(sample);
+  };
+  requestAnimationFrame(sample);
+});
 const t0 = Date.now();
 await page.keyboard.press('Enter');
-const skipped = await waitFor(() => window.__ap.store.getState().landing.lastLanding === null, 8000, 50);
+// While it runs: the header's pause button and TAB are swallowed (the world the skip flies must be the one-call skip's).
+await page.waitForTimeout(120);
+const midway = await st(() => ({ running: window.__ap.store.getState().landing.lastLanding !== null, skipping: document.body.classList.contains('ll-skipping') }));
+await page.locator('#speedPause').click({ force: true, timeout: 2000 }).catch(() => {});
+await page.keyboard.press('Tab');
+await page.keyboard.press('Enter');
+const midAfter = await st(() => ({ paused: window.__ap.store.getState().clock.paused, mode: window.__ap.store.getState().ui.mode }));
+const skipped = await waitFor(() => window.__ap.store.getState().landing.lastLanding === null, 30000, 50);
 const skipMs = Date.now() - t0;
 await page.waitForTimeout(300);
+const frames = await st(() => ({ tasks: window.__llTasks, hints: [...window.__llHints] }));
+const longest = Math.max(0, ...frames.tasks);
+check(`[ENTER] skips over frames: \`SKIPPING… n LEFT\` while it runs, its longest task ${longest} ms (≤ 100), done in ${skipMs} ms`,
+  skipped && longest <= 100 && frames.hints.some((hint) => /^SKIPPING… \d+ LEFT$/.test(hint)), JSON.stringify(frames));
+check('…while it runs a click on PAUSE, TAB and a second [ENTER] change nothing', !midway.running || (midway.skipping && !midAfter.paused && midAfter.mode === 'tools'),
+  JSON.stringify({ midway, midAfter }));
 const after = await st((pods) => {
   const s = window.__ap.store.getState();
   return { phase: s.hollow.finale.phase, stripHidden: document.getElementById('lastLanding').hidden, llOn: document.body.classList.contains('ll-on'),
+    landedLz: pods.filter((pod) => { const fate = s.landing.pods.find((record) => record.pod === pod)?.fate; return fate?.kind === 'down' && fate.touchdown.place === 'lz'; }).length,
     fates: pods.map((pod) => s.landing.pods.find((record) => record.pod === pod)?.fate.kind), sources: pods.map((pod) => s.landing.pods.find((record) => record.pod === pod)?.fate.launch?.source ?? null) };
 }, eaten);
-check(`[ENTER]: THE LAST LANDING over in that keypress (${skipMs} ms), 'done', the strip gone, every restored pod down by 'merge'`, skipped && after.phase === 'done'
+check(`…THE LAST LANDING over, 'done', the strip gone, every restored pod down by 'merge'`, skipped && after.phase === 'done'
   && after.stripHidden && !after.llOn && after.fates.every((kind) => kind === 'down') && after.sources.every((source) => source === 'merge'), JSON.stringify(after));
 
 // ======================================================================================================================
@@ -174,6 +204,8 @@ const report = await st(() => {
 });
 check('the final LANDING REPORT: `.lr-row.kind-restored` (`RESTORED BY MERGE · 3 RESTORED · …`, an icon per pod), `(restored)` on the credits', reportUp
   && report.dom === 1 && /^RESTORED BY MERGE · 3 RESTORED/.test(report.line ?? '') && report.icons === EATEN && report.credits >= 1, JSON.stringify(report));
+check(`…its LANDED count is the skip's own (${after.landedLz} in an LZ with room)`, after.landedLz === 0
+  ? !/ LANDED/.test(report.line ?? '') : (report.line ?? '').includes(` ${after.landedLz} LANDED`), String(report.line));
 check('…its ending line `ENDING · MERGE · …`', /^ENDING · MERGE · /.test(report.endingLine ?? ''), String(report.endingLine));
 await shot('2-report');
 
