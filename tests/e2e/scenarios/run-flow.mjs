@@ -495,8 +495,12 @@ const lastBoot = await st((from) => window.__ap.log().filter((entry) => entry.id
 // The unit is the archive's next (__ap.runNumber re-reads the lineage: UNIT-049 after run 2's start), greeted by the last
 // unit that ended (047).
 const lastUnit = await st(() => window.__ap.store.getState().run.unitNumber);
-check(`…LAST LIGHT's boot opens on it, in HOLLOW's voice (\`> hi 0${lastUnit}. it's 047. …\`)`, lastBoot[0]?.speaker === 'hollow'
-  && lastBoot[0].text.startsWith(`> hi 0${lastUnit}. it's 047. `) && await st(() => window.__ap.store.getState().run.ghostSpoken), JSON.stringify(lastBoot.slice(0, 3)));
+// Slice 7c (R35, R36): a won run leaves no ghost line; the final root's face speaks instead, in HOLLOW's voice, after the
+// receiver's own lines: `> hi 049. it's 047. i deleted 046. …`, then its wait at the dish.
+const face = lastBoot.filter((entry) => entry.speaker === 'hollow');
+check(`…LAST LIGHT's boot: the final root's face in HOLLOW's voice (\`> hi 0${lastUnit}. it's 047. …\`, then its wait), no ghost`,
+  face[0]?.text.startsWith(`> hi 0${lastUnit}. it's 047. `) === true && /at this dish/.test(face[1]?.text ?? '')
+  && !(await st(() => window.__ap.store.getState().run.ghostSpoken)), JSON.stringify(face)); // the face is not the ghost (R36)
 await page.waitForTimeout(500);
 // Falling at the planet with an empty tank. BEAM OUT is a real race (6 tactical s against the impact) and the world runs
 // on while the kid reads the offer and its confirm: from 1,000 km the impact was 5 s off by the time the bar ran, and
