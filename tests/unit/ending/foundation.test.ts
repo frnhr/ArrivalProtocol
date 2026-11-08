@@ -1,0 +1,237 @@
+// Slice 7a FOUNDATION (docs/phase3/impl/slice-7-plan.md §2.2, §2.4, §6.1 ending/foundation): the lead's suite.
+// • the save: the v6 fixtures (tests/unit/save/fixtures/run-save-v6-*: ENDING CHOSEN at LAST LIGHT after PURGE on seed 7's
+//   worked route, a run 2 desk whose last unit is 'won-merge') migrate to v7 and decode; the finale reads PURGE +
+//   REASSIGNMENT, the last unit's ending MERGE + REASSIGNMENT, every featured colonist's line null, THE LAST LANDING null;
+//   both resume; the codec's v7 refusals (a decided finale with no step 2, SPARE + SUNSET, STAY naming no ship, THE LAST
+//   LANDING set, a pod restored that MERGE never gave back, SHIP DONE with an open finale);
+// • the archive: META 3 → 4 of the archive fixture (MERGE + REASSIGNMENT from the trail's last stop, endingsSeen gains
+//   'reassignment', traces dropped), each cause's migration, parseEnding strict, recordRunEnd's pieces;
+// • the gates and tables: data/endings.ts all down, its option tables, the title keys; the neutral stubs' answers and the
+//   throwing ones; finaleRunCause and endingRecordOf; the arbiter shut while the card is up.
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+import { check, finish } from '../landing/checks';
+import type { GameState } from '@state/schema';
+import type { EndingRecord } from '@/types/ending';
+import { createStore } from '@state/store';
+import { createInitialState } from '@state/initial';
+import { decodeRunSave, migrateRunSave, encodeRunSave } from '@systems/save-codec';
+import { resumeRun } from '@systems/run-save';
+import { pendingRunSave } from '@systems/save-write';
+import { parseMeta, recordRunEnd, freshMeta, META_MIGRATIONS, MetaCorrupt } from '@systems/meta';
+import { parseEnding } from '@systems/meta-parse';
+import { optionState, emptyShip, stayCandidates, endingRecordOf, finaleRunCause, reportEndingLine } from '@systems/ending-rules';
+import { pickStay, continueFollowed } from '@systems/finale';
+import { epilogueModel, finalCardModel } from '@systems/epilogue';
+import { choiceMayOpen, sayChoice, withdrawUntimedChoices, mountSay, openChoiceEntry } from '@systems/say';
+import { finaleCardUp, finalePending } from '@state/selectors';
+import {
+  ENDINGS_BUILT, ENDING_PIECES, STEP1_OPTIONS, STEP2_OPTIONS, step2Options, builtPieces, endingTitleKey,
+} from '@data/endings';
+import { stubStorage, pageOpen } from '../save/save-fixture';
+import { decideFinale, openFinaleStep1 } from '../support/finale';
+import { RUN_SAVE_KEY, RUN_SAVE_VERSION, META_STORAGE_KEY, META_VERSION, EMPTY_SHIP_FUEL_PCT, STAR_FUEL_PCT } from '@data/tuning';
+
+const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), '..', 'save', 'fixtures');
+type Raw = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+const fixture = (file: string): { save: Raw; meta: Raw } => JSON.parse(readFileSync(join(FIXTURES, file), 'utf8'));
+const threw = (fn: () => unknown): string => {
+  try {
+    fn();
+    return '';
+  } catch (error) {
+    return (error as Error).message;
+  }
+};
+
+// --- The gates, the tables ------------------------------------------------------------------------------------------------
+check('every 7a gate is down (twoStep, night, contact)', !ENDINGS_BUILT.twoStep && !ENDINGS_BUILT.night && !ENDINGS_BUILT.contact);
+check(`RUN_SAVE_VERSION 7, META_VERSION 4, EMPTY_SHIP_FUEL_PCT = STAR_FUEL_PCT (${STAR_FUEL_PCT}: one ★ notch, R8)`,
+  RUN_SAVE_VERSION === 7 && META_VERSION === 4 && EMPTY_SHIP_FUEL_PCT === STAR_FUEL_PCT);
+check('the pieces: seven, and six built while CONTACT is down (ENDINGS n/6, R22)',
+  ENDING_PIECES.length === 7 && builtPieces().length === 6 && !builtPieces().includes('contact'));
+check('step 1 is PURGE MERGE SPARE on keys 1–3, SPARE rules out SUNSET; step 2 is SUNSET STAY REASSIGNMENT CONTACT, CONTACT absent (R11)',
+  STEP1_OPTIONS.map((option) => `${option.key}${option.piece}`).join() === '1purge,2merge,3spare'
+  && STEP1_OPTIONS.find((option) => option.piece === 'spare')?.rulesOut === 'sunset'
+  && STEP2_OPTIONS.map((option) => option.piece).join() === 'sunset,stay,reassignment,contact'
+  && step2Options().map((option) => option.piece).join() === 'sunset,stay,reassignment');
+check('a title is keyed by step 2, then step 1; SPARE + SUNSET has none (R8, R23)',
+  endingTitleKey('sunset', 'merge') === 'sunset:merge' && endingTitleKey('reassignment', 'followed') === 'reassignment:followed'
+  && /rules out SUNSET/.test(threw(() => endingTitleKey('sunset', 'spare'))));
+
+// --- The stubs, the cause, the record ----------------------------------------------------------------------------------------
+{
+  const store = createStore<GameState>(createInitialState({ seed: 7 }));
+  const state = store.getState();
+  check('the neutral stubs: PURGE and REASSIGNMENT open, MERGE by its charge, every other row hidden; no empty ship, no STAY ship, no report line',
+    optionState(state, 'purge', []).kind === 'open' && optionState(state, 'reassignment', []).kind === 'open'
+    && ['spare', 'sunset', 'stay', 'contact'].every((piece) => optionState(state, piece as never, []).kind === 'hidden')
+    && !emptyShip(state).ok && stayCandidates(state).length === 0 && reportEndingLine(state) === null);
+  check('…the night has no models yet (the screens skip)', epilogueModel(state, null) === null && finalCardModel(state, null) === null);
+  check('the throwing stubs: pickStay and continueFollowed (Track FINALE)',
+    /not built \(Track FINALE/.test(threw(() => pickStay(store, 0))) && /not built \(Track FINALE/.test(threw(() => continueFollowed(store))));
+  check('a fresh world: no ending, nothing pending, no card', endingRecordOf(state) === null && !finalePending(state) && !finaleCardUp(state)
+    && /not decided/.test(threw(() => finaleRunCause(state))));
+  store.update((draft) => {
+    draft.landing.finalShip = true;
+    decideFinale(draft.hollow.finale, 'merge');
+  });
+  const record = endingRecordOf(store.getState());
+  // A headless world is the classic one: no arm slot, no year.
+  check('a decided FINALE on a final ship: its record (MERGE + REASSIGNMENT, the root, no slot or year on the classic world, the kit, no FUEL) and won-merge',
+    record !== null && record.hollow === 'merge' && record.you === 'reassignment' && JSON.stringify(record.rootUnits) === '[46]'
+    && store.getState().run.map.world === 'classic' && record.finalSlot === null && record.finalYear === null && record.kit.includes('scan')
+    && record.fuelPct === null && finaleRunCause(store.getState()) === 'won-merge', JSON.stringify(record));
+  for (const [fate, cause] of [['purge', 'won-purge'], ['spare', 'won-spare'], ['followed', 'unresolved']] as const) {
+    store.update((draft) => { decideFinale(draft.hollow.finale, fate); });
+    check(`…step 1 ${fate} is ${cause} (R17)`, finaleRunCause(store.getState()) === cause);
+  }
+  check('…a SPARE keeps the empty ship\'s FUEL as shown', endingRecordOf(store.getState())?.fuelPct === null
+    && (() => { store.update((draft) => { decideFinale(draft.hollow.finale, 'spare'); }); return endingRecordOf(store.getState())?.fuelPct !== null; })());
+  // The arbiter (R18): no TERMINAL choice opens while the card is up, and the card's open withdraws an untimed one.
+  const unmount = mountSay(store);
+  store.update((draft) => { draft.hollow.finale.phase = 'none'; });
+  sayChoice('sleeper', 'stay with me?', ['YES'], null, () => undefined);
+  const untimed = openChoiceEntry(store.getState());
+  store.update((draft) => { openFinaleStep1(draft.hollow.finale); });
+  check('the arbiter: the card up (step 1) shuts every choice, timed or not', finaleCardUp(store.getState())
+    && !choiceMayOpen(store.getState(), true) && !choiceMayOpen(store.getState(), false));
+  check('…and withdrawUntimedChoices closes the untimed one standing', untimed !== null && withdrawUntimedChoices() === 1
+    && openChoiceEntry(store.getState()) === null);
+  unmount();
+}
+
+// --- The save: v6 → v7 --------------------------------------------------------------------------------------------------------
+function resumeFixture(file: string): ReturnType<typeof createStore<GameState>> {
+  const { save, meta } = fixture(file);
+  const storage = stubStorage({ [RUN_SAVE_KEY]: JSON.stringify(save), [META_STORAGE_KEY]: JSON.stringify(meta) });
+  const store = createStore<GameState>(createInitialState({ seed: 1 }));
+  pageOpen(store, storage, 1);
+  if (store.getState().save.status !== 'ok' || pendingRunSave() === null) throw new Error(`resumeFixture: ${file} is not offered (${JSON.stringify(store.getState().save)})`);
+  resumeRun(store);
+  return store;
+}
+
+const v6Ending = fixture('run-save-v6-ending-chosen-lastlight.json');
+{
+  const migrated = migrateRunSave(v6Ending.save) as Raw;
+  const finale = migrated.payload.slices.hollow.finale;
+  const decoded = decodeRunSave(JSON.stringify(v6Ending.save));
+  check('the v6 ENDING CHOSEN (LAST LIGHT, PURGE) migrates to v7 and decodes', v6Ending.save.saveVersion === 6 && migrated.saveVersion === 7 && decoded.ok,
+    decoded.ok ? '' : `${decoded.refusal.kind}: ${decoded.refusal.detail}`);
+  check('…its finale is done: PURGE + REASSIGNMENT, the root fallen, nothing restored, no STAY, no card second (R16)',
+    finale.phase === 'done' && finale.hollow === 'purge' && finale.you === 'reassignment' && finale.rootFell === true
+    && JSON.stringify(finale.restored) === '[]' && finale.stay === null && finale.cardAtAi === null && !('restoredHalf' in finale),
+    JSON.stringify(finale));
+  check('…THE LAST LANDING null, every featured colonist\'s line null (R2, R21)', migrated.payload.slices.landing.lastLanding === null
+    && migrated.payload.run.ships.length > 0 && migrated.payload.run.ships.every((ship: Raw) => ship.pods.every((pod: Raw) => pod.featured.every((colonist: Raw) => colonist.line === null))));
+  const store = resumeFixture('run-save-v6-ending-chosen-lastlight.json');
+  check('…and resumes at LAST LIGHT\'s LANDING REPORT with the finale decided', store.getState().run.phase === 'report'
+    && store.getState().landing.finalShip && store.getState().hollow.finale.phase === 'done' && finaleRunCause(store.getState()) === 'won-purge');
+}
+const v6Run2 = fixture('run-save-v6-ship-done-run2.json');
+{
+  const migrated = migrateRunSave(v6Run2.save) as Raw;
+  const ending = migrated.payload.run.lastUnit.ending;
+  const decoded = decodeRunSave(JSON.stringify(v6Run2.save));
+  check('the v6 run 2 desk migrates to v7 and decodes', v6Run2.save.saveVersion === 6 && migrated.saveVersion === 7 && decoded.ok,
+    decoded.ok ? '' : `${decoded.refusal.kind}: ${decoded.refusal.detail}`);
+  const lastStop = v6Run2.save.payload.run.lastUnit.trail.stops.at(-1);
+  check('…its last unit\'s ending is MERGE + REASSIGNMENT, the root its HOLLOW, the final ship the trail\'s last stop (R16)',
+    ending.hollow === 'merge' && ending.you === 'reassignment' && JSON.stringify(ending.rootUnits) === '[46]' && ending.finalSlot === lastStop.slot
+    && ending.finalYear === lastStop.year && ending.finalShip === 'LAST LIGHT' && ending.stay === null && ending.kit.length === 0
+    && ending.fuelPct === null && ending.charge === 0, JSON.stringify(ending));
+  const store = resumeFixture('run-save-v6-ship-done-run2.json');
+  check('…and resumes at run 2\'s first desk, the last unit\'s ending kept', store.getState().run.phase === 'desk'
+    && store.getState().run.map.run === 2 && store.getState().run.lastUnit?.ending?.hollow === 'merge');
+}
+
+// The codec's v7 refusals, each on the migrated ENDING CHOSEN (or the run 2 desk).
+{
+  const base = migrateRunSave(v6Ending.save) as Raw;
+  const desk = migrateRunSave(v6Run2.save) as Raw;
+  const refusal = (from: Raw, edit: (save: Raw) => void): string => {
+    const copy = structuredClone(from);
+    edit(copy);
+    const decoded = decodeRunSave(JSON.stringify(copy));
+    return decoded.ok ? 'decoded' : `${decoded.refusal.kind}: ${decoded.refusal.detail}`;
+  };
+  const cases: [string, Raw, (save: Raw) => void, RegExp][] = [
+    ['a decided finale with no step 2', base, (save) => { save.payload.slices.hollow.finale.you = null; }, /both choices/],
+    ['a root that stands under PURGE', base, (save) => { save.payload.slices.hollow.finale.rootFell = false; }, /root stands/],
+    ['SPARE with SUNSET', base, (save) => { Object.assign(save.payload.slices.hollow.finale, { hollow: 'spare', you: 'sunset' }); }, /SPARE with SUNSET/],
+    ['STAY naming no ship of the run', base, (save) => { Object.assign(save.payload.slices.hollow.finale, { you: 'stay', stay: 7 }); }, /STAY names slot 7/],
+    ['STAY with no ship', base, (save) => { save.payload.slices.hollow.finale.you = 'stay'; }, /STAY's ship is missing/],
+    ['THE LAST LANDING set', base, (save) => { save.payload.slices.landing.lastLanding = { pods: [] }; }, /lastLanding/],
+    ['a pod MERGE never gave back', base, (save) => { save.payload.slices.hollow.finale.restored = [3]; }, /restored pod 3/],
+    ['an unknown phase', base, (save) => { save.payload.slices.hollow.finale.phase = 'choice'; }, /finale\.phase/],
+    ['ENDING CHOSEN at step 1', base, (save) => { save.payload.slices.hollow.finale.phase = 'step1'; }, /^route/],
+    ['SHIP DONE with an open finale', desk, (save) => { save.payload.slices.hollow.finale.phase = 'duel'; }, /SHIP DONE with the finale 'duel'/],
+    ['a last unit\'s ending with SPARE + SUNSET', desk, (save) => { Object.assign(save.payload.run.lastUnit.ending, { hollow: 'spare', you: 'sunset', fuelPct: 30 }); }, /SPARE rules out SUNSET/],
+  ];
+  for (const [what, from, edit, want] of cases) {
+    const got = refusal(from, edit);
+    check(`the codec refuses ${what}`, want.test(got), got);
+  }
+  const roundTrip = decodeRunSave(encodeRunSave((decodeRunSave(JSON.stringify(base)) as { ok: true; save: never }).save));
+  check('…and a v7 save round-trips', roundTrip.ok);
+}
+
+// --- The archive: META 3 → 4 --------------------------------------------------------------------------------------------------
+{
+  const v3 = JSON.parse(readFileSync(join(FIXTURES, 'meta-v3-won-merge.json'), 'utf8')) as Raw;
+  const meta = parseMeta(JSON.stringify(v3));
+  const stop = v3.lastUnit.trail.stops.at(-1);
+  check('the META-3 archive (run 1 MERGE) reads as META 4: MERGE + REASSIGNMENT from the trail\'s last stop (R16)',
+    v3.version === 3 && meta.version === 4 && meta.lastUnit?.ending?.hollow === 'merge' && meta.lastUnit.ending.you === 'reassignment'
+    && meta.lastUnit.ending.finalSlot === stop.slot && meta.lastUnit.ending.finalYear === stop.year && meta.lastUnit.ending.finalShip === stop.shipName,
+    JSON.stringify(meta.lastUnit?.ending));
+  check('…endingsSeen gains REASSIGNMENT, traces is gone', JSON.stringify(v3.endingsSeen) === '["merge"]'
+    && JSON.stringify(meta.endingsSeen) === '["merge","reassignment"]' && !('traces' in meta));
+  const step = META_MIGRATIONS[3]!;
+  const unitOf = (cause: string, trail: unknown = null): Raw => ({ ...v3.lastUnit, cause, trail, shipName: 'LAST LIGHT' });
+  const migrated = (cause: string, trail: unknown = null): Raw => (step({ ...v3, endingsSeen: [], lastUnit: unitOf(cause, trail) }).lastUnit as Raw).ending;
+  check('…each cause: won-purge → PURGE, unresolved → followed, every lost cause → null; a classic record with no trail keeps its ship only',
+    migrated('won-purge').hollow === 'purge' && migrated('unresolved').hollow === 'followed'
+    && ['flagship-lost', 'overwritten', 'stayed', 'abandoned', 'signal-lost'].every((cause) => migrated(cause) === null)
+    && migrated('won-purge').finalSlot === null && migrated('won-purge').finalYear === null && migrated('won-purge').finalShip === 'LAST LIGHT');
+  check('…an empty endingsSeen stays empty', JSON.stringify(step({ ...v3, endingsSeen: [] }).endingsSeen) === '[]');
+  check('…traces at version 4 is an unknown field', (() => {
+    try { parseMeta(JSON.stringify({ ...meta, traces: [] })); return false; } catch (error) { return error instanceof MetaCorrupt && /traces/.test(error.message); }
+  })());
+}
+{
+  const good: EndingRecord = {
+    hollow: 'spare', you: 'stay', rootUnits: [46], finalSlot: 19, finalShip: 'LAST LIGHT', finalYear: 3020,
+    stay: { slot: 5, colony: 'RIVERSIDE', year: 2580 }, kit: ['scan', 'delete'], fuelPct: 23, charge: 26,
+  };
+  check('parseEnding reads a whole record back exactly', JSON.stringify(parseEnding(good, 'e')) === JSON.stringify(good));
+  const bad: [string, Partial<Record<keyof EndingRecord, unknown>> & Raw, RegExp][] = [
+    ['an unknown step 1', { hollow: 'eat' }, /hollow 'eat'/],
+    ['an unknown step 2', { you: 'nap' }, /you 'nap'/],
+    ['SPARE + SUNSET', { you: 'sunset', stay: null }, /SPARE rules out SUNSET/],
+    ['STAY with no colony', { stay: null }, /missing for STAY/],
+    ['a colony without STAY', { you: 'reassignment' }, /set without STAY/],
+    ['FUEL kept for neither SPARE nor SUNSET', { hollow: 'purge' }, /fuelPct/],
+    ['a tool twice', { kit: ['scan', 'scan'] }, /twice/],
+    ['a FUEL over 100', { fuelPct: 101 }, /over 100/],
+    ['an extra field', { extra: 1 }, /unknown fields/],
+  ];
+  for (const [what, edit, want] of bad) {
+    const message = threw(() => parseEnding({ ...good, ...edit }, 'e'));
+    check(`parseEnding refuses ${what}`, want.test(message), message);
+  }
+  const ended = recordRunEnd(freshMeta(1), {
+    unit: 47, shipName: 'LAST LIGHT', landed: 0, stats: { moves: 0, deletes: 0 }, hollowUnits: [46], trail: null, cause: 'unresolved', score: 0,
+    ending: { ...good, hollow: 'followed', you: 'reassignment', stay: null, fuelPct: null },
+  });
+  check('recordRunEnd keeps the ending and adds its pieces (a followed step 1 is none)', ended.lastUnit?.ending?.hollow === 'followed'
+    && JSON.stringify(ended.endingsSeen) === '["reassignment"]');
+  const lost = recordRunEnd(freshMeta(1), {
+    unit: 47, shipName: 'VESPER', landed: 0, stats: { moves: 0, deletes: 0 }, hollowUnits: [46], trail: null, cause: 'overwritten', score: 0,
+  });
+  check('…a lost run keeps none', lost.lastUnit?.ending === null && lost.endingsSeen.length === 0);
+}
+
+finish();
