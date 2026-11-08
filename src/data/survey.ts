@@ -8,7 +8,7 @@ import { SURVEY_CELL_DEG, SURVEY_CELLS } from '@data/tuning';
 // boot or CONTROL line, no card rows), whatever the map rolled; a ship's ShipDef.site is the map's roll either way.
 export const SURVEY_BUILT: Readonly<{ poor: boolean }> = {
   // Track SWATH raises this line (POOR plays POOR), before SKILL_TREE.survey.built.
-  poor: false,
+  poor: true,
 };
 
 // A ship's site data as this build plays it: the map's roll once POOR is built, else GOOD. The one gate every reader goes

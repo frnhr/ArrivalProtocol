@@ -5,6 +5,7 @@ import { formatCount } from '@data/format';
 import { STAR_FUEL_PCT } from '@data/tuning';
 import { podTag } from '@data/pod-ids';
 import { AUTODROP_TEXT } from '@data/autodrop-text';
+import { SWATH_TEXT } from '@data/swath-text';
 
 // Every landing word (docs/phase3/01-landing.md, slice 1a) as a PLACEHOLDER: 05-story owns the final wording, and the
 // state words of §3.10 (CAN'T LAUNCH, PARKED IN ORBIT · fate unknown, NOT LAUNCHED) are the decided set. A pod is never
@@ -96,7 +97,7 @@ export const LANDING_ECHO = {
     const hard = touch === 'hard' ? ' · HARD' : '';
     // Slice 6 SWATH: its one line here appends SWATH_TEXT.echoTail(lz, revealing) when `revealing` is set
     // (`> pod03 ... LANDED · HARD · LZ-B IS WET`).
-    void revealing;
+    if (revealing !== null && lz !== null) return LANDING_ECHO.touchdown(pod, place, lz, touch, bullseye) + SWATH_TEXT.echoTail(lz, revealing);
     switch (place) {
       case 'lz': return `> ${podTag(pod)} ... LANDED${hard}${bullseye && touch === 'soft' ? AUTODROP_TEXT.bullseye : ''}`;
       case 'mislanded': return `> ${podTag(pod)} ... LANDED · ${lz ?? '?'} FULL${hard}`;

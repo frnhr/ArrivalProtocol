@@ -63,10 +63,10 @@ const throws = (run: () => unknown): boolean => { try { run(); return false; } c
 const GATES_AT_LOAD = { poor: SURVEY_BUILT.poor, built: SKILL_TREE.survey.built };
 
 // --- What this build plays (plan §5: one check per gate, so Track SWATH raises each line on its own) -----------------------
-// POOR: Track SWATH raises it first (`=== true`, `built: POOR plays POOR (Track SWATH)`).
-check('built: POOR plays GOOD, not yet (Track SWATH)', SURVEY_BUILT.poor === false);
-// SURVEY: Track SWATH raises it last (`=== 3`, `built: SURVEY v1–v3 (Track SWATH)`).
-check('built: SURVEY not yet (Track SWATH)', SKILL_TREE.survey.built === 0);
+// POOR: Track SWATH raised it first.
+check('built: POOR plays POOR (Track SWATH)', SURVEY_BUILT.poor === true);
+// SURVEY: Track SWATH raised it last.
+check('built: SURVEY v1–v3 (Track SWATH)', SKILL_TREE.survey.built === 3);
 // (end of the built checks)
 
 // --- ShipDef.site and the gate -------------------------------------------------------------------------------------------
@@ -393,9 +393,10 @@ check('…withSurvey puts the gates back', SURVEY_BUILT.poor === GATES_AT_LOAD.p
     siteStars(site('candidate', 'flat', 'wide')) === 3 && siteStars(site('guess', 'flat', 'standard')) === 3
     && siteStars(site('candidate', 'flat', 'narrow')) === 2 && siteStars(site('candidate', 'rocky', 'wide')) === 1
     && siteStars(site('guess', 'wet', 'narrow')) === 1 && siteStars(site('wreck', 'rocky', 'standard')) === 0);
-  // M2: the run rule and the swath width, neutral until SWATH.
-  check('surveyRunning and swathHalfRad answer neutrally until SWATH builds them (\'off\', 0)',
-    surveyRunning(createInitialState({ seed: 1 })) === 'off' && swathHalfRad(3) === 0);
+  // M2: the run rule and the swath width (Track SWATH built them: a GOOD planet is 'off', ±20° at v1–v2, ±40° at v3).
+  check('surveyRunning is \'off\' on a GOOD planet; swathHalfRad is 0 at v0, ±20° at v1–v2, ±40° at v3 (Track SWATH)',
+    surveyRunning(createInitialState({ seed: 1 })) === 'off' && swathHalfRad(0) === 0
+    && Math.abs(swathHalfRad(2) - Math.PI / 9) < 1e-12 && Math.abs(swathHalfRad(3) - 2 * Math.PI / 9) < 1e-12);
   // M4: a long unmapped arc is cut so the strip lays it out on the right side of the dot, and the overview line never wraps.
   const arc = { fromRad: 0.1, toRad: 6.2 };
   const pieces = splitRimArcs([arc]);

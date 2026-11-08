@@ -1,11 +1,14 @@
 // Slice 6: Track SWATH owns this file (docs/phase3/impl/slice-6-plan.md §2.13, §6.2): only what SWATH's modules emit:
 // CONTROL's quips, the TERMINAL's lines, the strip's row, the Skills row's status and the touchdown echo's tail. The boot
 // line, the sites' labels and the refusals are the lead's (data/survey-text.ts); everything SITES paints is
-// data/sites-text.ts's. Seeded by the FOUNDATION with the plan's words; SWATH rewords and renames freely (the FOUNDATION's
-// suites check it by shape only). Every line ≤ MAX_LINE_CHARS at its worst case (tests/unit/support/words, SWATH's block).
+// data/sites-text.ts's. Seeded by the FOUNDATION with the plan's words, kept by SWATH. Every line ≤ MAX_LINE_CHARS at its worst case (tests/unit/support/words, SWATH's block).
 import type { BadGround } from '@/types/survey';
+import type { LzWidth } from '@/types/landing';
 
 const GROUND_WORD: Readonly<Record<BadGround, string>> = { rocky: 'ROCKY', wet: 'WET' };
+
+// A site's WIDTH class as the TERMINAL's find line names it (`ROOM 800 · WIDE`).
+export const WIDTH_WORD: Readonly<Record<LzWidth, string>> = { wide: 'WIDE', standard: 'STANDARD', narrow: 'NARROW' };
 
 export const SWATH_TEXT = {
   // ARRIVAL CONTROL (say('control', …, { critical: true }), once each per ship: plan R21).
