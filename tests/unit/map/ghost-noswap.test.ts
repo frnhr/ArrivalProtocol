@@ -80,7 +80,7 @@ check('…and none once the orbit is locked or accepted (the landing)', capabili
 h.stepUntil(() => st().burn.ghost === null, 5);
 check('…and the moment stands between bursts', st().burn.ghost === null && noSwapForGhost(st()));
 {
-  // Slice 5 (plan R5, review M5; Track WARDEN): a corrupted resident angry enough to outpush this failing controller is the
+  // Slice 5 (plan R5, review M5; Track WARDEN): a corrupted resident angry enough to outpush the controller is the
   // scheduler's source (ghostBy), but the SWAP-only readers keep Thrust Ctrl's own ghost (controllerGhost): the no-Swap
   // moment and the ENGINE FAULT refusal stand, and VESPER's own bursts are still the controller's.
   const withResident = structuredClone(st()) as GameState;
@@ -88,10 +88,20 @@ check('…and the moment stands between bursts', st().burn.ghost === null && noS
   withResident.resident.corrupted!.phase = 'awake';
   withResident.resident.corrupted!.angryUntilAi = withResident.clock.aiSec + 10;
   withResident.memory.push({ id: 'resident', name: 'WARDEN.sys', type: 'resident', size: 10, integrity: 40, owner: 'WARDEN', scanned: false });
+  // Slice 8 (§2.5): at amp 0.10 an angry resident pushes 95% as hard as this failing controller, so the controller still
+  // fires, and the no-Swap moment and ENGINE FAULT's refusal stand; against a degraded controller (Thrust Ctrl at 60%) the
+  // angry resident outpushes it, and the SWAP-only readers keep the controller's ghost (the no-Swap moment stands).
+  const failingCtrl = capabilitiesNow(withResident).thrustCtrl;
+  check('slice 8: an angry resident (amp 0.10) does not outpush a failing controller; the no-Swap moment and ENGINE FAULT\'s refusal stand',
+    failingCtrl.ghostBy === 'controller' && failingCtrl.ghost === ARM_GHOST_BY_BAND.failing && failingCtrl.controllerGhost === ARM_GHOST_BY_BAND.failing
+    && noSwapForGhost(withResident) && ghostRefusesSkip(withResident));
+  const thrust = withResident.memory.find((seg) => seg.role === 'thrust-ctrl');
+  if (thrust?.type === 'ship') thrust.integrity = 60;
   const ctrl = capabilitiesNow(withResident).thrustCtrl;
-  check('slice 5: an angry resident outpushing it fires instead (ghostBy), yet the no-Swap moment and ENGINE FAULT\'s refusal stand',
-    ctrl.ghostBy === 'resident' && ctrl.ghost === RESIDENT_GHOST_ANGRY && ctrl.controllerGhost === ARM_GHOST_BY_BAND.failing
-    && noSwapForGhost(withResident) && ghostRefusesSkip(withResident) && capabilitiesNow(st()).thrustCtrl.ghostBy === 'controller');
+  check('slice 5: an angry resident outpushing a degraded controller fires instead (ghostBy), yet the no-Swap moment stands',
+    ctrl.ghostBy === 'resident' && ctrl.ghost === RESIDENT_GHOST_ANGRY && ctrl.controllerGhost === ARM_GHOST_BY_BAND.degraded
+    && noSwapForGhost(withResident) && capabilitiesNow(st()).thrustCtrl.ghostBy === 'controller',
+    JSON.stringify({ by: ctrl.ghostBy, band: ctrl.band }));
 }
 
 // The seed on the beam holds its own SKIP refusal: the defender (who has Rm) clears it first.

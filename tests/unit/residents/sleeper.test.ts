@@ -10,8 +10,8 @@
 // • MEND DRIVERS: an infected driver under HOLLOW's drain is healed to 100 and cured, never `repairing`, then the next;
 // • the gift at the ship's end (`taught by BARNABY`, 4 cycles), the record (woken, mend) and the notable event;
 // • the wake by MOVE, its offer left standing at a LOST ship's end: woken with no job ('awake'), the gift paid all the same;
-// • HOLD A WALL: offered with a seed in memory; MOTH.wall stands on the drivers' side of the seed's free run, and the seed's
-//   bites stop at it;
+// • HOLD A WALL (slice 8, §2.6): offered with a seed a GAP from the drivers, not beside a WALL; MOTH.wall stands in that GAP,
+//   flush against the drivers, and the seed's bites stop at it;
 // • RUN THE DROPS: the 'resident' controller flies the landing (AUTODROP shadowed and unclaimed, no thread), every pod
 //   launched with no key pressed, its own SKIPs between passes; MOTH is never food. Review M1: no `press [L]` in a window its
 //   plan owns, the kid's rows back once the plan is empty (hurt drivers); m4: its volleys emit.
@@ -238,23 +238,38 @@ fresh();
 }
 
 // --- HOLD A WALL -----------------------------------------------------------------------------------------------------------
-fresh();
-{
-  // A seed lands 5 blocks past POD 05: [POD 01…05][free 5][seed 2][free 17][POD 06]. Its left side reaches five drivers, its
-  // right side two: the wall goes on the left, flush against POD 05.
-  const pod5 = driversInMemory(st()).find((driver) => driver.pod === 5)!;
+// Slice 8 (§2.6, OD 25): MOTH stands in a GAP. A seed beside a WALL (4 free blocks or more on both sides) gets no offer: the
+// wall it held there stopped nothing.
+const plantSeedPast = (pod5: DriverSegment, blocks: number): HollowSegment => {
   const at = segmentStarts(st().memory)[st().memory.indexOf(pod5)]! + pod5.size;
   const seed: HollowSegment = { id: newSegId('seed'), name: '???', type: 'hollow', size: 2, root: false, locked: false, owner: '???', seed: true };
   h.store.update((draft) => {
-    replaceRange(draft.memory, at + 5, at + 7, [seed], { opId: null, own: [] });
+    replaceRange(draft.memory, at + blocks, at + blocks + 2, [seed], { opId: null, own: [] });
     mergeAdjacentFree(draft.memory);
     draft.hollow.phase = 'awake';
     draft.ui.memoryRev++;
   });
+  return seed;
+};
+fresh();
+{
+  // [POD 01…05][free 5][seed 2][free 17][POD 06]: a WALL on both sides of the seed.
+  plantSeedPast(driversInMemory(st()).find((driver) => driver.pod === 5)!, 5);
+  check('a seed with a WALL on both sides: no HOLD A WALL (nothing for it to stop)', wallSpot(st().memory) === null
+    && sleeperJobsNow(st()).join() === 'drops,mend');
+}
+fresh();
+{
+  // [POD 01…05][free 3][seed 2][free 19][POD 06]. Its left side is a GAP of 3 to five drivers, its right side a WALL: the
+  // wall goes in the left GAP, 2 blocks flush against POD 05, one free block left between it and the seed.
+  const pod5 = driversInMemory(st()).find((driver) => driver.pod === 5)!;
+  const at = segmentStarts(st().memory)[st().memory.indexOf(pod5)]! + pod5.size;
+  const seed = plantSeedPast(pod5, 3);
   const before = hollowReach(st().memory, st().clock.aiSec).find((candidate) => candidate.hollowId === seed.id && candidate.side === 'left');
   const spot = wallSpot(st().memory);
-  check('with a seed in memory HOLD A WALL is offered, its spot on the side with the most drivers in reach (5), flush against POD 05',
-    sleeperJobsNow(st()).join() === 'drops,wall,mend' && spot?.startAddr === at && spot.drivers === 5 && before?.neighbourId === pod5.id, JSON.stringify(spot));
+  check('with a seed a GAP from the drivers HOLD A WALL is offered, its spot in that GAP (5 drivers in reach), flush against POD 05',
+    sleeperJobsNow(st()).join() === 'drops,wall,mend' && spot?.startAddr === at && spot.blocks === 2 && spot.drivers === 5
+    && before?.verdict === 'bite' && before.neighbourId === pod5.id, JSON.stringify({ spot, before }));
   wakeSleeperNow(h.store);
   h.step();
   check('…and its button is there (key H)', JSON.stringify(openChoiceEntry(st())?.choice?.keys) === '["R","H","T"]',
@@ -263,17 +278,26 @@ fresh();
   until(() => sleeper().phase === 'working', 1);
   const wall = st().memory.find((block) => block.id === sleeper().wallId);
   const index = wall === undefined ? -1 : st().memory.indexOf(wall);
-  check('HOLD A WALL: a 4-block BARNABY.wall, placed once, right after POD 05', wall?.type === 'sleeper' && wall.part === 'wall' && wall.size === 4
+  check('HOLD A WALL: a 2-block BARNABY.wall, placed once, right after POD 05', wall?.type === 'sleeper' && wall.part === 'wall' && wall.size === 2
     && wall.name === 'BARNABY.wall' && st().memory[index - 1]?.id === pod5.id && sleeper().job === 'wall', JSON.stringify(wall));
   check('…its rules: no DELETE, MOVE or COPY, nothing to heal', wall !== undefined && rule(wall, 'delete') === RESIDENT_REFUSAL.wallDelete
     && rule(wall, 'move') === RESIDENT_REFUSAL.wallMove && rule(wall, 'copy') === RESIDENT_REFUSAL.sleeperCopy && rule(wall, 'repair') === TOOL_REFUSAL.firewallHealth);
   const reach = hollowReach(st().memory, st().clock.aiSec).find((candidate) => candidate.hollowId === seed.id && candidate.side === 'left');
-  check('…the seed\'s reach on that side was a GAP of 5 to POD 05; now a GAP of 1 that ends at the wall (blocked)',
-    before?.gapBlocks === 5 && reach?.verdict === 'blocked' && reach.gapBlocks === 1 && reach.neighbourId === wall?.id, JSON.stringify(reach));
+  check('…the seed\'s reach on that side was a GAP of 3 to POD 05 (a bite); now a GAP of 1 that ends at the wall (blocked)',
+    before?.gapBlocks === 3 && reach?.verdict === 'blocked' && reach.gapBlocks === 1 && reach.neighbourId === wall?.id, JSON.stringify(reach));
   const t0 = st().clock.aiSec;
   until(() => st().clock.aiSec > t0 + 60, 80);
   check('…and 60 s of the seed\'s bites never reach a driver', !driversInMemory(st()).some(isInfected)
     && st().memory.filter((block) => block.type === 'sleeper' && block.part === 'wall').length === 1);
+}
+fresh();
+{
+  // A beam seed's own layout: one block from its target. MOTH fills that 1-block GAP.
+  const pod5 = driversInMemory(st()).find((driver) => driver.pod === 5)!;
+  const at = segmentStarts(st().memory)[st().memory.indexOf(pod5)]! + pod5.size;
+  plantSeedPast(pod5, 1);
+  const spot = wallSpot(st().memory);
+  check('a seed one block from POD 05: the wall is that 1-block GAP', spot?.startAddr === at && spot.blocks === 1 && spot.drivers === 5, JSON.stringify(spot));
 }
 
 // --- RUN THE DROPS ---------------------------------------------------------------------------------------------------------

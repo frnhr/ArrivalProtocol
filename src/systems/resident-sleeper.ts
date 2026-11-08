@@ -15,7 +15,7 @@ import { on, emit } from '@systems/events';
 import { say, sayChoice, withdrawChoice, otherOpenChoice, choiceMayOpen } from '@systems/say';
 import { getOpsBySeg } from '@systems/ops-core';
 import { segmentStarts, replaceRange, newSegId, assertMemoryInvariants, freeSegment, mergeAdjacentFree, requireAddr } from '@systems/memory-ops';
-import { cureNow } from '@systems/hollow';
+import { cureNow, isWall } from '@systems/hollow';
 import { grantCycles } from '@systems/skill-tree';
 import { currentSlot } from '@systems/map-streams';
 import { shipLaunchYear } from '@systems/map-run';
@@ -43,9 +43,10 @@ import { INTEGRITY_MAX, SLEEPER_WALL_BLOCKS, SLEEPER_GIFT_CYCLES } from '@data/t
 // • RUN THE DROPS: AUTODROP v3's PLAN flown for MOTH (no thread of the kid's, AUTODROP itself shadowed), which also asks for
 //   the SKIP between its passes, the [F] the kid would press (R11). In flight it waits. While its plan has rows the strip
 //   shows a wait row in every window (no [L]: review M1, autodrop.ts controllerWaitLine).
-// • HOLD A WALL: a 4-block MOTH.wall (a `sleeper` segment, part 'wall': no health, so HOLLOW's spread stops at it) at R13's
-//   spot, once. Offered only while something hostile shows in memory (a disguised seed shows as a harmless file, so it
-//   does not count: the button must not give it away) and the spot exists.
+// • HOLD A WALL: MOTH.wall (a `sleeper` segment, part 'wall': no health, so HOLLOW's spread stops at it), once, standing in a
+//   GAP between something hostile and the files it would bite (slice 8, §2.6: wallSpot). Offered only while something
+//   hostile shows in memory (a disguised seed shows as a harmless file, so it does not count: the button must not give it
+//   away) and such a GAP exists.
 // • MEND DRIVERS: an AI tick after HOLLOW's: the lowest-integrity driver aboard that needs it gains REPAIR v1's rate for its
 //   size, with no thread and no charge (no `repairing` state: it stays launchable); at 100 it is cured as a REPAIR cures
 //   (hollow.ts cureNow), and MOTH moves on.
@@ -83,12 +84,16 @@ function yearsAsleep(state: Readonly<GameState>): number {
 
 export interface WallSpot {
   startAddr: number;
+  blocks: number;     // MOTH.wall's width there: SLEEPER_WALL_BLOCKS, or the whole GAP when it is narrower
   drivers: number;    // the drivers on that side, before the next blocker or hollow block
 }
 
-// Where MOTH.wall would stand now, or null (nothing hostile showing, or no open free run of SLEEPER_WALL_BLOCKS beside it):
-// beside the hollow block or seed with the most drivers in reach, on the side facing them, flush against the far end of
-// its free run (the end the drivers are on). Ties: the first in address order. Pure.
+// Where MOTH.wall would stand now, or null (nothing hostile showing, or no GAP beside it). Slice 8 (§2.6, OD 25): a GAP, an
+// open free run of 1 to WALL_MIN_BLOCKS − 1 blocks between a hollow block or seed and a file it would bite. A run of
+// WALL_MIN_BLOCKS or more is already a WALL (the kid's own rule), so a wall there stopped nothing (OD 25). MOTH stands in
+// the GAP, a file bites can't cross (as FIREWALL.sys), SLEEPER_WALL_BLOCKS wide or the whole GAP when it is narrower (a beam
+// seed lands SEED_GAP_TO_TARGET_BLOCKS, one block, from its target), flush against the file on the far side. The spot is
+// on the side of the hostile block with the most drivers in reach. Ties: the first in address order. Pure.
 export function wallSpot(memory: readonly Segment[]): WallSpot | null {
   const starts = segmentStarts(memory);
   let best: WallSpot | null = null;
@@ -96,26 +101,32 @@ export function wallSpot(memory: readonly Segment[]): WallSpot | null {
     if (!isHollow(seg) || isDisguised(seg)) return;
     for (const step of [-1, 1] as const) {
       let cursor = index + step;
-      let blocks = 0;
+      let gap = 0;
       while (cursor >= 0 && cursor < memory.length && isOpenFree(memory[cursor]!)) {
-        blocks += memory[cursor]!.size;
+        gap += memory[cursor]!.size;
         cursor += step;
       }
-      if (blocks < SLEEPER_WALL_BLOCKS) continue;
+      const food = memory[cursor];
+      if (gap === 0 || isWall(gap) || food === undefined || isHollow(food) || !isInfectable(food)) continue;
+      // In reach: what a chain of bites could eat from here, up to the next blocker, hollow block or WALL of free blocks.
       let drivers = 0;
+      let freeRun = 0;
       for (let at = cursor; at >= 0 && at < memory.length; at += step) {
         const next = memory[at]!;
         if (isHollow(next) || !(next.type === 'free' || isInfectable(next))) break;
+        freeRun = next.type === 'free' ? freeRun + next.size : 0;
+        if (isWall(freeRun)) break;
         if (isDriver(next)) drivers++;
       }
-      const startAddr = step === 1 ? starts[index]! + seg.size + blocks - SLEEPER_WALL_BLOCKS : starts[index]! - blocks;
-      if (best === null || drivers > best.drivers) best = { startAddr, drivers };
+      const blocks = Math.min(SLEEPER_WALL_BLOCKS, gap);
+      const startAddr = step === 1 ? starts[index]! + seg.size + gap - blocks : starts[index]! - gap;
+      if (best === null || drivers > best.drivers) best = { startAddr, blocks, drivers };
     }
   });
   return best;
 }
 
-// The jobs MOTH offers now (04 §3.14: HOLD A WALL not on a ship with nothing hostile in memory).
+// The jobs MOTH offers now (04 §3.14: HOLD A WALL not on a ship with nothing hostile in memory, nor with no GAP to stand in).
 export function sleeperJobsNow(state: Readonly<GameState>): SleeperJob[] {
   return JOBS.filter((job) => job !== 'wall' || wallSpot(state.memory) !== null);
 }
@@ -195,11 +206,11 @@ function placeWall(store: Store<GameState>, spot: Readonly<WallSpot>): void {
   const state = store.getState();
   const def = state.resident.def!;
   const wall: SleeperSegment = {
-    id: newSegId('sleeper_wall'), name: RESIDENT_TEXT.file.wall(def.name), type: 'sleeper', size: SLEEPER_WALL_BLOCKS, part: 'wall',
+    id: newSegId('sleeper_wall'), name: RESIDENT_TEXT.file.wall(def.name), type: 'sleeper', size: spot.blocks, part: 'wall',
     owner: def.name, scanned: true, awake: true, desc: KIN_TEXT.sleeper.wallDesc(def.name),
   };
   store.update((draft) => {
-    replaceRange(draft.memory, spot.startAddr, spot.startAddr + SLEEPER_WALL_BLOCKS, [wall], { opId: null, own: [] });
+    replaceRange(draft.memory, spot.startAddr, spot.startAddr + spot.blocks, [wall], { opId: null, own: [] });
     mergeAdjacentFree(draft.memory);
     assertMemoryInvariants(draft.memory, layoutOf(draft).totalBlocks);
     draft.resident.sleeper!.wallId = wall.id;
@@ -427,5 +438,5 @@ export function pickSleeperJob(store: Store<GameState>, job: SleeperJob): void {
   if (sleeper.phase === 'working') throw new Error(`pickSleeperJob: the sleeper already has a job (${sleeper.job})`);
   if (sleeper.phase === 'offering' && sleeper.entryId !== null && offerStands(store.getState(), sleeper.entryId)) withdrawChoice(sleeper.entryId);
   answer = null;
-  if (!startJob(store, job)) throw new Error('pickSleeperJob: HOLD A WALL has no spot (nothing hostile, or no free run of 4)');
+  if (!startJob(store, job)) throw new Error('pickSleeperJob: HOLD A WALL has no spot (nothing hostile, or no GAP beside it)');
 }

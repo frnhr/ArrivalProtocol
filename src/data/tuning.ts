@@ -2153,10 +2153,13 @@ export const AUTODROP_DAMAGED_ALERT_SEC = AUTODROP_DONE_LINE_SEC;
 
 // A beam seed lands disguised as a harmless 2-block file (04 §3.6, decision 22) with this chance, by the receiver's depth:
 // the first row whose fromDepth is at most the depth counts (read from the last). Before depth 5 the kid is still learning
-// what a seed looks like; from 7 the arm is HOLLOW's, and half its seeds hide. Noise seeds on the beam only (plan R9).
+// what a seed looks like; from 7 the arm is HOLLOW's, and two of its seeds in three hide. Noise seeds on the beam only (plan
+// R9). Slice 8 (§2.4, OD 4): raised from 1/3 and 1/2 (decision 22's starting values), because a depth-5 run met a decoy in
+// only 25% of runs (balance/decoy-stats, 800 runs); now 33%. The rate alone can't reach 40% (3/4 and 1 give 43%, with
+// nearly every deep seed hidden), so SENTRY v1's price is §2.4's other half (ECONOMY's). To reverse: 1/3 and 1/2.
 export const DISGUISE_CHANCE_BY_DEPTH: readonly Readonly<{ fromDepth: number; chance: number }>[] = [
-  { fromDepth: 5, chance: 1 / 3 },
-  { fromDepth: 7, chance: 1 / 2 },
+  { fromDepth: 5, chance: 1 / 2 },
+  { fromDepth: 7, chance: 2 / 3 },
 ];
 // SENTRY v2's QUICK RM (03 §3.10): DELETE on a hollow block that is not the root takes this share of its time, so a seed
 // goes in 1.0 s instead of 2.0, and a 6-block meal in 2.0 s instead of 4.0. The root's ROOT_DELETE_SEC is untouched (plan
@@ -2230,16 +2233,19 @@ export const RESIDENT_START_INTEGRITY = 40;
 // something that grew there, not deleted like a file.
 export const RESIDENT_DELETE_BASE_SEC = 1.0;
 export const RESIDENT_DELETE_PER_BLOCK_SEC = 0.5;
-// The engine bursts (plan R3, [FRAN]): 04's 14 tac s and 1 tac s, at the arm's limp amp (ARM_GHOST_BY_BAND: 0.15, Fran's
-// halving of slice 3b) instead of 04's 25%. Its push (0.15 ÷ 14 = 0.0107 per tac s) is 71% of the arm's failing
-// controller (0.015): 04's "about two thirds of an unfixed VESPER" on the arm's own scale. capabilities.ts checks it stays
-// under the failing controller's. To reverse: amp 0.25.
-export const RESIDENT_GHOST: Readonly<GhostSpec> = { meanIntervalTac: 14, amp: 0.15, durTac: 1.0, stickChance: 0 };
+// The engine bursts (plan R3, [FRAN]): 04's 14 tac s and 1 tac s, at amp 0.10 instead of 04's 25%. Its push (0.10 ÷ 14 =
+// 0.0071 per tac s) is 48% of the arm's failing controller (0.015): about half an unfixed VESPER. capabilities.ts checks it
+// stays under the failing controller's. Slice 8 (§2.5, OD 24): down from slice 5's 0.15 (the arm's limp amp, 71%), at which
+// an ignored resident stranded 3 of 10 flights (GANNET, seeds 3–11, strip and sloppy kids) at 0% FUEL; at 0.10 every ignored
+// flight locks its orbit (FUEL 2% mean, 18 points under no resident), and every answer lands within 2 points of no resident.
+// The intervals stay, so anger still doubles the rate. To reverse: amp 0.15 (0.07 would leave 5% FUEL in 8 of 10 ignored
+// flights, but only 6 points of pressure; slice-8-plan "Deviations (Track THREAT)").
+export const RESIDENT_GHOST: Readonly<GhostSpec> = { meanIntervalTac: 14, amp: 0.10, durTac: 1.0, stickChance: 0 };
 // While a DELETE runs on it (04: "a burst every 4 tac s meanwhile"): the 6 s DELETE costs about 1.5 bursts, so it is felt,
 // but never a reason not to.
-export const RESIDENT_GHOST_DELETING: Readonly<GhostSpec> = { meanIntervalTac: 4, amp: 0.15, durTac: 1.0, stickChance: 0 };
+export const RESIDENT_GHOST_DELETING: Readonly<GhostSpec> = { meanIntervalTac: 4, amp: 0.10, durTac: 1.0, stickChance: 0 };
 // After REFUSE or a timeout (04 §3.12): twice as often, for RESIDENT_ANGRY_SEC.
-export const RESIDENT_GHOST_ANGRY: Readonly<GhostSpec> = { meanIntervalTac: 7, amp: 0.15, durTac: 1.0, stickChance: 0 };
+export const RESIDENT_GHOST_ANGRY: Readonly<GhostSpec> = { meanIntervalTac: 7, amp: 0.10, durTac: 1.0, stickChance: 0 };
 export const RESIDENT_ANGRY_SEC = 30;
 // The locks (04 §3.12): phase 2's verb drill. The first 30 AI s after the wake, then every 40 (room for the flight between
 // them), each telegraphed for 3 s.
@@ -2280,8 +2286,11 @@ export const LEFTOVER_START_INTEGRITY = 100;
 // The sleeper (04 §3.14): MOVE takes 1.5 + 0.2 × 12 = 3.9 s, and rm on its lock 1.0 s.
 export const SLEEPER_FILE_BLOCKS = 12;
 export const SLEEP_LOCK_BLOCKS = 1;
-// HOLD A WALL: a WALL's width (WALL_MIN_BLOCKS), so the wall it holds is the one the kid already knows.
-export const SLEEPER_WALL_BLOCKS = 4;
+// HOLD A WALL (slice 8, §2.6, OD 25): MOTH.wall stands in a GAP (1 to WALL_MIN_BLOCKS − 1 free blocks between something
+// hostile and a file), a blocker bites can't cross, FIREWALL_BLOCKS wide (or the whole GAP when it is narrower: a beam seed
+// lands one block from its target). Slice 5's 4-block wall went only where 4 free blocks already were a WALL, so it never
+// stopped a bite (sleeper-sweep: 0.0 drivers eaten against none). To reverse: 4, and resident-sleeper.ts wallSpot's old run.
+export const SLEEPER_WALL_BLOCKS = 2;
 // The sleeper's gift (plan R12, [FRAN]): one middle ship's income (ARRIVED +1, LANDED +3 at 60–79%): a v1's price and one
 // more, a gift that is felt but does not buy a tier by itself.
 export const SLEEPER_GIFT_CYCLES = 4;
