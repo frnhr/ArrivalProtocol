@@ -468,7 +468,8 @@ function controllerTick(store: Store<GameState>): void {
 function goLowAimNow(state: Readonly<GameState>, sol: Readonly<DropSolution> | null): GoLowAim | null {
   const { landing } = state;
   if (landing.ended !== null || sol === null || sol.block !== null || sol.dot === null) return null;
-  if (podCounts(state).aboard === 0) return null;
+  // Review M1: the engine is shut in MERGE's reopened landing (selectors engineOpen), so no burn is offered there.
+  if (state.hollow.finale.phase === 'last-landing' || podCounts(state).aboard === 0) return null;
   const choice = goLowerChoice(state, sol, capabilitiesNow(state));
   if (choice === null) return null;
   const { fit, launchRad } = choice;

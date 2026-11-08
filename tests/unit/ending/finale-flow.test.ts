@@ -13,6 +13,7 @@
 //   after it, the LANDING REPORT and its ending line (`ENDING · PURGE · STAND BY`).
 // • MERGE (R15): the drivers back in place at the confirm, the landing reopened after the verdict ('last-landing'), the
 //   restored pod lands, then 'done'; the record keeps the charge as the confirm left it.
+// • MERGE + SUNSET at FUEL 22% (review M1): the reopened landing's engine is shut, so the ship leaves with the record's FUEL.
 // • UNRESOLVED (R10): IT FOLLOWED YOU (no entry 12, no step-1 pick), CONTINUE, SUNSET still allowed, the root stays.
 import { check, finish } from '../wp1/harness';
 import { createHarness11 } from '../wp11/harness11';
@@ -35,12 +36,14 @@ import { optionState, emptyShip, stayCandidates, endingRecordOf, finaleRunCause,
 import { choiceMayOpen } from '@systems/say';
 import { buildRunSave, encodeRunSave, decodeRunSave } from '@systems/save-codec';
 import { actionDelete, actionRepair, recordDriverLost } from '@state/actions';
-import { chargeLeft, driversInMemory, finalePending, finaleCardUp, isHollow, getByRole, integrityState } from '@state/selectors';
+import { chargeLeft, driversInMemory, engineOpen, finalePending, finaleCardUp, isHollow, getByRole, integrityState } from '@state/selectors';
+import { setFiring } from '@systems/flight-controls';
+import { shownFuelPct } from '@systems/flight-hud';
 import { getOpsBySeg, cancelOp } from '@systems/ops-core';
 import { setLandingMode, landInstantly } from '../support/landing-instant';
 import { finaleAtStep1, settleFinale, chooseEnding } from '../support/finale';
 import { FINALE_TEXT } from '@data/finale-text';
-import { FINALE_OPEN_DELAY_SEC, FINALE_VERDICT_MAX_LINES, MERGE_COST_CHARGE, MERGE_DRIVER_INTEGRITY, ROOT_DELETE_SEC } from '@data/tuning';
+import { EMPTY_SHIP_FUEL_PCT, FINALE_OPEN_DELAY_SEC, FINALE_VERDICT_MAX_LINES, MERGE_COST_CHARGE, MERGE_DRIVER_INTEGRITY, ROOT_DELETE_SEC } from '@data/tuning';
 import type { GameState, ShipResult } from '@state/schema';
 
 const SEED = 7;
@@ -293,11 +296,9 @@ toArmCard();
     && finaleRunCause(state()) === 'won-purge', String(reportEndingLine(state())));
 }
 
-// --- MERGE: the drivers back in place, the landing reopened after the verdict (R15) ---------------------------------------
-toArmDuel();
-{
-  // HOLLOW eats a driver as hollow.ts consume does (landing/hollow-landing's eat): a block of its size in its place that
-  // remembers the pod, and the pod's driver recorded eaten.
+// HOLLOW eats the first driver as hollow.ts consume does (landing/hollow-landing's eat): a block of its size in its place
+// that remembers the pod, and the pod's driver recorded eaten.
+function eatLeadDriver(): ReturnType<typeof driversInMemory>[number] {
   const lead = driversInMemory(state())[0]!;
   const memory = state().memory;
   const block: HollowSegment = {
@@ -306,6 +307,13 @@ toArmDuel();
   };
   replaceRange(memory, requireAddr(memory, lead), requireAddr(memory, lead) + lead.size, [block], { opId: null, own: [lead] });
   h.store.update((d) => { recordDriverLost(d, lead, 'eaten'); d.ui.memoryRev++; });
+  return lead;
+}
+
+// --- MERGE: the drivers back in place, the landing reopened after the verdict (R15) ---------------------------------------
+toArmDuel();
+{
+  const lead = eatLeadDriver();
   deleteRoot();
   landInstantly(h.store);
   settleFinale(h.store, () => h.step());
@@ -326,6 +334,37 @@ toArmDuel();
   while (state().run.phase === 'landing' && h.wall() < end) h.step();
   check('…the LANDING REPORT; the record keeps the charge the confirm left (10), not the world\'s after (3)', state().run.phase === 'report'
     && endingRecordOf(state())?.charge === 30 - MERGE_COST_CHARGE && reportEndingLine(state()) === 'ENDING · MERGE · WE SAVED YOU A SEAT');
+}
+
+// --- MERGE + SUNSET at FUEL 22%: the reopened landing's engine is shut (review M1) ------------------------------------------
+toArmDuel();
+{
+  const lead = eatLeadDriver();
+  deleteRoot();
+  landInstantly(h.store);
+  settleFinale(h.store, () => h.step());
+  setCharge(30);
+  h.store.update((d) => { d.burn.fuelPct = 22; d.landing.fuelAtEndPct = 22; });
+  check('MERGE + SUNSET at FUEL 22% with an eaten driver: confirmed, the record\'s FUEL 22',
+    chooseEnding(h.store, 'merge', 'sunset') === null && state().hollow.finale.phase === 'last-landing'
+    && state().hollow.finale.record?.fuelPct === 22, `${state().hollow.finale.phase} ${state().hollow.finale.record?.fuelPct}`);
+  const before = state().burn.fuelPct;
+  const refusal = setFiring(h.store, true, 'player');
+  // Even a throttle forced on delivers nothing: the sim reads engineOpen too.
+  h.store.update((d) => { d.burn.firing = true; d.burn.firingSource = 'player'; });
+  h.stepFor(20);
+  check('…in \'last-landing\' the engine is shut: the throttle refused, no GO LOWER offered, no FUEL burned under a held throttle',
+    !engineOpen(state()) && refusal !== null && state().landing.goLow === null && Math.abs(state().burn.fuelPct - before) < 1e-9,
+    `${refusal} ${state().burn.fuelPct} ${before}`);
+  h.store.update((d) => { d.burn.firing = false; d.burn.firingSource = null; });
+  landInstantly(h.store);
+  check('…the restored pod lands, \'done\'', state().landing.pods.find((record) => record.pod === lead.pod)?.fate.kind === 'down' && untilPhase('done', 10));
+  const end = h.wall() + 30;
+  while (state().run.phase === 'landing' && h.wall() < end) h.step();
+  const fuel = state().landing.fuelAtEndPct;
+  check('…the report: the ship leaves with the record\'s FUEL (≥ 20%, SUNSET\'s price), `ENDING · MERGE · WE TOOK THE SHIP`',
+    state().run.phase === 'report' && fuel !== null && shownFuelPct(fuel) === endingRecordOf(state())?.fuelPct && shownFuelPct(fuel) >= EMPTY_SHIP_FUEL_PCT
+    && reportEndingLine(state()) === 'ENDING · MERGE · WE TOOK THE SHIP', `${fuel} ${reportEndingLine(state())}`);
 }
 
 // --- UNRESOLVED: IT FOLLOWED YOU, then step 2 with SUNSET (R10) ---------------------------------------------------------

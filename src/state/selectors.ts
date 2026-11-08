@@ -266,10 +266,13 @@ export function isLanding(state: Readonly<GameState>): boolean {
 // hold, faults' FILE_FAULTS and closedIdleAiSec stay flight-only (status === 'approaching').
 // In landing the ship must still be in orbit (locked or accepted): a crash or escape during the landing closes it at
 // once, before endLandingLost writes ended = 'ship-lost'. Track ORBIT owns it; defined by the foundation, not read yet.
+// Slice 7a (review M1): MERGE's reopened landing ('last-landing', R15's interim) launches pods but the engine stays shut:
+// the ending record froze SUNSET's FUEL at the confirm, and the empty ship must leave with it (no GO LOWER, no trims, no
+// flying the ship into the planet after choosing it). 7b's R26 input layer keeps it shut the same way.
 export function engineOpen(state: Readonly<GameState>): boolean {
   if (state.run.phase === 'flight') return state.burn.status === 'approaching';
   const inOrbit = state.burn.status === 'locked' || state.burn.status === 'accepted';
-  return state.run.phase === 'landing' && state.landing.ended === null && inOrbit;
+  return state.run.phase === 'landing' && state.landing.ended === null && inOrbit && state.hollow.finale.phase !== 'last-landing';
 }
 
 // The ghost bursts of the phase the ship is in (review M2): the landing counts its own (LandingState.ghostBursts), so its
