@@ -629,3 +629,10 @@ at CLOSE. Each says before → after, measured on the branch.
      SURVEY landing a little after, so it looked like SURVEY's. With the worked kit (DELETE, MOVE) given at the flight's start,
      none, v1 and v3 keep the Core and land all 9 pods. Not a threat number: the sweep should request what CONTROL tags, as
      sleeper-sweep's `SLEEPER_KIT=route` does.
+122. **The playthrough's scripted kid held a burn through a `[TAB]` cue, and burned the tank away from the planet.** This
+     caused COMPETENT's 0.4 lost ships per run and its 4% Core-dead runs: all three kids lost the same ships on seeds 3, 7,
+     8, 13 and 15.
+     - FIXED in the harness (lead, from THREAT's probe): the kid lets go of a held burn when a MIND line asks for [TAB].
+       THREAT's probe won seeds 3, 7 and 8 with no ship lost.
+     - **ASK (game side): should the strip say RELEASE first, while a burn is held, before `PATH UNCERTAIN — [TAB]`?** A
+       real kid holding SPACE may do what the script did.

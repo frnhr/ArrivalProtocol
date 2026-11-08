@@ -723,6 +723,10 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
         return;
       }
       const keyMatch = text.match(/press \[([WASD])\]/);
+      // Slice 8 THREAT (R1): a MIND line asking for [TAB] (e.g. `PATH UNCERTAIN — [TAB], REPAIR SENSOR INTERP`) while the
+      // kid holds a burn: the kid lets go, so the follower stops calling for the SHIP and the kid TABs to the MIND. Without
+      // this the follower held SPACE and burned the tank away from the planet (seeds 3, 7, 8, 13, 15).
+      if (line.layer === 'mind' && holding && /\[TAB\]/.test(text)) { setHolding(false); return; }
       if (/RELEASE|TOO EARLY|WAIT|TURN AROUND/.test(text)) {
         pressAtTSec = null;
         setHolding(false);
