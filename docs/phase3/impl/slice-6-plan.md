@@ -1421,6 +1421,31 @@ save bump. No tuning value moved.
   the FINALE's only (`data/threats.ts`) and a final ship is GOOD, so SURVEY never holds a thread where a verb could be
   skipped; no corrupted resident's due lock met a Core SURVEY had filled.
 - **R16:** 0 SURVEY/SENTRY ties at the 58 desks of these routes.
+### OPEN-DECISIONS 52: the drop-dot swath (after the merge at 2dcfb7c)
+
+15. **In the LANDING, SURVEY v2+ also maps a swath around the drop dot** (the lead's decision, OPEN-DECISIONS 52; a deviation
+    from 01 §3.13, whose swath is under the ship only): "the sensors look where the pods will go". Same half-width as the
+    ship's swath at that version (±20° at v2, ±40° at v3); v1 stays ship-only; the thread rules are unchanged.
+    `survey-model.ts dropSwathOn(state)` says when (the landing, v2+, running); `survey.ts` reads the dot from the drop cache
+    (`getDropSolution().dot.rad`, an existing selector: no patch) and sweeps the ship's arc of the tick shifted by the dot's
+    lead, so no second angle is stored. No dot (Nav Plotter dead), no dot swath. SITES's wedge may draw the second one from
+    `dropSwathOn` and the same selector.
+16. **The flow suite pins it on CORMORANT:** LZ-B is unmapped at ORBIT LOCK; v1 meets its first window blind and the first
+    touchdown shows it; v2 reveals it before LZ-B's first window with the ship 86° away (beyond its own ±20°), and the strip's
+    kid moves it by `bestSwap` and lands all four pods soft.
+
+**The sweep re-run** (42 POOR ships, seeds 1–10, every flight to its report):
+
+| | Q | vs GOOD | landed | hard pods | cycles | bad guess shown by SURVEY before its first pod |
+|---|---|---|---|---|---|---|
+| GOOD | 93.9% | — | 93.4% | 0.00 | 5.57 | — |
+| no SURVEY | 71.3% | −22.6 | 91.6% | 3.38 | 4.14 | 0 of 42 (all by touchdown) |
+| v1 | 75.4% | −18.6 | 94.5% | 2.95 | 4.38 | 0 of 42 (v1 rates nothing) |
+| v2 | 93.2% | −0.7 | 94.4% | 0.29 | 5.55 | **42 of 42** (was 20) |
+| v3 | 93.9% | +0.0 | 94.4% | 0.24 | 5.57 | 42 of 42 (was 21) |
+
+v2 is now within 3% of GOOD, as §7.3 expected. FUEL at lock, m6 (0 and 0) and R16 (0 ties) are unchanged.
+
 ## Deviations (Track SITES)
 
 Recorded by Track SITES (branch `sites-6`, from 0b93e6e). §2.14 is built in SITES's own files and marked spots; no lead file
