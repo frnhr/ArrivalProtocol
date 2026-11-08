@@ -21,7 +21,7 @@ import {
   cardStage, finaleCardModel, meterModel, rowForKey, rootWordsAt, rootWordsStarts, stayRowModel, verdictRows, verdictTone,
   fuelStarTitle, type CardInput, type CardModel, type CardNames,
 } from '@systems/finale-card';
-import { ENDINGS_BUILT } from '@data/endings';
+import { withEndings as withGates } from '../support/finale';
 import { FINALE_TEXT } from '@data/finale-text';
 import { HOLLOW_FINALE } from '@data/hollow-text';
 import { LOG_TEXT, logEntryLines } from '@data/log-text';
@@ -37,18 +37,6 @@ const throws = (fn: () => unknown): boolean => {
     return true;
   }
 };
-// The gates are module data (data/endings.ts); a check that needs one up raises it for its own body only.
-function withGates<T>(set: Partial<{ twoStep: boolean; contact: boolean }>, fn: () => T): T {
-  const gates = ENDINGS_BUILT as { twoStep: boolean; night: boolean; contact: boolean };
-  const before = { ...gates };
-  Object.assign(gates, set);
-  try {
-    return fn();
-  } finally {
-    Object.assign(gates, before);
-  }
-}
-
 // --- The states under test -------------------------------------------------------------------------------------------------
 const BASE = createInitialState({ seed: 7 });
 // A landing on the final ship at AI second 100, its finale edited by `edit`.
@@ -279,7 +267,7 @@ function input(options: Partial<Record<EndingPiece, OptionState>>, more: Partial
     state.burn.fuelPct = fuel;
     state.landing.fuelAtEndPct = end;
   });
-  check('FUEL notch: its own title while the two steps are not built', fuelStarTitle(flying(30, true)) === null);
+  check('FUEL notch: its own title while the two steps are not built', withGates({ twoStep: false }, () => fuelStarTitle(flying(30, true))) === null);
   const title = withGates({ twoStep: true }, () => fuelStarTitle(flying(23, true)));
   const short = withGates({ twoStep: true }, () => fuelStarTitle(flying(30, true, 12)));
   check('FUEL notch: on the final ship it also reads SUNSET, and the FUEL as the card will price it',
