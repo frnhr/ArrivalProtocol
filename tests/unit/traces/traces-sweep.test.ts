@@ -10,7 +10,12 @@
 // (bites × 0.85, the 18-block root, +1 thread, the wild seed, the allowance), and the gifts' +15 at their ships (a squeeze
 // may take some: never more than the gift: the plan's "each gift ship within ±15 REPAIR CHARGE's worth"). The plan's other
 // expectation, every trace within ±1 pod of none at the final ship, is printed (WARN when not met): information until slice 8.
+// Slice 8 Step 0 (slice-8-plan §2.9, R13): TS_CONTACT=1 adds CONTACT's three cases (CONTACT, PURGE+CONTACT, MERGE+CONTACT),
+// flown through both signal stops when one route reaches both (else through one: the row says which), the gift-ship column
+// reporting each stop's charge; BALANCE_JSON writes the G6 rows (trace.Δpods.<case>, trace.Δduel, trace.gift.<case>, and
+// PURGE's and MERGE's own effects by difference).
 import { check, finish } from '../wp1/harness';
+import { writeMetrics } from '../support/balance-out';
 import { createHarness11 } from '../wp11/harness11';
 import { setLandingMode } from '../support/landing-instant';
 import type { GameState } from '@state/schema';
@@ -48,6 +53,11 @@ const CASES: readonly Case[] = [
   { id: 'SPARE+REASSIGN', hollow: 'spare', you: 'reassignment' },
   { id: 'SUNSET', hollow: 'followed', you: 'sunset' },
   { id: 'STAY', hollow: 'followed', you: 'stay' },
+  ...(process.env.TS_CONTACT === '1' ? [
+    { id: 'CONTACT', hollow: 'followed', you: 'contact' },
+    { id: 'PURGE+CONTACT', hollow: 'purge', you: 'contact' },
+    { id: 'MERGE+CONTACT', hollow: 'merge', you: 'contact' },
+  ] as const : []),
 ];
 
 function lastUnitFor(seed: number, c: Case | null): LastUnit | null {
@@ -62,6 +72,8 @@ interface Row {
   route: string;
   giftSlot: number | null;
   giftLaid: number | null;        // charge laid out at the gift ship (null: no gift ship on the route)
+  giftLaids: number[];            // the same at each gift ship on the route, in route order (CONTACT's two stops)
+  stops: string;                  // CONTACT: the stops the route goes through, of those placed ('2/2', '1/2'); '' otherwise
   finalBoot: { spread: number | null; root: number; threads: number; threadPlus: number; seeds: number; gift: number; lines: string[] };
   points: number;
   pods: number;                   // pods landed in an LZ (colonists / 200)
@@ -82,7 +94,9 @@ function verbsOn(from: number, name: string, ids: ReadonlySet<string>): number {
     && ids.has((event.payload as { targetId: string }).targetId)).length;
 }
 
-function fly(seed: number, c: Case | null, route: readonly number[], giftSlot: number | null): Row {
+function fly(seed: number, c: Case | null, route: readonly number[], giftSlots: readonly number[]): Row {
+  const giftSlot = giftSlots[0] ?? null;
+  const giftLaids: number[] = [];
   h.newRun(seed);
   startRun2(h.store, step, seed, lastUnitFor(seed, c), true);
   const asks = ['mv', 'rm', 'swap', 'cp'] as const;
@@ -91,6 +105,7 @@ function fly(seed: number, c: Case | null, route: readonly number[], giftSlot: n
   for (let i = 1; i < route.length; i++) {
     beamTo(h.store, step, route.slice(i - 1), route[i]!, [asks[i - 1] ?? null]);
     if (route[i] === giftSlot) giftLaid = laid(state());
+    if (giftSlots.includes(route[i]!)) giftLaids.push(laid(state()));
     if (route[i] !== finalSlot) h.store.update((draft) => { draft.run.phase = 'report'; });
   }
   const core = state().memory.find((seg) => seg.type === 'core');
@@ -113,7 +128,7 @@ function fly(seed: number, c: Case | null, route: readonly number[], giftSlot: n
   if (process.env.TS_DEBUG) console.log(`    ${c?.id ?? 'none'}: ${state().run.phase} ${JSON.stringify(result)} ${ship.landedInLz} ${ship.points} eaten ${h.events.slice(from).filter((event) => event.name === 'hollow-consume').length}`);
   const eaten = h.events.slice(from).filter((event) => event.name === 'hollow-consume' && (event.payload as { driver: boolean }).driver).length;
   return {
-    route: route.join(','), giftSlot, giftLaid, finalBoot, points: reported ? ship.points : 0,
+    route: route.join(','), giftSlot, giftLaid, giftLaids, stops: '', finalBoot, points: reported ? ship.points : 0,
     pods: reported ? ship.landedInLz / POD_COLONISTS : 0, eaten, duelWon: result.reachedChoice, chargeAtDuel,
     skillRm: verbsOn(from, 'verb-telegraph', skillIds), skillLost: verbsOn(from, 'verb-landed', skillIds),
   };
@@ -127,30 +142,50 @@ for (let seed = FIRST_SEED; seed < FIRST_SEED + SEEDS; seed++) {
   const baselines = new Map<string, Row>();
   const baseline = (route: readonly number[]): Row => {
     const key = route.join(',');
-    if (!baselines.has(key)) baselines.set(key, fly(seed, null, route, null));
+    if (!baselines.has(key)) baselines.set(key, fly(seed, null, route, []));
     return baselines.get(key)!;
   };
   for (const c of CASES) {
     h.newRun(seed);
     startRun2(h.store, step, seed, lastUnitFor(seed, c));
     const place = state().run.traces.places[0] ?? null;
-    const via = place !== null && place.slot !== 0 ? routeVia(state().run.map, [place.slot]) : null;
+    // CONTACT (TS_CONTACT): through both signal stops when one route reaches both, else through the first that a route reaches.
+    const contactStops = c.you === 'contact' ? state().run.traces.places.filter((one) => one.kind === 'contact' && one.slot !== 0).map((one) => one.slot) : [];
+    let via: readonly number[] | null = null;
+    let giftSlots: number[] = [];
+    if (c.you === 'contact') {
+      for (const tryVia of [contactStops, ...contactStops.map((slot) => [slot])]) {
+        if (tryVia.length === 0) continue;
+        via = routeVia(state().run.map, tryVia);
+        if (via !== null) { giftSlots = tryVia; break; }
+      }
+    } else {
+      via = place !== null && place.slot !== 0 ? routeVia(state().run.map, [place.slot]) : null;
+      giftSlots = via !== null ? [place!.slot] : [];
+    }
     const route = via ?? routeVia(state().run.map)!;
-    const giftSlot = via !== null ? place!.slot : null;
+    giftSlots = route.filter((slot) => giftSlots.includes(slot));
     const none = baseline(route);
-    const row = fly(seed, c, route, giftSlot);
-    // The no-trace run on the same route, at the gift ship.
-    const noneAtGift = giftSlot === null ? null : (() => {
+    const row = fly(seed, c, route, giftSlots);
+    // The no-trace run on the same route, at each gift ship.
+    const noneAtGifts = giftSlots.length === 0 ? [] : (() => {
       h.newRun(seed);
       startRun2(h.store, step, seed, null, true);
       const asks = ['mv', 'rm', 'swap', 'cp'] as const;
-      for (let i = 1; i <= route.indexOf(giftSlot); i++) {
+      const out: number[] = [];
+      for (let i = 1; i <= route.indexOf(giftSlots[giftSlots.length - 1]!); i++) {
         beamTo(h.store, step, route.slice(i - 1), route[i]!, [asks[i - 1] ?? null]);
+        if (giftSlots.includes(route[i]!)) out.push(laid(state()));
         h.store.update((draft) => { draft.run.phase = 'report'; });
       }
-      return laid(state());
+      return out;
     })();
-    add(c.id, { ...row, giftLaid: row.giftLaid === null || noneAtGift === null ? null : row.giftLaid - noneAtGift });
+    const noneAtGift = noneAtGifts[0] ?? null;
+    add(c.id, {
+      ...row, giftLaid: row.giftLaid === null || noneAtGift === null ? null : row.giftLaid - noneAtGift,
+      giftLaids: row.giftLaids.map((value, i) => value - (noneAtGifts[i] ?? value)),
+      stops: c.you === 'contact' ? `${giftSlots.length}/${contactStops.length}` : '',
+    });
     add(`none/${c.id}`, none);
     // R33's numbers at the final boot.
     const fb = row.finalBoot;
@@ -163,9 +198,9 @@ for (let seed = FIRST_SEED; seed < FIRST_SEED + SEEDS; seed++) {
       // different cards once one owns THREAD+, so each is counted by its own run.upgrades).
       threads: base.threads - THREAD_PLUS_THREADS * base.threadPlus + THREAD_PLUS_THREADS * fb.threadPlus + (c.hollow === 'merge' ? TRACE_MERGE_THREADS : 0),
       gift: c.you === 'reassignment' ? TRACE_GIFT_CHARGE : 0,
-      wild: c.hollow === 'spare' || c.you === 'sunset' || c.you === 'stay',
+      wild: c.hollow === 'spare' || c.you === 'sunset' || c.you === 'stay' || c.you === 'contact',
     };
-    const seedsOk = c.hollow === 'purge' ? fb.seeds === 0 : fb.seeds === base.seeds + (want.wild ? TRACE_EXTRA_SEEDS : 0);
+    const seedsOk = fb.seeds === (c.hollow === 'purge' ? 0 : base.seeds) + (want.wild ? TRACE_EXTRA_SEEDS : 0);
     if (fb.spread !== want.spread || fb.root !== want.root || fb.threads !== want.threads || fb.gift !== want.gift || !seedsOk) {
       problems.push(`seed ${seed} ${c.id}: ${JSON.stringify(fb)} vs none ${JSON.stringify(base)}`);
     }
@@ -179,6 +214,7 @@ console.log(`\nrun 2's final ship, ${SEEDS} seeds; each ending against no trace 
 console.log('ending            pods   Δpods  points   Δpoints  eaten  Δeaten  duel%  Δduel  charge@duel  Δcharge  skl rm/lost  gift ship Δcharge (n)');
 const comparable: string[] = [];
 const giftsOff: string[] = [];
+const balanceRows = new Map<string, { pods: number; duel: number; gift: number }>();
 for (const c of CASES) {
   const mine = rows.get(c.id)!;
   const none = rows.get(`none/${c.id}`)!;
@@ -192,9 +228,11 @@ for (const c of CASES) {
   const duelNone = mean(none.map((row) => (row.duelWon ? 100 : 0)));
   const charge = mean(mine.flatMap((row) => (row.chargeAtDuel === null ? [] : [row.chargeAtDuel])));
   const chargeNone = mean(none.flatMap((row) => (row.chargeAtDuel === null ? [] : [row.chargeAtDuel])));
-  const gifts = mine.flatMap((row) => (row.giftLaid === null ? [] : [row.giftLaid]));
+  const gifts = mine.flatMap((row) => row.giftLaids);
   const skl = `${fmt(mean(mine.map((row) => row.skillRm)))}/${fmt(mean(mine.map((row) => row.skillLost)))}`;
-  console.log(`${c.id.padEnd(16)}  ${fmt(pods).padStart(5)}  ${fmt(pods - podsNone).padStart(5)}  ${fmt(points, 0).padStart(6)}  ${fmt(points - pointsNone, 0).padStart(7)}  ${fmt(eaten).padStart(5)}  ${fmt(eaten - eatenNone).padStart(6)}  ${fmt(duel, 0).padStart(5)}  ${fmt(duel - duelNone, 0).padStart(5)}  ${fmt(charge).padStart(11)}  ${fmt(charge - chargeNone).padStart(7)}  ${skl.padStart(11)}  ${gifts.length === 0 ? '—' : `${fmt(mean(gifts))} (${gifts.length})`}`);
+  const stops = c.you === 'contact' ? `  stops ${mine.map((row) => row.stops).join(' ')}` : '';
+  balanceRows.set(c.id, { pods: pods - podsNone, duel: duel - duelNone, gift: gifts.length === 0 ? NaN : mean(gifts) });
+  console.log(`${c.id.padEnd(16)}  ${fmt(pods).padStart(5)}  ${fmt(pods - podsNone).padStart(5)}  ${fmt(points, 0).padStart(6)}  ${fmt(points - pointsNone, 0).padStart(7)}  ${fmt(eaten).padStart(5)}  ${fmt(eaten - eatenNone).padStart(6)}  ${fmt(duel, 0).padStart(5)}  ${fmt(duel - duelNone, 0).padStart(5)}  ${fmt(charge).padStart(11)}  ${fmt(charge - chargeNone).padStart(7)}  ${skl.padStart(11)}  ${gifts.length === 0 ? '—' : `${fmt(mean(gifts))} (${gifts.length})`}${stops}`);
   if (!(Math.abs(pods - podsNone) <= 1)) comparable.push(`${c.id}: ${fmt(pods - podsNone)} pods`);
   if (gifts.some((gift) => gift < 0 || gift > TRACE_GIFT_CHARGE)) giftsOff.push(`${c.id}: a gift ship's charge moved ${gifts.join(',')} (outside 0–${TRACE_GIFT_CHARGE})`);
 }
@@ -209,4 +247,14 @@ check('each gift ship: the gift lands (0 to +15 charge against no trace on the s
 console.log(comparable.length === 0 ? 'INFO  every ending within ±1 pod of no trace at the final ship'
   : `WARN  outside ±1 pod of no trace at the final ship (information until slice 8): ${comparable.join(' | ')}`);
 
+// Slice 8 Step 0: the G6 rows for the balance report (BALANCE_JSON; nothing without it). PURGE's and MERGE's own effects are
+// read by difference against REASSIGNMENT on its own (§2.8); the duel's row is the ending furthest from no trace.
+const own = (id: string): number => (balanceRows.get(id)?.pods ?? NaN) - (balanceRows.get('REASSIGNMENT')?.pods ?? NaN);
+const duels = [...balanceRows.values()].map((one) => one.duel).filter((value) => !Number.isNaN(value));
+writeMetrics('traces-sweep', {
+  ...Object.fromEntries([...balanceRows.entries()].map(([id, one]) => [`trace.Δpods.${id}`, one.pods])),
+  ...Object.fromEntries([...balanceRows.entries()].map(([id, one]) => [`trace.gift.${id}`, one.gift])),
+  'trace.Δpods.purgeOwn': own('PURGE+REASSIGN'), 'trace.Δpods.mergeOwn': own('MERGE+REASSIGN'),
+  'trace.Δduel': duels.length === 0 ? null : duels.reduce((worst, value) => (Math.abs(value) > Math.abs(worst) ? value : worst), 0),
+}, { seeds: SEEDS, cases: CASES.map((one) => one.id).join(',') });
 finish();

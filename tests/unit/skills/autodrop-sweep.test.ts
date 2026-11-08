@@ -10,7 +10,14 @@
 // kid lands a ship whose drivers and instruments are all at 100 (the windows AUTODROP can fly: sure parts).
 // Per row: pods landed in an LZ with room (%), points, mislanded, the windows used, the wall s of the landing, and how often
 // AUTODROP's claim found no thread (`'autodrop-wait'`). 03 wants the gap between v3 and none "really felt" on the ark.
+// Slice 8 Step 0 (slice-8-plan §2.3, OD 9; slice-4cde Measurements: "slice 8 should judge it with a sloppy kid"): a fourth
+// kid, sloppy, the quiet kid's keys with a 1.2 s reaction to every strip line, who misses the first cue of a window one time
+// in three (it acts again only once that cue has gone and come back), on its own seeded stream per row. SWEEP_KIDS picks the
+// kids (default healed, quiet, busy: today's rows). BALANCE_JSON writes `drop.Δpods.<ship>.<kid>.v<n>` (landed % at that
+// version less the same kid's v0, on the same ship) and `drop.worst` (the lowest of them).
 import { check, finish } from '../landing/checks';
+import { writeMetrics } from '../support/balance-out';
+import { createRng } from '@systems/rng';
 import { createHarness7 } from '../wp7/harness7';
 import { armLanding, ARM } from './autodrop-arm';
 import { ensureLandingKeys, followLanding } from '../landing/harness-landing';
@@ -49,6 +56,51 @@ function busy(): void {
 interface Row { ship: string; version: number; kid: string; landedPct: number; points: number; mislanded: number; wall: number; waits: number; volleys: number }
 const rows: Row[] = [];
 
+// The sloppy kid (slice 8): the quiet kid's keys, each after SLOPPY_REACTION_SEC of the same line, and a window's first cue
+// missed one time in three.
+const SLOPPY_REACTION_SEC = 1.2;
+const SLOPPY_MISS = 1 / 3;
+function flySloppy(version: 0 | SkillVersion, rngSeed: number): { wall: number } {
+  const start = h.wall();
+  const rng = createRng(rngSeed);
+  let held = false;
+  let seen: { text: string; at: number } | null = null;
+  let wasOpen = false;
+  let missing = false;
+  let missedText: string | null = null;
+  while (st().run.phase === 'landing' && st().landing.ended === null && h.wall() - start < MAX_WALL) {
+    h.step();
+    const text = shown();
+    const generic = text.replace(/\d+/g, '#');
+    if (seen === null || seen.text !== generic) seen = { text: generic, at: h.wall() };
+    const open = st().landing.window !== null;
+    if (open && !wasOpen) missing = rng() < SLOPPY_MISS;
+    wasOpen = open;
+    const cue = /hold \[L\]|press \[L\]|\[G\]/.test(text);
+    if (missing && cue && missedText === null) missedText = generic;
+    if (missedText !== null && generic !== missedText) { missing = false; missedText = null; }
+    if (missedText !== null) continue;
+    if (h.wall() - seen.at < SLOPPY_REACTION_SEC - 1e-9) continue;
+    const ad = st().landing.autodrop;
+    if (version === 1) {
+      if (!held && /hold \[L\]/.test(text)) { h.keyDown('KeyL'); held = true; continue; }
+      if (held && (!ad.held || !/hold \[L\]/i.test(text))) { h.keyUp('KeyL'); held = false; continue; }
+      if (!held && /press \[L\]/.test(text)) { h.press('KeyL'); seen = null; continue; }
+    } else if (version !== 0 && ad.armed === null && /\[G\]/.test(text)) {
+      h.press('KeyG');
+      continue;
+    } else if (/press \[L\]/.test(text)) {
+      h.press('KeyL');
+      seen = null;
+      continue;
+    }
+    if (!held && st().clock.skipWarp === null && /\[F\]/.test(text) && skipBlockReason(st(), getPrediction()) === null) { h.press('KeyF'); seen = null; }
+  }
+  if (held) h.keyUp('KeyL');
+  if (st().run.phase === 'landing' && st().landing.ended === null) endLanding(h.store);
+  return { wall: h.wall() - start };
+}
+
 function fly(version: 0 | SkillVersion, kidBusy: boolean): { wall: number } {
   const start = h.wall();
   const tick = (): void => { if (kidBusy) busy(); };
@@ -83,13 +135,16 @@ function fly(version: 0 | SkillVersion, kidBusy: boolean): { wall: number } {
   return { wall: h.wall() - start };
 }
 
-for (const ship of SHIPS.filter((candidate) => (process.env.SWEEP_SHIPS ?? candidate.name).split(',').includes(candidate.name))) {
-  for (const kid of ['healed', 'quiet', 'busy'] as const) {
+const KIDS = (process.env.SWEEP_KIDS ?? 'healed,quiet,busy').split(',');
+if (!KIDS.every((kid) => ['healed', 'quiet', 'busy', 'sloppy'].includes(kid))) throw new Error(`SWEEP_KIDS=${process.env.SWEEP_KIDS}: healed, quiet, busy or sloppy`);
+for (const [shipIndex, ship] of SHIPS.entries()) {
+  if (!(process.env.SWEEP_SHIPS ?? ship.name).split(',').includes(ship.name)) continue;
+  for (const kid of KIDS) {
     for (const version of [0, 1, 2, 3] as const) {
       armLanding(h, ship.route, { autodrop: version === 0 ? null : version, demos: [0.05, -0.05], healDrivers: kid === 'healed', healInstruments: kid === 'healed' });
       const waitsBefore = h.events.filter((event) => event.name === 'autodrop-wait').length;
       const volleysBefore = h.events.filter((event) => event.name === 'autodrop-volley').length;
-      const { wall } = fly(version, kid === 'busy');
+      const { wall } = kid === 'sloppy' ? flySloppy(version, 1000 + 10 * shipIndex + version) : fly(version, kid === 'busy');
       const end = h.wall() + 120;
       while (st().run.phase === 'landing' && h.wall() < end) h.step();
       const tally = landingResult(st(), 'locked');
@@ -105,9 +160,21 @@ for (const ship of SHIPS.filter((candidate) => (process.env.SWEEP_SHIPS ?? candi
     }
   }
 }
-check('every landing ended', rows.length % 12 === 0 && rows.length > 0);
-check('AUTODROP never lands fewer colonists than the strip-following kid by hand on the same ship (quiet kid)',
+check('every landing ended', rows.length % (4 * KIDS.length) === 0 && rows.length > 0);
+if (KIDS.includes('quiet')) check('AUTODROP never lands fewer colonists than the strip-following kid by hand on the same ship (quiet kid)',
   SHIPS.filter((ship) => rows.some((r) => r.ship === ship.name)).every((ship) => [1, 2, 3].every((v) => rows.find((r) => r.ship === ship.name && r.kid === 'quiet' && r.version === v)!.landedPct
     >= rows.find((r) => r.ship === ship.name && r.kid === 'quiet' && r.version === 0)!.landedPct - 10)),
   rows.filter((r) => r.kid === 'quiet').map((r) => `${r.ship} v${r.version} ${r.landedPct}%`).join(' · '));
+// Slice 8 Step 0: each version against the same kid's v0 on the same ship (landed %), for the balance report.
+const deltas = rows.filter((row) => row.version > 0).map((row) => {
+  const v0 = rows.find((other) => other.ship === row.ship && other.kid === row.kid && other.version === 0)!;
+  return { id: `drop.Δpods.${row.ship}.${row.kid}.v${row.version}`, delta: row.landedPct - v0.landedPct };
+});
+for (const kid of KIDS) {
+  console.log(`INFO  ${kid.padEnd(6)} against v0: ${deltas.filter((one) => one.id.includes(`.${kid}.`)).map((one) => `${one.id.replace('drop.Δpods.', '').replace(`.${kid}`, '')} ${one.delta >= 0 ? '+' : ''}${one.delta}%`).join(' · ')}`);
+}
+writeMetrics('autodrop-sweep', {
+  ...Object.fromEntries(deltas.map((one) => [one.id, one.delta])),
+  'drop.worst': deltas.length === 0 ? null : Math.min(...deltas.map((one) => one.delta)),
+}, { kids: KIDS.join(','), ships: [...new Set(rows.map((row) => row.ship))].join(',') });
 finish();

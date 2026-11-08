@@ -1,11 +1,25 @@
-// BALANCE_ONLY: v2 ROUND vs v3 over the classic ships × damage states (plan R15; also plan 4's missing ROUND sweep), whole landings.
-// Slice 4e, Track ORBIT (slice-4cde-plan §8.3). Information until slice 8, not a balance target: each classic ship (ARES-VII
-// … LAST LIGHT) locked in LANDING on a low ellipse (▼ at 0.45 of the band, e 0.03) or on a capture's loop (▼ at 0.3 of the
+// BALANCE_ONLY: v2 ROUND vs v3 over run 1's authored ships on the arm × damage states (plan R15; also plan 4's missing ROUND sweep), whole landings.
+// Slice 4e, Track ORBIT (slice-4cde-plan §8.3). Information until slice 8, not a balance target: each of run 1's five authored
+// ships on the arm (ARES-VII, HALCYON, KESTREL, VESPER, LAST LIGHT: harness9 shipAlone, the arm fixture since Track RETIRE)
+// locked in LANDING on a low ellipse (▼ at 0.45 of the band, e 0.03) or on a capture's loop (▼ at 0.3 of the
 // band, ▲ a step under its top), healthy or damaged (Sensor Interp and every driver at 70%: a ×2.25 drop), landed by the
 // strip (followLanding: a kid who obeys it, manual pods) with no AUTOBURN, with v2 (one [B]: ROUND) and with v3 (one [B]:
 // LANDING ORBIT). Per row: FUEL used, wall seconds to the first drop, pods landed in an LZ, points, v3's top-ups and the
 // windows they cost (R13), and the wall s to reach the landing orbit. A landing still open after MAX_WALL is ended there.
+// Slice 8 Step 0 (slice-8-plan §2.2, OD 3): re-baselined on the arm. Its rows name the ship the fixture built; V3_SHIPS (names,
+// comma-separated) flies some of them; per ship it prints v3 against v2 ROUND (pods, first drop, FUEL), and BALANCE_JSON
+// writes `v3.Δpods.damaged` (the worse of VESPER's and LAST LIGHT's ×2.25 rows, v3's pods over v2's, both starts),
+// `v3.Δfirst-drop-s` (v3's first drop against v2's on those rows, mean) and `v3.Δfuel.healthy` (v3's FUEL against v2's on
+// every healthy row, mean; negative: v3 burns less).
+// The arm's numbers at fa323d6 (--full, the slice-8 Step 0 baseline of this sweep; the classic five's are slice-4cde's M5):
+// • healthy low: v2 ROUND FUEL −7.6%, v3 −4.8%, 45/46 pods both; healthy capture: v2 −35.9%, v3 −19.4%, 45 against 44 pods;
+// • damaged low: v2 −7.6%, v3 −20.8%, 40 against 37 pods; damaged capture: v2 −35.9%, v3 −33.4%, 40 against 34 pods;
+// • v3 over v2 on the ×2.25 ships: VESPER −4 pods (low 12 = 12, capture 9 against 13), LAST LIGHT −1 (13 against 14, 13 = 13);
+//   the first drop 7 s sooner on average (VESPER low 27 against 39 s); healthy FUEL −1.9 points a row;
+// • every LAST LIGHT row is still open at MAX_WALL (the final ship's landing does not end by the strip here; not read further
+//   in Step 0): its pods are counted where they stand, and its rows take most of the sweep's time.
 import { check, finish } from '../wp1/harness';
+import { writeMetrics } from '../support/balance-out';
 import { createHarness9 } from '../wp9/harness9';
 import { lockOn, ensureLandingKeys, followLanding } from '../landing/harness-landing';
 import { giveSkillFile } from '../support/skills';
@@ -23,6 +37,9 @@ setLandingMode('manual');
 const state = (): GameState => h.store.getState();
 const LANDING_DONE = [...DRIVER_RULES.map((rule) => rule.id), 'engine-io-fault', 'lesson-dot-wide', 'lesson-drag-sinks'];
 const SHIPS = ['ARES-VII', 'HALCYON', 'KESTREL', 'VESPER', 'LAST LIGHT'];
+// V3_SHIPS: the ships flown (names, comma-separated), all five by default.
+const FLOWN = (process.env.V3_SHIPS ?? SHIPS.join(',')).split(',');
+if (!FLOWN.every((name) => SHIPS.includes(name))) throw new Error(`V3_SHIPS=${process.env.V3_SHIPS}: not one of ${SHIPS.join(', ')}`);
 
 interface Row {
   ship: string; damage: string; start: Start; auto: 'none' | 'v2' | 'v3'; ended: boolean;
@@ -97,7 +114,7 @@ function flyRow(index: number, damaged: boolean, auto: Row['auto'], start: Start
   const points = down.reduce((sum, record) => sum + (record.fate.kind === 'down' ? record.fate.touchdown.points : 0), 0);
   const maxPoints = pods.reduce((sum, record) => sum + record.colonists, 0);
   return {
-    ship: SHIPS[index]!, damage: damaged ? 'damaged' : 'healthy', start, auto, ended, fuelUsed: fuel0 - (state().landing.fuelAtEndPct ?? state().burn.fuelPct),
+    ship: state().level.shipName, damage: damaged ? 'damaged' : 'healthy', start, auto, ended, fuelUsed: fuel0 - (state().landing.fuelAtEndPct ?? state().burn.fuelPct),
     firstDropSec: firstDrop, landed, pods: pods.length, points, maxPoints, wallSec: h.wall() - wall0,
     targetAlt: aimAlt, orbitSec: orbitAt, topUps, costs: lines.filter((text) => text.startsWith('AUTOBURN v3: TOP-UP COSTS')).length, lowers,
   };
@@ -105,6 +122,7 @@ function flyRow(index: number, damaged: boolean, auto: Row['auto'], start: Start
 
 const rows: Row[] = [];
 for (let index = 0; index < SHIPS.length; index++) {
+  if (!FLOWN.includes(SHIPS[index]!)) continue;
   for (const damaged of [false, true]) for (const start of ['low', 'capture'] as const) {
     for (const auto of ['none', 'v2', 'v3'] as const) {
       const row = flyRow(index, damaged, auto, start);
@@ -134,4 +152,27 @@ for (const damage of ['healthy', 'damaged']) for (const start of ['low', 'captur
 const v3Rows = rows.filter((row) => row.auto === 'v3');
 console.log(`INFO R13: ${v3Rows.reduce((t, r) => t + r.topUps, 0)} top-ups over the v3 landings, ${v3Rows.reduce((t, r) => t + r.costs, 0)} cost a window`);
 
+// Slice 8 Step 0 (§2.2): v3 against v2 ROUND per ship and damage, both starts summed, and the balance report's rows.
+const pair = (ship: string, damage: string) => (['low', 'capture'] as const).map((start) => {
+  const of = (auto: Row['auto']) => rows.find((row) => row.ship === ship && row.damage === damage && row.start === start && row.auto === auto)!;
+  return { v2: of('v2'), v3: of('v3') };
+});
+const flownShips = [...new Set(rows.map((row) => row.ship))];
+for (const ship of flownShips) for (const damage of ['healthy', 'damaged']) {
+  const pairs = pair(ship, damage);
+  console.log(`INFO v3 − v2 ${ship.padEnd(10)} ${damage.padEnd(7)}: pods ${pairs.reduce((t, p) => t + p.v3.landed - p.v2.landed, 0)}, points `
+    + `${pairs.reduce((t, p) => t + p.v3.points - p.v2.points, 0)}, first drop ${pairs.map((p) => ((p.v3.firstDropSec ?? 0) - (p.v2.firstDropSec ?? 0)).toFixed(0)).join(' / ')} s, `
+    + `FUEL ${pairs.map((p) => (p.v3.fuelUsed - p.v2.fuelUsed).toFixed(1)).join(' / ')} points`);
+}
+const hard = ['VESPER', 'LAST LIGHT'].filter((ship) => flownShips.includes(ship));
+const hardPods = hard.map((ship) => pair(ship, 'damaged').reduce((t, p) => t + p.v3.landed - p.v2.landed, 0));
+const hardFirst = hard.flatMap((ship) => pair(ship, 'damaged').map((p) => (p.v3.firstDropSec ?? 0) - (p.v2.firstDropSec ?? 0)));
+const healthyFuel = flownShips.flatMap((ship) => pair(ship, 'healthy').map((p) => p.v3.fuelUsed - p.v2.fuelUsed));
+const meanOf = (values: readonly number[]): number | null => (values.length === 0 ? null : values.reduce((a, b) => a + b, 0) / values.length);
+writeMetrics('v3-sweep', {
+  'v3.Δpods.damaged': hardPods.length === 0 ? null : Math.min(...hardPods),
+  ...Object.fromEntries(hard.map((ship, i) => [`v3.Δpods.damaged.${ship.replace(/\W/g, '')}`, hardPods[i]!])),
+  'v3.Δfirst-drop-s': meanOf(hardFirst),
+  'v3.Δfuel.healthy': meanOf(healthyFuel),
+}, { ships: flownShips.join(',') });
 finish();
