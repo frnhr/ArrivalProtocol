@@ -57,7 +57,10 @@ import { podCode } from '@data/landing-text';
 import type { ShipDef, HollowDef } from '@data/ships';
 import { classicShip, CLASSIC_HOPS } from '@data/classic-five';
 import { nominalShipThreat, nominalRunThreat, planThreat, threatInputFor, fixedShipFacts, NO_FINAL_TRACES } from '@systems/threat-plan';
-import { finalTraceInput } from '@systems/traces';
+import { finalTraceInput, finalTraces, rootUnitsOf, runTracesOf, type FinalTraces } from '@systems/traces';
+import { TRACES_BUILT, LINEAGE_BUILT } from '@data/traces';
+import { bookShape, type BookShape } from '@state/log-selectors';
+import type { LogBook, RunTraces, TraceKind } from '@/types/trace';
 import { huntTarget } from '@systems/trace-hunt';
 import { rollBeamSeeds, rollDeliverySeeds, plantBeamSeed, seedTargetsOf, disguiseChanceAt } from '@systems/beam-seeds';
 import { autodropDebug, setPassCount, setDropDemos, type AutodropDebug } from '@systems/autodrop';
@@ -141,6 +144,7 @@ import { hopBetween, reachable, roomFit } from '@systems/map-hop';
 import { mapFacts, nominalRouteThreat } from '@systems/map-facts';
 import { layerOf } from '@systems/map-geometry';
 import { FIRST_SLOT } from '@data/arm';
+import type { LastUnit } from '@/types/lineage';
 import { packedFiles, arrivalCharge } from '@systems/carry';
 import { resetWorldForShip } from '@systems/run';
 import { createRunState, withRunMap } from '@state/initial';
@@ -173,7 +177,8 @@ interface DebugHooks {
   // A TERMINAL line with inline buttons; the answer (or null on timeout) lands in __ap.lastChoice.
   sayChoice: (speaker: Speaker, text: string, options: string[], timeoutAiSec: number) => number;
   lastChoice: string | null | undefined;
-  log: () => LogEntry[];
+  // Slice 7c (§2.12): log.book() is the `???` file's book this run (run.log.book) and its shape (entries, rings, root).
+  log: LogDebug;
   queued: () => readonly { speaker: Speaker; text: string }[];
   ticker: () => LogEntry | null;
   director: () => { shown: ObjectiveLine | null; done: string[] };
@@ -416,6 +421,10 @@ interface DebugHooks {
   // Slice 7b (§2.12): THE LAST LANDING's machine (null when it is not running) with the FINALE's phase and the gate; skip is
   // its [ENTER] (Track DROP's skipLastLanding: throws until built).
   lastLanding: LastLandingDebug;
+  // Slice 7c (§2.12): the run's traces and where their gifts wait, what the final ship plays of them (built kinds only) and the
+  // gates; traces.as(kind) re-rolls this run's traces as if the last unit had ended with that piece (a step-1 piece with
+  // REASSIGNMENT, a step-2 piece after PURGE; CONTACT is 7d's), the places on this run's arm and stream.
+  traces: TracesDebug;
   skipEnding: () => boolean;
   // WP11 part 2: the game's events lately (name and payload, newest last; DEBUG_EVENT_KEEP of them), so a browser run
   // can count what happened (belt hits on racks A–B, BLOCKED, the duel's spikes) without a listener of its own.
@@ -460,6 +469,18 @@ interface FinaleDebug {
   pick: (step: 1 | 2, piece: EndingPiece, stay?: number) => string | null;
   back: () => string | null;
   cont: () => string | null;
+}
+
+// __ap.log: the TERMINAL's lines, and the `???` file's book (slice 7c, §2.12).
+interface LogDebug {
+  (): LogEntry[];
+  book: () => { book: LogBook; shape: Readonly<BookShape> };
+}
+
+// __ap.traces: the run's traces, and a re-roll as if the last unit had chosen a piece (slice 7c, §2.12).
+interface TracesDebug {
+  (): { traces: RunTraces; final: FinalTraces; root: number[]; built: Readonly<Record<TraceKind, boolean>>; lineage: boolean };
+  as: (kind: TraceKind) => RunTraces;
 }
 
 // __ap.lastLanding: THE LAST LANDING's state, and its [ENTER] (slice 7b, §2.12).
@@ -830,6 +851,43 @@ function debugSurveyPoor(store: Store<GameState>): void {
   debugRoute(store, route);
 }
 
+// __ap.traces.as(kind) (slice 7c, §2.12): this run's traces as if the last unit had ended with `kind` (a step-1 piece with
+// REASSIGNMENT, a step-2 piece after PURGE), placed again on this run's arm and stream (systems/traces.ts runTracesOf). The
+// last unit's record gains that ending (a run 1 gets a last unit made up for it, as a won run leaves one), so the save's
+// check (traceRefusal) holds. The ending's facts: the arm's final ship, a final year 3 years before this one's, STAY's colony
+// the last trail's first colony (or the first ship's world), the kit Scan, Repair and Rm, SUNSET's and SPARE's FUEL 25%.
+function debugTracesAs(store: Store<GameState>, kind: TraceKind): RunTraces {
+  if (kind === 'contact') throw new Error("__ap.traces.as: CONTACT is 7d's");
+  const run = store.getState().run;
+  if (run.map.world !== 'arm') throw new Error('__ap.traces.as: the arm only (the classic world holds no traces)');
+  const final = run.map.arm.find((ship) => ship !== undefined && ship !== null && ship.kind === 'final');
+  if (final === undefined) throw new Error('__ap.traces.as: the arm has no final ship');
+  const step1 = kind === 'purge' || kind === 'merge' || kind === 'spare';
+  const hollow: HollowChoice = step1 ? kind : 'purge';
+  const you: YouChoice = step1 ? 'reassignment' : kind;
+  const cause: LastCause = hollow === 'merge' ? 'won-merge' : hollow === 'spare' ? 'won-spare' : 'won-purge';
+  const base: LastUnit = run.lastUnit ?? {
+    number: run.unitNumber - 1, landed: 0, shipName: final.name, cause, stats: { moves: 0, deletes: 0 }, hollowUnits: [...run.hollowUnits],
+    trail: null, skills: null, ending: null,
+  };
+  const colonyStop = base.trail?.stops.find((stop) => stop.colony !== null) ?? null;
+  const stay = colonyStop !== null && colonyStop.colony !== null
+    ? { slot: colonyStop.slot, colony: colonyStop.colony, year: colonyStop.year }
+    : { slot: FIRST_SLOT, colony: 'RIVERSIDE', year: run.map.startYear };
+  const ending: EndingRecord = {
+    hollow, you, rootUnits: [...base.hollowUnits], finalSlot: final.slot, finalShip: final.name, finalYear: final.approachYear - 3,
+    stay: you === 'stay' ? stay : null, kit: ['scan', 'repair', 'delete'], fuelPct: you === 'sunset' || hollow === 'spare' ? 25 : null,
+    charge: 20,
+  };
+  const lastUnit: LastUnit = { ...(structuredClone(base) as LastUnit), cause, ending };
+  const traces = runTracesOf(lastUnit, run.map, run.seed);
+  store.update((draft) => {
+    draft.run.lastUnit = lastUnit;
+    draft.run.traces = structuredClone(traces) as RunTraces;
+  });
+  return traces;
+}
+
 // __ap.runNumber(n): a NEW RUN now, as run `n` of the arm (run 1: run 1's arm; later: a fresh roll with ARES-(VI + n) and
 // that run's final ship), on its title card. The archive's lineage is kept (the unit number, the last unit), with its wave
 // set to `n`, so run.wave and map.run agree (the review's nit: the map came from `n`, the run state from the archive).
@@ -939,7 +997,12 @@ export function mountDebug(store: Store<GameState>): void {
       if (window.__ap) window.__ap.lastChoice = picked;
     }),
     lastChoice: undefined,
-    log: () => store.getState().log.entries,
+    log: Object.assign(() => store.getState().log.entries, {
+      book: () => {
+        const book = store.getState().run.log.book;
+        return { book: structuredClone(book) as LogBook, shape: bookShape(book) };
+      },
+    }),
     queued: queuedLines,
     ticker: () => tickerEntry(store.getState()),
     director: () => store.getState().director,
@@ -1215,6 +1278,13 @@ export function mountDebug(store: Store<GameState>): void {
       const state = store.getState();
       return { state: state.landing.lastLanding, phase: state.hollow.finale.phase, built: LAST_LANDING_BUILT };
     }, { skip: () => skipLastLanding(store) }),
+    traces: Object.assign(() => {
+      const run = store.getState().run;
+      return {
+        traces: structuredClone(run.traces) as RunTraces, final: finalTraces(run), root: rootUnitsOf(run), built: { ...TRACES_BUILT },
+        lineage: LINEAGE_BUILT,
+      };
+    }, { as: (kind: TraceKind) => debugTracesAs(store, kind) }),
     skipEnding: () => skipFinaleEnding(store),
     events: (name) => recentEvents.filter((event) => name === undefined || event.name === name),
     glitch: (level, ms) => glitchBurst(level, ms),
