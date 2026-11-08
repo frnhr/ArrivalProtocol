@@ -1,4 +1,5 @@
-// Slice 3c: Track UI owns this file (docs/phase3/impl/slice-3c-plan.md §5.3); WORLD and SAVE request words by message.
+// Slice 7a: the lead owns this file (slice-7-plan.md §4.1): the endingLine hook (systems/ending-rules.ts reportEndingLine,
+// Track FINALE's; 7b's VIEW marks its RESTORED row's icons here). Slice 3c: Track UI's model stands.
 import type { GameState } from '@state/schema';
 import type { Colonist } from '@/types/segment';
 import type { LandingTally, Place, PodSummary, Touch } from '@/types/landing';
@@ -13,6 +14,7 @@ import { HARD_WORDS_POOL } from '@data/souls';
 import { COLONISTS_PER_POD, STAR_CHARGE_BONUS } from '@data/tuning';
 import { residentReportRows, type ResidentReportRow } from '@systems/resident-hud';
 import { surveyLzRowSuffix } from '@systems/survey-hud';
+import { reportEndingLine } from '@systems/ending-rules';
 
 // The LANDING REPORT's view model (01-landing §4, plan §1.4), pure: everything the screen shows, from landingResult and
 // the stars, so the screen (components/run/LandingReport.ts) only lays it out and times it. It plays in three stages:
@@ -61,6 +63,9 @@ export interface LandingReportModel {
   lzRows: string[];           // `LZ-A 600 / 600 ✓`, `LZ-B 400 / 600 · 200 SHORT`, one per LZ in label order
   otherRows: string[];        // OFF-SITE, NO-GO, each parked / not-launched pod, RESTORED BY MERGE
   colonyLine: string | null;  // `they are calling it RIVERSIDE`
+  // Slice 7a (05 §3.7): the final ship's ending line under the colony (`ENDING · PURGE · STAND BY`), null on every other
+  // ship (ending-rules reportEndingLine, Track FINALE's; null until it is built).
+  endingLine: string | null;
   // Slice 3c (05 §3.5, §3.8): ship 1's beacon row, `LZ-A · A BEACON WAS ALREADY THERE · SET BY UNIT-046 · 1 YEAR AGO` (the
   // last unit's from run 2, by the launch gap; `THIS YEAR` for 0), null past ship 1, on the classic world, and when the last
   // unit's first ship never reached orbit (systems/lineage.ts beaconOnFirstShip).
@@ -253,6 +258,7 @@ export function landingReportModel(state: Readonly<GameState>): LandingReportMod
     lzRows: rows.filter((row) => row.kind === 'lz').map((row) => row.line),
     otherRows: rows.filter((row) => row.kind !== 'lz').map((row) => row.line),
     colonyLine: tally.colony === null ? null : LANDING_REPORT_TEXT.colony(tally.colony),
+    endingLine: landing.finalShip ? reportEndingLine(state) : null,
     beaconLine: beaconLine(state),
     nearMisses: misses.map((miss) => miss.text),
     credits: credits(state, tally),

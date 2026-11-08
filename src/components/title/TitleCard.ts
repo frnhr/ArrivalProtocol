@@ -191,7 +191,8 @@ export function mountTitleCard(store: Store<GameState>): () => void {
     // The endings live in the archive's session copy, which every browser page opens (state/instance.ts).
     const returning = !isFirstRun(state.run);
     endingsEl.hidden = !returning;
-    const seen = returning ? archiveMeta().endingsSeen : [];
+    // Slice 7a: only WP11's two count until Track NIGHT moves the line to the built pieces (endingsSeen holds all seven).
+    const seen = returning ? ENDINGS.filter((ending) => archiveMeta().endingsSeen.includes(ending)) : [];
     endingsEl.textContent = returning ? ARCHIVE_TEXT.endings(seen.length, ENDINGS.length) : '';
     // WP11 part 2: lit once an ending has been found (RUN END names them: `ENDINGS 1/2 · PURGE · ???`).
     endingsEl.classList.toggle('found', seen.length > 0);

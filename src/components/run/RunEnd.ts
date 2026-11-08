@@ -1,8 +1,14 @@
-// Slice 4: Track UI owns this file (docs/phase3/impl/slice-4-plan.md §5.2): UNSPENT. Others ask by message.
+// Slice 7a: Track NIGHT owns this file after the FOUNDATION (docs/phase3/impl/slice-7-plan.md §4.1, §5.1; R19): the RUN
+// TALLY loses its ending block and the bridge (both move to the FINAL CARD), and its button goes on to the EPILOGUE. The
+// FOUNDATION's seam: with ENDINGS_BUILT.night raised the button reads EPILOGUE ▸ and sets ui.runEndStage 'epilogue' (the
+// keys answer only on the tally); while it is down it is NEW RUN, as before slice 7.
+// Slice 4: Track UI's UNSPENT stands. Others ask by message.
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import { runEndModel, type RunEndModel, type RunEndShipRow, type RunEndNext } from '@systems/run-end';
-import { startRun } from '@systems/run';
+import { startRun, setRunEndStage } from '@systems/run';
+import { ENDINGS_BUILT } from '@data/endings';
+import { EPILOGUE_TEXT } from '@data/epilogue-text';
 import { archiveLineage, archiveMeta, ENDINGS } from '@systems/meta';
 import { newRunSeed } from '@systems/rng';
 import { pushModal, registerKeys } from '@systems/input';
@@ -261,7 +267,7 @@ export function mountRunEnd(store: Store<GameState>): () => void {
     const archiveLine = archive === 'ok' || archive === 'none' ? null : ARCHIVE_TEXT.runEnd[archive];
     archiveEl.hidden = archiveLine === null;
     archiveEl.textContent = archiveLine ?? '';
-    renderKeyCaps(newBtn, RUN_END_TEXT.newRun, { own: 'SPACE' });
+    renderKeyCaps(newBtn, ENDINGS_BUILT.night ? EPILOGUE_TEXT.tallyOn : RUN_END_TEXT.newRun, { own: 'SPACE' });
     newBtn.classList.add('arming');
     root.classList.remove('scored');
     inputFromMs = Infinity;
@@ -282,8 +288,9 @@ export function mountRunEnd(store: Store<GameState>): () => void {
   // NEW RUN: a fresh run in the page (the title card again), once the screen has been up long enough. The
   // next unit is the archive's (UNIT-048 after UNIT-047, with its ghost), kept or not (state.archive).
   function newRun(): void {
-    if (!model || performance.now() < inputFromMs) return;
-    startRun(store, newRunSeed(), archiveLineage());
+    if (!model || performance.now() < inputFromMs || store.getState().ui.runEndStage !== 'tally') return;
+    if (ENDINGS_BUILT.night) setRunEndStage(store, 'epilogue');
+    else startRun(store, newRunSeed(), archiveLineage());
   }
 
   const onNew = (event: MouseEvent): void => { event.stopPropagation(); newRun(); };

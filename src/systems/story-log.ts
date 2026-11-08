@@ -63,7 +63,7 @@ function firstLandingKeyDue(state: Readonly<GameState>): boolean {
 // Entry 12 types from the root at its last block (05 §3.5: `> 047. wait.`, then entry 12): finale.ts rootGone moves the
 // duel to its choice in the AI tick, after HOLLOW's last words, and this post tick follows it.
 function rootKeyDue(state: Readonly<GameState>): boolean {
-  return state.hollow.finale.phase === 'choice' && !state.run.log.found.includes(12);
+  return state.hollow.finale.phase === 'step1' && state.hollow.finale.rootFell && !state.run.log.found.includes(12);
 }
 
 // The log's chip says what the run knows (logKnown): `???`, or `046.log` from the SCAN or the first key on.

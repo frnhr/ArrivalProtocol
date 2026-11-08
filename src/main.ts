@@ -9,6 +9,8 @@ import './styles/game.css';
 import './styles/landing.css';
 import './styles/threat.css';
 import './styles/desk.css';
+import './styles/ending.css';
+import './styles/night.css';
 import './styles/responsive.css';
 import './styles/resident.css';
 import './styles/survey.css';
@@ -92,6 +94,8 @@ import { mountLogReader, mountLogChips } from '@components/memory-view/LogReader
 import { mountTransmitScreen } from '@components/run/TransmitScreen';
 import { mountDeskScreen } from '@components/desk/DeskScreen';
 import { mountRunEnd } from '@components/run/RunEnd';
+import { mountEpilogue } from '@components/run/Epilogue';
+import { mountFinalCard } from '@components/run/FinalCard';
 import { mountMergeTick } from '@components/memory-view/MergeTick';
 import { mountLaunchFx } from '@components/memory-view/LaunchFx';
 import { mountPodTags } from '@components/memory-view/PodTags';
@@ -289,6 +293,9 @@ mountLandingReport(store);
 mountDeskScreen(store);
 mountTransmitScreen(store);
 mountRunEnd(store);
+// Slice 7a (R19): the night after the RUN TALLY (Track NIGHT's screens; inert until ENDINGS_BUILT.night).
+mountEpilogue(store);
+mountFinalCard(store);
 // Slice 2: the LOG READER, over TRANSMIT or the game (05 §4).
 mountLogReader(store);
 // WP11: LAST LIGHT's choice, once the root's DELETE has left its last block.

@@ -132,6 +132,10 @@ export function mountLandingReport(store: Store<GameState>): () => void {
   const goodnightEl = make('div', 'lr-goodnight');
   goodnightEl.hidden = true;
   beaconEl.after(goodnightEl);
+  // Slice 7a (05 §3.7): the final ship's ending line under the colony (landing-report.ts endingLine; null until FINALE).
+  const endingEl = make('div', 'lr-ending');
+  endingEl.hidden = true;
+  colonyEl.after(endingEl);
 
   let model: LandingReportModel | null = null;
   let stage: Stage = 'rows';
@@ -398,6 +402,8 @@ export function mountLandingReport(store: Store<GameState>): () => void {
     routeEl.textContent = report.route;
     colonyEl.hidden = report.colonyLine === null;
     colonyEl.textContent = report.colonyLine ?? '';
+    endingEl.hidden = report.endingLine === null;
+    endingEl.textContent = report.endingLine ?? '';
     // Slice 3c: ship 1's beacon (05 §3.5), under the colony: the last unit was here first.
     beaconEl.hidden = report.beaconLine === null;
     beaconEl.textContent = report.beaconLine ?? '';

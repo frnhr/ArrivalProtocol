@@ -1,3 +1,6 @@
+// Slice 7a: Track CARD owns this file after the FOUNDATION (docs/phase3/impl/slice-7-plan.md §4.1, §5.1: the two-step card
+// replaces this one). The FOUNDATION kept WP11's one-step card on the v7 phases: it shows on step 1 once the root fell,
+// chooses through finale.ts chooseFinale (PURGE or MERGE, then REASSIGNMENT), and types the ending of a decided FINALE.
 import type { Store } from '@state/store';
 import type { GameState, EndingLine, EndingVoice } from '@state/schema';
 import {
@@ -18,11 +21,12 @@ import { echoWord } from '@data/tool-text';
 import { formatCount } from '@data/format';
 import { podCode } from '@data/landing-text';
 import {
-  MERGE_COST_CHARGE, HOLLOW_TYPE_CPS, FINALE_CHOICE_DELAY_SEC, FINALE_CHOICE_ARM_SEC, FINALE_ENDING_CPS, CONTROL_CHIME_LEAD_SEC,
+  MERGE_COST_CHARGE, HOLLOW_TYPE_CPS, FINALE_OPEN_DELAY_SEC, FINALE_STEP_ARM_SEC, FINALE_ENDING_CPS, CONTROL_CHIME_LEAD_SEC,
+  FINALE_CARD_FADE_MS,
 } from '@data/tuning';
 
 // LAST LIGHT's choice and its typed ending (§1, §6.6, §9 WP11 item 5): the payoff of the run.
-// • THE CARD. FINALE_CHOICE_DELAY_SEC after the root's DELETE has completed (the tear and the collapse are seen
+// • THE CARD. FINALE_OPEN_DELAY_SEC after the root's DELETE has completed (the tear and the collapse are seen
 //   first), a card comes up over a dimmed screen: ROOT DELETED, the last block pulsing, `UNIT-046 · ONE BLOCK LEFT`,
 //   and HOLLOW's last words typing in its pink (`> 047. wait.`). Then the two options, each with the command it runs
 //   in TERMINAL words, what it means and what it costs:
@@ -30,7 +34,7 @@ import {
 //   – [2] MERGE `> merge unit_046 -> unit_047`: warm and costly: "It becomes part of you. C13 · C14 come back, with
 //     missing memories." Its price is a meter of the kid's REPAIR CHARGE against the MERGE 20 tick (the 20 it will
 //     spend hatched out of it); short of it, the button is out of reach and says why: `NEEDS 20 CHARGE (you have 14)`.
-//   The buttons take clicks and keys FINALE_CHOICE_ARM_SEC after the card is up (a kid still clicking the root never
+//   The buttons take clicks and keys FINALE_STEP_ARM_SEC after the card is up (a kid still clicking the root never
 //   chooses by accident). The card is a modal for its moment (§6.11's choice layer): 1 and 2 choose, P pauses, M mutes.
 //   The delay and the arming are AI seconds (§3.4: story timers stand still while paused).
 // • THE ENDING. The choice (systems/finale.ts) writes its typed ending in the same update as its phase; the card clears
@@ -60,8 +64,7 @@ interface EndingRow {
 // The typing voice each ending voice speaks with: the echo and CONTROL's words in the relay tick, the narration in the
 // strip's softer purr, and the merged unit in HOLLOW's blips and the unit's ticks in turn (two voices as one).
 const ENDING_TYPE_VOICE: Readonly<Record<Exclude<EndingVoice, 'us'>, TypeVoice>> = { cmd: 'sys', story: 'strip', control: 'sys' };
-// The card fades out over this long once its ending is done (game.css .finale-choice.closing).
-const CLOSE_FADE_MS = 600;
+// The card fades out over FINALE_CARD_FADE_MS once its ending is done (game.css .finale-choice.closing).
 
 interface OptionParts {
   button: HTMLButtonElement;
@@ -203,7 +206,7 @@ export function mountFinaleChoice(store: Store<GameState>): () => void {
       },
     });
     wordsQueue.kick();
-    armAtAi = aiNow() + FINALE_CHOICE_ARM_SEC;
+    armAtAi = aiNow() + FINALE_STEP_ARM_SEC;
     root.classList.remove('armed');
   }
 
@@ -247,8 +250,8 @@ export function mountFinaleChoice(store: Store<GameState>): () => void {
     endingTyped = false;
     endingAll = false;
     root.hidden = false;
-    root.className = `finale-choice ending chose-${ending.choice}`;
-    card.className = `fc-card chose-${ending.choice}`;
+    root.className = `finale-choice ending chose-${ending.choice.hollow}`;
+    card.className = `fc-card chose-${ending.choice.hollow}`;
     openModal();
     renderKeyCaps(hintEl, HOLLOW_FINALE.endingHint, { own: 'SPACE' });
     hintEl.hidden = false;
@@ -352,7 +355,7 @@ export function mountFinaleChoice(store: Store<GameState>): () => void {
       root.className = 'finale-choice';
       endingEl.replaceChildren();
       endingEl.style.minHeight = '';
-    }, CLOSE_FADE_MS);
+    }, FINALE_CARD_FADE_MS);
   }
 
   // --- What the store says ---
@@ -365,19 +368,19 @@ export function mountFinaleChoice(store: Store<GameState>): () => void {
       if (stage !== 'off') closeNow();
       return;
     }
-    if (finale.phase === 'choice') {
+    if (finale.phase === 'step1' && finale.rootFell) {
       if (stage === 'off') {
         stage = 'waiting';
-        showAtAi = state.clock.aiSec + FINALE_CHOICE_DELAY_SEC;
+        showAtAi = finale.cardAtAi ?? state.clock.aiSec + FINALE_OPEN_DELAY_SEC;
       } else if (stage === 'choosing') {
         paintPrice();
       }
       return;
     }
-    if (finale.phase === 'purged' || finale.phase === 'merged') {
+    if (finale.phase === 'done' && (finale.hollow === 'purge' || finale.hollow === 'merge')) {
       // The choice writes its ending in the same update as its phase (systems/finale.ts): a chosen finale without one
       // is a bug, never a card to close quietly.
-      if (finale.ending === null) throw new Error(`FinaleChoice: the finale is '${finale.phase}' but has no ending`);
+      if (finale.ending === null) throw new Error(`FinaleChoice: the finale chose '${finale.hollow}' but has no ending`);
       if (finaleEndingShowing(state)) {
         if (stage !== 'ending' && stage !== 'closing') startEnding();
         return;

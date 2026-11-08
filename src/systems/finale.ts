@@ -1,5 +1,10 @@
+// Slice 7a: Track FINALE owns this file after the FOUNDATION (docs/phase3/impl/slice-7-plan.md §4.1, §5.1): the phases (R6),
+// the prices (R8, R9, R11), the pick and the confirm (R7), the apply (PURGE, MERGE's interim R15, SPARE), UNRESOLVED (R10)
+// and the verdict (R13). The FOUNDATION laid down the v7 machine with WP11's one step behind ENDINGS_BUILT.twoStep (data/
+// endings.ts): with the gate down the card opens as the root falls, PURGE or MERGE, step 2 is REASSIGNMENT, applied at once.
 import type { Store } from '@state/store';
-import type { GameState, RunEndCause, EndingLine, FinaleEnding } from '@state/schema';
+import type { GameState, EndingLine, FinaleEnding } from '@state/schema';
+import type { HollowChoice, YouChoice } from '@/types/ending';
 import type { HollowSegment, Segment, DriverSegment } from '@/types/segment';
 import type { PodRecord } from '@/types/landing';
 import { onAiTick } from '@systems/clock';
@@ -7,7 +12,7 @@ import { onWorldReset } from '@systems/reset';
 import { emit, NO_PAYLOAD } from '@systems/events';
 import { glitchBurst } from '@systems/glitch';
 import { getOpsBySeg, abortOp } from '@systems/ops-core';
-import { say, hollowLabel, unitName, assertLineFits, mindTypedByAi, typingSec } from '@systems/say';
+import { say, hollowLabel, unitName, assertLineFits, mindTypedByAi, typingSec, withdrawUntimedChoices } from '@systems/say';
 import { theRoot, rootDeleteRunning, rootDeleteProgress, nameHollow } from '@systems/hollow';
 import { clearAlert, VERB_ALERT_ID, SEED_ALERT_ID } from '@systems/alerts';
 import { replaceRange, mergeAdjacentFree, requireAddr, freeSegment, assertMemoryInvariants } from '@systems/memory-ops';
@@ -22,11 +27,14 @@ import { layoutOf } from '@data/memory';
 import { HOLLOW_FINALE } from '@data/hollow-text';
 import { IS_DEV } from '@/env';
 import { formatCount } from '@data/format';
+import { ENDINGS_BUILT } from '@data/endings';
+import { optionState, stayCandidates } from '@systems/ending-rules';
+import { notBuilt } from '@systems/not-built';
 import {
   MERGE_COST_CHARGE, MERGE_DRIVER_INTEGRITY, DRIVER_BLOCKS, GLITCH_BURST_LEVEL, GLITCH_BURST_MS,
   DUEL_SPIKE_EVERY_START_SEC, DUEL_SPIKE_EVERY_END_SEC, DUEL_SPIKE_LEVEL_START, DUEL_SPIKE_LEVEL_END, DUEL_SPIKE_MS,
   ROOT_GONE_GLITCH_LEVEL, ROOT_GONE_GLITCH_MS, MERGE_GLITCH_LEVEL, MERGE_GLITCH_MS, FINALE_ENDING_MAX_LINES,
-  FINALE_ENDING_CPS, FINALE_ENDING_GAP_SEC, FINALE_ENDING_HOLD_SEC, CONTROL_CHIME_LEAD_SEC,
+  FINALE_ENDING_CPS, FINALE_ENDING_GAP_SEC, FINALE_ENDING_HOLD_SEC, CONTROL_CHIME_LEAD_SEC, FINALE_OPEN_DELAY_SEC,
 } from '@data/tuning';
 
 // LAST LIGHT's finale (§1, §4.3, §6.6, §9 WP11 items 4–5), DOM-free. The flagship's ship ends here, and so does the run.
@@ -62,6 +70,7 @@ import {
 //   FINALE_ENDING_CPS, the gaps, CONTROL's chime and a hold to read). The FinaleChoice card types it on that clock;
 //   skipFinaleEnding (a click or a key) lets the report come at once.
 
+// WP11's one-step pick (chooseFinale: the card before Track CARD's, ?debug's __ap.finale.choose).
 export type FinaleChoice = 'purge' | 'merge';
 
 // From the ship's landing slice (copied from ShipDef.final when the ship was built), never a ShipDef lookup: a
@@ -70,30 +79,22 @@ function isFlagship(state: Readonly<GameState>): boolean {
   return state.landing.finalShip;
 }
 
-// How the run ends after the flagship's LANDING REPORT (systems/run.ts continueAfterReport).
-export function finaleRunCause(state: Readonly<GameState>): RunEndCause {
-  switch (state.hollow.finale.phase) {
-    case 'purged': return 'won-purge';
-    case 'merged': return 'won-merge';
-    case 'unresolved': return 'unresolved';
-    default: throw new Error(`finaleRunCause: the finale is '${state.hollow.finale.phase}', not decided`);
-  }
-}
+// How the run ends after the flagship's LANDING REPORT: systems/ending-rules.ts finaleRunCause (slice 7a, R17).
 
 // The `MERGE 20` tick the charge readouts carry on the flagship (§7.1 `.mem-stats`, §9 WP11 item 1): MERGE's price, while
 // the choice is still ahead (null on every other ship, and once the finale is decided). Part 2 draws it.
 export function mergeTickCharge(state: Readonly<GameState>): number | null {
   if (!isFlagship(state)) return null;
   const phase = state.hollow.finale.phase;
-  return phase === 'none' || phase === 'duel' || phase === 'choice' ? MERGE_COST_CHARGE : null;
+  return phase === 'none' || phase === 'duel' || phase === 'asleep' || phase === 'step1' || phase === 'step2' ? MERGE_COST_CHARGE : null;
 }
 
 // Something can still delete the root: state/selectors rootDeletable (the landing's pure table reads it there too).
 export { rootDeletable };
 
-// Why a choice can't be made now (null: it can). MERGE needs its price (§9 WP11 item 5).
+// Why WP11's one-step choice can't be made now (null: it can). MERGE needs its price (§9 WP11 item 5).
 export function finaleChoiceRefusal(state: Readonly<GameState>, choice: FinaleChoice): string | null {
-  if (state.hollow.finale.phase !== 'choice') return 'NOT NOW';
+  if (state.hollow.finale.phase !== 'step1' || !state.hollow.finale.rootFell) return 'NOT NOW';
   if (state.clock.paused) return TOOL_REFUSAL.paused;
   if (choice === 'merge' && chargeLeft(state) < MERGE_COST_CHARGE) return HOLLOW_FINALE.mergeNeeds(chargeLeft(state));
   return null;
@@ -135,7 +136,7 @@ export function finaleEndingLines(state: Readonly<GameState>, choice: FinaleChoi
     });
   } else {
     // Back in memory in place: every one of them is counted in inOrbit now.
-    const restored = state.landing.pods.filter((record) => state.hollow.finale.restoredInPlace.includes(record.pod))
+    const restored = state.landing.pods.filter((record) => state.hollow.finale.restored.includes(record.pod))
       .reduce((sum, record) => sum + record.colonists, 0);
     lines = HOLLOW_FINALE.mergeEnding({
       shipName, inOrbit: formatCount(inOrbit), restored: restored > 0 ? formatCount(restored) : null, hollowWord,
@@ -167,10 +168,10 @@ export function finaleEndingSec(lines: readonly EndingLine[]): number {
 }
 
 // The ending a choice writes, from the world as the choice left it (called inside the choice's own update).
-function endingFor(state: Readonly<GameState>, choice: FinaleChoice): FinaleEnding {
+function endingFor(state: Readonly<GameState>, choice: FinaleChoice, you: YouChoice): FinaleEnding {
   const lines = finaleEndingLines(state, choice);
   const startAi = state.clock.aiSec;
-  return { choice, lines, startAi, untilAi: startAi + finaleEndingSec(lines) };
+  return { choice: { hollow: choice, you }, lines, startAi, untilAi: startAi + finaleEndingSec(lines) };
 }
 
 // The kid ended the typed ending early (FinaleChoice: a click, SPACE or ENTER once it has typed): the LANDING REPORT may
@@ -235,11 +236,13 @@ function openRoot(store: Store<GameState>): void {
   emit('root-unlocked', NO_PAYLOAD);
 }
 
-// The root's DELETE completed (one last block stands where it was): HOLLOW stops, and lets go of what it was eating.
+// The root's DELETE completed (one last block stands where it was): HOLLOW stops, and lets go of what it was eating
+// ('asleep', R6). With the two steps not built the card opens at once (WP11: the choice came with the root's end).
 function rootGone(store: Store<GameState>): void {
   const cured = infectedSegments(store.getState());
   store.update((draft) => {
-    draft.hollow.finale.phase = 'choice';
+    draft.hollow.finale.phase = 'asleep';
+    draft.hollow.finale.rootFell = true;
     draft.hollow.phase = 'dormant';
     draft.hollow.biteInSec = null;
     draft.hollow.seedInSec = null;
@@ -255,20 +258,54 @@ function rootGone(store: Store<GameState>): void {
   for (const seg of cured) emit('hollow-cure', { segId: seg.id });
   glitchBurst(ROOT_GONE_GLITCH_LEVEL, ROOT_GONE_GLITCH_MS);
   say('hollow', HOLLOW_FINALE.lastWords(store.getState().run.unitNumber), { critical: true });
+  emit('finale-asleep', NO_PAYLOAD);
+  if (!ENDINGS_BUILT.twoStep) openStep1(store);
+}
+
+// The landing is settled (R6): it has ended, no pod is falling, and HOLLOW's line has typed in the TERMINAL. The card may
+// come up then (a touchdown bell under a card that asks a question reads like an answer).
+function landingSettled(state: Readonly<GameState>): boolean {
+  return state.landing.ended !== null && !state.landing.pods.some((record) => record.fate.kind === 'falling')
+    && mindTypedByAi(state) <= state.clock.aiSec;
+}
+
+// The FINALE's card opens on step 1 (R6, R18): FINALE_OPEN_DELAY_SEC from now, and any untimed choice standing in the
+// TERMINAL is withdrawn (say.ts's arbiter keeps every other choice shut while the card is up).
+function openStep1(store: Store<GameState>): void {
+  withdrawUntimedChoices();
+  store.update((draft) => {
+    draft.hollow.finale.phase = 'step1';
+    draft.hollow.finale.cardAtAi = draft.clock.aiSec + FINALE_OPEN_DELAY_SEC;
+  });
+  if (ENDINGS_BUILT.twoStep) emit('finale-open', { step: 1 });
 }
 
 // HOLLOW's last line holds the LANDING REPORT until it has typed in the TERMINAL (after whatever the TERMINAL is still
 // typing: the same sum say.ts keeps) and been read, like the typed endings (WP11 review: the report came 1.5 s after the
 // last touchdown and cut it off at `> you can't delete`).
+// Slice 7a (R10): with the two steps built, UNRESOLVED is step 1's IT FOLLOWED YOU card (rootFell false), and
+// continueFollowed goes on to step 2; before that it is decided at once, 'followed' and REASSIGNMENT (R16's reading).
 function unresolve(store: Store<GameState>): void {
   const state = store.getState();
   const line = HOLLOW_FINALE.unresolvedLine;
   const typedBy = Math.max(mindTypedByAi(state), state.clock.aiSec) + typingSec('hollow', line);
   store.update((draft) => {
-    draft.hollow.finale.phase = 'unresolved';
-    draft.hollow.finale.unresolvedUntilAi = typedBy + FINALE_ENDING_HOLD_SEC;
+    const finale = draft.hollow.finale;
+    finale.unresolvedUntilAi = typedBy + FINALE_ENDING_HOLD_SEC;
+    if (ENDINGS_BUILT.twoStep) {
+      finale.phase = 'step1';
+      finale.cardAtAi = typedBy + FINALE_OPEN_DELAY_SEC;
+    } else {
+      finale.phase = 'done';
+      finale.hollow = 'followed';
+      finale.you = 'reassignment';
+    }
   });
   say('hollow', line, { critical: true });
+  if (ENDINGS_BUILT.twoStep) {
+    withdrawUntimedChoices();
+    emit('finale-open', { step: 1 });
+  }
 }
 
 // HOLLOW's blocks leave memory, every op on them first (a DELETE the kid had running on a seed ends with it).
@@ -298,25 +335,27 @@ function driverFromRecord(record: Readonly<PodRecord>): DriverSegment {
   };
 }
 
-function purge(store: Store<GameState>): void {
+function purge(store: Store<GameState>, you: YouChoice): void {
   const memory = store.getState().memory;
   const blocks = memory.filter(isHollow);
   removeBlocks(memory, blocks);
   if (IS_DEV) assertMemoryInvariants(memory, layoutOf(store.getState()).totalBlocks);
   const gone = new Set(blocks.map((block) => block.id));
   store.update((draft) => {
-    draft.hollow.finale.phase = 'purged';
-    draft.hollow.finale.ending = endingFor(draft, 'purge');
+    draft.hollow.finale.phase = 'done';
+    draft.hollow.finale.hollow = 'purge';
+    draft.hollow.finale.you = you;
+    draft.hollow.finale.ending = endingFor(draft, 'purge', you);
     if (draft.ui.selectedId !== null && gone.has(draft.ui.selectedId)) draft.ui.selectedId = null;
     draft.ui.memoryRev++;
   });
   const state = store.getState();
   say('cmd', HOLLOW_FINALE.purgeEcho(echoWord(hollowLabel(state.run))), { critical: true });
   verdictOwed = HOLLOW_FINALE.purgeControl(state.mission.transmissionNum);
-  emit('finale-chosen', { choice: 'purge', restoredInPlace: 0, restoredHalf: 0 });
+  emit('finale-chosen', { hollow: 'purge', you, restored: 0 });
 }
 
-function merge(store: Store<GameState>): void {
+function merge(store: Store<GameState>, you: YouChoice): void {
   spendCharge(store, MERGE_COST_CHARGE);
   const state = store.getState();
   const memory = state.memory;
@@ -324,10 +363,9 @@ function merge(store: Store<GameState>): void {
   const blocks = memory.filter(isHollow);
   for (const block of blocks) for (const operation of getOpsBySeg(block.id)) abortOp(operation.id);
   const inPlace: number[] = [];
-  const half: number[] = [];
   for (const record of eaten) {
     const block = memory.find((seg): seg is HollowSegment => isHollow(seg) && seg.atePod === record.pod);
-    if (block === undefined) { half.push(record.pod); continue; }
+    if (block === undefined) continue;
     if (block.size !== DRIVER_BLOCKS) throw new Error(`finale: pod ${record.pod}'s block is ${block.size} blocks, not a driver's`);
     const start = requireAddr(memory, block);
     replaceRange(memory, start, start + block.size, [driverFromRecord(record)], { opId: null, own: [block] });
@@ -345,9 +383,13 @@ function merge(store: Store<GameState>): void {
       record.restored = true;
       if (record.fate.kind === 'parked') record.fate = { kind: 'aboard' };
     }
-    draft.hollow.finale = { phase: 'merged', restoredInPlace: inPlace, restoredHalf: half, ending: null, unresolvedUntilAi: null };
+    const finale = draft.hollow.finale;
+    finale.phase = 'done';
+    finale.hollow = 'merge';
+    finale.you = you;
+    finale.restored = inPlace;
     // Its numbers count the drivers just given back.
-    draft.hollow.finale.ending = endingFor(draft, 'merge');
+    finale.ending = endingFor(draft, 'merge', you);
     // Drivers back in memory: the landing goes on with them (it may have ended, or been lingering toward the report).
     // The pods parked when it ended reopen too if their driver never left memory (parked 'no-time'): the landing parks
     // at the moment it ends (landing.ts endNow), so reopening it must unpark them; FUEL is noted again when it ends again.
@@ -370,7 +412,7 @@ function merge(store: Store<GameState>): void {
   verdictOwed = HOLLOW_FINALE.mergeControl(after.mission.transmissionNum);
   // It comes into you: a long rolling tear that settles into the faint shimmer the next run keeps.
   glitchBurst(MERGE_GLITCH_LEVEL, MERGE_GLITCH_MS);
-  emit('finale-chosen', { choice: 'merge', restoredInPlace: inPlace.length, restoredHalf: half.length });
+  emit('finale-chosen', { hollow: 'merge', you, restored: inPlace.length });
 }
 
 // ENDING CHOSEN's save (slice 3c, systems/save-write.ts writeEndingChosen): CONTROL's verdict, if still owed, is said now,
@@ -382,16 +424,90 @@ export function sayOwedVerdict(): void {
   verdictOwed = null;
 }
 
-// PURGE or MERGE (FinaleChoice's buttons). Returns the refusal when it can't be made (nothing changes then).
+// Step 2's confirm applies both picks (R7): the blocks leave, MERGE's charge is spent, the verdict types. The FOUNDATION's
+// apply is WP11's PURGE and MERGE with their typed endings, then 'done'; SPARE, the verdict (R13) and MERGE's reopened
+// landing as 'last-landing' (R15) are Track FINALE's.
+function confirm(store: Store<GameState>, hollow: HollowChoice, you: YouChoice): void {
+  if (hollow === 'spare') notBuilt('finale SPARE\'s apply', 'FINALE', store, hollow, you);
+  if (hollow === 'purge') purge(store, you);
+  else merge(store, you);
+  if (ENDINGS_BUILT.twoStep) emit('finale-step2', { you });
+}
+
+// WP11's one step: PURGE or MERGE, and REASSIGNMENT (the card before Track CARD's, ?debug's __ap.finale.choose). Returns
+// the refusal when it can't be made (nothing changes then).
 export function chooseFinale(store: Store<GameState>, choice: FinaleChoice): string | null {
   const refusal = finaleChoiceRefusal(store.getState(), choice);
   if (refusal !== null) {
     emit('refused', { reason: refusal });
     return refusal;
   }
-  if (choice === 'purge') purge(store);
-  else merge(store);
+  confirm(store, choice, 'reassignment');
   return null;
+}
+
+// --- The card's actions (slice 7a: components/run/FinaleChoice.ts, Track CARD, calls them) ------------------------------
+// Each returns the refusal when it can't be done (said with the buzz; nothing changes), else null.
+
+function refused(reason: string): string {
+  emit('refused', { reason });
+  return reason;
+}
+
+// Why a step's option can't be picked now (null: it can): the step's phase, the pause (look-only), its price
+// (systems/ending-rules.ts optionState: an open option, or its need line).
+function pickRefusal(state: Readonly<GameState>, phase: 'step1' | 'step2', piece: HollowChoice | YouChoice): string | null {
+  if (state.hollow.finale.phase !== phase) return 'NOT NOW';
+  if (state.clock.paused) return TOOL_REFUSAL.paused;
+  const option = optionState(state, piece, []);
+  if (option.kind === 'open') return null;
+  return option.kind === 'needs' ? option.need : 'NOT NOW';
+}
+
+// Step 1's pick (R7): a pick, not a deed; step 2 comes up. Refused on UNRESOLVED's card (continueFollowed is its way on).
+export function pickStep1(store: Store<GameState>, hollow: HollowChoice): string | null {
+  const state = store.getState();
+  const refusal = state.hollow.finale.rootFell ? pickRefusal(state, 'step1', hollow) : 'NOT NOW';
+  if (refusal !== null) return refused(refusal);
+  store.update((draft) => {
+    draft.hollow.finale.hollow = hollow;
+    draft.hollow.finale.phase = 'step2';
+  });
+  emit('finale-open', { step: 2 });
+  return null;
+}
+
+// [ESC] BACK on step 2 (R7): step 1 again, its pick kept as a pick.
+export function backToStep1(store: Store<GameState>): string | null {
+  if (store.getState().hollow.finale.phase !== 'step2') return refused('NOT NOW');
+  store.update((draft) => { draft.hollow.finale.phase = 'step1'; });
+  emit('finale-open', { step: 1 });
+  return null;
+}
+
+// Step 2's pick, the confirm (R7): both picks are applied. STAY with more than one ★ ON TARGET ship asks which first
+// (pickStay); with one it is that one. The FOUNDATION applies REASSIGNMENT after PURGE or MERGE; the rest is FINALE's.
+export function pickStep2(store: Store<GameState>, you: YouChoice): string | null {
+  const state = store.getState();
+  const hollow = state.hollow.finale.hollow;
+  const refusal = pickRefusal(state, 'step2', you);
+  if (refusal !== null) return refused(refusal);
+  if (hollow === null) throw new Error('pickStep2: step 2 with no step-1 pick');
+  if (hollow === 'followed') notBuilt('finale UNRESOLVED\'s step 2', 'FINALE', store, you);
+  if (you === 'stay' && stayCandidates(state).length !== 1) notBuilt('finale STAY\'s pick', 'FINALE', store, you);
+  confirm(store, hollow, you);
+  return null;
+}
+
+// STAY's sub-row (R9): the ship (its slot on the arm, its route index on the classic world) whose colony the unit mounts;
+// then the confirm.
+export function pickStay(store: Store<GameState>, stay: number): string | null {
+  return notBuilt('pickStay', 'FINALE', store, stay);
+}
+
+// UNRESOLVED's step 1 (R10): `IT FOLLOWED YOU`, CONTINUE [ENTER]: step 2 with step 1 'followed'.
+export function continueFollowed(store: Store<GameState>): string | null {
+  return notBuilt('continueFollowed', 'FINALE', store);
 }
 
 function tick(store: Store<GameState>, dtAi: number): void {
@@ -405,6 +521,10 @@ function tick(store: Store<GameState>, dtAi: number): void {
   const phase = state.hollow.finale.phase;
   if (phase === 'none') {
     openRoot(store);
+    return;
+  }
+  if (phase === 'asleep') {
+    if (landingSettled(state)) openStep1(store);
     return;
   }
   if (phase !== 'duel') return;

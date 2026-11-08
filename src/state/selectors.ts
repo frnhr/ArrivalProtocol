@@ -403,14 +403,22 @@ export function scriptFightOpen(state: Readonly<GameState>): boolean {
   return id !== null && state.memory.some((seg) => seg.id === id);
 }
 
-// LAST LIGHT's finale is still on (WP11, systems/finale.ts): the duel, the choice still to be made, (part 2) the
-// typed ending the choice brought, or UNRESOLVED's last line, until it has typed and been read. The LANDING REPORT waits
-// for it (systems/landing.ts).
+// The final ship's FINALE is still on (WP11, systems/finale.ts; slice 7a's phases, R6): from the duel through THE LAST
+// LANDING, and once decided ('done') until the typed verdict and UNRESOLVED's last line have typed and been read. The
+// LANDING REPORT waits for it (systems/landing.ts). 'none' (no root opened: not the final ship) holds nothing.
 export function finalePending(state: Readonly<GameState>): boolean {
   const { phase, ending, unresolvedUntilAi } = state.hollow.finale;
-  if (phase === 'duel' || phase === 'choice') return true;
-  if (phase === 'unresolved') return unresolvedUntilAi !== null && state.clock.aiSec < unresolvedUntilAi;
-  return ending !== null && state.clock.aiSec < ending.untilAi;
+  if (phase === 'none') return false;
+  if (phase !== 'done') return true;
+  const aiSec = state.clock.aiSec;
+  return (ending !== null && aiSec < ending.untilAi) || (unresolvedUntilAi !== null && aiSec < unresolvedUntilAi);
+}
+
+// The FINALE's card is up (slice 7a, R18): step 1 or step 2. say.ts's arbiter keeps every TERMINAL choice shut while it is
+// (the card is a modal on the choice layer, not a TERMINAL choice).
+export function finaleCardUp(state: Readonly<GameState>): boolean {
+  const phase = state.hollow.finale.phase;
+  return phase === 'step1' || phase === 'step2';
 }
 
 // A corruption level (0..1) in CORRUPTION_STEP steps: the Core's, a glitch burst's (WP11), the MERGE floor's.

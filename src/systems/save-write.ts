@@ -147,14 +147,15 @@ export function writeRunSave(store: Store<GameState>, point: SavePoint, boot: Re
   }
 }
 
-// A finale that has decided how the run ends (systems/finale.ts finaleRunCause's three).
-const DECIDED: readonly GameState['hollow']['finale']['phase'][] = ['purged', 'merged', 'unresolved'];
+// A finale that has decided how the run ends (slice 7a: 'done', systems/ending-rules.ts finaleRunCause's four).
+const DECIDED: readonly GameState['hollow']['finale']['phase'][] = ['done'];
 
 // ENDING CHOSEN (3c plan §2.1, risk 1; systems/landing.ts as the final LANDING REPORT opens with a decided finale): every op
 // stops first (none may write into memory under the save, and none is running in the resumed world), no free block is left
 // reserved by one, then the save. `flushOwed` says anything the finale still owed the radio (systems/finale.ts
 // sayOwedVerdict: CONTROL's verdict waits for the typed ending, and a resumed world has no module state to say it from), so
-// the save's log has it. The clock stays as it was (the report's own pause rule). Slice 7 moves this to step 2's confirm.
+// the save's log has it. The clock stays as it was (the report's own pause rule). Slice 7a keeps it here, after THE LAST
+// LANDING, not at step 2's confirm (slice-7-plan R14: a save there would resume into a landing in progress).
 // Only when a save will be written (review fix, minor 3): with no save this page (headless, offline, the classic world) none
 // of it runs, and the finale says its verdict in its own time. A block still reserved after the abort is a bug: said on the
 // console, and the save goes OFFLINE rather than crash the final LANDING REPORT.

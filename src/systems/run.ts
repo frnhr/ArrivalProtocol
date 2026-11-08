@@ -1,3 +1,5 @@
+// Slice 7a: the lead owns this file (slice-7-plan.md §4.1): continueAfterReport's cause (ending-rules finaleRunCause) and
+// the run end's stages (setRunEndStage, R19).
 // Slice 6: the lead owns this file (docs/phase3/impl/slice-6-plan.md §5): endShip's survey record (systems/survey.ts
 // surveyShipEnd) and, from slice 5, its resident record (systems/residents.ts residentShipEnd). Slice 4d's transmitNext
 // disguise roll and arrival.seeds[].disguise stay as built. Others ask by message.
@@ -10,6 +12,7 @@ import type {
   UiState,
 } from '@state/schema';
 import type { Segment } from '@/types/segment';
+import type { RunEndStage } from '@/types/ending';
 import type { CarriedRacks } from '@data/memory';
 import type { ArrivalDelivery, DeliveryChip } from '@/types/repo';
 import type { Packet } from '@systems/carry';
@@ -39,7 +42,7 @@ import { commitTraining } from '@systems/training';
 import { isSkillFile } from '@state/selectors';
 import { archiveShipStarted, archiveShipDone, archiveRunEnded, archiveTutorialDone, playsTutorial, type RunLineage } from '@systems/meta';
 import { writeRunSave, clearRunSave } from '@systems/save-write';
-import { finaleRunCause } from '@systems/finale';
+import { finaleRunCause } from '@systems/ending-rules';
 import { newSegId } from '@systems/memory-ops';
 import { createRunState, createShipSlices, createUiState, createRunStats } from '@state/initial';
 import { planThreat, threatInputFor, applyThreat, nominalShipThreat, nominalRunThreat } from '@systems/threat-plan';
@@ -623,6 +626,18 @@ export function endRun(store: Store<GameState>, cause: RunEndCause): void {
       draft.ui.activeTool = null;
     });
   }
+}
+
+// The run end goes on to its next screen (slice 7a, R19: the RUN TALLY's EPILOGUE ▸, the epilogue's last click), in order:
+// tally → epilogue → final. Only while RUN END is up; a NEW RUN's world reset puts the stage back to 'tally'.
+export function setRunEndStage(store: Store<GameState>, stage: RunEndStage): void {
+  const state = store.getState();
+  if (state.run.phase !== 'end') throw new Error(`setRunEndStage: the run is in '${state.run.phase}', not at its end`);
+  const order: readonly RunEndStage[] = ['tally', 'epilogue', 'final'];
+  if (order.indexOf(stage) !== order.indexOf(state.ui.runEndStage) + 1) {
+    throw new Error(`setRunEndStage: '${state.ui.runEndStage}' does not go on to '${stage}'`);
+  }
+  store.update((draft) => { draft.ui.runEndStage = stage; });
 }
 
 // The LANDING REPORT's CONTINUE: the ship's result and its stars, then TRANSMIT, or, after the flagship (the last ship),

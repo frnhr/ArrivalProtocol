@@ -1,3 +1,5 @@
+// Slice 7a: the lead owns this file (docs/phase3/impl/slice-7-plan.md §2.12): __ap.finale's options and actions, __ap.ending,
+// __ap.night and archiveAs's ending; their bodies' rules are the tracks' (finale.ts, ending-rules.ts, epilogue.ts).
 // Slice 6: the lead owns this file (docs/phase3/impl/slice-6-plan.md §2.15, §5); the 4c–4e, slice 5 and slice 6 hooks'
 // bodies are in the track modules (autodrop.ts, sentry.ts, beam-seeds.ts, autoburn-v3.ts; resident-corrupted.ts,
 // resident-sleeper.ts; survey.ts). Tracks ask by message.
@@ -92,7 +94,14 @@ import { infectNow, cureNow, hollowReach, nameHollow, chooseVerb, verbWeights, t
 import { verbNow } from '@systems/hollow-verbs';
 import {
   chooseFinale, finaleChoiceRefusal, rootDeletable, skipFinaleEnding, finaleEndingShowing, finaleEndingLines, type FinaleChoice,
+  pickStep1, pickStep2, pickStay, backToStep1, continueFollowed,
 } from '@systems/finale';
+import { optionState, type OptionState } from '@systems/ending-rules';
+import { epilogueModel, finalCardModel, type EpilogueModel, type FinalCardModel } from '@systems/epilogue';
+import { parseEnding } from '@systems/meta-parse';
+import { notBuilt } from '@systems/not-built';
+import { STEP1_OPTIONS, step2Options } from '@data/endings';
+import type { EndingPiece, EndingRecord, HollowChoice, HollowFate, YouChoice, RunEndStage } from '@/types/ending';
 import { glitchBurst } from '@systems/glitch';
 import { infectedSegments, fileLabel } from '@state/selectors';
 import type { HollowState } from '@state/schema';
@@ -268,7 +277,10 @@ interface DebugHooks {
   // update (its trail, colonies, route, events and the next arm), with the run save cleared: a reload meets UNIT-048 on
   // the updated arm. `landed`: the colonists each ship that reached orbit landed (default: all its pods); a lost cause
   // ends on LAST LIGHT (crashed, or eaten for 'overwritten'), 'abandoned' while still on it.
-  archiveAs: (cause: LastCause, landed?: number) => Meta;
+  // Slice 7a (§2.12): `ending` sets fields of the last unit's ending record (a won or unresolved cause only; the rest default
+  // as META 4's migration reads an old record: step 1 by the cause, REASSIGNMENT, the worked route's LAST LIGHT), checked
+  // by the archive's own parse.
+  archiveAs: (cause: LastCause, landed?: number, ending?: Partial<EndingRecord>) => Meta;
   archiveCorrupt: () => void;
   archiveClear: () => void;
   // Phase 3 slice 3c: the run save. save is the page's save state and what is stored under RUN_SAVE_KEY; saveCorrupt
@@ -389,10 +401,13 @@ interface DebugHooks {
     wouldPick: Verb | null; weights: VerbWeights; untried: readonly FsToolKind[];
   };
   verbNow: () => void;
-  finale: () => {
-    state: GameState['hollow']['finale']; rootDeletable: boolean; mergeRefusal: string | null; purgeRefusal: string | null;
-    endingShowing: boolean; endingLeftSec: number | null;
-  };
+  // Slice 7a (§2.12): finale() also lists each step's options with their state on the card (ending-rules optionState, the
+  // archive's endingsSeen), and finale.pick / .back / .cont act as the card's keys do ([1]–[4], STAY's ship, [ESC], [ENTER]).
+  // ending puts the run at a decided final LANDING REPORT from any final ship (Track FINALE's body); night is the run end's
+  // stage with the EPILOGUE's and the FINAL CARD's models (Track NIGHT's).
+  finale: FinaleDebug;
+  ending: (hollow: HollowFate, you: YouChoice, opts?: { stay?: number }) => void;
+  night: () => { stage: RunEndStage; epilogue: EpilogueModel | null; card: FinalCardModel | null };
   choose: (choice: FinaleChoice) => string | null;
   skipEnding: () => boolean;
   endingLines: (choice: FinaleChoice) => EndingLine[];
@@ -429,12 +444,27 @@ const HOLLOW_DEMO_RACKS = { B: 'P P P P P P _16', C: 'P P _2 S _1 P P _29', D: '
 // POD 09 leads (the pod right of the root, behind the 1-block GAP).
 const HOLLOW_DEMO_LEAD = 9;
 const HOLLOW_DEMO_WAKE_SEC = 12;
+// __ap.finale: the state, and the card's actions (slice 7a, §2.12).
+interface FinaleDebug {
+  (): {
+    state: GameState['hollow']['finale']; rootDeletable: boolean; mergeRefusal: string | null; purgeRefusal: string | null;
+    endingShowing: boolean; endingLeftSec: number | null;
+    options: { step1: { piece: EndingPiece; state: OptionState }[]; step2: { piece: EndingPiece; state: OptionState }[] };
+  };
+  pick: (step: 1 | 2, piece: EndingPiece, stay?: number) => string | null;
+  back: () => string | null;
+  cont: () => string | null;
+}
+
+// __ap.archiveAs's ending (slice 7a): a won or unresolved cause's step 1, as META 4's migration reads it.
+const DEBUG_STEP1: Partial<Record<LastCause, HollowFate>> = { 'won-purge': 'purge', 'won-merge': 'merge', 'won-spare': 'spare', unresolved: 'followed' };
+
 // __ap.archiveAs: run 1's worked route (02 §3.14; tests/unit/map/run1-fixture.ts WORKED_ROUTE).
 const DEBUG_WORKED_ROUTE: readonly number[] = [0, 2, 5, 11, 15, 19];
 
 // __ap.archiveAs: the archive as if UNIT-047 had played run 1 on the worked route and ended with `cause`, through the real
 // record steps and the real world update (see DebugHooks.archiveAs).
-function debugArchiveAs(store: Store<GameState>, cause: LastCause, landed: number | undefined): Meta {
+function debugArchiveAs(store: Store<GameState>, cause: LastCause, landed: number | undefined, ending: Partial<EndingRecord> | undefined): Meta {
   // A typo'd cause would be written and read back as ARCHIVE CORRUPT on the next page (review fix, minor 9).
   if (!(LAST_CAUSES as readonly unknown[]).includes(cause)) throw new Error(`__ap.archiveAs: '${String(cause)}' is not a cause (${LAST_CAUSES.join(', ')})`);
   if (landed !== undefined && !(Number.isInteger(landed) && landed >= 0)) throw new Error(`__ap.archiveAs: landed ${landed} is not a whole number`);
@@ -466,7 +496,14 @@ function debugArchiveAs(store: Store<GameState>, cause: LastCause, landed: numbe
   };
   const started = recordTutorialDone(recordRunStart(freshMeta(armSeed), progress, Date.now()));
   const { update } = updateAfterRun(run);
-  const meta = recordRunEnd(started, { ...progress, cause, score: runScore(ships), nextArm: update.next, events: notableEvents(run) });
+  const step1 = DEBUG_STEP1[cause];
+  if (step1 === undefined && ending !== undefined) throw new Error(`__ap.archiveAs: a '${cause}' run has no ending`);
+  const finalStop = DEBUG_WORKED_ROUTE.at(-1)!;
+  const record = step1 === undefined ? null : parseEnding({
+    hollow: step1, you: 'reassignment', rootUnits: first.hollowUnits, finalSlot: finalStop, finalShip: map.arm[finalStop]!.name,
+    finalYear: map.galaxyYear, stay: null, kit: [], fuelPct: step1 === 'spare' ? 30 : null, charge: 0, ...ending,
+  }, '__ap.archiveAs ending');
+  const meta = recordRunEnd(started, { ...progress, cause, score: runScore(ships), nextArm: update.next, events: notableEvents(run), ending: record });
   if (saveMeta(browserStorage, meta) !== 'ok') throw new Error('__ap.archiveAs: the archive could not be written');
   browserStorage().removeItem(RUN_SAVE_KEY);
   return meta;
@@ -1016,7 +1053,7 @@ export function mountDebug(store: Store<GameState>): void {
     beamOutView: () => beamOutView(store.getState(), getPrediction()),
     amberBite: () => amberBite(store.getState()),
     archive: () => ({ status: store.getState().archive.status, meta: archiveMeta() }),
-    archiveAs: (cause, landed) => debugArchiveAs(store, cause, landed),
+    archiveAs: (cause, landed, ending) => debugArchiveAs(store, cause, landed, ending),
     archiveCorrupt: () => { browserStorage().setItem(META_STORAGE_KEY, '{ this is not an archive'); },
     archiveClear: () => { browserStorage().removeItem(META_STORAGE_KEY); },
     save: () => ({ state: structuredClone(store.getState().save), stored: browserStorage().getItem(RUN_SAVE_KEY) }),
@@ -1129,14 +1166,30 @@ export function mountDebug(store: Store<GameState>): void {
       };
     },
     verbNow: () => verbNow(store),
-    finale: () => {
+    finale: Object.assign(() => {
       const state = store.getState();
       const ending = state.hollow.finale.ending;
+      const seen = state.archive.status === 'ok' ? archiveMeta().endingsSeen : [];
+      const rows = (pieces: readonly EndingPiece[]) => pieces.map((piece) => ({ piece, state: optionState(state, piece, seen) }));
       return {
         state: state.hollow.finale, rootDeletable: rootDeletable(state),
         mergeRefusal: finaleChoiceRefusal(state, 'merge'), purgeRefusal: finaleChoiceRefusal(state, 'purge'),
         endingShowing: finaleEndingShowing(state), endingLeftSec: ending === null ? null : Math.max(0, ending.untilAi - state.clock.aiSec),
+        options: { step1: rows(STEP1_OPTIONS.map((option) => option.piece)), step2: rows(step2Options().map((option) => option.piece)) },
       };
+    }, {
+      pick: (step: 1 | 2, piece: EndingPiece, stay?: number): string | null => {
+        if (step === 1) return pickStep1(store, piece as HollowChoice);
+        return stay === undefined ? pickStep2(store, piece as YouChoice) : pickStay(store, stay);
+      },
+      back: () => backToStep1(store),
+      cont: () => continueFollowed(store),
+    }),
+    ending: (hollow, you, opts) => notBuilt('__ap.ending', 'FINALE', store, hollow, you, opts),
+    night: () => {
+      const state = store.getState();
+      const meta = state.archive.status === 'ok' ? archiveMeta() : null;
+      return { stage: state.ui.runEndStage, epilogue: epilogueModel(state, meta), card: finalCardModel(state, meta) };
     },
     choose: (choice) => chooseFinale(store, choice),
     skipEnding: () => skipFinaleEnding(store),

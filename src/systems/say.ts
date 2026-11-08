@@ -1,4 +1,5 @@
 // Slice 3c: Track SAVE owns reserveLogEntryIds / highestLogEntryId here (the entry-id counter only; slice-3c-plan §5.2).
+// Slice 7a: the lead owns the choice arbiter (choiceMayOpen, withdrawUntimedChoices; slice-7-plan R18, §4.1).
 import type { Store } from '@state/store';
 import type {
   GameState, Speaker, Channel, LogEntry, LogChoice, LogState, ViewMode, RunState, LineTone,
@@ -10,6 +11,7 @@ import { mindAlertActive } from '@systems/alerts';
 import { roleHealth } from '@systems/capabilities';
 import { garbleText } from '@systems/garble';
 import { emit } from '@systems/events';
+import { finaleCardUp } from '@state/selectors';
 import { UNNAMED_HOLLOW, unitName, hollowUnitName } from '@data/hollow-text';
 import { IS_DEV } from '@/env';
 import {
@@ -346,7 +348,10 @@ export function sayChoice(
 // • at most one choice stands at a time;
 // • a timed choice (a DEAL's 15 s) may open over untimed ones (the sleeper's offer), which sayChoice then withdraws: a timed
 //   question is never stuck behind one that never times out (R23), and the untimed one is made again once none stands;
-// • nothing else may open while a choice stands (sayChoice throws: two at once is a bug).
+// • nothing else may open while a choice stands (sayChoice throws: two at once is a bug);
+// • nothing opens while the FINALE's card is up (slice 7a, R18: state/selectors.ts finaleCardUp). The card is a modal on
+//   the choice layer, not a TERMINAL choice; its open withdraws any untimed choice standing (withdrawUntimedChoices), and a
+//   standing DEAL is already withdrawn when the landing ends (hollow-deal.ts's post tick).
 
 function openChoices(state: Readonly<GameState>): LogEntry[] {
   return state.log.entries.filter((entry) => entry.choice?.open === true);
@@ -354,6 +359,7 @@ function openChoices(state: Readonly<GameState>): LogEntry[] {
 
 // A choice (timed or not) may open now.
 export function choiceMayOpen(state: Readonly<GameState>, timed: boolean): boolean {
+  if (finaleCardUp(state)) return false;
   const standing = openChoices(state);
   return standing.length === 0 || (timed && standing.every((entry) => entry.choice!.timeoutAiSec === null));
 }
@@ -428,6 +434,15 @@ export function withdrawChoice(entryId: number): boolean {
     }
   });
   return true;
+}
+
+// Every untimed choice standing is withdrawn (slice 7a, R18: the FINALE's card opening). Their owners see their lines
+// closed, as for any withdrawal, and may offer again once the arbiter allows. Returns how many were withdrawn.
+export function withdrawUntimedChoices(): number {
+  const store = requireStore();
+  const untimed = openChoices(store.getState()).filter((entry) => entry.choice!.timeoutAiSec === null);
+  for (const entry of untimed) withdrawChoice(entry.id);
+  return untimed.length;
 }
 
 // The log across a world reset (systems/run.ts resetWorldForShip, §9 WP7 item 2): it keeps its history,

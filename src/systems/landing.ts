@@ -277,8 +277,11 @@ function endNow(store: Store<GameState>, reason: LandingEnd): void {
 
 // The landing is over and the bells have rung out: the LANDING REPORT opens. On the final ship its finale is decided by now
 // (the report waits for it: finalePending), and this is ENDING CHOSEN (slice 3c plan §2.1, risk 1; systems/save-write.ts:
-// the ops stopped, the finale's owed line said, then the save; slice 7 moves it to step 2's confirm).
+// the ops stopped, the finale's owed line said, then the save). Slice 7a (R14): it stays here, after THE LAST LANDING, and
+// the report opens on a final ship only at 'done' (a report under an undecided FINALE is a bug).
 function finishLanding(store: Store<GameState>): void {
+  const phase = store.getState().hollow.finale.phase;
+  if (store.getState().landing.finalShip && phase !== 'done') throw new Error(`finishLanding: the final ship's FINALE is '${phase}', not decided`);
   store.update((draft) => {
     draft.landing.lingerAiSec = null;
     draft.run.phase = 'report';
