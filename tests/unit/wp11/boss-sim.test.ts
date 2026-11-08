@@ -30,6 +30,7 @@
 // drivers (4 degraded and 1 failing, never the lead or the slot's neighbours). Re-measured on 12 seeds by the strip:
 // 12/12 locked and root deleted, 0.00 drivers lost (worst 0), 60 verb moments (0 landed, 51 blocked); 2 seeds in quick
 // (3 before the slice 2 review's tier trim).
+import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createHarness11, LAST_LIGHT } from './harness11';
 import { createInitialState } from '@state/initial';

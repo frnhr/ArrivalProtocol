@@ -8,6 +8,7 @@
 // • NEXT BITE on a sleeping root whose wake the coast can bring forward shows no time until the coast fixes the wake (no
 //   0:22 → 0:05 jump). Slice 2: HALCYON is calm, so phase 2's HALCYON root and HOLLOW (the WALLS stage's coast-tied wake)
 //   are planted there (support/hollow-world.ts plantHalcyonRoot).
+import '../../support/classic-world';
 import { check, finish } from '../../wp1/harness';
 import { createHarness7 } from '../harness7';
 import { plantHalcyonRoot } from '../../support/hollow-world';

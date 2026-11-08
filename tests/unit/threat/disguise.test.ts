@@ -11,6 +11,7 @@
 //   on another without a SCAN, after its decoy's own confirm, in 2.0 s (`IT WAS A SEED`); MOVE and COPY on others run their
 //   own time, unmask them (`NOT A FILE`) and move or copy nothing;
 // • the boot: the ECC seeds line leaves a decoy out, and it lands with no thunk.
+import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createHarness7 } from '../wp7/harness7';
 import { lockOn } from '../landing/harness-landing';

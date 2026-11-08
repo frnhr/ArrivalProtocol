@@ -2,12 +2,12 @@
 // systems/desk.ts), headless on the classic world, whose desk offers the single next ship: a ship's end opens the desk
 // with both clocks stopped, SET COURSE builds the PACKET against the hop, ◀ CHART goes back and keeps a lost ship's extras,
 // an unreachable slot throws, and the debug hooks' shapes are there.
+import '../support/classic-world';
 import { check, finish } from '../landing/checks';
 import { createStore, type Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import { createInitialState } from '@state/initial';
-import { freshUnitRacks } from '@systems/carry';
-import { classicShip, CLASSIC_HOPS } from '@data/classic-five';
+import { CLASSIC_HOPS } from '@data/classic-five';
 import { endShip, openDesk, backToChart, goTransmit } from '@systems/run';
 import { setCourseFromDesk } from '../support/desk';
 import { deskCandidates, deskSteps, selectShip, cycleShip, cardModel } from '@systems/desk';
@@ -15,7 +15,7 @@ import { hopBetween } from '@systems/map-hop';
 import { MAP_TEXT } from '@data/map-text';
 
 function halcyonOver(): Store<GameState> {
-  const store = createStore<GameState>(createInitialState({ seed: 4, shipIndex: 1, carried: freshUnitRacks(classicShip(1)) }));
+  const store = createStore<GameState>(createInitialState({ seed: 4, shipIndex: 1, carried: 'fresh' }));
   store.update((draft) => { draft.run.phase = 'report'; });
   endShip(store, 'locked');
   return store;
@@ -52,10 +52,10 @@ backToChart(lost);
 setCourseFromDesk(lost, 2);
 check('…and survive ◀ CHART: the PACKET carries +3 hits and the Core\'s −25', lost.getState().run.transit?.extraHits === 3 && lost.getState().run.transit?.coreHit === 25);
 
-const final = createStore<GameState>(createInitialState({ seed: 4, shipIndex: 4, carried: freshUnitRacks(classicShip(4)) }));
+const final = createStore<GameState>(createInitialState({ seed: 4, shipIndex: 4, carried: 'fresh' }));
 final.update((draft) => { draft.run.phase = 'report'; });
 endShip(final, 'locked');
 check('the final ship has no desk and no next ship', throws(() => openDesk(final, null)) && throws(() => goTransmit(final, 5)));
-const early = createStore<GameState>(createInitialState({ seed: 4, shipIndex: 1, carried: freshUnitRacks(classicShip(1)) }));
+const early = createStore<GameState>(createInitialState({ seed: 4, shipIndex: 1, carried: 'fresh' }));
 check('a ship that has not ended has no desk', throws(() => openDesk(early, null)));
 finish();

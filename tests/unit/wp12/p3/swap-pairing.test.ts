@@ -4,6 +4,7 @@
 //   the copy keeps the engine going; with the original gone, SWAP on Thrust.alt (or on the copy) hands the job over.
 // • The strip asked for `SWAP in Thrust.alt` with the Swap file eaten. Now it asks for the Swap file's REPAIR first
 //   while one is in memory, and with none says the engine can't fire.
+import '../../support/classic-world';
 import { check, finish } from '../../wp1/harness';
 import { createHarness10 } from '../../wp10/harness10';
 import { actionDelete, actionSwap, actionCopy } from '@state/actions';

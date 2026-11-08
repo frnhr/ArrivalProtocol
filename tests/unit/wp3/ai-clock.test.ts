@@ -2,6 +2,7 @@
 // 3.35 ± 0.05 wall-s at forced world warp ×1 and ×200, and in memory mode (OVERCLOCK), and the
 // charge spent is exactly 10 every time. Plus the repair rules around it (§6.5): continuous heal,
 // whole-point charging, NO CHARGE, concurrent repairs, the Core staying online, v2, pause.
+import '../support/classic-world';
 import { chargePerPoint } from '@state/actions';
 import { check, finish } from '../wp1/harness';
 import { createHarness3 } from './harness3';

@@ -4,6 +4,7 @@
 // the press stops the SKIP and burns on the same tick, the dodge holds, and WP9's dodge rules are unchanged (a SKIP
 // still lands SKIP_END_LEAD_TAC before the deadline: tests/unit/lead2/dodge-rules.test.ts). Rows: HOLLOW asleep and awake
 // (the real run), SPACE 1, 3, 5 and 6 s into the SKIP (the last one 0:16 before the deadline).
+import '../../support/classic-world';
 import { check, finish } from '../../wp1/harness';
 import { createHarness9 } from '../../wp9/harness9';
 

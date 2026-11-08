@@ -9,6 +9,7 @@
 // • the seams read them under the build's own gates: desk.ts cardModel's 'trace' row, chartModel's node.trace and
 //   chartLegend's TRACE, epilogue.ts finalCardOf's `next` (whatever TRACES_BUILT says, the screens follow it);
 // • `built` defaults to the gates, and CONTACT (7d's words) throws rather than paint nothing if its gate rises first.
+import '../support/classic-world';
 import { check, finish } from '../landing/checks';
 import type { GameState } from '@state/schema';
 import type { RunMapState } from '@/types/map';

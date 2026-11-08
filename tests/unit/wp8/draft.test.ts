@@ -15,6 +15,7 @@
 //   so), FUEL TRIM widens the Δv budget +15% on arrival (none below 50%; eaten mid-ship it keeps this ship's
 //   budget and gives none on the next arrival);
 // • a FIREWALL can be MOVEd next to HOLLOW's root and holds that side when HOLLOW wakes; it can't be copied.
+import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createHarness7 } from './../wp7/harness7';
 import { draftCards, draftEntries, UPGRADES, BASE_WHY, type DraftContext, type UpgradeId, type DraftCardId } from '@data/upgrades';

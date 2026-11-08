@@ -15,6 +15,7 @@
 // echoed and CONTROL's line; the story moved to the epilogue). Its worst-case words are checked for every ending.
 // Slice 1a: the landing stands while a scenario sets up ('manual' landing mode) and lands at once when it lets it go;
 // POD 11 and POD 12 (either side of LAST LIGHT's root) are the drivers MERGE gives back.
+import '../../support/classic-world';
 import { check, finish } from '../../wp1/harness';
 import { createHarness11 } from '../harness11';
 import { theRoot, infectNow } from '@systems/hollow';

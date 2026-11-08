@@ -11,6 +11,7 @@
 // • ▼'s drift: after an uncommanded burst the plot's ▼ label and the LOWEST readout say how far it moved, in red
 //   (`▼ DRIFT −60 km`, `(−60 km)`), for GHOST_DRIFT_SHOW_SEC; under a rough sensor only the way (`↓`); a run of bursts
 //   adds up; a held burn is never blamed on the ghost.
+import '../../support/classic-world';
 import { check, finish } from '../../wp1/harness';
 import { createHarness10 } from '../harness10';
 import { actionDelete, actionSwap, actionCopy } from '@state/actions';

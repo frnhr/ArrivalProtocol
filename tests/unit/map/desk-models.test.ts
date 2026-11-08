@@ -5,6 +5,7 @@
 // boarding beam (M3), the TIMELINE, the greying beat (`2 SHIPS NOW OUT OF YOUR REACH` at KESTREL), the steps and ← →.
 // Slice 3b (Track UI): the first desk's file step, the DELIVERIES row and TIMELINE marks (in time, late, catching up), the
 // request toggle, the tab and its badge.
+import '../support/classic-world';
 import { check, finish } from '../landing/checks';
 import { createStore, type Store } from '@state/store';
 import type { GameState } from '@state/schema';
@@ -20,8 +21,6 @@ import { mapFacts } from '@systems/map-facts';
 import { planThreat, threatInputFor, NO_FINAL_TRACES } from '@systems/threat-plan';
 import { shipSummaryAt } from '@systems/map-run';
 import { shipsLeft } from '@systems/map-route';
-import { freshUnitRacks } from '@systems/carry';
-import { classicShip } from '@data/classic-five';
 import { MAP_TEXT } from '@data/map-text';
 import { REPO_TEXT, REPO_FILE_TEXT } from '@data/repo-text';
 import { recommendation } from '@systems/repository';
@@ -218,7 +217,7 @@ check('…GOOD HOPE is TOO LATE BY 15 YRS from CORMORANT (card and chart), with 
   && chartModel(state).nodes.find((n) => n.slot === 17)?.state === 'too-late' && row(goodHope, 'fit') === undefined && goodHope.cost === null);
 
 // --- The classic world keeps its one desk (no years, nothing only from here) ------------------------------------------------
-const classic = createStore<GameState>(createInitialState({ seed: 4, shipIndex: 1, phase: 'desk', carried: freshUnitRacks(classicShip(1)) }));
+const classic = createStore<GameState>(createInitialState({ seed: 4, shipIndex: 1, phase: 'desk', carried: 'fresh' }));
 state = classic.getState();
 const cc = cardModel(state, 2);
 check('classic world: the card has no years, the chart has five ships, nothing greys', cc.schedule === null && cc.timeline === null

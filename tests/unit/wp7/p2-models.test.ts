@@ -12,6 +12,7 @@
 // TODO(phase2): RUN END's words are Track UI's (RUN_END_TEXT below landing-text's UI banner); the lines are checked
 // through its functions, so a rewording needs no change here, a new layout may.
 // • every new line fits the strip (≤ 70) with worst-case values.
+import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createHarness7 } from './harness7';
 import { startBeamOut, cancelBeamOut, shipResultOf, ringMissOf } from '@systems/run';

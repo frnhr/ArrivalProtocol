@@ -12,6 +12,7 @@
 //   bitten, then MOVE the drivers next to HOLLOW out to rack D, so both sides become WALLs) loses
 //   no pod's driver;
 // • an idle defender loses both (POD 04 and POD 05), and the spread stops at the WALLs.
+import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createHarness6 } from './harness6';
 import { hollowReach } from '@systems/hollow';

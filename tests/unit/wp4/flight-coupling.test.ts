@@ -6,6 +6,7 @@
 //     the licence arrives, REPAIR on Engine I/O, TAB back) still reaches `locked`.
 // Plus the fault beat itself: when it strikes, that it waits while paused, and that it strikes
 // once and only on ship 1.
+import '../support/classic-world';
 import { check, finish, TICK } from '../wp1/harness';
 import { followDirector, scriptOf } from '../wp2/harness2';
 import { createHarness4 } from './harness4';

@@ -7,6 +7,7 @@
 // • MOVE POD 01 into the free space just past POD 05, one block off it: exposed across `GAP 1`;
 // and on a planted strip, the bridge warning (`⚠ BRIDGES HOLLOW TO YOUR CORE`): it fires only when the
 // placement leaves HOLLOW a chain of gaps < 4 into rack E that was not there before.
+import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createHarness7 } from './harness7';
 import { movePreview, memoryAfterMove, reachesRackE, hollowReachAll } from '@systems/move-preview';

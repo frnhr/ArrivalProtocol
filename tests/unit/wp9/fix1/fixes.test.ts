@@ -13,6 +13,7 @@
 // • The quality items: isCorrectionRow knows every F6–F8 row the table makes; debrisRack throws on anything but a
 //   one-rack cloud; AUTOBURN.skl's chip breaks at its dot; AUTOBURN.skl goes to rack D's tail when racks E–F are full;
 //   every new line fits the strip.
+import '../../support/classic-world';
 import { check, finish } from '../../wp1/harness';
 import { createHarness9, KESTREL } from '../harness9';
 import { continueAfterReport } from '../../support/classic-flow';

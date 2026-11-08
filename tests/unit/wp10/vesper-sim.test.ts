@@ -10,6 +10,7 @@
 //   the backup keeps its OWN integrity and health word (the lead's item 1: a damaged backup used to read intact) and its
 //   infection (§9 WP10 edge case); refused on a busy file (either one), on a ship file with no backup, on a file that
 //   is not a ship file; clicking the backup swaps the pair; a cancel changes nothing; the thread is held meanwhile.
+import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createStore } from '@state/store';
 import type { GameState } from '@state/schema';

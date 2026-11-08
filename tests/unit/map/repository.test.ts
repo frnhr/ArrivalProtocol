@@ -10,6 +10,7 @@
 // • the no-Swap condition for the strip's ghost line (risk 1);
 // • INFO over 50 fresh arms, following the tag on random routes: ENGINE FAULT ships reached without Swap (risk 1), and how
 //   often a salvage deal has fewer than 3 cards (risk 11).
+import '../support/classic-world';
 import { check, finish } from '../landing/checks';
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
@@ -31,8 +32,6 @@ import { draftCards, draftEntries } from '@data/upgrades';
 import { reachableFrom } from '@systems/map-hop';
 import { currentSlot, armShipAt } from '@systems/map-streams';
 import { hasUsableTool } from '@state/selectors';
-import { freshUnitRacks } from '@systems/carry';
-import { classicShip } from '@data/classic-five';
 import { createRng } from '@systems/rng';
 import { REPAIR_V2_VERSION } from '@data/tuning';
 import { byDepth } from '../depth';
@@ -132,7 +131,7 @@ check('…Swap arrived here (delivered at CORMORANT, 2659); Cp is still behind a
   dropTools(store, 'delete');
   check('…and no Rm outranks it: Rm', recommendation(store.getState()) === 'rm');
   check('the classic world has no repository: no tag, empty lists', (() => {
-    const classic = createStore<GameState>(createInitialState({ seed: 4, shipIndex: 1, carried: freshUnitRacks(classicShip(1)) }));
+    const classic = createStore<GameState>(createInitialState({ seed: 4, shipIndex: 1, carried: 'fresh' }));
     const model = repoModel(classic.getState(), 2);
     return recommendation(classic.getState()) === null && model.world === 'classic' && model.available.length === 0 && deskWindowOnOpen(classic.getState()) === null;
   })());
@@ -168,7 +167,7 @@ check('…Swap arrived here (delivered at CORMORANT, 2659); Cp is still behind a
   for (let seed = 1; seed <= 300; seed++) if (draftCards(ctx, createRng(seed)).some((card) => card.id === 'repair-v2')) dealtV2++;
   check('the arm deals salvage only: REPAIR v2 in none of 300 deals (a Repair aboard to upgrade)',
     ctx.salvageOnly === true && ctx.hasRepair && dealtV2 === 0 && !draftEntries(ctx).some((entry) => entry.def.id === 'repair-v2'));
-  const classic = createStore<GameState>(createInitialState({ seed: 4, shipIndex: 1, carried: freshUnitRacks(classicShip(1)) }));
+  const classic = createStore<GameState>(createInitialState({ seed: 4, shipIndex: 1, carried: 'fresh' }));
   giveTools(classic, ['repair']);
   const classicCtx = draftContext(classic.getState(), 200);
   check('…the classic world still deals REPAIR v2', classicCtx.salvageOnly === false && draftEntries(classicCtx).some((entry) => entry.def.id === 'repair-v2'));

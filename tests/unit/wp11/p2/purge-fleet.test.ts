@@ -8,6 +8,7 @@
 // • the words fit one line with the worst numbers; a fleet that all made it keeps the full claim (the model alone).
 // Slice 7a (R6, R13): PURGE is taken on the two-step card once the landing has settled, and its typed ending is the short
 // verdict: it makes no fleet claim at all (the count is RUN END's, below, and the epilogue's).
+import '../../support/classic-world';
 import { check, finish } from '../../wp1/harness';
 import { createHarness11 } from '../harness11';
 import { receiveTransmission } from '@systems/boot';

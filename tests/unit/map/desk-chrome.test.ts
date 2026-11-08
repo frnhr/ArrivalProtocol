@@ -1,6 +1,7 @@
 // Slice 3a DESK: the words round the map (02-map §4, 01-landing §4, 05 §3.12): the header crumb's galaxy year on the arm
 // (`UNIT-047 / KESTREL · 2467 / FLYBY`) and its desk and TRANSMIT crumbs, the MIND header's `MEMORY 384 · FULL`, and the
 // title line `UNIT-047 · YEAR 2300 · FINAL SHIP 180 LY OUT`; the desk's opening once per visit (the review's m3, m4).
+import '../support/classic-world';
 import { check, finish } from '../landing/checks';
 import { createStore } from '@state/store';
 import type { GameState } from '@state/schema';

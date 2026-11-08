@@ -6,6 +6,7 @@
 //
 // A lean harness: only the store, the clock heartbeat, say() and the ops core (no flight), so
 // the 2,000 sequences run in seconds. Ops advance through clock.advance exactly as in the game.
+import '../support/classic-world';
 import { actionRefusal } from '@state/actions';
 import { check, finish } from '../wp1/harness';
 import { layoutOf, wp3Fixture } from './harness3';

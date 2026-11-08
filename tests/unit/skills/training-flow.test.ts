@@ -13,6 +13,7 @@
 //   this check only; 4a builds AUTOBURN alone).
 // • Graded damage's watcher (03 §3.5): 'skill-version' on a step down and back up while flying, silent on a ship's first
 //   tick and at the desk, and a file under REPAIR (offline) reads OFF.
+import '../support/classic-world';
 import { check, finish } from '../landing/checks';
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';

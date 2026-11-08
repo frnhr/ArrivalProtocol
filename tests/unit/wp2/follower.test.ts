@@ -2,6 +2,7 @@
 // the composed strip, not the bare flight table), including WP1's three injected mistakes. Also:
 // the strip never flickers, the moments fire once each in order (the juice and the stamps hang
 // off them), and a SPACE held through a skipped boot does not burn until a fresh press.
+import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createHarness2, followDirector, scriptOf, type Harness2, type FollowOpts } from './harness2';
 import { receiveTransmission } from '@systems/boot';

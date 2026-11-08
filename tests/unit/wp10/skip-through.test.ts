@@ -18,6 +18,7 @@
 // Rule 4 only came a tick after a burst, and the planted WAITs flew 30+ bursts to their landing in one press. Under the
 // strict reading no planted loop keeps its plan through 1,000 tac s of bursts (tests/unit/wp10/fix1/probes/one-press.log:
 // 40 loops × 4 seeds, every one stops on a changed plan after 1–1,159 tac s).
+import '../support/classic-world';
 import { createHarness, check, finish } from '../wp1/harness';
 import { setDebugWarp, skipBlockReason, skipTarget } from '@systems/pace';
 import { getPrediction, currentPrediction } from '@systems/predict';
@@ -28,7 +29,6 @@ import { GHOST_WARN_ID } from '@systems/alerts';
 import { GHOST_TEXT } from '@data/ghost-text';
 import { classicShip } from '@data/classic-five';
 import { createInitialState } from '@state/initial';
-import { freshUnitRacks } from '@systems/carry';
 import { resetWorld } from '@systems/reset';
 import { stateFromElements, elementsFromState, ringFit } from '@/types/orbit';
 import type { SasMode } from '@state/schema';
@@ -49,7 +49,7 @@ function stepUntil(until: () => boolean, maxWall: number): void {
 function vesper(seed: number): void {
   h.reset(seed);
   h.store.update((d) => {
-    Object.assign(d, createInitialState({ seed, shipIndex: VESPER, carried: freshUnitRacks(classicShip(VESPER)) }));
+    Object.assign(d, createInitialState({ seed, shipIndex: VESPER, carried: 'fresh' }));
     d.hollow.phase = 'dormant';
   });
   resetWorld();

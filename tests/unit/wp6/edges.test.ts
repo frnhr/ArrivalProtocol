@@ -22,6 +22,7 @@
 // • a world reset in the middle of a fight leaves nothing behind;
 // • (review round 1) a copy eaten while it was written echoes COPY GONE and is no lost soul; HOLLOW's
 //   alerts go when the ship ends (a crash, CORE LOST); the eaten countdown never jumps on SPACE.
+import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createHarness6 } from './harness6';
 import { infectNow, nameHollow, coreInfected, secondsToEaten } from '@systems/hollow';

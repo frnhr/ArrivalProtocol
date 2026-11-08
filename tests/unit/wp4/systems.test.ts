@@ -1,6 +1,7 @@
 // WP4 part 1 systems beyond the numbered acceptance: the seed (roles, licences, visibility), the
 // licence installs, the sensed prediction, guidance F1 and F2, the dead engine, SWAP moving the
 // role, the quantized glitch level, and the delete questions that name a flight effect.
+import '../support/classic-world';
 import { check, finish, TICK } from '../wp1/harness';
 import { releaseAtCapture, idle, stepUntil } from '../wp1-rules/flows';
 import { createHarness4 } from './harness4';

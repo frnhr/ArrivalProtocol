@@ -4,6 +4,7 @@
 // the landing's first burst, the bursts at LANDING_BURN_POWER), and the minors' checks (L9 with an empty tank, the decay
 // chip and L10 at 0 orbits, a declined GO LOWER's lifetime, GO LOWER held by hand under MANUAL, L3b's WIDE DROP twin, the
 // GROUND TRACK with NO BAY CTRL, GO LOWER under the DRAG line).
+import '../support/classic-world';
 import { check, finish } from './checks';
 import { lockOn, ensureLandingKeys } from './harness-landing';
 import { createHarness7 } from '../wp7/harness7';

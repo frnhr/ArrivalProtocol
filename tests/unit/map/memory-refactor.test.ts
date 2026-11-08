@@ -3,10 +3,10 @@
 // the run's threat and HOLLOW's config), on two seeds, hashes to the digest it had before the refactor (HEAD 82928df's
 // data/ships.ts and the 384 constants), with the one new field (level.memoryClass) left out. A digest that moves is a
 // visible change on the classic world: find it, never re-record it here.
+import '../support/classic-world';
 import { createHash } from 'node:crypto';
 import { check, finish } from '../wp1/harness';
 import { createInitialState } from '@state/initial';
-import { freshUnitRacks } from '@systems/carry';
 import { classicShip, CLASSIC_FIVE } from '@data/classic-five';
 import { MEMORY_LAYOUTS, layoutOf } from '@data/memory';
 
@@ -18,7 +18,7 @@ const BEFORE = [
 const now: string[] = [];
 for (const seed of [1, 7]) {
   for (let index = 0; index < CLASSIC_FIVE.length; index++) {
-    const state = createInitialState({ seed, shipIndex: index, carried: index === 0 ? null : freshUnitRacks(classicShip(index)) });
+    const state = createInitialState({ seed, shipIndex: index, carried: 'fresh' });
     const { memoryClass, ...level } = state.level;
     // Slice 3a's removal of MissionMeta.distanceLy (the old title's 581 LY, FLEET_ROUTE_LY) is written back in its old
     // place, so the rest of the mission line is still checked byte for byte.

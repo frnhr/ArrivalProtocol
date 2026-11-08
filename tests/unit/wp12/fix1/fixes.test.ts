@@ -9,6 +9,7 @@
 // • The two TODOs part 3 dropped (spec 5): the run-2 hurt-cluster hint shows once; AUTOBURN's READY lesson takes GET
 //   READY's place when the coast was SKIPped. (Slice 1a: the hurt-cluster hint is the hurt-driver one.)
 // • The phone header's next hazard (experience 2): KESTREL's debris cloud by its rack and countdown.
+import '../../support/classic-world';
 import { check, finish } from '../../wp1/harness';
 import { createHarness7 } from '../../wp7/harness7';
 import { buildDirectorCtx, composeObjective, type DirectorCtx } from '@systems/director';

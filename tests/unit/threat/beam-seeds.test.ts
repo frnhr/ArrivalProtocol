@@ -8,6 +8,7 @@
 // • one store: the beam into KESTREL lays the seed behind Telemetry, the boot's ECC line names it, the seed alert holds
 //   SKIP and names its file, rm says the seed's words once a ship, a seed left behind reports home at the ship's end
 //   (TRACE 1, 'trace-changed'), and once HOLLOW is aboard a seed left feeds its root instead.
+import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createHarness7 } from '../wp7/harness7';
 import { lockOn } from '../landing/harness-landing';

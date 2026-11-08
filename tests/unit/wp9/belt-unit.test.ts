@@ -6,6 +6,7 @@
 // • Hits land on a random damageable file in the belt's racks that no op holds (drawn again once), −8 each; a
 //   driver taken to 0 leaves memory (no HOLLOW turn) and its pod stays aboard, its driver lost 'dead' (CAN'T LAUNCH); the predictor's zoneHits counts the time
 //   inside and the expected hits; pace is TACTICAL inside and SKIP is refused there.
+import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createHarness9 } from './harness9';
 import { newBeltClock, beltClockTick, beltTarget, chordInsideFrac } from '@systems/zones';

@@ -2,6 +2,7 @@
 // systems/lineage.ts beaconOnFirstShip; 05-story §3.5, §3.8): run 1 reads 046's (`LZ-A · A BEACON WAS ALREADY THERE · SET
 // BY UNIT-046 · 1 YEAR AGO`), run 2 the last unit's by the launch gap (`1 YEAR AGO` on §3.14's fixture, `THIS YEAR` at 0),
 // none past ship 1, none when the last unit's first ship never reached orbit, none on the classic world.
+import '../support/classic-world';
 import { check, finish } from '../landing/checks';
 import type { GameState } from '@state/schema';
 import type { LastUnit } from '@/types/lineage';

@@ -6,6 +6,7 @@
 //   last ~0.7 tac s of the countdown while two REPAIRs ran was hit (the WP9 verify-3 probe, 3 broken promises). It is
 //   now judged with every thread busy: a start the countdown still promises dodges whatever the threads do, and the
 //   deadline holds still while ops start and end.
+import '../support/classic-world';
 import { createHarness9 } from '../wp9/harness9';
 import { followDirector } from '../wp2/harness2';
 import { check, finish } from '../wp1/harness';

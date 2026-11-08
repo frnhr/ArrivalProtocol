@@ -16,6 +16,7 @@
 //   above it pass `[]` (every tool tried).
 // Slice 1a: KESTREL's racks are phase 2's with `C` → `P`; the old cluster codes below name the pods where those
 // clusters sat (`C08` is POD 08, tests/unit/support/pod-code.ts). Bay Ctrl took Printer Uplink's 6 blocks.
+import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { isPodCode } from '../support/pod-code';
 import { createHarness9, KESTREL } from './harness9';

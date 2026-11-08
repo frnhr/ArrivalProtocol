@@ -12,6 +12,7 @@
 //   change (hit → clear: CLEAR OF THE DEBRIS); the jump never carries the ship past the choice or past the verdict.
 // LEAD-2 item 5 moved the dodge's deadline 2.2 tac s earlier (judged with every Core thread busy), so the first SKIP's
 // stop moves with it: each tree is checked against its own deadline.
+import '../support/classic-world';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { check, finish } from '../wp1/harness';

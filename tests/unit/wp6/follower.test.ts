@@ -7,6 +7,7 @@
 //   story; HOLLOW never says a word.
 // • The kid who does everything (REPAIRs the engine at its fault, POD 02 when the hurt-driver lesson asks): all 600 land
 //   soft in LZ-A.
+import '../support/classic-world';
 import { check, finish, followStrip } from '../wp1/harness';
 import { createHarness6 } from './harness6';
 import { actionRepair } from '@state/actions';

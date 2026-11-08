@@ -4,6 +4,7 @@
 // since the review, m8: a policy reminder rides in a reply at the same boot), the stamps, the joined
 // postcards, no postcard without landed colonists, the stale greeting, the ring crossings of a two-layer hop, arm only,
 // stable ids, the read marks, and HOLLOW's reading line once a run.
+import '../support/classic-world';
 import { check, finish } from '../landing/checks';
 import { createStore } from '@state/store';
 import type { GameState, ShipResult } from '@state/schema';

@@ -8,6 +8,7 @@
 //   'reassignment', traces dropped), each cause's migration, parseEnding strict, recordRunEnd's pieces;
 // • the gates and tables: data/endings.ts all down, its option tables, the title keys; the neutral stubs' answers and the
 //   throwing ones; finaleRunCause and endingRecordOf; the arbiter shut while the card is up.
+import '../support/classic-world';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';

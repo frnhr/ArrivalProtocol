@@ -8,6 +8,7 @@
 //   each content version, a missing or unknown key, the saved run field by field (a type, an Infinity in the wrong place,
 //   the envelope's copies against the run), a classic map, a route that doesn't match its point, a ship that doesn't build;
 // • saveRefusal finds a stale save; the size at each point is printed (INFO, risk 8).
+import '../support/classic-world';
 import { isDeepStrictEqual } from 'node:util';
 import { check, finish } from '../landing/checks';
 import type { GameState } from '@state/schema';

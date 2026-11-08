@@ -16,7 +16,7 @@ import { capabilitiesNow } from '@systems/capabilities';
 import { getOps, canStartOp } from '@systems/ops-core';
 import { packUnit, layoutCarried } from '@systems/carry';
 import { resetWorld } from '@systems/reset';
-import { createInitialState } from '@state/initial';
+import { createInitialState, fixtureWorldNow } from '@state/initial';
 import { nominalShipThreat } from '@systems/threat-plan';
 import { FRESH_UNIT_RACK_E, FRESH_UNIT_RACK_F } from '@data/memory';
 import { classicShip, CLASSIC_HOPS } from '@data/classic-five';
@@ -80,6 +80,8 @@ export function createHarness10(seed = 1, opts: { soulsFound?: boolean } = {}): 
     vesper(nextSeed, vesperOpts = {}) {
       base.shipAlone(VESPER, nextSeed);
       if (vesperOpts.hunt) {
+        // The classic five's VESPER with a HUNT verdict (Track RETIRE: not moved to the arm yet).
+        if (fixtureWorldNow() !== 'classic') throw new Error('harness10.vesper: { hunt } is the classic VESPER\'s (import support/classic-world)');
         const threat = huntVerdict();
         const ship = classicShip(VESPER);
         const files = [...FRESH_UNIT_RACK_E, ...FRESH_UNIT_RACK_F]

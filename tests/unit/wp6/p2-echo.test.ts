@@ -14,6 +14,7 @@
 //   before the breach line.
 // • Every echo fits a line (≤ MAX_LINE_CHARS with worst-case names) and says no "never say" word; the
 //   painter's labels too.
+import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createHarness6 } from './harness6';
 import { infectNow, nameHollow } from '@systems/hollow';

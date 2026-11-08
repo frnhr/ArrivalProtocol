@@ -11,6 +11,7 @@
 // • HALCYON's boot has no ghost either (it is LAST LIGHT's).
 // Then a page "reload" mid-run 2: the leftover run is 'abandoned' at HALCYON, and run 3's ghost says so at HALCYON's boot
 // (not ship 1's), once (KESTREL's boot has none).
+import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createHarness7 } from '../wp7/harness7';
 import { receiveTransmission, skipBoot } from '@systems/boot';

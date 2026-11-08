@@ -6,6 +6,7 @@
 // • a rack sum of 63, an unknown token, a duplicate role and a hurt pod the ship does not have each throw;
 // plus the run-1 names, the seeded rosters (a later run reseeds the hurt pod among the non-lead pods), and what
 // createInitialState makes of it (600 colonists in 3 pods, aboard, one LZ).
+import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import {
   buildShipMemory, hurtDriversFor, RACK_A, rackOf, racksLabel, shipColonists, shipPodCount, type ShipMemoryDef,

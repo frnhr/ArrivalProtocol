@@ -10,6 +10,7 @@
 // • edge cases: a ghost burst during the lock hold resets it; none while paused; a sticky burst (a dead controller) holds
 //   TACTICAL, refuses SKIP, and ends on a SPACE press and release;
 // • the strip follower with a scripted pip → SWAP defender (and the WP9 defender for HOLLOW) locks VESPER.
+import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createHarness10 } from './harness10';
 import { skipBlockReason } from '@systems/pace';

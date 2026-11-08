@@ -18,6 +18,7 @@
 // • THE TRAP (the lead's ruling of 21:30): a driver bitten twice in the same spot gets `MOVE it behind a WALL` on the strip
 //   once it is cured, never in front of a flight NOW line; a driver that moved starts its count over.
 // Slice 1a: the landing stands while a scenario sets up ('manual' landing mode) and lands at once when it lets it go.
+import '../../support/classic-world';
 import { check, finish } from '../../wp1/harness';
 import { createHarness11 } from '../harness11';
 import { theRoot, bittenAgainDrivers, infectNow } from '@systems/hollow';

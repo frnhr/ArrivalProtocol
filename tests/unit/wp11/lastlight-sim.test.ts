@@ -10,6 +10,7 @@
 //   the MERGE 20 tick's data;
 // • the lead's WP9 context: a verb's clock and its countdown, and the first seed, wait while the flight is at TACTICAL
 //   (never under a NOW / KEEP HOLDING / RELEASE line); SKIP waits for the first verb (the coast is its stage).
+import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createHarness11, LAST_LIGHT } from './harness11';
 import { shipColonists } from '@data/memory';

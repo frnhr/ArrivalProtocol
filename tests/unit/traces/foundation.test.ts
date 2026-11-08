@@ -10,6 +10,7 @@
 //   the book, the strangers), while planThreat's final rule, fed by hand, plays R33's numbers;
 // • RUN START: a run 2 from the fixture's archive holds its last unit's traces;
 // • the stubs: the neutral ones' answers, the throwing ones'.
+import '../support/classic-world';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';

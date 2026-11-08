@@ -9,6 +9,7 @@
 //   the classic world.
 // • The archive (03 §3.11): LastUnit.skills at RUN END, each skill's file level and AUTOBURN's accuracy, through the real
 //   archive write and back through the parser.
+import '../support/classic-world';
 import { check, finish } from '../landing/checks';
 import { createStore, type Store } from '@state/store';
 import type { GameState } from '@state/schema';

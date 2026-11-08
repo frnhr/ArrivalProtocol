@@ -8,6 +8,7 @@
 //   and validatePodRacks throwing on each rule;
 // • the live ★ ON TARGET tally (landing-rules onTargetTally) that the MiniHud reads.
 // The DOM side (six rows, labels, nothing clipped, no console errors) is the e2e tier.
+import '../support/classic-world';
 import { check, finish, harnessState } from '../wp1/harness';
 import {
   rackLabel, hexAddr, podRackLayouts, shipPodCount, lastPodRackTrailingFree, validatePodRacks, rootSlotRack,

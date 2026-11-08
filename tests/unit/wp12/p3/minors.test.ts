@@ -7,6 +7,7 @@
 // • WP7 verify: the MOVE preview of a driver bitten after the pick says STILL INFECTED, not SAFE.
 // • WP8 verify: with two FIREWALLs the placing line lights the one still to place, and is done once both hold.
 // • WP11 TODO: a Core worn below CORE_LOW_INTEGRITY (a thread lost, nothing infected) is named on a quiet coast in blue.
+import '../../support/classic-world';
 import { check, finish } from '../../wp1/harness';
 import { createHarness11 } from '../../wp11/harness11';
 import { buildDirectorCtx, type DirectorCtx } from '@systems/director';

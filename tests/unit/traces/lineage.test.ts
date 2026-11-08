@@ -14,6 +14,7 @@
 //   non-compliant kind built; down, none of it plays (so the suite reads the same before and after TRACE's merge);
 // • the classic world plays none; the ghost lines of R36 (won and UNRESOLVED silent, the lost causes kept);
 // • every lineage line at its worst case (≤ 70: three-digit units, two-unit roots, a three-digit wait).
+import '../support/classic-world';
 import { check, finish } from '../landing/checks';
 import { createStore, type Store } from '@state/store';
 import type { GameState } from '@state/schema';

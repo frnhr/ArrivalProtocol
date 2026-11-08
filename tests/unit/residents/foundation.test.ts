@@ -16,6 +16,7 @@
 //   and its SHIP DONE records LOOKOUT and decodes; the codec's v5 refusals (an open lock, an offered DEAL, an offering
 //   sleeper, a machine of another kind, a met resident off the route or not the map's, too many signals);
 // • the FOUNDATION's words fit the strip.
+import '../support/classic-world';
 import { readFileSync } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
 import { fileURLToPath } from 'node:url';

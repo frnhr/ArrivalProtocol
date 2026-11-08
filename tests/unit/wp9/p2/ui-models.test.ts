@@ -13,6 +13,7 @@
 //   DAMAGED, GONE.
 // • The zone-forecast moment fires once (hit → clear) for the early correction, and the stamps' words.
 // • Every new line fits its place (≤ 70 characters on the strip; the plot's labels fit the plot's width).
+import '../../support/classic-world';
 import { check, finish } from '../../wp1/harness';
 import { createHarness9 } from '../harness9';
 import { getPrediction, getSensedPrediction } from '@systems/predict';

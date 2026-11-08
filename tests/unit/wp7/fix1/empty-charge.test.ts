@@ -5,6 +5,7 @@
 // • the layout itself: no pool packed → a fresh pool holding exactly the arrival charge;
 // • the EMERGENCY path: the pool spent by a real repair, a crash, EMERGENCY TRANSMIT → HALCYON boots with 12;
 // • the CONTINUE path: ship 1 flown to its WAKE REPORT with the pool spent → HALCYON with max(12, 6·★).
+import '../../support/classic-world';
 import { check, finish } from '../../wp1/harness';
 import { createHarness7 } from '../harness7';
 import { continueAfterLoss, continueAfterReport } from '../../support/classic-flow';

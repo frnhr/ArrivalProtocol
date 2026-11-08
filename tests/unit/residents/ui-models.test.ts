@@ -14,6 +14,7 @@
 // • the TERMINAL's voices and the untimed choice; the lock's reticle (its second, its share, `LOCK 3`); the sleeper's breath;
 // • the stamps (the surprise's wake with its tear, DELETED, CURED, `SIGNAL · 1/3`) and the PACKET's leftover deck.
 // Every word's worst case is support/words.test's block 5 FACE.
+import '../support/classic-world';
 import { check, finish } from '../landing/checks';
 import type { GameState, LogChoice } from '@state/schema';
 import type { Segment, DriverSegment, ResidentSegment, SleeperSegment, NoteSegment, LeftoverSegment, SleepLockSegment } from '@/types/segment';
