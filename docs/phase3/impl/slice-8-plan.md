@@ -877,3 +877,257 @@ and Step 0 merged). OPEN-DECISIONS 20 and 66 are marked BUILT, and items 113–1
     the stored arm is for run 3, the lineage's wave is 1`. It fails the same way on a clean checkout of fa323d6, so it
     predates POLISH. It comes from RETIRE's fixture world (`state/initial.ts fixtureArm`, called from `debug.ts
     debugRunNumber`), and is left for RETIRE or the lead.
+
+---
+
+## Deviations (Step 0 HARNESS)
+
+Branch `harness-8` from fa323d6 (the plan's head on `claude/modest-hawking-209t0f`), not pushed. RETIRE phase 3 has not
+merged, so **the baseline (`--full`) is not run yet**: only the quick profile, once, to prove the report end to end (below).
+No `src/` file changed and no debug hook was needed.
+
+**What is built** (§3.2, §3.3):
+- `tests/unit/support/balance-out.ts writeMetrics(suite, metrics, meta)`: silent without `BALANCE_JSON`; NaN / ∞ / undefined
+  are written as `null` (the report's `—`).
+- One `writeMetrics` hunk (plus its import) at the end of every §3.1 sweep: `wp12/playthrough.test` (through
+  `balance/playthrough-metrics.ts`), `wp11/full-run`, `traces/traces-sweep`, `survey/survey-sweep`, `skills/v3-sweep`,
+  `skills/autodrop-sweep`, `residents/corrupted-sweep`, `residents/sleeper-sweep`, `ending/last-landing-sweep`.
+- The knobs, each defaulting to today's rows: `TS_CONTACT=1` (CONTACT, PURGE+CONTACT, MERGE+CONTACT, through both signal
+  stops when one route reaches both, else one: the row prints `stops 2/2` or `1/2`), `SURVEY_SWEEP_KID=busy`, `SWEEP_KIDS`
+  (+ the `sloppy` kid), `CS_SEEDS` / `CS_KIDS` (+ `sloppy`), `SLEEPER_KIT=route`, `SLEEPER_HOLLOW=1`, `SLEEPER_ARMS`, `V3_SHIPS`.
+- The playthrough: §3.2's `RunRecord` / `ShipRecord` fields, SLOPPY's `buys: 'cheapest'`, the `scansSignals` MIND flag,
+  `PT_VARIANT=no-<skill>[-v<n>]` with `PT_BASE` (the paired worth and its standard error), `PT_ROUTES=set`, and seven
+  table rows at the end.
+- `balance/routes.ts` (pure) and `balance/route-check.ts`; `balance/targets.ts` (every row: band, source sweep, OD items,
+  lever; the sweeps' quick and full knobs); `balance/targets.test.ts` (quick tier); `balance/decoy-stats.test.ts` and
+  `balance/signal-stats.test.ts` (BALANCE_ONLY, pure); `balance/ab.mjs`; `balance/report.mjs`.
+- `skills/v3-sweep` re-baselined on the arm (`--full`, 60 landings): the header names run 1's authored ships on the arm and
+  carries the arm's numbers; per ship it prints v3 against v2 ROUND (pods, points, first drop, FUEL).
+
+**Deviations and findings.**
+1. **`package.json` is the lead's.** The `balance:report` line is its own commit (b64b580), for the lead to keep or drop.
+2. **The playthrough's kids change by default** (R4, §3.2), so its table does not byte-match today's: SLOPPY buys the
+   cheapest cell, COMPETENT and LITERAL SCAN signal files and notes. `PT_SLOPPY_BUYS=none PT_SCAN_SIGNALS=0` gives back the
+   kids of slices 4–7 for the contract review's comparison. The table gains seven rows after `won-merge runs`. Every other
+   sweep's existing lines print as before with no new knob set; v3-sweep, autodrop-sweep and survey-sweep add `INFO` lines
+   after them (the per-ship / per-kid / per-version summaries).
+3. **Leave-one-out variants.** Quick flies 4 (`no-autoburn-v2`, `no-autoburn-v3`, `no-autodrop`, `no-sentry`); full flies 6,
+   adding `no-autodrop-v3` and `no-sentry-v3`, so G4's "each v3 over its v2" has its rows (§3.1 said 4 for both).
+   `worth.<skill>.v<n>` is the worth of versions n–3 together. The price is what the full kid spent on the dropped cells, paired
+   by seed and route. `worth.autoburn.v3ratio` is derived by the report from the v3 and v2 rows (`targets.ts DERIVED`).
+   SURVEY is not on COMPETENT's list, so `worth.survey.v1` comes from survey-sweep, in cycles per POOR ship (OD 53's unit),
+   not pods per cycle.
+4. **The routes** (R5, pinned in `balance/routes.ts`): worked `0,2,5,11,15,19`; r5 `0,5,11,15,19`; r8 `0,2,5,7,10,15,16,19`
+   (CURLEW's sleeper and PROVIDENCE's late resident); tight `0,2,5,11,18,19` (HOLLOW boards the TIGHT WAYFARER). Run 1's
+   reachability is the same on every arm seed (907 routes on seeds 1, 3, 99, 200). The quick profile flies only the worked
+   route, so G1c and the per-route G2 rows read `—` there. The set's four routes are not flown yet: the baseline flies them first.
+5. **Metric definitions the plan left open.** `mind.busy` counts AI s with `canStartOp()` false, in flight or landing, on the
+   route's last two ships. `waits` counts each `autodrop-wait`, plus each time AUTOBURN's `waitingSinceTSec` turns on, per
+   ship. G3's rows are COMPETENT's on the worked route. `cyc.earned` is ARRIVED plus LANDED, without grants.
+   `merge.afford.<kid>` counts runs played for MERGE that reach the choice. `empty.<kid>` is `ending-rules emptyShip` at the
+   choice. `contact.open` is COMPETENT holding `SIGNALS_FOR_CONTACT` at the end. Each record carries the prices it was
+   judged by (`mergeCost`, `signalsForContact`), so an A/B copy is judged by its own.
+6. **`restore.healed` is 0 by construction.** No kid buys a RESTORE. The field and row exist; a restore policy waits on
+   OD 1, which is WAIT.
+7. **decoy-stats** (4 s): the model reproduces Track SENTRY's measured shares (depth 5: 14.7% vs 15%; depth 6: 9.8% vs 7%;
+   depth 7: 9.7% vs 9%, each within 3 SE). `decoy.run` is **24.6%**, against the plan's "about 30%". With §2.4's new rates
+   (1/2, 2/3), an A/B gives **33%**, still under 40%. So §2.4's fallback, SENTRY v1 at 1 cycle, will trigger (THREAT).
+8. **signal-stats** (1.4 s): 17.9% of run-1 arm-routes can collect 3 signals. The worked, r5 and tight routes never can
+   (0 of 200 arms); r8 can on 21 of 200. So `contact.open` on the worked route is 0% by construction. ENDINGS should read
+   §2.9's lever 2 (`SIGNALS_FOR_CONTACT` 3 → 2) against this.
+9. **OD 27 may not hold with requests.** With `SLEEPER_KIT=route`, the unit asks for what CONTROL tags at each desk. On
+   seed 7 it reaches CURLEW with DELETE and MOVE and wakes the sleeper (rm sleep.lock). 0 of the random routes sampled
+   reach it with neither. OD 27's "SCAN and REPAIR only" came from the sweep's own sends, which request nothing. THREAT
+   should re-read OD 27 before building REPAIR-wakes (§2.7).
+10. **HOLD A WALL** (`SLEEPER_HOLLOW=1`, seed 7): the wall is offered and `moth.wall.Δeaten` is 0.0. This confirms §2.6's
+    diagnosis.
+11. **survey busy** (seed 7's CORMORANT): the GOOD and no-SURVEY flights reach the LANDING REPORT. The v1–v3 flights do
+    not (its "every flight reaching its LANDING REPORT" check fails), and their pods are counted where they stand.
+    ECONOMY should read one of them (R1) before trusting `survey.busy.Δpods.v3`.
+12. **v3-sweep on the arm.** Every LAST LIGHT row is still open at MAX_WALL (1500 wall s) and is ended there. Its pods count
+    where they stand, and those rows take most of the sweep's time. Quick runs `V3_SHIPS=VESPER,LAST LIGHT`. Now v3 over v2
+    on the ×2.25 ships is VESPER −4 pods and LAST LIGHT −1; the first drop is 7 s sooner; healthy FUEL is −1.9 points per row.
+13. **Sweeps whose own checks fail still give numbers.** corrupted-sweep with `CS_KIDS=sloppy`: the sloppy kid strands on
+    `failing`, `ignore` and `refuse`, which is OD 24's problem itself. full-run's quick-seed MERGE check fails (OD 88).
+    The report lists such sweeps under the table. Only a sweep that writes no metrics is ERR.
+14. **`ab.mjs`** also rewrites a plain `const` (skills.ts `SPEC_TREE_CYCLES`), because a re-price must move it in the same
+    copy: the tree's validator throws at load otherwise. Its outputs go to `tests/.out/balance/ab-<name>/`, so an A/B run
+    never overwrites the real tree's `report.json`.
+15. **The playthrough's instant landing made G4 unmeasurable, so the report flies the landings** (`PT_LANDING=strip`, new).
+    The playthrough landed every ship with the suites' instant landing (OD 65), which lands every pod that can launch soft
+    in an LZ with room, whatever the kid owns. The first quick report read `worth` 0.00 ± 0.00 on all 24 pairs of every
+    variant, and its G2 pods (COMPETENT 91%, SLOPPY 76%) only count drivers eaten and ships lost. With `PT_LANDING=strip`,
+    each landing is flown by the strip, with the kid's reaction:
+    - [L], held while the strip says `hold [L]` (AUTODROP v1);
+    - [G] when AUTODROP is offered unarmed;
+    - [F] when a SKIP is offered;
+    - END LANDING on L12's rows.
+
+    The default stays `instant` (today's rows), and the report's playthrough jobs set `strip`. A first cut tapped [L] on
+    `hold [L]`, which made AUTODROP v1 look like it costs pods (KESTREL 2/6, VESPER 6/16); holding it fixed that. One
+    COMPETENT run now costs about 20–37 CPU s, against about 15. The quick report below is the strip run; its "Last"
+    column is the instant run.
+    - In the first strip run, 2 of 168 runs stuck in a landing past `PRINT_MAX_WALL_SEC` (LITERAL seed 19 on VESPER, and
+      one variant run). The kid now presses END LANDING after `LANDING_GIVE_UP_SEC` (600 wall s), counted in
+      `RunRecord.landingsEnded`. The rerun had no stuck run.
+    - With strip landings, COMPETENT lands 78% (instant: 91%) and SLOPPY wins 79% (instant: 63%).
+    - `worth` is now measurable, but noisy at 24 seeds: AUTOBURN v3 0.13 ± 0.07, v2+v3 0.04 ± 0.04, SENTRY 0.06 ± 0.10.
+    - AUTODROP reads −0.09 ± 0.07: a kid with AUTODROP lands fewer pods than one who spends those cycles elsewhere.
+      ECONOMY should read one seed's trace (R1) before trusting that; the landing follower is the first suspect.
+16. **OPEN-DECISIONS drafts (HARNESS's 117–119).**
+    - 117. *SLOPPY buys the cheapest cell the tree sells at every desk* (R4). BUILT in the harness. To reverse:
+      `PT_SLOPPY_BUYS=none`, or `buys: []` in `wp12/playthrough.ts`.
+    - 118. *COMPETENT and LITERAL SCAN every signal file and note they meet*, so `contact.open` is measured. BUILT. To
+      reverse: `PT_SCAN_SIGNALS=0`.
+    - 119. *The report's worth is pods per cycle the full kid spent on the dropped cells*, paired by seed and route, with
+      its standard error. Full adds the v3 variants of AUTODROP and SENTRY. To change: `balance/playthrough-metrics.ts
+      worthMetrics`, `targets.ts LOO_VARIANTS`.
+17. **Times.** These replace §3.1's estimates for the quick column. The 4 cores were shared with other agents' unit tiers,
+    at a load average of 6–8, so CPU-bound times run 1.5–2× high.
+    - The quick profile took **29 min** with strip landings, and 17 min with the instant landing.
+    - The playthrough (24 seeds × 3 kids) took 584 s; each leave-one-out variant 153–255 s.
+    - Single-process sweeps: traces-sweep 364 s, v3-sweep 337 s, survey-sweep 232 s, sleeper-sweep 141 s, autodrop-sweep
+      140 s, full-run 134 s, last-landing-sweep 133 s, survey-busy 66 s, corrupted-sweep 40 s, decoy-stats 13 s,
+      signal-stats 6 s.
+    - v3-sweep `--full` (60 landings) took about 15 min alone.
+18. **The quick tier** gains only `balance/targets.test`: 0.03 s in-suite and about 0.7 s of process time idle (1.7 s
+    under the load above). decoy-stats and signal-stats are BALANCE_ONLY, so the tier lists them as SKIP. The tier ran
+    225 passed, 0 failed, 15 balance-only skipped, in 378 s on 4 workers under that load. That is over the 265 s cap
+    only because of the shared cores (the tier is about 207 s on an idle machine). The lead should re-time it on a quiet
+    machine at the merge.
+
+**The quick profile, run once on this branch** (`npm run balance:report`, 1546a2b, strip landings; "Last" is the earlier
+instant-landing run at b64b580). It proves the report end to end. **It is not the baseline**: that is `--full` after
+RETIRE's merge.
+
+```
+ARRIVAL PROTOCOL · BALANCE REPORT · 1546a2b · quick · 2026-11-08 · 29 min
+| #     | Goal                                                   | Target    | Now         | Last |      | Seeds  | Source             | OD     |
+|-------|--------------------------------------------------------|-----------|-------------|------|------|--------|--------------------|--------|
+| G1    | COMPETENT wins                                         | ≥ 90%     | 79%         | 79%  | LOW  | 24     | playthrough        | 88     |
+| G1    | LITERAL wins (the strip alone)                         | ≥ 80%     | 79%         | 79%  | LOW  | 24     | playthrough        |        |
+| G1    | SLOPPY wins                                            | 30%–65%   | 79%         | 63%  | HIGH | 24     | playthrough        |        |
+| G1b   | SLOPPY ends sombre                                     | ≥ 15%     | 21%         | 38%  | OK   | 24     | playthrough        |        |
+| G1c   | COMPETENT wins, 5-ship route                           | ≥ 85%     | —           | —    | —    | 24     | playthrough        |        |
+| G1c   | COMPETENT wins, 8-ship route                           | ≥ 85%     | —           | —    | —    | 24     | playthrough        |        |
+| G2    | COMPETENT pods landed                                  | ≥ 85%     | 78%         | 91%  | LOW  | 24     | playthrough        | 88     |
+| G2    | COMPETENT pods, worst seed                             | ≥ 60%     | 44%         | 55%  | LOW  | 24     | playthrough        |        |
+| G2    | LITERAL pods landed                                    | ≥ 75%     | 79%         | 91%  | OK   | 24     | playthrough        |        |
+| G2    | SLOPPY pods landed                                     | 35%–70%   | 67%         | 76%  | OK   | 24     | playthrough        | 88     |
+| G2    | COMPETENT pods, 5-ship route                           | info      | —           | —    | INFO | 24     | playthrough        |        |
+| G2    | COMPETENT pods, 8-ship route                           | info      | —           | —    | INFO | 24     | playthrough        |        |
+| G2    | COMPETENT pods, TIGHT route                            | info      | —           | —    | INFO | 24     | playthrough        |        |
+| G2b   | COMPETENT ships lost per run                           | ≤ 0.1     | 0.4         | 0.4  | HIGH | 24     | playthrough        |        |
+| G2b   | SLOPPY loses ≥ 1 ship                                  | ≥ 50%     | 21%         | 38%  | LOW  | 24     | playthrough        |        |
+| G2b   | SLOPPY ships lost per run                              | ≤ 2.5     | 0.4         | 0.6  | OK   | 24     | playthrough        |        |
+| G3    | COMPETENT cycles earned                                | 24–32     | 28.1        | 33.2 | OK   | 24     | playthrough        |        |
+| G3    | COMPETENT cycles spent                                 | info      | 23.6        | 27.6 | INFO | 24     | playthrough        |        |
+| G3    | COMPETENT unspent at the last desk                     | ≤ 3       | 1.6         | 1.9  | OK   | 24     | playthrough        |        |
+| G3    | COMPETENT trains of the tree                           | 40%–60%   | 44%         | 51%  | OK   | 24     | playthrough        | 53     |
+| G3    | SLOPPY cycles earned                                   | ≥ 14      | 24.8        | 30.3 | OK   | 24     | playthrough        |        |
+| G3    | SLOPPY first-pick floor fires                          | ≤ 5%      | 0%          | 0%   | OK   | 24     | playthrough        |        |
+| G4    | AUTOBURN v2+v3 pays                                    | 0.1–0.5   | 0.04 ±0.04  | 0.00 | LOW  | 24     | playthrough-loo    | 3      |
+| G4    | AUTOBURN v3 pays                                       | 0.1–0.5   | 0.13 ±0.07  | 0.00 | OK   | 24     | playthrough-loo    | 3      |
+| G4    | AUTOBURN v3 over v2 (of v2's pods/cycle)               | ≥ 0.4     | 3.00        | —    | OK   | 24     | playthrough-loo    | 3      |
+| G4    | AUTODROP path pays                                     | 0.1–0.5   | -0.09 ±0.07 | 0.00 | LOW  | 24     | playthrough-loo    | 9      |
+| G4    | AUTODROP v3 pays                                       | 0.1–0.5   | —           | —    | —    | 24     | playthrough-loo    | 9      |
+| G4    | SENTRY path pays                                       | 0.1–0.5   | 0.06 ±0.10  | 0.00 | LOW  | 24     | playthrough-loo    | 4      |
+| G4    | SENTRY v3 pays                                         | 0.1–0.5   | —           | —    | —    | 24     | playthrough-loo    |        |
+| G5    | SLOPPY boarded by TRACE                                | 15%–35%   | 0%          | 0%   | LOW  | 24     | playthrough        |        |
+| G5    | COMPETENT boarded by TRACE                             | ≤ 10%     | 0%          | 0%   | OK   | 24     | playthrough        |        |
+| G5    | COMPETENT drivers eaten per run                        | ≤ 2       | 0.3         | 0.3  | OK   | 24     | playthrough        |        |
+| G5    | SLOPPY drivers eaten per run                           | 4–12      | 8.5         | 6.9  | OK   | 24     | playthrough        |        |
+| G5    | COMPETENT Core-dead runs                               | ≤ 0%      | 4%          | 4%   | HIGH | 24     | playthrough        |        |
+| G5    | COMPETENT Core lowest, median                          | ≥ 40      | 84.0        | 84.0 | OK   | 24     | playthrough        |        |
+| G5    | COMPETENT every thread busy, last 2 ships              | ≤ 30%     | 2%          | 3%   | OK   | 24     | playthrough        |        |
+| G5    | COMPETENT thread waits per ship                        | ≤ 1       | 0.0         | 0.0  | OK   | 24     | playthrough        |        |
+| G5b   | a depth-5 run meets a decoy                            | ≥ 40%     | 25%         | 25%  | LOW  | 800    | decoy-stats        | 4      |
+| G5b   | ships with a decoy, depth 5                            | info      | 15%         | 15%  | INFO | 800    | decoy-stats        | 4      |
+| G5b   | ships with a decoy, depth 6                            | info      | 10%         | 10%  | INFO | 800    | decoy-stats        | 4      |
+| G5b   | ships with a decoy, depth 7                            | info      | 10%         | 10%  | INFO | 800    | decoy-stats        | 4      |
+| G6    | REASSIGNMENT Δpods (next run)                          | ±1        | +1.5        | +1.5 | HIGH | 6      | traces-sweep       | 70     |
+| G6    | PURGE+REASSIGN Δpods (next run)                        | ±1        | +1.5        | +1.5 | HIGH | 6      | traces-sweep       | 70     |
+| G6    | MERGE+REASSIGN Δpods (next run)                        | ±1        | +1.7        | +1.7 | HIGH | 6      | traces-sweep       | 70     |
+| G6    | SPARE+REASSIGN Δpods (next run)                        | ±1        | +1.3        | +1.3 | HIGH | 6      | traces-sweep       | 70     |
+| G6    | SUNSET Δpods (next run)                                | ±1        | +0.2        | +0.2 | OK   | 6      | traces-sweep       | 45     |
+| G6    | STAY Δpods (next run)                                  | ±1        | 0.0         | 0.0  | OK   | 6      | traces-sweep       | 45     |
+| G6    | CONTACT Δpods (next run)                               | ±1        | -0.5        | -0.5 | OK   | 6      | traces-sweep       | 84     |
+| G6    | PURGE+CONTACT Δpods (next run)                         | ±1        | -0.3        | -0.3 | OK   | 6      | traces-sweep       | 84     |
+| G6    | MERGE+CONTACT Δpods (next run)                         | ±1        | -0.8        | -0.8 | OK   | 6      | traces-sweep       | 84     |
+| G6    | PURGE's own effect (PURGE+REASSIGN − REASSIGN)         | ±0.5      | 0.0         | 0.0  | OK   | 6      | traces-sweep       | 70     |
+| G6    | MERGE's own effect (MERGE+REASSIGN − REASSIGN)         | ±0.5      | +0.2        | +0.2 | OK   | 6      | traces-sweep       | 70     |
+| G6    | duel won, worst ending against no trace                | ±5%       | 0%          | 0%   | OK   | 6      | traces-sweep       | 70     |
+| G6    | SPARE+REASSIGN gift at its ship                        | 0–15      | 15.0        | 15.0 | OK   | 6      | traces-sweep       | 45     |
+| G6    | SUNSET gift at its ship                                | 0–15      | 15.0        | 15.0 | OK   | 6      | traces-sweep       | 45     |
+| G6    | STAY gift at its ship                                  | 0–15      | 15.0        | 15.0 | OK   | 6      | traces-sweep       | 45     |
+| G6    | CONTACT gift at its ship                               | 0–15      | 7.8         | 7.8  | OK   | 6      | traces-sweep       | 84     |
+| G6    | PURGE+CONTACT gift at its ship                         | 0–15      | 7.8         | 7.8  | OK   | 6      | traces-sweep       | 84     |
+| G6    | MERGE+CONTACT gift at its ship                         | 0–15      | 7.8         | 7.8  | OK   | 6      | traces-sweep       | 84     |
+| G6b   | MERGE affordable, COMPETENT                            | 50%–85%   | 64%         | 73%  | OK   | 24     | playthrough        | 88     |
+| G6b   | MERGE affordable, LITERAL                              | 50%–85%   | 55%         | 73%  | OK   | 24     | playthrough        | 88     |
+| G6b   | COMPETENT charge at the choice, median                 | info      | 17.0        | 21.0 | INFO | 24     | playthrough        | 88     |
+| G6b   | full-run: MERGE affordable                             | info      | 10%         | 10%  | INFO | 10     | full-run           | 88     |
+| G6b   | full-run: charge at the choice p25                     | info      | 9.0         | 9.0  | INFO | 10     | full-run           | 88     |
+| G6b   | full-run: charge at the choice median                  | info      | 13.0        | 13.0 | INFO | 10     | full-run           | 88     |
+| G6b   | full-run: charge at the choice p75                     | info      | 16.0        | 16.0 | INFO | 10     | full-run           | 88     |
+| G6b   | COMPETENT leaves the empty ship                        | ≥ 50%     | 100%        | 100% | OK   | 24     | playthrough        |        |
+| G6b   | CONTACT open (3 signals at the final ship)             | 15%–35%   | 0%          | 0%   | LOW  | 24     | playthrough        | 84     |
+| G6b   | a route can collect 3 signals (run-1 arms)             | info      | 18%         | 18%  | INFO | 200    | signal-stats       | 84     |
+| G7    | COMPETENT wall time, median                            | info      | 23.8        | 14.0 | INFO | 24     | playthrough        |        |
+| §2.1  | SURVEY v1 closes of the none→GOOD gap                  | ≥ 40%     | 21%         | 21%  | LOW  | 3      | survey-sweep       | 53     |
+| §2.1  | SURVEY v2 against GOOD                                 | ≥ -3      | -0.2        | -0.2 | OK   | 3      | survey-sweep       | 52     |
+| §2.1  | SURVEY v3 against GOOD                                 | info      | -0.2        | -0.2 | INFO | 3      | survey-sweep       | 54     |
+| §2.1  | SURVEY v1 cycles per POOR ship over none               | info      | 0.4         | 0.4  | INFO | 3      | survey-sweep       | 53     |
+| §2.1  | busy CORMORANT: SURVEY v3 over v2                      | ≥ 0.5     | 1.0         | 1.0  | OK   | 7      | survey-busy        | 54     |
+| §2.1  | SURVEY v3 mapped at ORBIT LOCK                         | info      | 53%         | 53%  | INFO | 3      | survey-sweep       | 54     |
+| §2.2  | AUTOBURN v3 over v2, ×2.25 VESPER / LAST LIGHT (worst) | ≥ 1       | -4.0        | -4.0 | LOW  | 24 ldg | v3-sweep           | 3      |
+| §2.2  | AUTOBURN v3 first drop against v2, ×2.25               | ≤ -30     | -7.5        | -7.5 | HIGH | 24 ldg | v3-sweep           | 3      |
+| §2.2  | AUTOBURN v3 FUEL against v2 ROUND, healthy             | ≤ 0       | -0.2        | -0.2 | OK   | 24 ldg | v3-sweep           | 3      |
+| §2.3  | sloppy kid: AUTODROP v1 on CORMORANT                   | ≥ 10%     | 0%          | 0%   | LOW  | 16 ldg | autodrop-sweep     | 9      |
+| §2.3  | sloppy kid: AUTODROP v3 on VESPER                      | ≥ 15%     | 19%         | 19%  | OK   | 16 ldg | autodrop-sweep     | 9      |
+| §2.3  | AUTODROP worst row against v0                          | ≥ 0%      | -6%         | -6%  | LOW  | 16 ldg | autodrop-sweep     | 9      |
+| §2.5  | ignored resident: flight ends with FUEL ≥ 5%           | ≥ 80%     | 0%          | 0%   | LOW  | 7      | corrupted-sweep    | 24     |
+| §2.5  | ignored resident: FUEL under no resident               | ≥ 8       | 20.0        | 20.0 | OK   | 7      | corrupted-sweep    | 24     |
+| §2.5  | every answer against no resident (worst)               | ≤ 4       | 20.0        | 20.0 | HIGH | 7      | corrupted-sweep    | 24     |
+| §2.5  | ignored resident: FUEL at the flight's end             | info      | 0.0         | 0.0  | INFO | 7      | corrupted-sweep    | 24     |
+| §2.5  | resident push against a failing Thrust Ctrl            | info      | 0.82        | 0.82 | INFO | 7      | corrupted-sweep    | 13, 24 |
+| §2.6  | HOLD A WALL: drivers eaten against none                | ≤ -1      | 0.0         | 0.0  | HIGH | 1,7    | sleeper-sweep      | 25     |
+| §2.7  | the route's kit wakes the sleeper                      | ≥ 100%    | 100%        | 100% | OK   | 1,7    | sleeper-sweep      | 27     |
+| §2.7  | sleeper reached with neither DELETE nor MOVE           | info      | 0%          | 0%   | INFO | 1,7    | sleeper-sweep      | 27     |
+| §2.14 | blind drop worth on GENTLE                             | 0.6–0.9   | 0.68        | 0.68 | OK   | 2      | last-landing-sweep |        |
+| §2.14 | blind drop worth on HARSH                              | 0.35–0.65 | 0.36        | 0.36 | OK   | 2      | last-landing-sweep |        |
+| §2.15 | COMPETENT ships ended under the ★ 20% FUEL             | ≤ 30%     | 23%         | 24%  | OK   | 24     | playthrough        |        |
+| §2.15 | COMPETENT SAVING FUEL refusals per run                 | info      | 0.4         | 0.3  | INFO | 24     | playthrough        |        |
+| §2.13 | restores that healed a file                            | info      | 0.0         | 0.0  | INFO | 24     | playthrough        | 1      |
+| §2.16 | TIGHT route: files left behind per ship                | info      | —           | —    | INFO | 24     | playthrough        |        |
+
+LOW  G1 win.competent: G2/G5 first: a COMPETENT loss is a pod or Core problem, read its seed with PT_TRACE=1 (R1)
+LOW  G1 win.literal: the strip asks for less than it needs: read a lost LITERAL seed (PT_TRACE=1)
+HIGH G1 win.sloppy: BEAM_SEED_ODDS[1] (THREAT, §2.16) before the ladder
+LOW  G2 pods.competent: 01's widths and drag only if every kid misses (§2.16)
+LOW  G2 pods.competent.worst: read the worst seed (PT_TRACE=1)
+HIGH G2b lost.competent: read the lost ship's seed (PT_TRACE=1)
+LOW  G2b lost1.sloppy: the existing SLOPPY target: the ladder (§2.16)
+LOW  G4 worth.autoburn.v2: a cell under 0.10 with no time value comes down by 1 (§2.15)
+LOW  G4 worth.autodrop.v1: the sloppy kid's gain (§2.3), then the WIDE DROP pass
+LOW  G4 worth.sentry.v1: SENTRY v1 at 1 cycle (§2.4); its value is mostly time, not pods
+LOW  G5 board.trace.sloppy: BEAM_SEED_ODDS[1] first, TRACE_BOARD_AT is a word on screen (§2.16)
+HIGH G5 core.dead.competent: read the seed (PT_TRACE=1)
+LOW  G5b decoy.run: DISGUISE_CHANCE_BY_DEPTH 1/2, 2/3; else SENTRY v1 at 1 cycle (§2.4)
+HIGH G6 trace.Δpods.REASSIGNMENT: TRACE_ALLOWANCE_CHARGE 8 (§2.8)
+HIGH G6 trace.Δpods.PURGE+REASSIGN: TRACE_ALLOWANCE_CHARGE 8 (§2.8)
+HIGH G6 trace.Δpods.MERGE+REASSIGN: TRACE_ALLOWANCE_CHARGE 8 (§2.8)
+HIGH G6 trace.Δpods.SPARE+REASSIGN: TRACE_ALLOWANCE_CHARGE 8 (§2.8)
+LOW  G6b contact.open: SIGNALS_FOR_CONTACT 3 → 2 if under 15% (§2.9)
+LOW  §2.1 survey.gap.v1: v1 price 2 → 1; then [FRAN] v1's GROUND ? tell
+LOW  §2.2 v3.Δpods.damaged: or the first drop ≥ 30 s sooner (next row)
+HIGH §2.2 v3.Δfirst-drop-s: or ≥ +1 pod (row above)
+LOW  §2.3 drop.Δpods.CORMORANT.sloppy.v1: [FRAN] v2+ fly a WIDE DROP's in-band opening (§2.3)
+LOW  §2.3 drop.worst: read that row's seed first (R1)
+LOW  §2.5 res.ok.ignore: RESIDENT_GHOST*.amp 0.15 → 0.10 (§2.5)
+HIGH §2.5 res.answerGap: §2.5
+HIGH §2.6 moth.wall.Δeaten: MOTH.wall a 2-block blocker in a GAP (§2.6)
+
+sweeps (quick): playthrough 584 s · playthrough-no-autoburn-v2 255 s · playthrough-no-autoburn-v3 206 s · playthrough-no-autodrop 153 s · playthrough-no-sentry 154 s · sleeper-sweep 141 s · survey-sweep 232 s · last-landing-sweep 133 s · v3-sweep 337 s · traces-sweep 364 s · full-run 134 s · decoy-stats 13 s · signal-stats 6 s · survey-busy 66 s · corrupted-sweep 40 s · autodrop-sweep 140 s
+their own checks failed (numbers kept): full-run (exit 1), survey-busy (exit 1), corrupted-sweep (exit 1)
+```

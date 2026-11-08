@@ -25,13 +25,21 @@
 // archive, phase 2's LAST LIGHT) and the landing now waits for the kid's [L] at each LZ window, so every design target
 // below prints an INFO line (with the measured number, at any depth) and fails only with PT_STRICT=1. The one hard
 // check left is that each kid's run ends (no `stuck` run). Re-tuning the kids for the landing is phase 2's work.
+// Slice 8 Step 0 (slice-8-plan §3.2): PT_ROUTES=set flies balance/routes.ts's four routes in turn per seed (each shard on one
+// route: playthrough.ts's PT_ROUTE), else the worked route (or PT_ROUTE) as before; PT_VARIANT (COMPETENT only) flies a
+// leave-one-out kid and, with PT_BASE (the full kid's PT_OUT folder), writes its paired worth; BALANCE_JSON writes the
+// metric ids of the plan's §1 (balance/playthrough-metrics.ts). The table gains the rows the report reads.
 import { spawn } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { check, finish } from '../wp1/harness';
 import { MERGE_COST_CHARGE } from '@data/tuning';
 import type { RunRecord, PlayerId } from './playthrough';
 import { byDepth, FULL } from '../depth';
+import { writeMetrics } from '../support/balance-out';
+import { playthroughMetrics, worthMetrics } from '../balance/playthrough-metrics';
+import { ROUTE_SET, ROUTE_NAMES } from '../balance/routes';
+import { assertRouteSet } from '../balance/route-check';
 
 // Quick depth (tests/unit/depth.ts, npm test): one seed of the COMPETENT kid, so a whole run is flown end to end and must
 // end. SLOPPY and LITERAL fly at full depth only (npm run balance: the 200 seeds of all three kids): on one seed each
@@ -50,6 +58,13 @@ for (const player of ALL_PLAYERS.filter((candidate) => !PLAYERS.includes(candida
 const OUT = process.env.PT_OUT ?? 'tests/.out/playthrough';
 if (!Number.isInteger(SEEDS) || SEEDS < 1) throw new Error(`PT_SEEDS=${process.env.PT_SEEDS} is not a seed count`);
 if (!Number.isInteger(WORKERS) || WORKERS < 1) throw new Error(`PT_WORKERS=${process.env.PT_WORKERS} is not a worker count`);
+// Slice 8: 'worked' (default: the worked route, or PT_ROUTE) or 'set' (R5's four routes, each seed on each).
+const ROUTES_MODE = process.env.PT_ROUTES ?? 'worked';
+if (ROUTES_MODE !== 'worked' && ROUTES_MODE !== 'set') throw new Error(`PT_ROUTES=${ROUTES_MODE} is neither worked nor set`);
+if (ROUTES_MODE === 'set') assertRouteSet();
+const ROUTE_ENVS: readonly (string | null)[] = ROUTES_MODE === 'set' ? ROUTE_NAMES.map((name) => ROUTE_SET[name].join(',')) : [null];
+const VARIANT = process.env.PT_VARIANT ?? '';
+if (VARIANT !== '' && PLAYERS.join(',') !== 'COMPETENT') throw new Error(`PT_VARIANT=${VARIANT} is COMPETENT's (PT_PLAYERS=COMPETENT)`);
 
 const TSX = 'node_modules/.bin/tsx';
 // The tsconfig the workers resolve `@data/…` and the rest through: the project's, or a copy of the source tree for a
@@ -78,10 +93,10 @@ function target(name: string, met: boolean, detail: string): void {
   console.log(`${met ? 'MET  ' : 'GAP  '}  ${name}  — ${detail} (${met ? 'met here; listed as a known gap: ' : ''}${note})`);
 }
 
-function shard(player: PlayerId, from: number, last: number): Promise<RunRecord[]> {
+function shard(player: PlayerId, from: number, last: number, route: string | null): Promise<RunRecord[]> {
   return new Promise((resolve, reject) => {
     const child = spawn(TSX, ['--tsconfig', TSCONFIG, 'tests/unit/wp12/playthrough.ts'], {
-      env: { ...process.env, PT_PLAYER: player, PT_FROM: String(from), PT_TO: String(last), PT_TRACE: '0' },
+      env: { ...process.env, PT_PLAYER: player, PT_FROM: String(from), PT_TO: String(last), PT_TRACE: '0', ...(route === null ? {} : { PT_ROUTE: route }) },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let out = '';
@@ -99,23 +114,25 @@ function shard(player: PlayerId, from: number, last: number): Promise<RunRecord[
 
 // Shards for every player, at most WORKERS at a time.
 async function runAll(): Promise<Map<PlayerId, RunRecord[]>> {
-  const jobs: { player: PlayerId; from: number; last: number }[] = [];
+  const jobs: { player: PlayerId; from: number; last: number; route: string | null }[] = [];
   // Two shards per worker and player, so a slow shard does not leave the other workers idle at the end.
   const perShard = Math.max(1, Math.ceil(SEEDS / (WORKERS * 2)));
   for (const player of PLAYERS) {
-    for (let from = 1; from <= SEEDS; from += perShard) jobs.push({ player, from, last: Math.min(SEEDS, from + perShard - 1) });
+    for (const route of ROUTE_ENVS) {
+      for (let from = 1; from <= SEEDS; from += perShard) jobs.push({ player, from, last: Math.min(SEEDS, from + perShard - 1), route });
+    }
   }
   const results = new Map<PlayerId, RunRecord[]>(PLAYERS.map((player) => [player, []]));
   let next = 0;
   const worker = async (): Promise<void> => {
     while (next < jobs.length) {
       const job = jobs[next++]!;
-      const records = await shard(job.player, job.from, job.last);
+      const records = await shard(job.player, job.from, job.last, job.route);
       results.get(job.player)!.push(...records);
     }
   };
   await Promise.all(Array.from({ length: Math.min(WORKERS, jobs.length) }, worker));
-  for (const records of results.values()) records.sort((a, b) => a.seed - b.seed);
+  for (const records of results.values()) records.sort((a, b) => a.seed - b.seed || a.planned.join(',').localeCompare(b.planned.join(',')));
   return results;
 }
 
@@ -205,6 +222,21 @@ function table(results: Map<PlayerId, RunRecord[]>): string {
     return `${atChoice.filter((run) => run.chargeAtChoice! >= 20).length} of ${atChoice.length}`;
   }));
   row('won-merge runs', each((records) => String(records.filter((run) => run.cause === 'won-merge').length)));
+  // Slice 8 Step 0: the balance report's numbers (balance/playthrough-metrics.ts).
+  row('pods landed in an LZ with room (of the route\'s), mean', each((records) => pct(mean(records.map((run) => run.pods.landed)), mean(records.map((run) => run.pods.aboard)))));
+  row('cycles earned · spent · unspent at the last desk', each((records) => `${mean(records.map((run) => run.cycles.earned)).toFixed(1)} · `
+    + `${mean(records.map((run) => run.cycles.spent)).toFixed(1)} · ${mean(records.flatMap((run) => (run.cycles.unspentLastDesk === null ? [] : [run.cycles.unspentLastDesk]))).toFixed(1)}`));
+  row('HOLLOW boarded by TRACE · forced', each((records) => `${pct(records.filter((run) => run.boardedBy === 'trace').length, records.length)} · `
+    + `${pct(records.filter((run) => run.boardedBy === 'forced').length, records.length)}`));
+  row('drivers eaten per run · thread waits per ship', each((records) => `${mean(records.map((run) => run.driversEaten)).toFixed(2)} · `
+    + `${(records.reduce((sum, run) => sum + run.waits, 0) / Math.max(1, records.reduce((sum, run) => sum + run.ships.length, 0))).toFixed(2)}`));
+  row('every thread busy, last two ships (of AI s)', each((records) => pct(records.reduce((sum, run) => sum + run.mindBusySec, 0), records.reduce((sum, run) => sum + run.mindAiSec, 0))));
+  row('signals held at the end · CONTACT open', each((records) => `${mean(records.map((run) => run.signals)).toFixed(2)} · `
+    + `${pct(records.filter((run) => run.signals >= run.signalsForContact).length, records.length)}`));
+  row('the empty ship at the choice (of reached)', each((records) => {
+    const reached = records.filter((run) => run.emptyShip !== null);
+    return `${reached.filter((run) => run.emptyShip === true).length} of ${reached.length}`;
+  }));
   row('stuck runs (harness: never ends)', each((records) => String(records.filter((run) => run.cause.startsWith('stuck')).length)));
   return lines.join('\n');
 }
@@ -281,6 +313,19 @@ async function main(): Promise<void> {
     target('SLOPPY: ≥ 1 ship is lost in ≥ 50% of the seeds', lostOne >= 0.5 * sloppy.length, pct(lostOne, sloppy.length));
     const stuck = sloppy.filter((run) => run.cause.startsWith('stuck')).length;
     check('SLOPPY: every run ends', stuck === 0, `${stuck} stuck`);
+  }
+  // Slice 8 Step 0: the balance report's metrics (BALANCE_JSON; nothing without it).
+  if (VARIANT !== '') {
+    const basePath = join(process.env.PT_BASE ?? OUT, 'COMPETENT.jsonl');
+    let base: RunRecord[] = [];
+    try {
+      base = readFileSync(basePath, 'utf8').split('\n').filter((line) => line.trim() !== '').map((line) => JSON.parse(line) as RunRecord);
+    } catch { console.log(`INFO  ${VARIANT}: no full kid's records at ${basePath} (PT_BASE): its worth is not measured`); }
+    const worth = worthMetrics(VARIANT, base, results.get('COMPETENT') ?? []);
+    console.log(`INFO  ${VARIANT}: ${Object.entries(worth).map(([id, value]) => `${id} ${value === null ? '—' : value.toFixed(3)}`).join(' · ')}`);
+    writeMetrics(`playthrough ${VARIANT}`, worth, { seeds: SEEDS, variant: VARIANT, base: basePath });
+  } else {
+    writeMetrics('playthrough', playthroughMetrics(results), { seeds: SEEDS, players: PLAYERS.join(','), routes: ROUTES_MODE });
   }
   finish();
 }

@@ -13,7 +13,10 @@
 // mislands where v2's pass and v3's plan send them to the room).
 // 01 §3.17 expects about 0.75 of a full pod for a blind drop on GENTLE and about 0.5 on HARSH, and full points with AUTODROP
 // on a good orbit. The checks hold v3 to full points and the blind drop to bands around 01's figures.
+// Slice 8 Step 0 (slice-8-plan §2.14): BALANCE_JSON writes the blind drop's worth with room (`ll.blind.gentle`, `ll.blind.harsh`)
+// and each AUTODROP version's on GENTLE (`ll.v<n>.gentle`, open room).
 import { check, finish } from '../wp1/harness';
+import { writeMetrics } from '../support/balance-out';
 import { createHarness11 } from '../wp11/harness11';
 import { setLandingMode } from '../support/landing-instant';
 import { armLastLanding, normalS, launchOf } from './last-landing-arm';
@@ -125,5 +128,8 @@ check('AUTODROP at any version is worth more than the blind drop, open or tight'
   ROOMS.every((room) => ['v1', 'v2', 'v3'].every((id) => worth(of(id, room)) > worth(of('blind', room)))));
 check('…and with the room tight, v1 (the split left to luck) is worth less than v3 (the plan)', worth(of('v1', 'tight')) < worth(of('v3', 'tight')),
   `${per(of('v1', 'tight').worth.gentle, of('v1', 'tight').pods)} vs ${per(of('v3', 'tight').worth.gentle, of('v3', 'tight').pods)}`);
-
+writeMetrics('last-landing-sweep', {
+  'll.blind.gentle': worth(of('blind')), 'll.blind.harsh': worth(of('blind'), 'harsh'),
+  'll.v1.gentle': worth(of('v1')), 'll.v2.gentle': worth(of('v2')), 'll.v3.gentle': worth(of('v3')),
+}, { seeds: SEEDS });
 finish();

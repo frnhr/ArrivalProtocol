@@ -76,6 +76,7 @@ import { eccSeedsLine } from '@data/threat-text';
 import { STAR_CHARGE_BONUS, BAND_OK_MIN } from '@data/tuning';
 import { solLy } from '@systems/map-geometry';
 import { chooseEnding, finaleAtStep1 } from '../support/finale';
+import { writeMetrics } from '../support/balance-out';
 
 const FINAL_LANDING_SEC = Number(process.env.FINAL_LANDING_SEC ?? 48);
 // FINAL_LANDING: 'strip' (default: LAST LIGHT's landing by the strip) or 'stand' (FINAL_LANDING_SEC, then instant).
@@ -420,4 +421,11 @@ else check('…the quick seed reached its MERGE (PURGE: merge-test and fix1)', m
 setLandingMode('instant');
 h.newRun(Math.max(...SEED_LIST) + 1);
 check('NEW RUN: every reset module in its initial state', resetReport().length === 0, JSON.stringify(resetReport()));
+// Slice 8 Step 0 (slice-8-plan §2.10): MERGE's margin for the balance report (BALANCE_JSON; nothing without it).
+const quantile = (q: number): number | null => (charges.length === 0 ? null : charges[Math.min(charges.length - 1, Math.floor(q * charges.length))]!);
+writeMetrics('full-run', {
+  'merge.afford.fullrun': atChoice.length === 0 ? null : (100 * affordable) / atChoice.length,
+  'merge.charge.p25': quantile(0.25), 'merge.charge.median': quantile(0.5), 'merge.charge.p75': quantile(0.75),
+  'win.fullrun': (100 * victories) / SEEDS,
+}, { seeds: SEEDS, mergeCost: MERGE_COST_CHARGE });
 finish();

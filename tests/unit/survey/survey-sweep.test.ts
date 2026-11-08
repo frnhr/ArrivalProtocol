@@ -15,7 +15,19 @@
 // and the AI seconds a corrupted resident's due lock waited for a thread SURVEY held; and R16's SURVEY/SENTRY ties: desks on
 // these routes where both branches were due, SURVEY took the visit and SENTRY waited one desk.
 // The checks are information (OPEN-DECISIONS 33 and 37 take the numbers), except that every flight reaches its report.
+// Slice 8 Step 0 (slice-8-plan §2.1, OD 54): SURVEY_SWEEP_KID=busy flies seed 7's POOR CORMORANT (slot 15) on the worked
+// route, where HOLLOW boards: the beam's seeds are not freed and HOLLOW stays as it boarded, and the kid defends with the
+// WP11 defender (harness11 defend11: it SCANs and DELETEs seeds, REPAIRs bites, MOVEs souls), so SURVEY's thread matters.
+// Per version it prints the pods landed, the first swap's moment (before ORBIT LOCK or in the landing), the AI s the kid
+// waited for a thread (every thread busy while it had a seed or a bite to answer) and SURVEY's own thread-s. BALANCE_JSON
+// writes §2.1's rows: v1's share of the none→GOOD point gap, v2's and v3's points against GOOD, v1's cycles per POOR ship
+// over none, v3's mapped share at ORBIT LOCK; busy: v3's pods over v2's.
 import { check, finish } from '../landing/checks';
+import { writeMetrics } from '../support/balance-out';
+import { createHarness11, type Harness11 } from '../wp11/harness11';
+import { WORKED_ROUTE } from '@systems/arm-fixture';
+import { threateningSeeds } from '@systems/hollow';
+import { isInfected } from '@state/selectors';
 import type { GameState } from '@state/schema';
 import type { SkillVersion } from '@/types/skill';
 import type { RunMapState } from '@/types/map';
@@ -41,10 +53,17 @@ import { landingResult } from '@systems/landing-rules';
 import { endLanding } from '@systems/landing';
 import { shipCycles } from '@systems/run-score';
 
-const SEEDS = Array.from({ length: Number(process.env.SURVEY_SWEEP_SEEDS ?? 10) }, (_, i) => i + 1);
+const KID = process.env.SURVEY_SWEEP_KID ?? 'strip';
+if (KID !== 'strip' && KID !== 'busy') throw new Error(`SURVEY_SWEEP_KID=${KID} is neither strip nor busy`);
+const BUSY = KID === 'busy';
+// The busy kid: seed 7's CORMORANT on the worked route (slice-8-plan §2.1), unless SURVEY_SWEEP_SEEDS names more.
+const BUSY_SLOT = 15;
+const SEEDS = BUSY && process.env.SURVEY_SWEEP_SEEDS === undefined ? [7]
+  : Array.from({ length: Number(process.env.SURVEY_SWEEP_SEEDS ?? 10) }, (_, i) => i + 1);
 // SURVEY_SWEEP_SLOT: one slot only (a ship looked at by itself).
-const ONLY_SLOT = process.env.SURVEY_SWEEP_SLOT === undefined ? null : Number(process.env.SURVEY_SWEEP_SLOT);
-const h = createHarness7(1);
+const ONLY_SLOT = BUSY ? BUSY_SLOT : process.env.SURVEY_SWEEP_SLOT === undefined ? null : Number(process.env.SURVEY_SWEEP_SLOT);
+const h = BUSY ? createHarness11(1) : createHarness7(1);
+const defendNow = (): void => { if (BUSY) (h as Harness11).defend11(); else h.defend(); };
 const s = (): Readonly<GameState> => h.store.getState();
 setLandingMode('manual');
 
@@ -55,6 +74,9 @@ interface Row {
   report: boolean; q: number; landedPct: number; hard: number; cycles: number;
   atCapture: number; fuelAtLock: number; moves: number; reveal: string;
   verbSkips: number; lockWaitSec: number;
+  // Slice 8: mapped % at ORBIT LOCK; pods landed in an LZ with room; the first swap's moment; the kid's thread waits and
+  // SURVEY's own thread-s (AI s).
+  atLock: number; pods: number; swapAt: 'lock' | 'landing' | null; kidWaitSec: number; surveyThreadSec: number;
 }
 
 // The shortest route from ARES-VII (slot 0) to `slot`, through ships that are not final; null when none reaches it.
@@ -99,9 +121,11 @@ function arrive(seed: number, route: readonly number[], poor: boolean): GameStat
       for (const seg of draft.memory) {
         if ((seg.type === 'ship' || seg.type === 'tool' || seg.type === 'core' || seg.type === 'driver') && 'integrity' in seg) seg.integrity = 100;
       }
-      draft.memory = draft.memory.map((seg) => (seg.type === 'hollow' ? freeSegment(seg.size) : seg));
-      mergeAdjacentFree(draft.memory);
-      if (draft.hollow.phase !== 'awake') draft.hollow.phase = 'dormant';
+      if (!BUSY) {
+        draft.memory = draft.memory.map((seg) => (seg.type === 'hollow' ? freeSegment(seg.size) : seg));
+        mergeAdjacentFree(draft.memory);
+        if (draft.hollow.phase !== 'awake') draft.hollow.phase = 'dormant';
+      }
       draft.ui.memoryRev++;
     });
     h.step();
@@ -154,8 +178,16 @@ function fly(start: GameState, seed: number, policy: Policy): Row {
   let lockWaitSec = 0;
   let moments = s().hollow.verbMoments;
   let aiAt = s().clock.aiSec;
+  let swapAt: Row['swapAt'] = null;
+  let kidWaitSec = 0;
+  let surveyThreadSec = 0;
+  const movesAtStart = s().landing.survey.moves.length;
   const each = (): void => {
     const state = s();
+    const dtAi = state.clock.aiSec - aiAt;
+    if (swapAt === null && state.landing.survey.moves.length > movesAtStart) swapAt = state.run.phase === 'flight' ? 'lock' : 'landing';
+    if (holdsThread(SURVEY_THREAD_OWNER)) surveyThreadSec += dtAi;
+    if (!canStartOp() && (threateningSeeds(state.memory, state.clock.aiSec).length > 0 || state.memory.some(isInfected))) kidWaitSec += dtAi;
     if (atCapture < 0) {
       const { x, y, vx, vy } = state.orbit;
       if ((vx * vx + vy * vy) / 2 - state.level.planet.mu / Math.hypot(x, y) < 0) atCapture = mappedPct(state.landing.survey);
@@ -169,9 +201,10 @@ function fly(start: GameState, seed: number, policy: Policy): Row {
     aiAt = state.clock.aiSec;
     if (version !== null) moveLzs(version);
   };
-  followDirector(h, { reactionSec: 0.4, maxWall: 900, mistake: () => { each(); h.defend(); return false; } });
+  followDirector(h, { reactionSec: 0.4, maxWall: 900, mistake: () => { each(); defendNow(); return false; } });
   const fuelAtLock = s().burn.fuelPct;
-  if (s().run.phase === 'landing') followLanding(h, { maxWall: 900, onTick: () => { each(); h.defend(); } });
+  const atLock = mappedPct(s().landing.survey);
+  if (s().run.phase === 'landing') followLanding(h, { maxWall: 900, onTick: () => { each(); defendNow(); } });
   // A pod a resident locks for good keeps the landing open (no strip row asks for END LANDING then): the kid ends it.
   if (s().run.phase === 'landing' && s().landing.ended === null) endLanding(h.store);
   h.stepUntil(() => s().run.phase !== 'landing', 120);
@@ -184,6 +217,7 @@ function fly(start: GameState, seed: number, policy: Policy): Row {
   return {
     seed, slot: 0, name: '', policy, bad, report, q, landedPct: tally.colonistsAboard > 0 ? (100 * tally.landedInLz) / tally.colonistsAboard : 0,
     hard, cycles, atCapture, fuelAtLock, moves: s().landing.survey.moves.length, reveal, verbSkips, lockWaitSec,
+    atLock, pods: tally.landedInLz / 200, swapAt, kidWaitSec, surveyThreadSec,
   };
 }
 
@@ -194,7 +228,7 @@ for (const seed of SEEDS) {
   for (const ship of map.arm) {
     if (ship.reserved.site !== 'poor' || shipDefAt(map, ship.slot).final) continue;
     if (ONLY_SLOT !== null && ship.slot !== ONLY_SLOT) continue;
-    const route = routeTo(map, ship.slot);
+    const route = BUSY ? WORKED_ROUTE.slice(0, WORKED_ROUTE.indexOf(BUSY_SLOT) + 1) : routeTo(map, ship.slot);
     if (route === null) { skipped.push(`seed ${seed} ${ship.name}: no route`); continue; }
     const good = arrive(seed, route, false);
     const poor = arrive(seed, route, true);
@@ -236,4 +270,29 @@ for (const policy of POLICIES) {
 }
 check(`R16: ${ties.size} SURVEY/SENTRY ties at the ${tieDesks.size} desks of these routes (SENTRY a desk later)${ties.size > 0 ? `: ${[...ties].join(' | ')}` : ''}`, true);
 
+// Slice 8 Step 0: per version, the busy kid's numbers (printed in either mode), and §2.1's rows for the balance report.
+const dqOf = (policy: Policy): number => mean(by(policy).map((row) => 100 * (row.q - goodQ.get(`${row.seed}:${row.slot}`)!)));
+const podsOf = (policy: Policy): number => mean(by(policy).map((row) => row.pods));
+for (const policy of POLICIES) {
+  const mine = by(policy);
+  console.log(`INFO  ${KID} ${String(policy).padEnd(4)}: pods landed ${podsOf(policy).toFixed(2)}, first swap ${mine.map((row) => row.swapAt ?? '—').join(',')}, `
+    + `kid waited ${mean(mine.map((row) => row.kidWaitSec)).toFixed(1)} AI s for a thread, SURVEY held one ${mean(mine.map((row) => row.surveyThreadSec)).toFixed(1)} AI s, `
+    + `mapped at ORBIT LOCK ${mean(mine.map((row) => row.atLock)).toFixed(0)}%`);
+}
+if (BUSY) {
+  writeMetrics('survey-sweep busy', {
+    'survey.busy.Δpods.v3': podsOf(3) - podsOf(2),
+    ...Object.fromEntries(([1, 2, 3] as const).map((v) => [`survey.busy.pods.v${v}`, podsOf(v)])),
+    'survey.busy.preLock.v3': mean(by(3).map((row) => (row.swapAt === 'lock' ? 100 : 0))),
+    'survey.busy.kidWait.v3': mean(by(3).map((row) => row.kidWaitSec)),
+  }, { seeds: SEEDS.join(','), slot: BUSY_SLOT });
+} else {
+  const cyclesOf = (policy: Policy): number => mean(by(policy).map((row) => row.cycles));
+  writeMetrics('survey-sweep', {
+    'survey.gap.v1': dqOf('none') === 0 ? null : (100 * (dqOf(1) - dqOf('none'))) / -dqOf('none'),
+    'survey.dq.none': dqOf('none'), 'survey.dq.v1': dqOf(1), 'survey.dq.v2': dqOf(2), 'survey.dq.v3': dqOf(3),
+    'worth.survey.v1': cyclesOf(1) - cyclesOf('none'),
+    'survey.mappedAtLock.v3': mean(by(3).map((row) => row.atLock)),
+  }, { seeds: SEEDS.length, ships });
+}
 finish();
