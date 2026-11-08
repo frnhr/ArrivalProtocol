@@ -186,3 +186,5 @@ Status words:
       dot ("the sensors look where the pods will go"). This deviates from 01 §3.13's geometry.
     - The alternatives were a strip row that holds a window while the ground is unknown, or letting an LZ move with
       pods already down. Both were rejected: the first costs the kid time, the second changes scoring.
+    - **Result:** v2 now shows the bad guess before its first pod on 42 of 42 ships (it was 20), and scores −0.7
+      points against GOOD (it was −14.0). v3 scores +0.0. No SURVEY and v1 are unchanged.
