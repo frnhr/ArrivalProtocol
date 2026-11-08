@@ -128,11 +128,18 @@ export function mountSitesWindow(store: Store<GameState>): () => void {
     status.className = `sw-status tone-${model.tone}`;
     lzList.replaceChildren(...model.lzs.map(rowNode));
     const nodes: HTMLElement[] = [];
+    let pills: HTMLElement | null = null;
     for (const row of model.sites) {
       nodes.push(rowNode(row));
-      if (row.selected && model.pills.length > 0) nodes.push(pillsNode(model));
+      if (row.selected && model.pills.length > 0) { pills = pillsNode(model); nodes.push(pills); }
     }
     siteList.replaceChildren(...nodes);
+    // A site picked low in the list: its pills scrolled into the window's view. By hand, in the body alone: scrollIntoView
+    // would also scroll the desk's overflow-hidden containers.
+    if (pills !== null) {
+      const below = pills.getBoundingClientRect().bottom - body.getBoundingClientRect().bottom;
+      if (below > 0) body.scrollTop += below + 4;
+    }
     empty.hidden = model.empty === null;
     patch(empty, model.empty ?? '');
     hint.hidden = model.hint === null;

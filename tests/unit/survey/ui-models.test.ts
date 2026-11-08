@@ -158,6 +158,7 @@ built(() => {
     const landing = cormorant((s) => {
       mapCells(s, 0, SURVEY_CELLS, true);
       s.run.phase = 'landing';
+      s.burn.status = 'locked';
       const record = s.landing.pods[0]!;
       record.fate = { kind: 'down', launch: {} as never, touchdown: { place: 'lz', lz: 'LZ-B', points: 100, missKm: null, touch: 'hard', atAi: 0 } } as PodFate;
     });

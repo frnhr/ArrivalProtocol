@@ -17,7 +17,7 @@ export const SITES_TEXT = {
   window: {
     title: 'Sites',
     // The header line, and the strip of the rim under it (one cell of SITES_RIM_BAR_CELLS per glyph).
-    header: (pct: number): string => `SITES · POOR DATA · MAPPED ${pct}%`,
+    header: (pct: number): string => `POOR DATA · MAPPED ${pct}%`,
     rimMapped: '▓',
     rimUnmapped: '░',
     // SURVEY's state (survey-model.ts surveyRunning) and version: running at v1–v2 holds a thread, at v3 none.
