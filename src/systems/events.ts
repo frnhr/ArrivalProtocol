@@ -326,6 +326,13 @@ export interface GameEvents {
   // The last unit took the final root over (R35): its unit number.
   'root-face': { unit: number };
   // --- end of 7c NEXT RUN ---
+
+  // === Slice 7d (docs/phase3/impl/slice-7-plan.md §2.5): systems/unknown-events.ts emits it as a `▓▓░▓` file's SCAN finds
+  // its fragments (after 'signal-found', which the stamp and the note's SCAN share).
+  // --- 7d SIGNALS ---
+  // The `▓▓░▓` file on the ship in `slot` gave `n` fragments (the signal `?` ship's 2, a CONTACT stop's 1).
+  'signal-event': { slot: number; n: number };
+  // --- end of 7d SIGNALS ---
 }
 
 export type ZoneForecast = 'hit' | 'clear' | 'unknown';

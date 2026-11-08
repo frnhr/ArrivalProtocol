@@ -8,6 +8,7 @@ import type { FeaturedColonist } from '@/types/landing';
 import { lightArrival, type LightSource } from '@systems/delivery-rule';
 import { letterSourcesFromTrail } from '@systems/lineage';
 import { traceMessages } from '@systems/trace-gifts';
+import { unknownMessages } from '@systems/signals';
 import { armShipAt, isEndSlot, worldSlotOf } from '@systems/map-streams';
 import { solLy, ringsCrossed } from '@systems/map-geometry';
 import { WORLDS, RING_LY } from '@data/arm';
@@ -89,9 +90,11 @@ function deriveMessages(run: Readonly<RunState>): InboxMessage[] {
     ...letters(run),
     // Slice 7c (R32): STAY's supply packet's letter (Track TRACE's; none until built).
     ...traceMessages(run),
+    // Slice 7d (R39): the old colony `?` ship's letter (systems/signals.ts; none until UNKNOWN_EVENTS_BUILT).
+    ...unknownMessages(run),
   ];
   const order: Readonly<Record<InboxMessage['kind'], number>> = {
-    welcome: 0, policy: 1, 'arm-complete': 2, reply: 3, postcard: 4, letter: 5, 'no-address': 6,
+    welcome: 0, policy: 1, 'arm-complete': 2, reply: 3, postcard: 4, letter: 5, 'old-colony': 5, 'no-address': 6,
   };
   for (const message of messages) checkMessage(message);
   return messages

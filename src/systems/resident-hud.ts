@@ -8,6 +8,9 @@ import type { Segment, DriverSegment, ResidentFileSegment } from '@/types/segmen
 import type { DraftCard } from '@data/upgrades';
 import { builtResident } from '@data/residents';
 import { KIN_TEXT } from '@data/kin-text';
+import { UNKNOWN_TEXT } from '@data/unknown-text';
+import { UNKNOWN_EVENTS_BUILT } from '@data/unknown';
+import { signalSourceAt } from '@systems/signals';
 import { RESIDENT_UI_TEXT } from '@data/resident-ui-text';
 import { SKILL_TREE } from '@data/skills';
 import { podCode } from '@data/landing-text';
@@ -53,10 +56,19 @@ export function residentCardRow(state: Readonly<GameState>, slot: number): Resid
 // glyph would narrow it to a departed resident, telling it from a sleeper or a late surprise. In slice 5 no card ahead names
 // a departed resident (it reads `unknown` until the ship is met), so the glyph shows nowhere yet; slice 7's cards that do
 // (the `?` signal ship's) get it with no change here.
+// Slice 7d (R40, OPEN-DECISIONS 49; the lead's): also on every `?` ship that carries fragments (the signal ship's file, the
+// gone resident's note), once the `?` ships are built. Their `??? · NO TRANSPONDER` card promises no resident kind, so the
+// glyph narrows nothing (OD 31 holds), and the three it marks with the notes are CONTACT's price. And on a CONTACT stop whose
+// `▓▓░▓` file still waits (02 §3.5: "every other fragment ship"; its card's TRACE row names it already).
 export function signalGlyph(state: Readonly<GameState>, slot: number): boolean {
   const map = state.run.map;
   if (map.world !== 'arm' || state.run.residents.signals.length === 0) return false;
   if (map.route.some((stop) => stop.slot === slot)) return false;
+  const ahead = shipSummaryAt(map, slot).reserved;
+  if (UNKNOWN_EVENTS_BUILT && ahead !== null && ahead.unknownEvent !== null && ahead.fragments > 0) {
+    return ahead.unknownEvent === 'signal' || builtResident(ahead.resident === null ? null : { ...ahead.resident, fragments: ahead.fragments })?.kind === 'left';
+  }
+  if (signalSourceAt(state.run, slot)?.source === 'contact-stop') return true;
   const card = residentCardRow(state, slot);
   if (card === null || card.value === T.card.unknown || card.value === T.card.none) return false;
   const reserved = shipSummaryAt(map, slot).reserved;
@@ -157,6 +169,9 @@ function fileLook(seg: Readonly<ResidentFileSegment>): ResidentSegmentLook {
       return seg.fragment ? look('res-grey res-note res-signal', T.strip.signal, 'signal') : look('res-grey res-note', T.strip.read, 'partial');
     case 'leftover':
       return seg.scanned ? look('res-grey res-leftover res-scanned', null) : { ...unknown, className: 'res-grey res-leftover' };
+    // Slice 7d: the `▓▓░▓` file, grey and `?` until a SCAN, then its noise (a read note's fragment look).
+    case 'signal':
+      return seg.scanned ? look('res-grey res-note res-signal', T.strip.signal, 'signal') : { ...unknown, className: 'res-grey res-note res-signal-file' };
   }
 }
 
@@ -208,6 +223,14 @@ export function residentInspect(state: Readonly<GameState>, seg: Readonly<Segmen
       return {
         state: { text: T.detail.state.read, cls: 'partial' }, rows: [],
         note: { lines: [...lines], signature: T.detail.signature(seg.owner), noise: seg.fragment ? T.noise : null },
+      };
+    }
+    // Slice 7d: a read `▓▓░▓` file shows its one line, no sender, and its noise.
+    case 'signal': {
+      if (!seg.scanned) return null;
+      return {
+        state: { text: T.detail.state.read, cls: 'partial' }, rows: [],
+        note: { lines: [UNKNOWN_TEXT.signal.lines[seg.source]], signature: UNKNOWN_TEXT.signal.signature, noise: UNKNOWN_TEXT.signal.noise },
       };
     }
     case 'sleeper': {
@@ -300,8 +323,9 @@ export function curedStamp(): ResidentStamp {
   return { text: T.stamp.cured, tone: 'good', glitch: false };
 }
 
+// Slice 7d: past CONTACT's price (a run can find up to 7), the stamp says the count alone: `SIGNAL · 4/3` reads as a bug.
 export function signalStamp(count: number): ResidentStamp {
-  return { text: T.stamp.signal(count, SIGNALS_FOR_CONTACT), tone: 'good', glitch: false };
+  return { text: count > SIGNALS_FOR_CONTACT ? T.stamp.signalMore(count) : T.stamp.signal(count, SIGNALS_FOR_CONTACT), tone: 'good', glitch: false };
 }
 
 // --- The PACKET's leftover deck (TransmitScreen) ----------------------------------------------------------------------------

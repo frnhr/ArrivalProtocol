@@ -55,6 +55,8 @@ export const FINALE_TEXT = {
   price: {
     charge: (have: number): string => `COSTS ${MERGE_COST_CHARGE} REPAIR CHARGE · you have ${have}`,
     fuel: (have: number): string => `FUEL ${have}% ✓ · needs ${EMPTY_SHIP_FUEL_PCT}%`,
+    // 7d (R41; the 7a review's note): an open CONTACT reads as met, as the FUEL does; signals are held, not spent.
+    signals: (have: number, need: number): string => `SIGNALS ${have} ✓ · needs ${need}`,
   },
   needs: {
     charge: (have: number): string => `NEEDS ${MERGE_COST_CHARGE} CHARGE · you have ${have}`,

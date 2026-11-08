@@ -34,7 +34,7 @@ import { HOLLOW_STAGES } from '@data/threats';
 import { bookShape, logEntriesAtBoot, BOOK_046, BOOK_STRANGER, BOOK_LAST } from '@state/log-selectors';
 import { bookName, bookEntryLines } from '@data/log-books';
 import { controlCompliant } from '@systems/ending-rules';
-import { TRACES_BUILT, LINEAGE_BUILT, TRACE_RULES, STRANGER_UNITS, SUNSET_GIFT_PRIORITY } from '@data/traces';
+import { TRACES_BUILT, TRACE_RULES, STRANGER_UNITS, SUNSET_GIFT_PRIORITY } from '@data/traces';
 import { layerOf } from '@systems/map-geometry';
 import { hollowLabel } from '@systems/say';
 import { traceSeedMods, traceSeedAllowance, traceGiftCharge, arrivalTraceLines, traceBootLines, traceBootLineText, traceBootLineSaid, traceMessages } from '@systems/trace-gifts';
@@ -63,12 +63,12 @@ const threw = (fn: () => unknown): string => {
 
 // --- The gates, the tables ------------------------------------------------------------------------------------------------
 // Track TRACE's gate lines (one a kind; CONTACT's is 7d's):
-check('built: every trace but CONTACT (Track TRACE raised each kind; CONTACT is 7d\'s)',
-  Object.entries(TRACES_BUILT).every(([kind, built]) => built === (kind !== 'contact'))
+check('built: every trace (Track TRACE raised each kind, 7d CONTACT\'s)',
+  Object.values(TRACES_BUILT).every((built) => built)
   && Object.keys(TRACES_BUILT).join() === 'purge,merge,spare,sunset,stay,reassignment,contact');
 // (Track LINEAGE's gate line:)
-check('built: the lineage (Track LINEAGE: traces/lineage, traces/logs)', LINEAGE_BUILT);
-check('RUN_SAVE_VERSION 8', RUN_SAVE_VERSION === 8);
+// (The lineage's gate, LINEAGE_BUILT, retired in 7d with its gate-down paths: OPEN-DECISIONS 74.)
+check('RUN_SAVE_VERSION ≥ 8 (7d bumped it to 9)', RUN_SAVE_VERSION >= 8);
 check('the trace table: PURGE, MERGE and REASSIGNMENT act at the final ship, the others wait as gifts and cost the wild seed (05 §3.8)',
   TRACE_RULES.purge.where === 'final' && TRACE_RULES.merge.where === 'final' && TRACE_RULES.reassignment.where === 'final'
   && (['spare', 'sunset', 'stay', 'contact'] as const).every((kind) => TRACE_RULES[kind].where === kind && TRACE_RULES[kind].cost === 'wild-seed')
@@ -266,7 +266,7 @@ for (const [what, file, raw] of [['run 2\'s first desk', 'run-save-v7-ship-done-
   const run = migrated.payload.run;
   const decoded = decodeRunSave(JSON.stringify(raw.save));
   check(`the v7 ${what} migrates to v8 and decodes: no traces (it played without them), 046.log, HOLLOW as it met it`,
-    raw.save.saveVersion === 7 && migrated.saveVersion === 8 && decoded.ok && JSON.stringify(run.traces) === JSON.stringify(noTraces())
+    raw.save.saveVersion === 7 && migrated.saveVersion === RUN_SAVE_VERSION && decoded.ok && JSON.stringify(run.traces) === JSON.stringify(noTraces())
     && run.log.book.kind === '046' && JSON.stringify(run.hollowUnits) === JSON.stringify(raw.save.payload.run.hollowUnits),
     decoded.ok ? '' : `${decoded.refusal.kind}: ${decoded.refusal.detail}`);
   if (run.arrival !== null) check(`…its arrival gains no trace line and no gift charge`, JSON.stringify(run.arrival.traceLines) === '[]' && run.arrival.giftCharge === 0);

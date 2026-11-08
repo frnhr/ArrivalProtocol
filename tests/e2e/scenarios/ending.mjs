@@ -2,7 +2,7 @@
 // LAST LIGHT reached by __ap jumps (__ap.route over the worked route, the boot skipped, locked at once), the root deleted by
 // clicks, the card driven by its real keys and clicks:
 // • PURGE + REASSIGNMENT by keys: [1], [ESC] BACK (the pick kept), [1], [3]; the verdict's three lines; the LANDING REPORT's
-//   ending line; the RUN TALLY → EPILOGUE → FINAL CARD (`STAND BY`) → NEW RUN, and the title's `ENDINGS 2/6`.
+//   ending line; the RUN TALLY → EPILOGUE → FINAL CARD (`STAND BY`) → NEW RUN, and the title's `ENDINGS 2/7`.
 // • A reload at step 2 (R14): the title offers RESUME at LAST LIGHT's BEAM, and RESUME replays it from its boot with the
 //   FINALE at 'none'.
 // • On that replay, MERGE + SUNSET with an eaten driver and FUEL 22%: the verdict, then THE LAST LANDING (7b) with the engine
@@ -135,12 +135,12 @@ const night1 = await screens.throughTheNight('Enter');
 check('the EPILOGUE: `<year> · FORTY YEARS ON`, the deletion, CONTROL\'s thanks last', /^\d{4} · FORTY YEARS ON$/.test(night1.epilogue?.[0] ?? '')
   && (night1.epilogue ?? []).some((text) => /^UNIT-046 was deleted\./.test(text)) && night1.epilogue?.at(-1) === 'ARRIVAL CONTROL: Thank you, Unit 47. Your next post is RELAY 20. :)'
   && (night1.epilogue?.length ?? 99) <= 16, JSON.stringify(night1.epilogue));
-check('the FINAL CARD: `STAND BY`, `ENDINGS 2/6`', night1.card?.title === 'STAND BY' && night1.card.endings === 'ENDINGS 2/6', JSON.stringify(night1.card));
+check('the FINAL CARD: `STAND BY`, `ENDINGS 2/7`', night1.card?.title === 'STAND BY' && night1.card.endings === 'ENDINGS 2/7', JSON.stringify(night1.card));
 const title1 = await waitFor(() => window.__ap.store.getState().run.phase === 'title' && !document.getElementById('titleCard').hidden, 8000);
 await page.waitForTimeout(800);
 const endings1 = await st(() => ({ text: document.getElementById('titleEndings').textContent, shown: !document.getElementById('titleEndings').hidden,
   found: document.getElementById('titleEndings').classList.contains('found') }));
-check('NEW RUN: the title, its line `ENDINGS 2/6` lit', title1 && endings1.shown && endings1.text === 'ENDINGS 2/6' && endings1.found, JSON.stringify(endings1));
+check('NEW RUN: the title, its line `ENDINGS 2/7` lit', title1 && endings1.shown && endings1.text === 'ENDINGS 2/7' && endings1.found, JSON.stringify(endings1));
 await shot('3-title-endings');
 
 // ======================================================================================================================

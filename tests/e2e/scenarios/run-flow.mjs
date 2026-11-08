@@ -463,8 +463,8 @@ check('…YOUR ROUTE: the route drawn on the mini chart', runEnd.route > 0, `${r
 await shot('10-run-end');
 // Slice 7a (R19): the RUN TALLY → the EPILOGUE → the FINAL CARD → NEW RUN.
 const night = await kit.throughTheNight('Space');
-check('…the night: the EPILOGUE (CONTROL\'s line last), then the FINAL CARD `STAND BY`, `ENDINGS 2/6`', night.epilogue !== null
-  && /^ARRIVAL CONTROL: Thank you, Unit 47\./.test(night.epilogue.at(-1) ?? '') && night.card?.title === 'STAND BY' && night.card.endings === 'ENDINGS 2/6',
+check('…the night: the EPILOGUE (CONTROL\'s line last), then the FINAL CARD `STAND BY`, `ENDINGS 2/7`', night.epilogue !== null
+  && /^ARRIVAL CONTROL: Thank you, Unit 47\./.test(night.epilogue.at(-1) ?? '') && night.card?.title === 'STAND BY' && night.card.endings === 'ENDINGS 2/7',
   JSON.stringify({ last: night.epilogue?.at(-1), card: night.card }));
 await waitFor(() => window.__ap.store.getState().run.phase === 'title', 4000);
 const fresh = await st(() => ({ phase: window.__ap.store.getState().run.phase, ship: window.__ap.store.getState().level.shipName,

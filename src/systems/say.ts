@@ -63,7 +63,7 @@ export { unitName };
 
 // What the kid calls HOLLOW right now: '???' until it has said who it is (`> i was 046.` on the ship it boards, or
 // finale.ts at the final ship's ORBIT LOCK: run.hollowNamed), then its units' name (run.hollowUnits:
-// `UNIT-046`, on a later run the last unit, systems/meta.ts hollowName). Its blocks, the TERMINAL's
+// `UNIT-046`, on a later run a relay stranger, systems/traces.ts midRunHollowUnits). Its blocks, the TERMINAL's
 // `[user: …]` tags and the line vars all read it here.
 // Slice 7c (R35): on a final ship after a REASSIGNMENT trace (built) the root is the last unit (systems/traces.ts
 // rootUnitsOf), so its blocks, its tags and the FINALE's commands name it; run.hollowUnits everywhere else.

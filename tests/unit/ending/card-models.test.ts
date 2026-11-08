@@ -192,10 +192,10 @@ function input(options: Partial<Record<EndingPiece, OptionState>>, more: Partial
     model.face === 'you' && model.kicker === FINALE_TEXT.header.armDone && model.quote === FINALE_TEXT.controlQuote
     && model.title === FINALE_TEXT.header.step2 && model.back === FINALE_TEXT.back && model.cont === null && model.stay === null);
   check('step 2: step 1\'s pick above the question, as its row said it', model.picked?.word === 'PURGE' && model.picked.command === '> rm unit_046');
-  check('step 2: [1] SUNSET [2] STAY [3] REASSIGNMENT; CONTACT\'s row absent until 7d (R11), even when its state says open',
-    model.rows.map((row) => `${row.key}${row.piece}`).join(' ') === '1sunset 2stay 3reassignment');
-  check('step 2: CONTACT\'s row comes with its gate', withGates({ contact: true }, () =>
-    finaleCardModel(input(options, { step: 2, hollow: 'purge', stay: STAY3 })).rows.map((row) => row.key).join()) === '1,2,3,4');
+  check('step 2: [1] SUNSET [2] STAY [3] REASSIGNMENT [4] CONTACT (7d raised its gate)',
+    model.rows.map((row) => `${row.key}${row.piece}`).join(' ') === '1sunset 2stay 3reassignment 4contact');
+  check('step 2: CONTACT\'s row goes with its gate (R11: absent while it is down)', withGates({ contact: false }, () =>
+    finaleCardModel(input(options, { step: 2, hollow: 'purge', stay: STAY3 })).rows.map((row) => row.key).join()) === '1,2,3');
   check('step 2: SUNSET\'s command launches the ship; STAY mounts the newest ★ ship\'s colony (M3); REASSIGNMENT stands by',
     model.rows[0]?.command === '> launch last_light' && model.rows[1]?.command === '> mount first_light' && model.rows[2]?.command === '> stand by');
   const older = finaleCardModel(input(options, { step: 2, hollow: 'purge', stay: STAY3.slice(1) }));
@@ -212,9 +212,10 @@ function input(options: Partial<Record<EndingPiece, OptionState>>, more: Partial
     spared.rows[0]?.kind === 'needs' && spared.rows[0].ruledOut && spared.rows[0].caption === FINALE_TEXT.needs.shipTaken
     && spared.rows.slice(1).every((row) => !row.ruledOut) && model.rows.every((row) => !row.ruledOut));
   check('step 2: the NEXT RUN: lines; after PURGE SUNSET\'s seed is `1 more`, after SPARE `that same seed` (R33: once a run)',
-    model.rows.map((row) => row.nextRun).join(' | ') === '+ a cache you left on the way · − 1 more seed at the end | + a packet from your colony · − 1 more seed at the end | + 15 charge at the final ship · − the last root is you'
+    model.rows.map((row) => row.nextRun).join(' | ') === '+ a cache you left on the way · − 1 more seed at the end | + a packet from your colony · − 1 more seed at the end | + 15 charge at the final ship · − the last root is you | + 2 signal stops on the map · − 1 more seed at the end'
     && spared.rows[0]?.nextRun === '+ a cache you left on the way · − that same seed'
-    && spared.rows[1]?.nextRun === '+ a packet from your colony · − that same seed' && spared.rows[2]?.nextRun === model.rows[2]?.nextRun,
+    && spared.rows[1]?.nextRun === '+ a packet from your colony · − that same seed' && spared.rows[2]?.nextRun === model.rows[2]?.nextRun
+    && spared.rows[3]?.nextRun === '+ 2 signal stops on the map · − that same seed',
     JSON.stringify([model.rows.map((row) => row.nextRun), spared.rows.map((row) => row.nextRun)]));
   const followed = finaleCardModel(input(options, { step: 2, hollow: 'followed', stay: STAY3 }));
   check('step 2 after UNRESOLVED: the pick reads IT FOLLOWED YOU with no command; SUNSET is not ruled out (it comes with you)',

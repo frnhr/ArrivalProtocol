@@ -11,6 +11,7 @@ import type { SkillId, RunSkillState } from '@/types/skill';
 import type { ResidentState, RunResidentState, ShipResidentDef, CorruptedState, SleeperState } from '@/types/resident';
 import type { SiteData, SurveySite, SurveyState } from '@/types/survey';
 import { builtResident, residentRackA } from '@data/residents';
+import { signalFileAt } from '@systems/signals';
 import { siteDataOf } from '@data/survey';
 import { rollSurveySites } from '@data/survey-sites';
 import { SKILL_IDS } from '@data/skills';
@@ -167,10 +168,12 @@ export function createShipSlices(run: Readonly<RunState>, carried: CarriedRacks 
   const firstRun = playsTutorial(run);
   const hurt = hurtDriversFor(ship, firstRun, shipRng(run, slot, 'hurt'));
   const resident = builtResident(ship.resident);
+  // Slice 7d (R39, R41): the `▓▓░▓` file after the resident's (the signal `?` ship's, a CONTACT stop's; systems/signals.ts).
+  const signal = signalFileAt(run, slot);
   const memory = buildShipMemory(
     ship, carried, shipRng(run, slot, ship.memory.drivers.familiesSeedStream), firstRun,
     hollowLabel(run), threat.rootBlocks === null ? null : { blocks: threat.rootBlocks }, hurt,
-    resident === null ? [] : residentRackA(resident, shipRng(run, slot, 'resident-files')),
+    [...(resident === null ? [] : residentRackA(resident, shipRng(run, slot, 'resident-files'))), ...(signal === null ? [] : [signal])],
   );
   // The ship's hazard zones for this run (WP9): the written debris rack on the tutorial run, a seeded one later.
   const zones = resolveZones(ship.zones, ship.flight, firstRun, shipRng(run, slot, 'zones'));

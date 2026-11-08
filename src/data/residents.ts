@@ -9,7 +9,7 @@ import { RESIDENT_TEXT } from '@data/resident-text';
 import { KIN_TEXT } from '@data/kin-text';
 import {
   RESIDENT_FILE_BLOCKS, RESIDENT_START_INTEGRITY, NOTE_BLOCKS, LEFTOVER_COUNT, LEFTOVER_BLOCKS_MIN, LEFTOVER_BLOCKS_MAX,
-  LEFTOVER_START_INTEGRITY, SLEEPER_FILE_BLOCKS, SLEEP_LOCK_BLOCKS, RESIDENT_RACK_A_MIN_FREE,
+  LEFTOVER_START_INTEGRITY, SLEEPER_FILE_BLOCKS, SLEEP_LOCK_BLOCKS, RESIDENT_RACK_A_MIN_FREE, SIGNAL_FILE_BLOCKS,
 } from '@data/tuning';
 
 // The residents' data (04 §3.11–§3.14, plan R15–R16): which kinds this build plays, and the rack-A files each kind brings.
@@ -58,8 +58,9 @@ export const RESIDENT_KIND_MAX_BLOCKS: Readonly<Record<ResidentKind, number>> = 
 // Every kind fits RESIDENT_RACK_A_MIN_FREE (04's L6), checked at load. That a WALL's width stays free behind them in RACK_A
 // (plan R16: the free run that always separates the residents' files from the pods) is data/memory.ts's check, on RACK_A.
 function validateResidentData(): void {
+  // Slice 7d: with the `▓▓░▓` file beside them (a CONTACT stop may hold both).
   for (const [kind, blocks] of Object.entries(RESIDENT_KIND_MAX_BLOCKS)) {
-    if (blocks > RESIDENT_RACK_A_MIN_FREE) {
+    if (blocks + SIGNAL_FILE_BLOCKS > RESIDENT_RACK_A_MIN_FREE) {
       throw new Error(`residents: a ${kind} resident's files (${blocks} blocks) are over RESIDENT_RACK_A_MIN_FREE (${RESIDENT_RACK_A_MIN_FREE})`);
     }
   }

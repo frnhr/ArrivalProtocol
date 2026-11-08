@@ -41,6 +41,9 @@ import { TRAINING_TEXT } from '@data/training-text';
 import { residentCardRow, signalGlyph } from '@systems/resident-hud';
 import { surveyCardRow } from '@systems/survey-hud';
 import { traceCardRow, traceOnChart } from '@systems/trace-hud';
+import { unknownCard } from '@systems/unknown-events';
+import { unknownShown } from '@systems/signals';
+import { UNKNOWN_TEXT } from '@data/unknown-text';
 import { TRACE_HUD_TEXT } from '@data/trace-text';
 import { siteDataOf } from '@data/survey';
 import { RESIDENT_UI_TEXT } from '@data/resident-ui-text';
@@ -410,10 +413,12 @@ export function chartModel(state: Readonly<GameState>): ChartModel {
     const world = worldSlotOf(map, slot);
     const taken = trail?.marks.some((mark) => mark.kind === 'taken' && mark.slot === world) === true;
     const history = shipHistory(map, slot, firstDesk);
+    // Slice 7d (R39): a `?` ship not visited yet gives no size away (its label `???`, its node a standard ship's).
+    const hidden = unknownShown(state.run, slot);
     return {
-      slot, name: ship.name, world: ship.world, x, y, kind: ship.kind, colonists: ship.colonists,
+      slot, name: ship.name, world: ship.world, x, y, kind: hidden && ship.kind === 'ark' ? 'standard' : ship.kind, colonists: ship.colonists,
       tight: ship.memoryClass === 'TIGHT', isFinal: ship.final, state: seen.state,
-      label: MAP_TEXT.chart.node(ship.name, ship.colonists), year: ship.approachYear, reason: seen.reason,
+      label: hidden ? UNKNOWN_TEXT.chartNode(ship.name) : MAP_TEXT.chart.node(ship.name, ship.colonists), year: ship.approachYear, reason: seen.reason,
       onlyFromHere: only.has(slot),
       taken: taken && trail !== null ? MAP_TEXT.chart.takenNoShip(unitName(trail.unit)) : null,
       history,
@@ -586,12 +591,14 @@ export function cardModel(state: Readonly<GameState>, slot: number): CardModel {
     cost = MAP_TEXT.card.cost(hop.transitHits + extra, hop.eccFixes, hitsLanding(hop, extra));
   }
 
-  return {
+  // Slice 7d (R39): a `?` ship not visited yet shows its public schedule, and every other row `??? · NO TRANSPONDER`
+  // (systems/unknown-events.ts unknownCard; the model as it is for every other ship).
+  return unknownCard(state, slot, {
     slot, reachable: isReachable, state: seen.state,
     top: MAP_TEXT.card.top(ship.name, ship.world, ship.colonists, ship.pods), name: ship.name,
     sub: MAP_TEXT.card.sub(ship.world, ship.pods), colonists: MAP_TEXT.card.colonists(ship.colonists),
     tags, schedule, scheduleTone, cost, rows, timeline, fit,
-  };
+  }, ship.world);
 }
 
 // --- The card's deliveries (phase 3 slice 3b; 02 §4) -----------------------------------------------------------------------

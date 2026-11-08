@@ -38,6 +38,10 @@ import { EPILOGUE_TEXT, ENDING_TITLE, SPARE_RUN_END, PAYOFF_OF, WALKED_IN } from
 import { LAST_LANDING_TEXT } from '@data/last-landing-text';
 import { TRACE_TEXT, TRACE_HUD_TEXT } from '@data/trace-text';
 import { LINEAGE_TEXT } from '@data/lineage-text';
+// Slice 7d (the 7d block below).
+import { UNKNOWN_TEXT } from '@data/unknown-text';
+import { CONTACT_TEXT } from '@data/contact-text';
+import { OLD_COLONIES } from '@data/unknown';
 
 const DATA = join(import.meta.dirname, '..', '..', '..', 'src', 'data');
 
@@ -262,7 +266,7 @@ check(`the no-room rows say no never-say word and fit the strip (≤ ${MAX_LINE_
       // By the template's own parameters: (name), (name, year), (pod, name), (count, of), (cycles, name), (file, version). A
       // template not listed fails the suite, so a new one is rendered at its worst case too.
       const byShape: Record<string, unknown[]> = {
-        gift: [99, name], goodnight: [name], lockedParked: ['POD 99', name], signal: [99, 99], inspect: [name, 99999],
+        gift: [99, name], goodnight: [name], lockedParked: ['POD 99', name], signal: [99, 99], signalMore: [99], inspect: [name, 99999],
         inspectCured: [name, 99999], headline: [name], skillChip: ['AUTOBURN.skl', 9], lockBadge: [99], lockedTitle: ['POD 99', name],
         lockedBy: [name], signature: [name], left: [name], friendly: [name], corrupted: [100],
       };
@@ -612,5 +616,33 @@ const SLICE7_BASE: Readonly<Record<string, unknown>> = {
 }
 
 // --- end of 7c CHART -------------------------------------------------------------------------------------------------------
+
+// --- 7d SIGNALS (data/unknown-text.ts, data/contact-text.ts; the 7d words in finale-text.ts and epilogue-text.ts) -----------
+{
+  // A 12-character ship and world (NAME_MAX_CHARS), the three old colonies by their own units, a three-digit unit, two-digit
+  // fragments, counts and charge; every old-colony letter line by line (the renderer joins a template's lines with commas).
+  const SIGNALS_WORST: Readonly<Record<string, unknown>> = {
+    name: 'W'.repeat(12), world: 'W'.repeat(12), unit: 'UNIT-147', fragments: 99, count: 99, of: 3, stops: 99, charge: 99,
+  };
+  const worst = { ...SLICE7_BASE, ...SIGNALS_WORST };
+  const { letters, ...oldRest } = UNKNOWN_TEXT.oldColony;
+  const lines = [
+    ...renderSlice6({ ...UNKNOWN_TEXT, oldColony: oldRest }, [], 'UNKNOWN_TEXT', worst),
+    ...renderSlice6(CONTACT_TEXT, [], 'CONTACT_TEXT', worst),
+    ...OLD_COLONIES.flatMap((colony) => {
+      const letter = letters[colony.name]!;
+      return [UNKNOWN_TEXT.oldColony.from(colony.name, 'UNIT-147'), letter.subject, ...letter.lines('UNIT-147')];
+    }),
+    UNKNOWN_TEXT.signal.found(1, 1, 3), UNKNOWN_TEXT.signal.found(2, 7, 3),
+  ];
+  const bad = lines.filter((text) => text.length > MAX_LINE_CHARS || RULES.some((rule) => rule.re.test(text)));
+  check(`7d SIGNALS words: every line (${lines.length}) fits (≤ ${MAX_LINE_CHARS}) at its worst case and says no never-say word`,
+    lines.length > 20 && bad.length === 0, JSON.stringify(bad));
+  check('…every old colony has its letter of at most 6 lines (05 §3.3), and the letters name only those three',
+    OLD_COLONIES.every((colony) => (letters[colony.name]?.lines('UNIT-009').length ?? 99) <= 6)
+    && Object.keys(letters).sort().join() === OLD_COLONIES.map((colony) => colony.name).sort().join());
+}
+
+// --- end of 7d SIGNALS -----------------------------------------------------------------------------------------------------
 
 finish();

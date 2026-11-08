@@ -26,6 +26,7 @@ export function categoryOf(seg: Segment): FilterKey {
     case 'sleep-lock':
     case 'note':
     case 'leftover':
+    case 'signal':
       return 'ship';
     case 'fs-tool':
     case 'hollow':

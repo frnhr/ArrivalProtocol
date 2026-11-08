@@ -52,17 +52,17 @@ const threw = (fn: () => unknown): string => {
 
 // --- The gates, the tables ------------------------------------------------------------------------------------------------
 // The one gate left (the 7a fix pass dropped twoStep and night, review (e)): 7d's CONTACT.
-check('built: CONTACT not yet (7d)', !ENDINGS_BUILT.contact && JSON.stringify(Object.keys(ENDINGS_BUILT)) === '["contact"]');
+check('built: CONTACT (7d raised it; signals/contact)', ENDINGS_BUILT.contact && JSON.stringify(Object.keys(ENDINGS_BUILT)) === '["contact"]');
 // (7c bumped the save to 8: traces/foundation pins it; this suite's v6 fixtures migrate through 7 to it.)
 check(`RUN_SAVE_VERSION 7 or later, META_VERSION 4, EMPTY_SHIP_FUEL_PCT = STAR_FUEL_PCT (${STAR_FUEL_PCT}: one ★ notch, R8)`,
   RUN_SAVE_VERSION >= 7 && META_VERSION === 4 && EMPTY_SHIP_FUEL_PCT === STAR_FUEL_PCT);
-check('the pieces: seven, and six built while CONTACT is down (ENDINGS n/6, R22)',
-  ENDING_PIECES.length === 7 && builtPieces().length === 6 && !builtPieces().includes('contact'));
-check('step 1 is PURGE MERGE SPARE on keys 1–3, SPARE rules out SUNSET; step 2 is SUNSET STAY REASSIGNMENT CONTACT, CONTACT absent (R11)',
+check('the pieces: seven, all built with CONTACT (ENDINGS n/7, R22)',
+  ENDING_PIECES.length === 7 && builtPieces().length === 7 && builtPieces().includes('contact'));
+check('step 1 is PURGE MERGE SPARE on keys 1–3, SPARE rules out SUNSET; step 2 is SUNSET STAY REASSIGNMENT CONTACT, on keys 1–4 (7d)',
   STEP1_OPTIONS.map((option) => `${option.key}${option.piece}`).join() === '1purge,2merge,3spare'
   && STEP1_OPTIONS.find((option) => option.piece === 'spare')?.rulesOut === 'sunset'
   && STEP2_OPTIONS.map((option) => option.piece).join() === 'sunset,stay,reassignment,contact'
-  && step2Options().map((option) => option.piece).join() === 'sunset,stay,reassignment');
+  && step2Options().map((option) => option.piece).join() === 'sunset,stay,reassignment,contact');
 check('a title is keyed by step 2, then step 1; SPARE + SUNSET has none (R8, R23)',
   endingTitleKey('sunset', 'merge') === 'sunset:merge' && endingTitleKey('reassignment', 'followed') === 'reassignment:followed'
   && /rules out SUNSET/.test(threw(() => endingTitleKey('sunset', 'spare'))));
@@ -73,12 +73,12 @@ check('a title is keyed by step 2, then step 1; SPARE + SUNSET has none (R8, R23
   const state = store.getState();
   // As built by Track FINALE (ending/rules has the rest): a fresh world is no final ship in orbit, has no ★ ON TARGET ship
   // and no decided FINALE, so the rows that need them are out of reach (`???` before they were ever chosen).
-  check('the built rules on a fresh world: PURGE and REASSIGNMENT open and free, MERGE by its charge meter, SPARE/SUNSET/STAY out of reach and unnamed, CONTACT hidden; no empty ship, no STAY ship, no report line',
+  check('the built rules on a fresh world: PURGE and REASSIGNMENT open and free, MERGE by its charge meter, SPARE/SUNSET/STAY/CONTACT out of reach and unnamed (CONTACT: 0 of 3 signals); no empty ship, no STAY ship, no report line',
     isDeepStrictEqual(optionState(state, 'purge', []), { kind: 'open', price: null, now: null })
     && isDeepStrictEqual(optionState(state, 'reassignment', []), { kind: 'open', price: null, now: null })
     && isDeepStrictEqual(optionState(state, 'merge', []), { kind: 'open', price: { kind: 'charge', have: chargeLeft(state), need: MERGE_COST_CHARGE }, now: null })
     && ['spare', 'sunset', 'stay'].every((piece) => { const option = optionState(state, piece as never, []); return option.kind === 'needs' && !option.named; })
-    && optionState(state, 'contact', []).kind === 'hidden'
+    && isDeepStrictEqual(optionState(state, 'contact', []), { kind: 'needs', need: FINALE_TEXT.needs.signals(0, 3), named: false, price: { kind: 'signals', have: 0, need: 3 } })
     && !emptyShip(state).ok && stayCandidates(state).length === 0 && reportEndingLine(state) === null);
   check('the card\'s other ways on, as built: pickStay and continueFollowed refuse off the card (NOT NOW), never throw',
     pickStay(store, 0) === 'NOT NOW' && continueFollowed(store) === 'NOT NOW');

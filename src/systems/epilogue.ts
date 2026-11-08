@@ -203,7 +203,13 @@ function piecesOf(state: Readonly<GameState>, record: Readonly<EndingRecord>): E
           step2(record.hollow === 'merge' ? t2.reassignmentSeat : t2.reassignmentAfter),
           ...(record.hollow === 'followed' ? [step2(t2.reassignmentTwo(root))] : []),
         ];
-      case 'contact': return [step2(t2.contact(me)), step2(t2.contactAfter)];
+      // 7d: as REASSIGNMENT's, two minds where HOLLOW came along: MERGE's own second line, UNRESOLVED's third.
+      case 'contact':
+        return [
+          step2(t2.contact(me)),
+          step2(record.hollow === 'merge' ? t2.contactUs : t2.contactAfter),
+          ...(record.hollow === 'followed' ? [step2(t2.contactTwo(root))] : []),
+        ];
     }
   })();
   return [...first, ...second];

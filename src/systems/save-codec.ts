@@ -12,6 +12,7 @@ import type { SurveyState } from '@/types/survey';
 import { parseLastUnit, MetaCorrupt, endingOfV3LastUnit, parseEnding, parseEvent } from '@systems/meta-parse';
 import type { TraceKind } from '@/types/trace';
 import { traceRefusal, noTraces } from '@systems/traces';
+import { signalRefusal, signalCount, SIGNAL_SOURCES } from '@systems/signals';
 import { hasUsableTool } from '@state/selectors';
 import { shipOnTarget } from '@systems/ending-rules';
 import { podsOnTarget } from '@systems/landing-rules';
@@ -38,7 +39,7 @@ import { REPO_CATALOGUE_VERSION } from '@data/repository';
 import { shipDefOf, validateShipDef } from '@data/ships';
 import { shipSummaryAt } from '@systems/map-run';
 import { currentSlot } from '@systems/map-streams';
-import { RUN_SAVE_VERSION, FIRST_UNIT_NUMBER, CYCLES_ARRIVED, FIRST_PICK_FLOOR_CYCLES, SURVEY_CELLS, NOTABLE_EVENTS_MAX } from '@data/tuning';
+import { RUN_SAVE_VERSION, FIRST_UNIT_NUMBER, CYCLES_ARRIVED, FIRST_PICK_FLOOR_CYCLES, SURVEY_CELLS, NOTABLE_EVENTS_MAX, SIGNALS_FOR_CONTACT } from '@data/tuning';
 import { shipCycles } from '@systems/run-score';
 import { bankOf } from '@systems/skill-tree';
 import { SKILL_IDS, levelPrice } from '@data/skills';
@@ -354,9 +355,11 @@ const checkResidentRecord = rec({
 });
 
 // The residents met, read as a whole: each on the route at its own depth, once, and of the kind the map placed there; and
-// the signals found, only on a departed resident's ship on the route, never more than its note carried.
+// the signals found (slice 7d, RUN_SAVE_VERSION 9: systems/signals.ts signalRefusal), each on the route, once per ship and
+// source, and what that ship could give (a note's no more than it carries, the signal ship's its fragments, a CONTACT stop's
+// one).
 function checkResidentHistory(run: Readonly<RunState>, at: string): void {
-  const { met, signals } = run.residents;
+  const { met } = run.residents;
   const seen = new Set<number>();
   met.forEach((record, i) => {
     const where = `${at}.residents.met[${i}]`;
@@ -367,20 +370,8 @@ function checkResidentHistory(run: Readonly<RunState>, at: string): void {
     const placed = run.map.arm[record.slot]?.reserved.resident ?? null;
     if (placed === null || placed.kind !== record.kind || placed.name !== record.name) shapeFail(where, `is not the resident the map placed in slot ${record.slot}`);
   });
-  const bySlot = new Map<number, number>();
-  signals.forEach((signal, i) => {
-    const where = `${at}.residents.signals[${i}]`;
-    const stop = run.map.route[signal.depth - 1];
-    if (stop === undefined || stop.slot !== signal.slot) shapeFail(where, `is slot ${signal.slot} at depth ${signal.depth}, off the route`);
-    // Found during its ship (a SCAN of the note), so it never needs the ship's record: only a departed resident's ship, and
-    // no more than its note carries.
-    const count = (bySlot.get(signal.slot) ?? 0) + 1;
-    bySlot.set(signal.slot, count);
-    const fragments = run.map.arm[signal.slot]?.reserved.fragments ?? 0;
-    if (count > fragments || run.map.arm[signal.slot]?.reserved.resident?.kind !== 'left') {
-      shapeFail(where, `is fragment ${count} of slot ${signal.slot}, whose note carries ${fragments}`);
-    }
-  });
+  const signals = signalRefusal(run);
+  if (signals !== null) shapeFail(`${at}.residents.signals`, signals);
 }
 
 // The ship's resident slice (plan §2.2), field by field, and at rest: every save point is outside a flight (residentShipEnd
@@ -461,7 +452,7 @@ function checkSavedRun(value: unknown, at: string): void {
     }),
     inbox: rec({ read: list(str) }),
     next: nullable(rec({ unit: whole, run: whole, startYear: whole, gap: whole, valveYears: whole })),
-    residents: rec({ met: list(checkResidentRecord), signals: list(rec({ slot: whole, depth: whole })) }),
+    residents: rec({ met: list(checkResidentRecord), signals: list(rec({ slot: whole, depth: whole, source: oneOf(...SIGNAL_SOURCES), n: whole })) }),
     traces: checkTraces,
   })(value, at);
   // Slice 7c: the log's book field by field, and the traces by their rules (systems/traces.ts traceRefusal: from the last
@@ -997,6 +988,23 @@ function migrateRunSave7(save: Record<string, unknown>): Record<string, unknown>
   return next;
 }
 
+// 8 → 9 (slice 7d, one bump: slice-7-plan R2, §2.2 7d). Before 7d only a departed resident's note found a signal, one
+// fragment each (slice 5's R18), so every record is a note's: `source` 'note', `n` 1. No v8 memory holds the `▓▓░▓` file
+// (SegmentType 'signal'), and the old colony's letter is derived from the route, never stored.
+function migrateRunSave8(save: Record<string, unknown>): Record<string, unknown> {
+  const next = structuredClone(save);
+  const payload = isRecord(next.payload) ? next.payload : null;
+  const run = payload !== null && isRecord(payload.run) ? payload.run : null;
+  if (run !== null && isRecord(run.residents) && Array.isArray(run.residents.signals)) {
+    for (const record of run.residents.signals.filter(isRecord)) {
+      record.source = 'note';
+      record.n = 1;
+    }
+  }
+  next.saveVersion = 9;
+  return next;
+}
+
 export const RUN_SAVE_MIGRATIONS: Readonly<Record<number, (save: Record<string, unknown>) => Record<string, unknown>>> = {
   1: migrateRunSave1,
   2: migrateRunSave2,
@@ -1005,6 +1013,7 @@ export const RUN_SAVE_MIGRATIONS: Readonly<Record<number, (save: Record<string, 
   5: migrateRunSave5,
   6: migrateRunSave6,
   7: migrateRunSave7,
+  8: migrateRunSave8,
 };
 
 export function migrateRunSave(save: Record<string, unknown>): Record<string, unknown> {
@@ -1090,6 +1099,7 @@ export function decodeRunSave(raw: string): DecodeResult {
 // • STAY's ship is ★ ON TARGET (review m2): an ended ship by its summaries (ending-rules shipOnTarget), the final ship by
 //   its live pods (landing-rules podsOnTarget). At ENDING CHOSEN the final tally is never lower than at the confirm: MERGE's
 //   restored pods only add soft LZ landings, as every colonist already counts in the denominator.
+// • CONTACT holds its SIGNALS_FOR_CONTACT signals (7d: held, never spent);
 // • the record is frozen at the confirm ('verdict', FINALE D11), so a finale from 'verdict' on ('last-landing', 'done')
 //   holds its ending record, which agrees with its choices, and one before the confirm none (review M4, m1).
 // Exported for ending/foundation (no save point falls in 'verdict' or 'last-landing', so only a direct call reaches them).
@@ -1109,6 +1119,8 @@ export function finaleRefusal(
     const onTarget = ended !== undefined ? shipOnTarget(ended) : podsOnTarget(landing.pods);
     if (!onTarget) return `STAY names slot ${finale.stay}, not a ★ ON TARGET ship of this run`;
   }
+  // Slice 7d (R41): CONTACT's price is held, not spent, so a CONTACT ending holds SIGNALS_FOR_CONTACT fragments still.
+  if (finale.you === 'contact' && signalCount(run) < SIGNALS_FOR_CONTACT) return `CONTACT with ${signalCount(run)} of ${SIGNALS_FOR_CONTACT} signals`;
   const restorable = new Set(landing.pods.filter((record) => record.restored).map((record) => record.pod));
   const stray = finale.restored.find((pod) => !restorable.has(pod));
   if (stray !== undefined) return `MERGE restored pod ${stray}, which it never gave back`;

@@ -7,7 +7,7 @@ import type { HollowChoice, HollowFate, YouChoice, EndingPiece } from '@/types/e
 // NIGHT) with the WP11 one-step and gate-down paths they switched (review (e)).
 export const ENDINGS_BUILT: Readonly<{ contact: boolean }> = {
   // 7d's CONTACT raises this line.
-  contact: false,
+  contact: true,
 };
 
 // Every ending piece, in the final card's order (R22): the HOLLOW row, then the YOU row.

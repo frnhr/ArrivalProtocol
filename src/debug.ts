@@ -57,8 +57,9 @@ import { podCode } from '@data/landing-text';
 import type { ShipDef, HollowDef } from '@data/ships';
 import { classicShip, CLASSIC_HOPS } from '@data/classic-five';
 import { nominalShipThreat, nominalRunThreat, planThreat, threatInputFor, fixedShipFacts, NO_FINAL_TRACES } from '@systems/threat-plan';
-import { finalTraceInput, finalTraces, noTraces, rootUnitsOf, runTracesOf, type FinalTraces } from '@systems/traces';
-import { TRACES_BUILT, LINEAGE_BUILT } from '@data/traces';
+import { finalTraceInput, finalTraces, noTraces, rootUnitsOf, runTracesOf, traceAt, type FinalTraces } from '@systems/traces';
+import { cardModel } from '@systems/desk';
+import { TRACES_BUILT } from '@data/traces';
 import { bookShape, type BookShape } from '@state/log-selectors';
 import type { LogBook, RunTraces, TraceKind } from '@/types/trace';
 import { huntTarget } from '@systems/trace-hunt';
@@ -86,7 +87,7 @@ import {
   assertMemoryInvariants, segmentStarts, unitInstallAddress, replaceRange, mergeAdjacentFree, newSegId,
 } from '@systems/memory-ops';
 import { layoutOf } from '@data/memory';
-import { META_STORAGE_KEY, RUN_SAVE_KEY, ROOT_BLOCKS, COLONISTS_PER_POD } from '@data/tuning';
+import { META_STORAGE_KEY, RUN_SAVE_KEY, ROOT_BLOCKS, COLONISTS_PER_POD, CONTACT_STOP_FRAGMENTS } from '@data/tuning';
 import type { SaveState } from '@/types/save';
 import { updateArm, updateAfterRun, armStateOfMap, type ArmUpdate } from '@systems/map-update';
 import { visitsOf, trailOf, notableEvents } from '@systems/lineage';
@@ -146,6 +147,8 @@ import { layerOf } from '@systems/map-geometry';
 import { routes } from '@systems/map-route';
 import { FIRST_SLOT } from '@data/arm';
 import type { LastUnit } from '@/types/lineage';
+import type { SignalSource } from '@/types/resident';
+import { signalCount, signalSourceAt, unknownShown, oldColonyOf } from '@systems/signals';
 import { packedFiles, arrivalCharge } from '@systems/carry';
 import { resetWorldForShip } from '@systems/run';
 import { createRunState, withRunMap } from '@state/initial';
@@ -377,7 +380,13 @@ interface DebugHooks {
     angry: () => void;
   };
   sleeper: { wake: () => void; job: (job: SleeperJob) => void };
-  signals: () => SignalRecord[];
+  // Slice 7d (§2.12): signals() is the run's records (slice 5's), signals.count() the fragments they hold (CONTACT's price),
+  // signals.give(n) finds n more where this run's route holds them unfound (a note with a fragment, the signal ship's file,
+  // a CONTACT stop's), in route order, as their SCANs would (throws when the route holds fewer: a record the ship could not
+  // give would be refused by the save). unknown(slot?) is a `?` ship's event (the selected ship, else this one): its kind,
+  // whether its card reads `???`, its old colony, its signal file's source and the card's rows.
+  signals: (() => SignalRecord[]) & { count: () => number; give: (n: number) => number };
+  unknown: (slot?: number) => UnknownDebug;
   // Slice 6 (slice-6-plan §2.15). survey(): the ship's survey (the sites, mapped %, paused, claimed, the best version it ran at,
   // the moves and reveals, the version it works at now). survey.poor writes POOR site data into this ship's reservation and
   // restarts the ship from its boot (it plays POOR once SURVEY_BUILT.poor is raised). SWATH's: map (mark `pct` of the rim,
@@ -424,7 +433,7 @@ interface DebugHooks {
   lastLanding: LastLandingDebug;
   // Slice 7c (§2.12): the run's traces and where their gifts wait, what the final ship plays of them (built kinds only) and the
   // gates; traces.as(kind) re-rolls this run's traces as if the last unit had ended with that piece (a step-1 piece with
-  // REASSIGNMENT, a step-2 piece after PURGE; CONTACT is 7d's), the places on this run's arm and stream.
+  // REASSIGNMENT, a step-2 piece after PURGE), the places on this run's arm and stream.
   traces: TracesDebug;
   skipEnding: () => boolean;
   // WP11 part 2: the game's events lately (name and payload, newest last; DEBUG_EVENT_KEEP of them), so a browser run
@@ -479,8 +488,17 @@ interface LogDebug {
 }
 
 // __ap.traces: the run's traces, and a re-roll as if the last unit had chosen a piece (slice 7c, §2.12).
+interface UnknownDebug {
+  slot: number;
+  event: 'old-colony' | 'gone-resident' | 'signal' | null;
+  shown: boolean;
+  oldColony: string | null;
+  signal: { source: string; fragments: number } | null;
+  rows: { key: string; value: string }[];
+}
+
 interface TracesDebug {
-  (): { traces: RunTraces; final: FinalTraces; root: number[]; built: Readonly<Record<TraceKind, boolean>>; lineage: boolean };
+  (): { traces: RunTraces; final: FinalTraces; root: number[]; built: Readonly<Record<TraceKind, boolean>> };
   as: (kind: TraceKind) => RunTraces;
   // The shortest route (fewest ships, then the lowest slots) from the first ship to a final ship through every slot of
   // `via`, or null: for a script that jumps to a gift ship with __ap.route (the 7c review's e2e).
@@ -858,13 +876,53 @@ function debugSurveyPoor(store: Store<GameState>): void {
   debugRoute(store, route);
 }
 
+// __ap.signals.give(n) (slice 7d, §2.12): n more fragments, found where this run's route holds them unfound (each stop's
+// sources in route order: a note with its fragment, the signal ship's file, a CONTACT stop's), as their SCANs would record
+// them, so the save's check holds. Returns the run's count. Throws when the route holds fewer than n.
+function debugGiveSignals(store: Store<GameState>, n: number): number {
+  const run = store.getState().run;
+  if (run.map.world !== 'arm') throw new Error('__ap.signals.give: the arm only');
+  const found = (slot: number, source: SignalSource): boolean => run.residents.signals.some((record) => record.slot === slot && record.source === source);
+  const records: SignalRecord[] = [];
+  let left = n;
+  for (const stop of run.map.route) {
+    if (left <= 0) break;
+    const ship = run.map.arm[stop.slot]!;
+    const sources: { source: SignalSource; n: number }[] = [];
+    if (ship.reserved.resident?.kind === 'left' && ship.reserved.fragments > 0 && ship.reserved.unknownEvent !== 'signal') sources.push({ source: 'note', n: 1 });
+    if (ship.reserved.unknownEvent === 'signal') sources.push({ source: 'signal-event', n: ship.reserved.fragments });
+    const place = traceAt(run, stop.slot);
+    if (place?.kind === 'contact') sources.push({ source: 'contact-stop', n: CONTACT_STOP_FRAGMENTS });
+    for (const source of sources) {
+      if (left <= 0 || found(stop.slot, source.source)) continue;
+      records.push({ slot: stop.slot, depth: stop.depth, source: source.source, n: source.n });
+      left -= source.n;
+    }
+  }
+  if (left > 0) throw new Error(`__ap.signals.give: this route holds ${n - left} unfound fragments, not ${n}`);
+  store.update((draft) => { draft.run.residents.signals.push(...records); });
+  return signalCount(store.getState().run);
+}
+
+// __ap.unknown(slot?) (slice 7d, §2.12): a `?` ship's event as the build plays it.
+function debugUnknown(state: Readonly<GameState>, at?: number): UnknownDebug {
+  const slot = at ?? state.ui.deskSelected ?? currentSlot(state.run);
+  const ship = state.run.map.world === 'arm' ? state.run.map.arm[slot] ?? null : null;
+  const event = ship?.reserved.unknownEvent ?? null;
+  return {
+    slot, event, shown: unknownShown(state.run, slot),
+    oldColony: event === 'old-colony' ? oldColonyOf(state.run, slot).name : null,
+    signal: signalSourceAt(state.run, slot),
+    rows: cardModel(state, slot).rows.map((row) => ({ key: row.key, value: row.value })),
+  };
+}
+
 // __ap.traces.as(kind) (slice 7c, §2.12): this run's traces as if the last unit had ended with `kind` (a step-1 piece with
 // REASSIGNMENT, a step-2 piece after PURGE), placed again on this run's arm and stream (systems/traces.ts runTracesOf). The
 // last unit's record gains that ending (a run 1 gets a last unit made up for it, as a won run leaves one), so the save's
 // check (traceRefusal) holds. The ending's facts: the arm's final ship, a final year 3 years before this one's, STAY's colony
 // the last trail's first colony (or the first ship's world), the kit Scan, Repair and Rm, SUNSET's and SPARE's FUEL 25%.
 function debugTracesAs(store: Store<GameState>, kind: TraceKind): RunTraces {
-  if (kind === 'contact') throw new Error("__ap.traces.as: CONTACT is 7d's");
   const run = store.getState().run;
   if (run.map.world !== 'arm') throw new Error('__ap.traces.as: the arm only (the classic world holds no traces)');
   const final = run.map.arm.find((ship) => ship !== undefined && ship !== null && ship.kind === 'final');
@@ -1289,7 +1347,6 @@ export function mountDebug(store: Store<GameState>): void {
       const run = store.getState().run;
       return {
         traces: structuredClone(run.traces) as RunTraces, final: finalTraces(run), root: rootUnitsOf(run), built: { ...TRACES_BUILT },
-        lineage: LINEAGE_BUILT,
       };
     }, {
       as: (kind: TraceKind) => debugTracesAs(store, kind),
@@ -1350,7 +1407,11 @@ export function mountDebug(store: Store<GameState>): void {
       angry: () => angerResidentNow(store),
     }),
     sleeper: { wake: () => wakeSleeperNow(store), job: (job) => pickSleeperJob(store, job) },
-    signals: () => structuredClone(store.getState().run.residents.signals),
+    signals: Object.assign(() => structuredClone(store.getState().run.residents.signals), {
+      count: () => signalCount(store.getState().run),
+      give: (n: number) => debugGiveSignals(store, n),
+    }),
+    unknown: (slot?: number) => debugUnknown(store.getState(), slot),
     survey: Object.assign(() => surveyDebug(store.getState()), {
       poor: () => { debugSurveyPoor(store); },
       map: (pct = 100) => mapNow(store, pct),

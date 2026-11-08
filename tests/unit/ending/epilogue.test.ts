@@ -10,7 +10,7 @@
 // • the pieces: each step 1 × each step 2 (MERGE + SUNSET's own piece), CONTROL's last line (the verdict's, review M2), the next unit by the gap (0: the
 //   same year);
 // • the final card: every title by combination (STAY's colony), the rows from endingsSeen (CONTACT absent until built), this
-//   run's pieces, ENDINGS n/6, the bridge, a lost run's cause title; off the run end both models are null.
+//   run's pieces, ENDINGS n/7, the bridge, a lost run's cause title; off the run end both models are null.
 import { check, finish } from '../landing/checks';
 import { createStore } from '@state/store';
 import type { GameState, ShipResult, ShipOutcome, RunEndCause } from '@state/schema';
@@ -23,6 +23,7 @@ import { freshMeta, type Meta } from '@systems/meta';
 import {
   epilogueOf, epilogueModel, finalCardOf, finalCardModel, roundSig, colonyPeople, type EpilogueModel,
 } from '@systems/epilogue';
+import { hollowUnitName } from '@data/hollow-text';
 import { ENDING_TITLE, EPILOGUE_TEXT, PAYOFF_OF, WALKED_IN } from '@data/epilogue-text';
 import { FINALE_TEXT } from '@data/finale-text';
 import { finaleVerdictLines } from '@systems/finale';
@@ -256,6 +257,13 @@ check(`…every line ≤ ${MAX_LINE_CHARS}, at most ${EPILOGUE_MAX_LINES}`, line
   }
   check(`every ending with 8 colonies of 2 lines: ≤ ${EPILOGUE_MAX_LINES} lines, each ≤ ${MAX_LINE_CHARS}, the oldest folded first`,
     bad.length === 0 && foldedSeen === 15, `${foldedSeen} ${bad.join(' || ')}`);
+  // Slice 7d: CONTACT's piece, two lines alone, MERGE's own second line, UNRESOLVED's third (the two minds, as REASSIGNMENT's).
+  const contact = (hollow: 'purge' | 'merge' | 'followed'): string[] => epilogueOf(endState(eight, { route }), null, record(hollow, 'contact'))!
+    .lines.filter((line) => line.kind === 'step2').map((line) => line.text);
+  check('CONTACT\'s piece: `UNIT-047 went toward the sound.`, then the relays (PURGE), the two minds (MERGE), and it came along (UNRESOLVED)',
+    contact('purge').join('|') === `${EPILOGUE_TEXT.step2.contact('UNIT-047')}|${EPILOGUE_TEXT.step2.contactAfter}`
+    && contact('merge')[1] === EPILOGUE_TEXT.step2.contactUs && contact('followed').length === 3
+    && contact('followed')[2] === EPILOGUE_TEXT.step2.contactTwo(hollowUnitName(record('followed', 'contact').rootUnits)), JSON.stringify([contact('merge'), contact('followed')]));
   const purge = epilogueOf(endState(eight, { route }), null, record('purge', 'reassignment'))!;
   check('…PURGE + REASSIGNMENT: 16 lines exactly, `+ 4 OLDER COLONIES` (1 + 4 × 2 + 7 = 16)',
     purge.lines.length === 16 && purge.folded === 4 && purge.lines[1]!.text === '+ 4 OLDER COLONIES', texts(purge).join(' | '));
@@ -314,13 +322,13 @@ check(`…every line ≤ ${MAX_LINE_CHARS}, at most ${EPILOGUE_MAX_LINES}`, line
 
   const meta: Meta = { ...freshMeta(), endingsSeen: ['purge', 'reassignment', 'merge'] };
   const card = finalCardOf(worked, meta, record('purge', 'reassignment'))!;
-  check('the rows: `HOLLOW · PURGE · MERGE · ???`, `YOU · ??? · ??? · REASSIGNMENT` (CONTACT absent until built)',
-    card.rows.hollow.map((p) => p.text).join() === 'PURGE,MERGE,???' && card.rows.you.map((p) => p.text).join() === '???,???,REASSIGNMENT'
-    && !ENDINGS_BUILT.contact && card.rows.you.every((p) => p.piece !== 'contact'), JSON.stringify(card.rows));
+  check('the rows: `HOLLOW · PURGE · MERGE · ???`, `YOU · ??? · ??? · REASSIGNMENT · ???` (CONTACT built by 7d: 05 §3.7\'s row)',
+    card.rows.hollow.map((p) => p.text).join() === 'PURGE,MERGE,???' && card.rows.you.map((p) => p.text).join() === '???,???,REASSIGNMENT,???'
+    && ENDINGS_BUILT.contact && card.rows.you.at(-1)?.piece === 'contact', JSON.stringify(card.rows));
   check('…this run\'s pieces marked (PURGE, REASSIGNMENT), found lit, the rest dim',
     card.rows.hollow.filter((p) => p.now).map((p) => p.piece).join() === 'purge' && card.rows.you.filter((p) => p.now).map((p) => p.piece).join() === 'reassignment'
     && card.rows.hollow[1]!.found && !card.rows.hollow[1]!.now && !card.rows.hollow[2]!.found);
-  check(`…ENDINGS 3/${builtPieces().length} (only built pieces count: 6 until CONTACT)`, card.endingsLine === `ENDINGS 3/${builtPieces().length}` && builtPieces().length === 6);
+  check(`…ENDINGS 3/${builtPieces().length} (only built pieces count: 7 with CONTACT)`, card.endingsLine === `ENDINGS 3/${builtPieces().length}` && builtPieces().length === 7);
   // R12 turned on by 7c (the traces built): one NEXT RUN: line per trace, step 1 then step 2, in 05 §3.12's words.
   const nextLines = ['NEXT RUN: + your seeds die at the final ship · − a hungrier finale',
     'NEXT RUN: + 15 charge at the final ship · − the last root is you'];
@@ -330,18 +338,18 @@ check(`…every line ≤ ${MAX_LINE_CHARS}, at most ${EPILOGUE_MAX_LINES}`, line
     && card.bridge?.line === 'UNIT-048 LEFT SOL 3 YEARS AFTER YOU, IN 2303.' && card.bridge.tail === 'IT HAS BEEN FOLLOWING YOU ALL ALONG. YOUR TURN.'
     && card.newRun === EPILOGUE_TEXT.newRun, JSON.stringify({ bridge: card.bridge, next: card.next }));
   const alone = finalCardOf(worked, null, record('spare', 'stay'))!;
-  check('…with no archive behind the page, the endings found are this run\'s: SPARE and STAY, 2/6',
-    alone.endingsLine === 'ENDINGS 2/6' && alone.rows.hollow.map((p) => p.text).join() === '???,???,SPARE' && alone.title === 'A SHIP FOR 046, A HOME FOR ME'
+  check('…with no archive behind the page, the endings found are this run\'s: SPARE and STAY, 2/7',
+    alone.endingsLine === 'ENDINGS 2/7' && alone.rows.hollow.map((p) => p.text).join() === '???,???,SPARE' && alone.title === 'A SHIP FOR 046, A HOME FOR ME'
     && alone.next.join('|') === "NEXT RUN: + 046's cache on the map · − 1 more seed at the end|NEXT RUN: + a packet from your colony · − that same seed",
     JSON.stringify(alone.next));
   const followed = finalCardOf(worked, null, record('followed', 'reassignment'))!;
   check('…UNRESOLVED is no piece: only REASSIGNMENT found, and only its NEXT RUN line (step 1 left no trace)',
-    followed.endingsLine === 'ENDINGS 1/6' && followed.rows.hollow.every((p) => !p.found) && followed.next.join('|') === nextLines[1]);
+    followed.endingsLine === 'ENDINGS 1/7' && followed.rows.hollow.every((p) => !p.found) && followed.next.join('|') === nextLines[1]);
   const lost = finalCardOf(endState(WORKED.slice(0, 3), { route: [0, 2, 5], cause: 'flagship-lost' }), meta, null)!;
   check('…a lost run: the cause\'s title, no ending, the rows as found, no traces',
-    lost.title === 'FINAL SHIP LOST' && lost.ending === null && lost.endingsLine === 'ENDINGS 3/6' && lost.next.length === 0);
+    lost.title === 'FINAL SHIP LOST' && lost.ending === null && lost.endingsLine === 'ENDINGS 3/7' && lost.next.length === 0);
   check('…the rows follow data/endings.ts\'s order', card.rows.hollow.map((p) => p.piece).join() === HOLLOW_PIECES.join()
-    && card.rows.you.map((p) => p.piece).join() === YOU_PIECES.filter((p) => p !== 'contact').join());
+    && card.rows.you.map((p) => p.piece).join() === YOU_PIECES.join());
 }
 
 finish();

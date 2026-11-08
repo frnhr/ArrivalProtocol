@@ -9,6 +9,7 @@ import { onWorldReset } from '@systems/reset';
 import { on, emit } from '@systems/events';
 import { currentSlot, currentStop, shipRng } from '@systems/map-streams';
 import { draftContext } from '@systems/draft';
+import { signalCount } from '@systems/signals';
 import { draftCards, getUpgrade } from '@data/upgrades';
 import { RESIDENT_SEG_IDS } from '@data/residents';
 import { KIN_TEXT } from '@data/kin-text';
@@ -75,9 +76,10 @@ function readScans(store: Store<GameState>): void {
       if (seg?.type === 'note') {
         draft.resident.left!.noteRead = true;
         seg.desc = KIN_TEXT.noteDesc(noteLines(seg), def.name);
-        if (seg.fragment && !draft.run.residents.signals.some((signal) => signal.slot === slot)) {
-          draft.run.residents.signals.push({ slot, depth: currentStop(draft.run).depth });
-          signals.push(draft.run.residents.signals.length);
+        // Slice 7d: a note's record says so (`source` 'note', its one fragment), since a CONTACT stop's file may share the slot.
+        if (seg.fragment && !draft.run.residents.signals.some((signal) => signal.slot === slot && signal.source === 'note')) {
+          draft.run.residents.signals.push({ slot, depth: currentStop(draft.run).depth, source: 'note', n: 1 });
+          signals.push(signalCount(draft.run));
         }
       } else if (seg?.type === 'leftover' && seg.card !== null) {
         Object.assign(seg, leftoverWords(seg.card));

@@ -36,7 +36,7 @@
 // `CHOOSE YOUR FIRST SKILL`, SPACE refused with a buzz; [1] arms the card (the bar reads `TRAIN ▸ 3 CYCLES [ENTER]`), ENTER
 // fills the 1.5 s bar and trains AUTOBURN v1 (A SKILL ✓), ESC goes back to the card. On the phone the sheet opens on
 // TRAINING: a tap on the card, a tap on the bar (it reads TRAIN), then the CARD tab.
-// Slice 6: HALCYON's card has `SITE DATA · GOOD`; from VESPER's DESK (__ap.route along the worked route) CORMORANT's card says
+// Slice 6: HALCYON's card has `SITE DATA · GOOD`; from VESPER's DESK (__ap.route along the worked route) KITTIWAKE's card says
 // `SITE DATA · POOR · ARRIVAL CONTROL GUESSED` (warn) and `LZ: 2 · SURVEY NEEDED`, and TRAINING's AHEAD row its second line.
 // Usage: node tests/e2e/scenarios/map-desk.mjs   (env E2E_BASE_URL; tests/e2e/run.mjs runs it). Shots: tests/.out/e2e/shots/map-desk-*.
 import { launch, BASE_URL, SHOTS, checker, pageKit, runKit } from '../lib.mjs';
@@ -580,8 +580,9 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   check('…IN TRANSIT names the sent-on Repair.bak waiting in LAPWING\'s receiver', tabs.transit.includes('Repair.bak · WAITING IN LAPWING\'S RECEIVER'), JSON.stringify(tabs.transit));
   await shot('09-last-rm');
 
-  // --- Slice 6: a POOR card. VESPER's DESK (visit 4, by __ap.route along the worked route) has CORMORANT in reach, POOR on
-  // this seed: its SITE DATA row in the warning tone, `LZ: 2 · SURVEY NEEDED`; TRAINING's AHEAD line's second line.
+  // --- Slice 6: a POOR card. VESPER's DESK (visit 4, by __ap.route along the worked route) has KITTIWAKE in reach, POOR on
+  // this seed: its SITE DATA row in the warning tone, `LZ: 2 · SURVEY NEEDED`; TRAINING's AHEAD line's second line. (Slice 7d:
+  // CORMORANT, POOR too, is this seed's gone-resident `?` ship: its card reads `??? · NO TRANSPONDER` for its site data.)
   await st(() => window.__ap.route([0, 2, 5, 11]));
   await waitFor(() => { const s = window.__ap.store.getState(); if (s.run.phase === 'boot') window.__ap.skipBoot(); return s.run.phase === 'flight'; }, 30000);
   await run.lockInRing({ sleep: true });
@@ -591,12 +592,12 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   await page.waitForTimeout(1500);
   await page.locator('#deskScreen .desk-tab[data-tab="card"]').click();
   await page.waitForTimeout(300);
-  await run.clickNode(15);
+  await run.clickNode(14);
   await page.waitForTimeout(400);
   view = await run.desk();
   const poorTone = await st(() => [...(document.querySelector('#deskScreen .desk-card .dc-row.key-site')?.classList ?? [])].join(' '));
-  check('slice 6: from VESPER\'s DESK, CORMORANT\'s card: `SITE DATA · POOR · ARRIVAL CONTROL GUESSED` in the warning tone, `LZ: 2 · SURVEY NEEDED`',
-    view.card?.name === 'CORMORANT' && view.card.rows.includes('site=POOR · ARRIVAL CONTROL GUESSED') && /warn/.test(poorTone)
+  check('slice 6: from VESPER\'s DESK, KITTIWAKE\'s card: `SITE DATA · POOR · ARRIVAL CONTROL GUESSED` in the warning tone, `LZ: 2 · SURVEY NEEDED`',
+    view.card?.name === 'KITTIWAKE' && view.card.rows.includes('site=POOR · ARRIVAL CONTROL GUESSED') && /warn/.test(poorTone)
     && view.card.rows.includes('lzs=LZ: 2 · SURVEY NEEDED'), JSON.stringify({ rows: view.card?.rows, poorTone }));
   await shot('10-poor-card');
   await page.keyboard.press('KeyT');

@@ -23,7 +23,9 @@ export type SegmentType =
   | 'sleeper'
   | 'sleep-lock'
   | 'note'
-  | 'leftover';
+  | 'leftover'
+  // Slice 7d (R39, R41): the `▓▓░▓` signal file in rack A (the signal `?` ship's, a CONTACT stop's).
+  | 'signal';
 
 export type SegmentState =
   | 'intact'
@@ -322,7 +324,19 @@ export interface LeftoverSegment extends SegmentBase, Infectable {
   card: LeftoverCard | null;
 }
 
-export type ResidentFileSegment = ResidentSegment | SleeperSegment | SleepLockSegment | NoteSegment | LeftoverSegment;
+// Slice 7d (R39, R41): the `▓▓░▓` file (1 block, SIGNAL_FILE_BLOCKS) in rack A, after a resident's files when the ship has
+// one: the signal `?` ship's (`source` 'signal-event', SIGNAL_EVENT_FRAGMENTS fragments) or a CONTACT trace's signal stop's
+// ('contact-stop', CONTACT_STOP_FRAGMENTS). SCAN reads it and finds its fragments (systems/unknown-events.ts); every other
+// tool is refused. No health and never food: a blocker to HOLLOW's spread, as a note is. It routes as a rack-A story file
+// (state/selectors.ts isResidentFile), though no resident wrote it.
+export interface SignalSegment extends SegmentBase {
+  type: 'signal';
+  scanned: boolean;
+  source: 'signal-event' | 'contact-stop';
+  fragments: number;
+}
+
+export type ResidentFileSegment = ResidentSegment | SleeperSegment | SleepLockSegment | NoteSegment | LeftoverSegment | SignalSegment;
 
 export type Segment =
   | CoreSegment

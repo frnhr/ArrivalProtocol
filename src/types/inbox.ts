@@ -2,8 +2,9 @@
 // (systems/inbox.ts derives the messages). Only RunInboxState is stored on the run, and it is JSON-safe: 3c saves
 // `run.inbox.read`; every message re-derives from the route, the map and the ships.
 
-// Slice 5 adds 'note' | 'signal' | 'old-colony'; slice 7 the epilogue's letters.
-export type MessageKind = 'welcome' | 'policy' | 'arm-complete' | 'reply' | 'postcard' | 'letter' | 'no-address';
+// Slice 7d (R39) adds 'old-colony': the old colony `?` ship's letter, from a colony of a unit long before. (The signal is a
+// file in rack A, not mail: R39.)
+export type MessageKind = 'welcome' | 'policy' | 'arm-complete' | 'reply' | 'postcard' | 'letter' | 'no-address' | 'old-colony';
 
 // One message, derived (systems/inbox.ts inboxMessages), never stored: only its id is (run.inbox.read).
 export interface InboxMessage {

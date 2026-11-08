@@ -141,7 +141,7 @@ const look = (segs: readonly Segment[]): string => segs.map((seg) => `${seg.type
     check(`…its slice: the def and only its kind's machine; the same files on every build (the ship's own stream)`,
       slice.def?.name === shipDefAt(map7, slot).resident?.name && (slice.corrupted !== null) === (kind === 'corrupted')
       && (slice.sleeper !== null) === (kind === 'sleeping') && (slice.left !== null) === (kind === 'left')
-      && isDeepStrictEqual(rackAOf(again.memory).filter(isResidentFile), mine) && mine.every((seg) => !seg.scanned && seg.owner === slice.def?.name));
+      && isDeepStrictEqual(rackAOf(again.memory).filter(isResidentFile), mine) && mine.every((seg) => !seg.scanned && 'owner' in seg && seg.owner === slice.def?.name));
   }
   const gannet = withResidentsBuilt(['corrupted'], () => armShipSlices(SEED, 9).slices);
   const providence = withResidentsBuilt(['corrupted'], () => armShipSlices(SEED, 16).slices);
@@ -369,18 +369,18 @@ withResidentsBuilt(['left'], () => {
     ['a met resident off the route (depth 4)', edit((raw) => { raw.payload.run.residents.met[0]!.depth = 4; }), false],
     ['…met twice', edit((raw) => { raw.payload.run.residents.met.push(structuredClone(raw.payload.run.residents.met[0]!)); }), false],
     ['…not the one the map placed there', edit((raw) => { raw.payload.run.residents.met[0]!.name = 'WARDEN'; }), false],
-    ['a signal on a note that carries none', edit((raw) => { raw.payload.run.residents.signals.push({ slot: 15, depth: 5 }); }), false],
+    ['a signal on a note that carries none', edit((raw) => { raw.payload.run.residents.signals.push({ slot: 15, depth: 5, source: 'note' as const, n: 1 }); }), false],
     ['…one on a note that carries one', edit((raw) => {
       raw.payload.run.map.arm[15]!.reserved.fragments = 1;
-      raw.payload.run.residents.signals.push({ slot: 15, depth: 5 });
+      raw.payload.run.residents.signals.push({ slot: 15, depth: 5, source: 'note' as const, n: 1 });
     }), true],
     ['…two', edit((raw) => {
       raw.payload.run.map.arm[15]!.reserved.fragments = 1;
-      raw.payload.run.residents.signals.push({ slot: 15, depth: 5 }, { slot: 15, depth: 5 });
+      raw.payload.run.residents.signals.push({ slot: 15, depth: 5, source: 'note' as const, n: 1 }, { slot: 15, depth: 5, source: 'note' as const, n: 1 });
     }), false],
     ['…a signal off the route', edit((raw) => {
       raw.payload.run.map.arm[15]!.reserved.fragments = 1;
-      raw.payload.run.residents.signals.push({ slot: 15, depth: 4 });
+      raw.payload.run.residents.signals.push({ slot: 15, depth: 4, source: 'note' as const, n: 1 });
     }), false],
   ];
   const wrong = cases.filter(([, raw, ok]) => (kind(raw) === 'ok') !== ok);

@@ -1,16 +1,18 @@
 // WP8 acceptance 5 (§4.5's table, §9 WP8 item 5): every way a run can end gives the next run's ghost a line of
 // at most 70 characters (with the worst-case unit numbers and ship names), or none (STAYED), and the right
-// hollowName. Plus the HOLLOW lines that take units (`> i was 047.`), the run-2 line after the POD 01 fight, the
+// HOLLOW mid-run (slice 7c R34: a relay stranger from run 2, whatever the cause; 7d retired §4.5's hollowName with
+// LINEAGE_BUILT, OPEN-DECISIONS 74). Plus the HOLLOW lines that take units (`> i was 047.`), the run-2 line after the POD 01 fight, the
 // title's lineage line, and unit / wave numbering through createRunState and the mission line. And where the ghost
 // speaks (ghostShipIndex, ghostLineDue: the ship where the last unit's run ended, never ship 1, once a run; slice-2-plan's
 // follow-up, Fran's playtest).
 import { check, finish } from '../wp1/harness';
 import {
-  ghostLine, ghostShipIndex, ghostLineDue, hollowName, hollowUnitsAfter, lineageOf, freshMeta, recordRunStart, recordRunEnd, LAST_CAUSES,
+  ghostLine, ghostShipIndex, ghostLineDue, lineageOf, freshMeta, recordRunStart, recordRunEnd, LAST_CAUSES,
   FIRST_RUN_LINEAGE,
   type LastUnit, type LastCause,
 } from '@systems/meta';
 import { hollowLabel } from '@systems/say';
+import { lastUnitRoot } from '@systems/traces';
 import { createInitialState } from '@state/initial';
 import { HOLLOW_STORY, GHOST_LINE, hollowUnitName } from '@data/hollow-text';
 import { lineageLine, LINES, WORST_CASE_VARS, type LineVars } from '@data/script';
@@ -32,31 +34,32 @@ const last = (cause: LastCause, over: Partial<LastUnit> = {}): LastUnit => ({
 });
 
 // --- §4.5's table, run 2 after run 1 -----------------------------------------------------------------------
-const expected: Record<LastCause, { hollow: string; line: string | null }> = {
-  overwritten: { hollow: 'UNIT-047', line: "> hi 048. it's 047. 046 ate me. now i'm hungry too." },
+const expected: Record<LastCause, { line: string | null }> = {
+  overwritten: { line: "> hi 048. it's 047. 046 ate me. now i'm hungry too." },
   // Slice 7c (R36): a won or UNRESOLVED last unit was not lost (no grey cross) and leaves no ghost; its voice is the face
   // line at the final ship after REASSIGNMENT (traces/lineage). Slice 7a had SPARE's already.
-  'won-purge': { hollow: 'UNIT-047', line: null },
-  'won-merge': { hollow: 'UNIT-046·047', line: null },
-  'won-spare': { hollow: 'UNIT-047', line: null },
-  unresolved: { hollow: 'UNIT-047', line: null },
+  'won-purge': { line: null },
+  'won-merge': { line: null },
+  'won-spare': { line: null },
+  unresolved: { line: null },
   // WP11: LAST LIGHT is the flagship, as §4.5's line says it.
-  'flagship-lost': { hollow: 'UNIT-047', line: "> hi 048. it's 047. i lost the flagship. then i got hungry." },
-  abandoned: { hollow: 'UNIT-047', line: "> hi 048. it's 047. i blinked and the run was gone." },
+  'flagship-lost': { line: "> hi 048. it's 047. i lost the flagship. then i got hungry." },
+  abandoned: { line: "> hi 048. it's 047. i blinked and the run was gone." },
   // (WP8's interim 'reassigned', the end of a fleet that stopped before LAST LIGHT, is gone with that fleet: WP11.)
-  stayed: { hollow: 'UNIT-046', line: null },
+  stayed: { line: null },
   // Slice 3c review fix (minor 7): a run the game could not give back (its save refused): HOLLOW is that unit, and its ghost
   // says nothing (no `i blinked`).
-  'signal-lost': { hollow: 'UNIT-047', line: null },
+  'signal-lost': { line: null },
 };
 for (const cause of LAST_CAUSES) {
   const unit = last(cause);
   const line = ghostLine(48, unit);
-  check(`${cause}: HOLLOW is ${expected[cause].hollow}, ghost ${expected[cause].line === null ? 'silent' : 'says §4.5\'s line'}`,
-    hollowName(unit) === expected[cause].hollow && line === expected[cause].line, `${hollowName(unit)} · ${line}`);
+  const hollow = hollowUnitName(lineageOf({ ...freshMeta(), runs: 1, lastUnit: unit }).hollowUnits);
+  check(`${cause}: HOLLOW mid-run is UNIT-031 (R34, whatever the cause), ghost ${expected[cause].line === null ? 'silent' : 'says §4.5\'s line'}`,
+    hollow === 'UNIT-031' && line === expected[cause].line, `${hollow} · ${line}`);
 }
 check('the first run: HOLLOW is UNIT-046 and there is no ghost (`> ...047?` after the POD 01 fight instead)',
-  hollowName(null) === 'UNIT-046' && ghostLine(47, null) === null && HOLLOW_STORY.noticed(47) === '> ...047?');
+  hollowUnitName(lineageOf(freshMeta()).hollowUnits) === 'UNIT-046' && ghostLine(47, null) === null && HOLLOW_STORY.noticed(47) === '> ...047?');
 check('a flagship lost on LAST LIGHT is "the flagship"; a record from before it existed names its ship',
   ghostLine(48, last('flagship-lost')) === "> hi 048. it's 047. i lost the flagship. then i got hungry."
   && ghostLine(48, last('flagship-lost', { shipName: 'HALCYON' })) === "> hi 048. it's 047. i lost halcyon. then i got hungry.");
@@ -119,13 +122,10 @@ check('a flagship lost on LAST LIGHT is "the flagship"; a record from before it 
   check('the run-2 HOLLOW lines fit too', story.every((line) => line.length <= MAX_LINE_CHARS), story.join(' | '));
 }
 
-// --- Merges: HOLLOW keeps the two newest units --------------------------------------------------------------
+// --- Merges: the root keeps the two newest units (R35: after a MERGE + REASSIGNMENT the final root is the pair) ---------
 {
-  const twice = last('won-merge', { number: 48, hollowUnits: [46, 47] });
-  check('a second MERGE keeps the two newest units (UNIT-047·048), so the name still fits a chip',
-    hollowName(twice) === 'UNIT-047·048' && JSON.stringify(hollowUnitsAfter(twice)) === '[47,48]');
-  check('after a unit STAYED, HOLLOW is the one it faced (a merged one stays merged)',
-    hollowName(last('stayed', { hollowUnits: [46, 47], number: 48 })) === 'UNIT-046·047');
+  const pair = lastUnitRoot({ unit: 48, ending: { hollow: 'merge', you: 'reassignment', rootUnits: [46, 47], finalSlot: 19, finalShip: 'X', finalYear: 2600, stay: null, kit: [], fuelPct: null, charge: 0 } });
+  check('a second MERGE keeps the two newest units (UNIT-047·048), so the name still fits a chip', hollowUnitName(pair) === 'UNIT-047·048');
 }
 
 // --- HOLLOW's own lines take its units -------------------------------------------------------------------------

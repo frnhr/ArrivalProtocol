@@ -116,8 +116,8 @@ const edit = (raw: string, change: (save: Raw) => void): string => {
 check('not JSON → not-json', kind('{ this is not a run save') === 'not-json');
 check('another save version → version', kind(edit(desk, (save) => { save.saveVersion = RUN_SAVE_VERSION + 1; })) === 'version');
 // Slice 4: the first step (1 → 2, the skill tree; its fixtures are migrated in tests/unit/skills/foundation.test.ts).
-check('migrateRunSave knows seven steps (1 → 2, slice 4; 2 → 3, its review; 3 → 4, slices 4c–4e; 4 → 5, slice 5; 5 → 6, slice 6; 6 → 7, slice 7a; 7 → 8, slice 7c), and leaves an unknown version for check 2',
-  Object.keys(RUN_SAVE_MIGRATIONS).join() === '1,2,3,4,5,6,7' && isDeepStrictEqual(migrateRunSave({ saveVersion: 0 }), { saveVersion: 0 }));
+check('migrateRunSave knows eight steps (1 → 2, slice 4; 2 → 3, its review; 3 → 4, slices 4c–4e; 4 → 5, slice 5; 5 → 6, slice 6; 6 → 7, slice 7a; 7 → 8, slice 7c; 8 → 9, slice 7d), and leaves an unknown version for check 2',
+  Object.keys(RUN_SAVE_MIGRATIONS).join() === '1,2,3,4,5,6,7,8' && isDeepStrictEqual(migrateRunSave({ saveVersion: 0 }), { saveVersion: 0 }));
 // 2 → 3: a v2 save (burn.auto without flying / captured) steps up with both empty and decodes; a v3 save burning with its
 // burn in hand reads (4c's mid-flight saves).
 const v2 = edit(desk, (save) => { save.saveVersion = 2; delete save.payload.slices.burn.auto.flying; delete save.payload.slices.burn.auto.captured; });
