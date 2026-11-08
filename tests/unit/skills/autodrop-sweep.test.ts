@@ -176,5 +176,5 @@ for (const kid of KIDS) {
 writeMetrics('autodrop-sweep', {
   ...Object.fromEntries(deltas.map((one) => [one.id, one.delta])),
   'drop.worst': deltas.length === 0 ? null : Math.min(...deltas.map((one) => one.delta)),
-}, { kids: KIDS.join(','), ships: [...new Set(rows.map((row) => row.ship))].join(',') });
+}, { kids: KIDS.join(','), ships: [...new Set(rows.map((row) => row.ship))].join(','), landings: rows.length });
 finish();

@@ -113,7 +113,7 @@ for (const { job, file } of results.values()) {
   ranSources.add(job.source);
   if (file === null) { crashedSources.add(job.source); continue; }
   Object.assign(metrics, file.metrics);
-  seedsBySource[job.source] ??= file.meta?.seeds ?? file.meta?.runs ?? file.meta?.arms ?? '';
+  seedsBySource[job.source] ??= file.meta?.seeds ?? file.meta?.runs ?? file.meta?.arms ?? (file.meta?.landings === undefined ? '' : `${file.meta.landings} ldg`);
 }
 for (const row of DERIVED) {
   const [a, b] = row.ratio.map((id) => metrics[id]);

@@ -174,5 +174,5 @@ writeMetrics('v3-sweep', {
   ...Object.fromEntries(hard.map((ship, i) => [`v3.Δpods.damaged.${ship.replace(/\W/g, '')}`, hardPods[i]!])),
   'v3.Δfirst-drop-s': meanOf(hardFirst),
   'v3.Δfuel.healthy': meanOf(healthyFuel),
-}, { ships: flownShips.join(',') });
+}, { ships: flownShips.join(','), landings: rows.length });
 finish();
