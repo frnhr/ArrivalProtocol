@@ -7,7 +7,7 @@
 import type { GameState } from '@state/schema';
 import type { LzState } from '@/types/landing';
 import type { SurveySite, SurveyState, BadGround, AssignRefusal } from '@/types/survey';
-import { siteDataOf } from '@data/survey';
+import { siteDataOf, SURVEY_BUILT } from '@data/survey';
 import { siteLabel, SURVEY_TEXT } from '@data/survey-text';
 import { SITES_TEXT as T } from '@data/sites-text';
 import { COLONISTS_PER_POD, SITES_RIM_BAR_CELLS } from '@data/tuning';
@@ -171,7 +171,8 @@ export interface SurveyCardRow {
 
 export function surveyCardRow(state: Readonly<GameState>, slot: number): SurveyCardRow | null {
   const map = state.run.map;
-  if (map.world !== 'arm') return null;
+  // The row is POOR site data's (plan R19: the card rows wait on SURVEY_BUILT.poor with the rest of it).
+  if (map.world !== 'arm' || !SURVEY_BUILT.poor) return null;
   const row = (value: string, tone: SurveyCardRow['tone'] = 'plain'): SurveyCardRow => ({ label: T.card.label, value, tone });
   const site = siteDataOf({ site: shipSummaryAt(map, slot).reserved?.site ?? 'good' });
   if (site === 'good') return row(T.card.good);
