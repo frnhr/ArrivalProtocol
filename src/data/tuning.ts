@@ -2287,8 +2287,13 @@ export const SLEEPER_WALL_BLOCKS = 4;
 export const SLEEPER_GIFT_CYCLES = 4;
 // MEND DRIVERS heals at REPAIR v1's rate (REPAIR_BASE_SEC, REPAIR_PER_BLOCK_SEC at 1×), so it has no number of its own:
 // "at REPAIR v1's rate" stays true if REPAIR is retuned.
-// 05 §3.7: CONTACT needs three signals; the stamp reads `SIGNAL · n/3`, and slice 7's CONTACT reads it.
-export const SIGNALS_FOR_CONTACT = 3;
+// CONTACT's price in signal fragments; the stamp reads `SIGNAL · n/2`, and slice 7's CONTACT reads it. 05 §3.7 said three.
+// Slice 8 (plan §2.9, OPEN-DECISIONS 84 and 107, [FRAN]): 2. WHY: the arm's 5 fragments sit on 4 ships of layers 3–7 (the
+// signal `?` ship's 2, three notes' 1), and a route passes few of them. Over 200 run-1 arms no worked, 5-ship or TIGHT
+// route can collect 3, and an 8-ship route can on 21 in 200; at 2, each of those routes can when it passes the signal ship
+// (14%; 8-ship 38%; any route 43%). Moved here, not in the generator (plan R3: the reservations are stored in the arm). A
+// number for slice 8's ENDINGS, in KIN's block because KIN wrote it. To reverse: 3.
+export const SIGNALS_FOR_CONTACT = 2;
 
 // --- end of 5 KIN --------------------------------------------------------------------------------------------------------
 

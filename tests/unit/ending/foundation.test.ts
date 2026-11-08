@@ -37,7 +37,7 @@ import {
 import { stubStorage, pageOpen } from '../save/save-fixture';
 import { decideFinale, openFinaleStep1 } from '../support/finale';
 import {
-  RUN_SAVE_KEY, RUN_SAVE_VERSION, META_STORAGE_KEY, META_VERSION, EMPTY_SHIP_FUEL_PCT, STAR_FUEL_PCT, MERGE_COST_CHARGE,
+  RUN_SAVE_KEY, RUN_SAVE_VERSION, META_STORAGE_KEY, META_VERSION, EMPTY_SHIP_FUEL_PCT, STAR_FUEL_PCT, MERGE_COST_CHARGE, SIGNALS_FOR_CONTACT,
 } from '@data/tuning';
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), '..', 'save', 'fixtures');
@@ -80,7 +80,7 @@ check('a title is keyed by step 2, then step 1; SPARE + SUNSET has none (R8, R23
     && isDeepStrictEqual(optionState(state, 'reassignment', []), { kind: 'open', price: null, now: null })
     && isDeepStrictEqual(optionState(state, 'merge', []), { kind: 'open', price: { kind: 'charge', have: chargeLeft(state), need: MERGE_COST_CHARGE }, now: null })
     && ['spare', 'sunset', 'stay'].every((piece) => { const option = optionState(state, piece as never, []); return option.kind === 'needs' && !option.named; })
-    && isDeepStrictEqual(optionState(state, 'contact', []), { kind: 'needs', need: FINALE_TEXT.needs.signals(0, 3), named: false, price: { kind: 'signals', have: 0, need: 3 } })
+    && isDeepStrictEqual(optionState(state, 'contact', []), { kind: 'needs', need: FINALE_TEXT.needs.signals(0, SIGNALS_FOR_CONTACT), named: false, price: { kind: 'signals', have: 0, need: SIGNALS_FOR_CONTACT } })
     && !emptyShip(state).ok && stayCandidates(state).length === 0 && reportEndingLine(state) === null);
   check('the card\'s other ways on, as built: pickStay and continueFollowed refuse off the card (NOT NOW), never throw',
     pickStay(store, 0) === 'NOT NOW' && continueFollowed(store) === 'NOT NOW');

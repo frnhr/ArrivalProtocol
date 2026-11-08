@@ -3,7 +3,7 @@
 // flight:
 // • rack A holds farewell.txt (outward: it carries the fragment) and three LEFT BEHIND leftovers, their cards rolled at the
 //   boot (pool, pool, skill), the same on a second roll; the tools' rules on both kinds;
-// • SCAN on the note: its lines and the signature, `signals` +1 and 'signal-found' (SIGNAL · 1/3), once only;
+// • SCAN on the note: its lines and the signature, `signals` +1 and 'signal-found' (SIGNAL · 1/2), once only;
 // • SCAN on a leftover: its card's name (`… · LEFT`, `A SKILL · LEFT`) and effect, 'leftover-read';
 // • the deck at the PACKET (the real SET COURSE): pool, pool, skill, unique ids, LEFT BEHIND's reasons; an eaten leftover and
 //   an unusable card each deal a plain card from the normal deal; the skill card falls back to `+2 CYCLES`, and to a plain

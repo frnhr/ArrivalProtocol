@@ -4,10 +4,10 @@
 // • HALCYON's DESK: LAPWING's SHIP CARD reads its public schedule and `??? · NO TRANSPONDER` for the rest (no colonists, no
 //   pods), its chart label `LAPWING · ???`; no `▓░` glyph anywhere while no fragment is held;
 // • LAPWING's INBOX holds the old colony's letter (OLDWELL, SUNDIAL or CANDLEWICK · FOUNDED BY UNIT-0nn);
-// • PLOVER: SCAN BOSUN's farewell.txt → `SIGNAL · 1/3`; its DESK: KITTIWAKE's node wears the `▓░` glyph (R40), its card still
+// • PLOVER: SCAN BOSUN's farewell.txt → `SIGNAL · 1/2` (CONTACT's price is 2 since slice 8); its DESK: KITTIWAKE's node wears the `▓░` glyph (R40), its card still
 //   `??? · NO TRANSPONDER`;
-// • KITTIWAKE: rack A holds the `▓▓░▓` file; SCAN reads it: 2 fragments, `SIGNAL · 3/3`, the TERMINAL's line;
-// • LAST LIGHT: the FINALE's step 2 shows CONTACT open (`SIGNALS 3 ✓ · needs 3`); PURGE + CONTACT: the verdict's
+// • KITTIWAKE: rack A holds the `▓▓░▓` file; SCAN reads it: 2 fragments, `SIGNAL · 3` (past the price), the TERMINAL's line;
+// • LAST LIGHT: the FINALE's step 2 shows CONTACT open (`SIGNALS 3 ✓ · needs 2`); PURGE + CONTACT: the verdict's
 //   `> transmit outward` and CONTROL's non-compliant line, the FINAL CARD `OUTWARD, ALONE` with `ENDINGS 2/7` and CONTACT's
 //   NEXT RUN: line.
 // `__ap.route` jumps between ships (each ship rebuilt from its boot, the `?` events with it); the flights are skipped.
@@ -116,8 +116,8 @@ await arrive(ROUTE.slice(0, 4));
 const before = (await stamps()).length;
 await scanSeg('note');
 const afterNote = await st(() => ({ count: window.__ap.signals.count(), records: window.__ap.signals() }));
-check('PLOVER: SCAN BOSUN\'s farewell.txt finds its fragment: `SIGNAL · 1/3`', afterNote.count === 1 && afterNote.records[0]?.source === 'note'
-  && (await stamps()).slice(before).includes('SIGNAL · 1/3'), JSON.stringify({ afterNote, stamps: await stamps() }));
+check('PLOVER: SCAN BOSUN\'s farewell.txt finds its fragment: `SIGNAL · 1/2`', afterNote.count === 1 && afterNote.records[0]?.source === 'note'
+  && (await stamps()).slice(before).includes('SIGNAL · 1/2'), JSON.stringify({ afterNote, stamps: await stamps() }));
 await toDesk();
 const kittiwake = await cardOf(14);
 check('PLOVER\'s DESK: KITTIWAKE wears the `▓░` glyph (R40: a `?` ship that carries fragments), its card still `??? · NO TRANSPONDER`',
@@ -141,9 +141,9 @@ const afterFile = await st(() => ({ count: window.__ap.signals.count(), last: wi
 // The TERMINAL types its line after the SCAN's own echo (say.ts queues it).
 await waitFor((from) => window.__ap.log().some((entry) => entry.id > from && entry.text.startsWith('> ▓▓░▓ ·')), 8000, 200, fromLog);
 const fileLines = await logTexts(fromLog);
-check('…SCAN reads it: 2 fragments found (3 held), `SIGNAL · 3/3`, and the TERMINAL\'s `> ▓▓░▓ · 2 FRAGMENTS OF THE SIGNAL · 3/3`',
-  afterFile.count === 3 && afterFile.last?.source === 'signal-event' && afterFile.last?.n === 2 && (await stamps()).slice(before2).includes('SIGNAL · 3/3')
-  && fileLines.includes('> ▓▓░▓ · 2 FRAGMENTS OF THE SIGNAL · 3/3'), JSON.stringify({ afterFile, lines: fileLines.slice(-4) }));
+check('…SCAN reads it: 2 fragments found (3 held), `SIGNAL · 3`, and the TERMINAL\'s `> ▓▓░▓ · 2 FRAGMENTS OF THE SIGNAL · 3 HELD`',
+  afterFile.count === 3 && afterFile.last?.source === 'signal-event' && afterFile.last?.n === 2 && (await stamps()).slice(before2).includes('SIGNAL · 3')
+  && fileLines.includes('> ▓▓░▓ · 2 FRAGMENTS OF THE SIGNAL · 3 HELD'), JSON.stringify({ afterFile, lines: fileLines.slice(-4) }));
 await shot('3-signal-file');
 
 // --- LAST LIGHT: CONTACT on the FINALE card -------------------------------------------------------------------------------------
@@ -167,9 +167,9 @@ const contactRow = await st(() => {
   const row = document.querySelector('#fcContact');
   return row === null ? null : { text: row.innerText.replace(/\s+/g, ' '), disabled: row.disabled === true, cls: row.className };
 });
-check('LAST LIGHT (the duel won by clicks): step 2 shows CONTACT open, `> transmit outward`, `SIGNALS 3 ✓ · needs 3`, and its NEXT RUN: line',
+check('LAST LIGHT (the duel won by clicks): step 2 shows CONTACT open, `> transmit outward`, `SIGNALS 3 ✓ · needs 2`, and its NEXT RUN: line',
   duel && fell && step1 && step2 && contactRow !== null && !contactRow.disabled && /CONTACT/.test(contactRow.text) && /> transmit outward/.test(contactRow.text)
-  && /SIGNALS 3 ✓ · needs 3/.test(contactRow.text) && /\+ 2 signal stops on the map/.test(contactRow.text), JSON.stringify({ duel, fell, step1, step2, contactRow }));
+  && /SIGNALS 3 ✓ · needs 2/.test(contactRow.text) && /\+ 2 signal stops on the map/.test(contactRow.text), JSON.stringify({ duel, fell, step1, step2, contactRow }));
 await shot('4-contact-row');
 const verdictFrom = await lastLogId();
 await page.locator('button#fcContact').click();
