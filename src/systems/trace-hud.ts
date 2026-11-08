@@ -24,7 +24,8 @@ import type { TraceKind } from '@/types/trace';
 import type { CardRow } from '@systems/desk';
 import { traceAt, traceKindsOf } from '@systems/traces';
 import { isEndSlot } from '@systems/map-streams';
-import { traceBuilt, TRACE_RULES } from '@data/traces';
+import { traceBuilt, TRACE_RULES, TRACE_PLACE_COUNT } from '@data/traces';
+import { CONTACT_TEXT } from '@data/contact-text';
 import { TRACE_HUD_TEXT } from '@data/trace-text';
 import { FINALE_TEXT } from '@data/finale-text';
 import { hollowUnitName, unitName } from '@data/hollow-text';
@@ -59,8 +60,8 @@ export function traceCardRow(
       words = T.supplyHere(ending.stay.colony, unitName(from.unit));
       break;
     }
-    // CONTACT's two signal stops are 7d's (its words live in contact-text.ts): fail loudly if its gate rises first.
-    case 'contact': throw new Error("traceCardRow: CONTACT's card row is 7d's");
+    // 7d (R41): one of CONTACT's signal stops (data/contact-text.ts).
+    case 'contact': words = CONTACT_TEXT.stopHere; break;
   }
   return place.given ? { label: T.cardLabel, value: T.found(words), tone: 'plain' } : { label: T.cardLabel, value: words, tone: 'good' };
 }
@@ -88,7 +89,7 @@ export function nextRunBody(
     case 'spare': return n.join(n.spare(hollowUnitName(rootUnits)), wild());
     case 'sunset': return n.join(n.sunset, wild());
     case 'stay': return n.join(n.stay, wild());
-    case 'contact': throw new Error("nextRunBody: CONTACT's NEXT RUN: line is 7d's");
+    case 'contact': return n.join(CONTACT_TEXT.nextGain(TRACE_PLACE_COUNT.contact), wild());
   }
 }
 

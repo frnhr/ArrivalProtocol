@@ -17,13 +17,12 @@ import {
 } from '@systems/meta-parse';
 import { runScore, runLanded } from '@systems/run-score';
 import { emit, NO_PAYLOAD } from '@systems/events';
-import { hollowUnitName, GHOST_LINE } from '@data/hollow-text';
+import { GHOST_LINE } from '@data/hollow-text';
 import { CLASSIC_FIVE } from '@data/classic-five';
 import { AUTHORED_SHIP_NAMES, FINAL_SHIP_NAMES } from '@data/ship-names';
 import { shipDefOf, validateShipDef } from '@data/ships';
 import { trailOf, ghostPlaceReached, mapHistoryOf, coloniesOf, notableEvents, visitsOfTrail } from '@systems/lineage';
 import { midRunHollowUnits } from '@systems/traces';
-import { LINEAGE_BUILT } from '@data/traces';
 import {
   updateArm, updateAfterRun, armStateOfMap, armContent, freshArmState, resetArmAfter, nextLaunchOf, type ArmUpdate,
 } from '@systems/map-update';
@@ -32,7 +31,7 @@ import {
   ShapeError, rec, whole, name as nameCheck, nullable, checkArmShip, checkDepartures,
 } from '@systems/save-shape';
 import {
-  META_STORAGE_KEY, META_V1_KEY, META_VERSION, FIRST_UNIT_NUMBER, HOLLOW_NAME_MAX_UNITS, COLONY_HISTORY_MAX_PER_WORLD,
+  META_STORAGE_KEY, META_V1_KEY, META_VERSION, FIRST_UNIT_NUMBER, COLONY_HISTORY_MAX_PER_WORLD,
   ROUTE_HISTORY_RUNS, NOTABLE_EVENTS_MAX,
 } from '@data/tuning';
 
@@ -47,9 +46,9 @@ export { ghostShipIndex, ghostPlaceReached } from '@systems/lineage';
 
 // The archive (§4.5, §9 WP8 item 4): the one thing that outlives a run. A local record of how many units
 // ARRIVAL CONTROL has sent, the best SCORE, the endings seen, the run in progress and how the last unit
-// ended. The next run reads it: you are UNIT-047 + runs on wave runs + 1, and HOLLOW is your last unit
-// (hollowName, by how it ended), whose ghost greets you at a later boot: the ship where that unit's run ended, never
-// ship 1 (ghostShipIndex; data/hollow-text.ts).
+// ended. The next run reads it: you are UNIT-047 + runs on wave runs + 1; HOLLOW is UNIT-046 on run 1 and a relay stranger
+// after it (slice 7c, R34: systems/traces.ts midRunHollowUnits), and a lost last unit's ghost greets you at a later boot:
+// the ship where that unit's run ended, never ship 1 (ghostShipIndex; data/hollow-text.ts).
 //
 // • Run accounting: RECEIVE TRANSMISSION on a run's title is RUN START (archiveRunStarted): runs + 1, and
 //   activeRun is set. Each later ship's start brings activeRun up to date (where the unit is, who woke, its
@@ -87,7 +86,7 @@ export { ghostShipIndex, ghostPlaceReached } from '@systems/lineage';
 //   record: both choices and every fact the next run's traces need), endingsSeen holds the seven pieces, and `traces` is
 //   gone (a trace lasts one run: the last unit's ending is the next run's traces). A version-3 record migrates in place.
 //
-// The pure half (loadMeta, saveMeta, the record* steps, lineageOf, hollowName) takes its storage as an
+// The pure half (loadMeta, saveMeta, the record* steps, lineageOf) takes its storage as an
 // argument, so the headless suites run it on stubs. The live half (openRunArchive and the archive* calls) holds
 // the page's session; run.ts and boot.ts call it at the run's moments, never from a store listener.
 
@@ -599,21 +598,6 @@ export interface RunLineage {
   events: NotableEvent[];
 }
 
-// HOLLOW's units after `lastUnit` (§4.5's table): on the first run the unit before 047 (UNIT-046); after a
-// unit that STAYED, the HOLLOW that unit faced; after a MERGE, that HOLLOW and the unit together (the newest
-// HOLLOW_NAME_MAX_UNITS of them); after every other ending, the last unit itself.
-export function hollowUnitsAfter(lastUnit: LastUnit | null): number[] {
-  if (lastUnit === null) return [FIRST_UNIT_NUMBER - 1];
-  if (lastUnit.cause === 'stayed') return [...lastUnit.hollowUnits];
-  if (lastUnit.cause === 'won-merge') return [...lastUnit.hollowUnits, lastUnit.number].slice(-HOLLOW_NAME_MAX_UNITS);
-  return [lastUnit.number];
-}
-
-// §4.5's `hollowName()`: who HOLLOW is on the run after `lastUnit`.
-export function hollowName(lastUnit: LastUnit | null): string {
-  return hollowUnitName(hollowUnitsAfter(lastUnit));
-}
-
 export function lineageOf(meta: Readonly<Meta>): RunLineage {
   return lineageAt(meta, FIRST_UNIT_NUMBER + meta.runs, meta.runs + 1);
 }
@@ -635,9 +619,8 @@ function lineageAt(meta: Readonly<Meta>, unitNumber: number, wave: number): RunL
     unitNumber,
     wave,
     lastUnit: meta.lastUnit === null ? null : structuredClone(meta.lastUnit),
-    // Slice 7c (R34): from run 2 a stranger from the relays once LINEAGE_BUILT is raised (systems/traces.ts
-    // midRunHollowUnits); until then the last unit, as hollowUnitsAfter has it.
-    hollowUnits: LINEAGE_BUILT ? midRunHollowUnits(wave) : hollowUnitsAfter(meta.lastUnit),
+    // Slice 7c (R34): from run 2 a stranger from the relays (systems/traces.ts midRunHollowUnits), never the last unit.
+    hollowUnits: midRunHollowUnits(wave),
     tutorialDone: meta.tutorialDone,
     armSeed: meta.armSeed,
     arm: armForWave(meta.arm, wave),
@@ -690,7 +673,7 @@ function lostShipWords(shipName: string): string {
 export function ghostLine(us: number, lastUnit: LastUnit | null): string | null {
   if (lastUnit === null) return null;
   const line = GHOST_LINE[lastUnit.cause];
-  return line === null ? null : line({ us, last: lastUnit, hollow: hollowUnitsAfter(lastUnit), lostShip: lostShipWords(lastUnit.shipName) });
+  return line === null ? null : line({ us, last: lastUnit, lostShip: lostShipWords(lastUnit.shipName) });
 }
 
 // The ghost's line on this run's current boot, or null: the run has a ghost (ghostLine), it has not spoken yet this run,

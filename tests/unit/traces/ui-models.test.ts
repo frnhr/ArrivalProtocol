@@ -29,14 +29,6 @@ import { MAX_LINE_CHARS } from '@data/tuning';
 const ALL = (kind: TraceKind): boolean => kind.length > 0;
 const NONE = (kind: TraceKind): boolean => kind.length === 0;
 const only = (...kinds: TraceKind[]) => (kind: TraceKind): boolean => kinds.includes(kind);
-const threw = (fn: () => unknown): string => {
-  try {
-    fn();
-    return '';
-  } catch (error) {
-    return (error as Error).message;
-  }
-};
 
 function ending(hollow: HollowFate, you: YouChoice, extra: Partial<EndingRecord> = {}): EndingRecord {
   return {
@@ -193,8 +185,9 @@ const armSlots = (state: Readonly<GameState>): number[] => state.run.map.arm.fla
   check('nextRunBody: the FINALE card\'s row body (no lead), null for an unbuilt kind',
     nextRunBody('purge', [46], false, ALL) === TRACE_HUD_TEXT.next.purge && nextRunBody('merge', [46], false, NONE) === null
     && nextRunBody('sunset', [46], true, ALL) === '+ a cache you left on the way · − that same seed');
-  check('CONTACT\'s words are 7d\'s: built, its row and its line throw rather than paint nothing',
-    /7d/.test(threw(() => nextRunBody('contact', [46], false, ALL))) && nextRunBody('contact', [46], false, NONE) === null);
+  check('CONTACT\'s words are 7d\'s (data/contact-text.ts): its NEXT RUN: body, the wild seed once; none unbuilt',
+    nextRunBody('contact', [46], false, ALL) === '+ 2 signal stops on the map · − 1 more seed at the end'
+    && nextRunBody('contact', [46], true, ALL) === '+ 2 signal stops on the map · − that same seed' && nextRunBody('contact', [46], false, NONE) === null);
 }
 
 // --- The seams read the build's gates (desk.ts, epilogue.ts) ---------------------------------------------------------------------

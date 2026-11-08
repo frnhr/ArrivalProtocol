@@ -1194,7 +1194,7 @@ const night = await runScreens.throughTheNight('Space');
 const epi = night.epilogue ?? [];
 check('the EPILOGUE: `<year> · FORTY YEARS ON`, CONTROL\'s line last, at most 16 lines', /^\d{4} · FORTY YEARS ON$/.test(epi[0] ?? '')
   && /^ARRIVAL CONTROL:/.test(epi.at(-1) ?? '') && epi.length <= 16, JSON.stringify(epi));
-check('the FINAL CARD: `STAND BY` and the endings found (`ENDINGS 2/6`)', night.card?.title === 'STAND BY' && night.card.endings === 'ENDINGS 2/6', JSON.stringify(night.card));
+check('the FINAL CARD: `STAND BY` and the endings found (`ENDINGS 2/7`)', night.card?.title === 'STAND BY' && night.card.endings === 'ENDINGS 2/7', JSON.stringify(night.card));
 await waitFor(() => window.__ap.store.getState().run.phase === 'title' && !document.getElementById('titleCard').hidden, 6000);
 // Slice 3c: from run 2 the title's line rolls its year up before the gap's stamp lands (about 2.4 s).
 await waitFor(() => !document.getElementById('titleStamp').hidden, 6000);

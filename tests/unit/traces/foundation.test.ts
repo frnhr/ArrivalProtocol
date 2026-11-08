@@ -34,7 +34,7 @@ import { HOLLOW_STAGES } from '@data/threats';
 import { bookShape, logEntriesAtBoot, BOOK_046, BOOK_STRANGER, BOOK_LAST } from '@state/log-selectors';
 import { bookName, bookEntryLines } from '@data/log-books';
 import { controlCompliant } from '@systems/ending-rules';
-import { TRACES_BUILT, LINEAGE_BUILT, TRACE_RULES, STRANGER_UNITS, SUNSET_GIFT_PRIORITY } from '@data/traces';
+import { TRACES_BUILT, TRACE_RULES, STRANGER_UNITS, SUNSET_GIFT_PRIORITY } from '@data/traces';
 import { layerOf } from '@systems/map-geometry';
 import { hollowLabel } from '@systems/say';
 import { traceSeedMods, traceSeedAllowance, traceGiftCharge, arrivalTraceLines, traceBootLines, traceBootLineText, traceBootLineSaid, traceMessages } from '@systems/trace-gifts';
@@ -63,11 +63,11 @@ const threw = (fn: () => unknown): string => {
 
 // --- The gates, the tables ------------------------------------------------------------------------------------------------
 // Track TRACE's gate lines (one a kind; CONTACT's is 7d's):
-check('built: every trace but CONTACT (Track TRACE raised each kind; CONTACT is 7d\'s)',
-  Object.entries(TRACES_BUILT).every(([kind, built]) => built === (kind !== 'contact'))
+check('built: every trace (Track TRACE raised each kind, 7d CONTACT\'s)',
+  Object.values(TRACES_BUILT).every((built) => built)
   && Object.keys(TRACES_BUILT).join() === 'purge,merge,spare,sunset,stay,reassignment,contact');
 // (Track LINEAGE's gate line:)
-check('built: the lineage (Track LINEAGE: traces/lineage, traces/logs)', LINEAGE_BUILT);
+// (The lineage's gate, LINEAGE_BUILT, retired in 7d with its gate-down paths: OPEN-DECISIONS 74.)
 check('RUN_SAVE_VERSION ≥ 8 (7d bumped it to 9)', RUN_SAVE_VERSION >= 8);
 check('the trace table: PURGE, MERGE and REASSIGNMENT act at the final ship, the others wait as gifts and cost the wild seed (05 §3.8)',
   TRACE_RULES.purge.where === 'final' && TRACE_RULES.merge.where === 'final' && TRACE_RULES.reassignment.where === 'final'

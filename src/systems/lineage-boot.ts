@@ -18,7 +18,6 @@ import type { GameState } from '@state/schema';
 import { emit } from '@systems/events';
 import { nameHollow } from '@systems/hollow';
 import { finalTraces, lastUnitRoot, onFinalShip, rootWaitYears } from '@systems/traces';
-import { LINEAGE_BUILT } from '@data/traces';
 import { LINEAGE_TEXT, strangerOf } from '@data/lineage-text';
 import { FRESH_UNIT_CHARGE } from '@data/memory';
 
@@ -27,7 +26,7 @@ import { FRESH_UNIT_CHARGE } from '@data/memory';
 export type LineageBootLineKind = 'face' | 'lineage-control' | 'stranger';
 
 function lineagePlays(state: Readonly<GameState>): boolean {
-  return LINEAGE_BUILT && state.run.map.world === 'arm';
+  return state.run.map.world === 'arm';
 }
 
 // The last unit's face is due at this boot (R35): the final ship, after a REASSIGNMENT trace (held and built: the root is the

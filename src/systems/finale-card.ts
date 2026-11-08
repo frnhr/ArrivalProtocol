@@ -159,7 +159,7 @@ function priceCaption(price: Readonly<PriceMeter>): string {
   switch (price.kind) {
     case 'charge': return FINALE_TEXT.price.charge(price.have);
     case 'fuel': return FINALE_TEXT.price.fuel(price.have);
-    case 'signals': return FINALE_TEXT.needs.signals(price.have, price.need);
+    case 'signals': return FINALE_TEXT.price.signals(price.have, price.need);
     default: throw new Error(`priceCaption: unknown meter '${String((price as PriceMeter).kind)}'`);
   }
 }

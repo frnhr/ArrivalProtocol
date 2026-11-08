@@ -1,5 +1,5 @@
 // Slice 7c: the lead owns this file (docs/phase3/impl/slice-7-plan.md §2.1, §4.3). Track TRACE raises TRACES_BUILT's lines
-// (one line per kind) and Track LINEAGE raises LINEAGE_BUILT (one line); others ask by message. Data and types only
+// (one line per kind; 7d raised CONTACT's); others ask by message. Data and types only
 // (support/import-guard): no system state is read here.
 // The next run's traces as data (05-story §3.8's table, R30–R38): what each trace gives and costs, where it acts, the gates,
 // the relay strangers and SUNSET's gift order. systems/traces.ts reads it (pure); every number is tuning.ts's 7c blocks'.
@@ -19,14 +19,11 @@ export const TRACES_BUILT: Readonly<Record<TraceKind, boolean>> = {
   stay: true,
   reassignment: true,
   // (7d's line:)
-  contact: false,
+  contact: true,
 };
 
-// The lineage this build plays (R34–R37): the relay strangers mid-run from run 2 (meta.ts lineageAt reads
-// systems/traces.ts midRunHollowUnits), the books (state/log-selectors.ts logBookOf), the face line and CONTROL's lineage
-// lines at the boot. Down: run 2's HOLLOW is the last unit and every book is 046.log, as before slice 7c.
-// Track LINEAGE raises this line.
-export const LINEAGE_BUILT: boolean = true;
+// The lineage (R34–R37) is built for good: slice 7d retired LINEAGE_BUILT and its gate-down paths (OPEN-DECISIONS 74, as 59
+// did for 7a's gates): the relay strangers mid-run from run 2, the books, the face line and CONTROL's lineage lines.
 
 export function traceBuilt(kind: TraceKind): boolean {
   return TRACES_BUILT[kind];

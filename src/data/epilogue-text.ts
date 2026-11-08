@@ -163,6 +163,9 @@ export const EPILOGUE_TEXT = {
     // --- 7d CONTACT's piece (Track CONTACT rewords it in this marked block) ---
     contact: (unit: string): string => `${unit} went toward the sound. It wrote it all down.`,
     contactAfter: 'The relays still pass on what it hears.',
+    // 7d: MERGE's second line (both minds went), UNRESOLVED's third (it came along, as REASSIGNMENT's and STAY's do).
+    contactUs: "It took two minds to listen. Neither one is hungry now.",
+    contactTwo: (hollow: string): string => `${hollow} went too. It listens better than it talks.`,
     // --- end of 7d CONTACT's piece ---
   },
   // MERGE + SUNSET's own piece (05 §3.12, "WE TOOK THE SHIP": the merge line, then these two, in place of both pieces).

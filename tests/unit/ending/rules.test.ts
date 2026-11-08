@@ -148,8 +148,8 @@ const onTarget = (slot: number, colony: string): ShipResult => result(slot, colo
   const followed = ended(base(), 31);
   followed.hollow.finale.hollow = 'followed';
   check('…after UNRESOLVED SUNSET is still open (R10: it comes with you)', optionState(followed, 'sunset', []).kind === 'open');
-  check('STAY open with a ★ ON TARGET ship; CONTACT hidden (R11, until 7d)', optionState(state, 'stay', []).kind === 'open'
-    && optionState(state, 'contact', ['contact']).kind === 'hidden');
+  check('STAY open with a ★ ON TARGET ship; CONTACT named once seen, out of reach with no signal (7d: signals/contact has the rest)',
+    optionState(state, 'stay', []).kind === 'open' && (() => { const option = optionState(state, 'contact', ['contact']); return option.kind === 'needs' && option.named; })());
 }
 
 // --- The record, the cause, the report's line --------------------------------------------------------------------------

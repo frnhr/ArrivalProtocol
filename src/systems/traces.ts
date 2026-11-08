@@ -4,7 +4,7 @@
 // last unit's ending leaves this run (tracesOf), where its gifts wait (placeTraces, on the run's own 'traces' stream: R4, no
 // stored arm moves), which trace a ship holds (traceAt), what the final ship plays (finalTraces), who the final root is
 // (rootUnitsOf), who HOLLOW is mid-run (midRunHollowUnits), which book the `???` file holds (logBookOf), and the save's
-// check (traceRefusal). Every effect reads data/traces.ts TRACES_BUILT / LINEAGE_BUILT: while a gate is down the traces are
+// check (traceRefusal). Every effect reads data/traces.ts TRACES_BUILT: while a kind is down its traces are
 // still rolled and saved, and nothing reads them.
 // Import guard (support/import-guard): data, types and the pure geometry and stream leaves only; never state/selectors.ts
 // (data modules reach it) and never a stateful system, so state/initial.ts, systems/meta.ts and systems/say.ts may all
@@ -22,7 +22,7 @@ import { layerOf, distLy } from '@systems/map-geometry';
 import { FIRST_SLOT, END_SLOTS } from '@data/arm';
 import { UNIT_046_TRAIL } from '@data/ship-names';
 import { controlCompliant } from '@data/endings';
-import { TRACES_BUILT, LINEAGE_BUILT, TRACE_RULES, TRACE_PLACE_COUNT, STRANGER_UNITS } from '@data/traces';
+import { TRACES_BUILT, TRACE_RULES, TRACE_PLACE_COUNT, STRANGER_UNITS } from '@data/traces';
 import {
   FIRST_UNIT_NUMBER, HOLLOW_NAME_MAX_UNITS, NOTABLE_EVENTS_MAX, TRACE_LAYERS, TRACE_SPARE_FALLBACK_LAYERS,
   TRACE_ROOT_WAIT_MIN_YEARS,
@@ -272,7 +272,7 @@ export function rootWaitYears(run: Readonly<Pick<RunState, 'traces' | 'map'>>): 
 
 // Who HOLLOW is mid-run (R34; 05 §3.5): UNIT-046 on run 1; from run 2 never the last unit (it is alive, ahead of you, until
 // its own final ship) but a stranger from the relays, STRANGER_UNITS by run: 031 on run 2, 038 on run 3, 031 again.
-// systems/meta.ts lineageAt reads it once LINEAGE_BUILT is raised (hollowUnitsAfter until then).
+// systems/meta.ts lineageAt reads it.
 export function midRunHollowUnits(wave: number): number[] {
   if (!(Number.isInteger(wave) && wave >= 1)) throw new Error(`midRunHollowUnits: run ${wave}`);
   if (wave === 1) return [FIRST_UNIT_NUMBER - 1];
@@ -283,9 +283,8 @@ export function midRunHollowUnits(wave: number): number[] {
 
 // Which book the `???` file holds this run, chosen once at RUN START (R37): run 1 → 046.log; after REASSIGNMENT the last
 // unit's own (047.log, its notable events at most NOTABLE_EVENTS_MAX); otherwise the relay stranger's (031.log, 038.log).
-// Every book is 046.log until LINEAGE_BUILT is raised.
 export function logBookOf(wave: number, lastUnit: Readonly<Pick<LastUnit, 'number' | 'ending'>> | null, events: readonly NotableEvent[]): LogBook {
-  if (!LINEAGE_BUILT || wave === 1) return { kind: '046' };
+  if (wave === 1) return { kind: '046' };
   const ending = lastUnit?.ending ?? null;
   if (lastUnit !== null && ending !== null && ending.you === 'reassignment') {
     return { kind: 'last', unit: lastUnit.number, step1: ending.hollow, events: structuredClone(events.slice(0, NOTABLE_EVENTS_MAX)) as NotableEvent[] };

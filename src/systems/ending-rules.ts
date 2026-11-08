@@ -13,6 +13,7 @@ import type { PodRecord } from '@/types/landing';
 import { chargeLeft, hasUsableTool, integrityState, isHollow } from '@state/selectors';
 import { currentSlot } from '@systems/map-streams';
 import { rootUnits } from '@systems/traces';
+import { signalCount } from '@systems/signals';
 import { shownFuelPct } from '@systems/flight-hud';
 import { onTargetTally, onTargetEarned } from '@systems/landing-rules';
 import { FS_TOOL_KINDS } from '@data/fs-tools';
@@ -22,7 +23,7 @@ import { ENDINGS_BUILT, endingTitleKey, controlCompliant } from '@data/endings';
 import { LAST_LANDING_BUILT } from '@data/last-landing';
 import { driverName } from '@data/landing-text';
 import { driverSegId } from '@data/pod-ids';
-import { DRIVER_BLOCKS, EMPTY_SHIP_FUEL_PCT, MERGE_COST_CHARGE, MERGE_DRIVER_INTEGRITY, STAY_PICK_MAX } from '@data/tuning';
+import { DRIVER_BLOCKS, EMPTY_SHIP_FUEL_PCT, MERGE_COST_CHARGE, MERGE_DRIVER_INTEGRITY, STAY_PICK_MAX, SIGNALS_FOR_CONTACT } from '@data/tuning';
 
 // THE EMPTY SHIP (R8): the final ship in orbit after its landing (ORBIT LOCKED or ACCEPT ORBIT), no pod aboard (a parked
 // pod counts as released), and FUEL as shown at the landing's end ≥ EMPTY_SHIP_FUEL_PCT. `fuelPct` is that FUEL (null
@@ -108,7 +109,7 @@ export interface PriceMeter {
 //   for the rest);
 // • needs: out of reach, greyed, with its need line (`NEEDS FUEL 20% · you have 12%`) and its meter; `named` when it was
 //   ever chosen before (the archive's endingsSeen), else the card reads `???`;
-// • hidden: not on the card (CONTACT before 7d; the FOUNDATION's answer for every row not yet built).
+// • hidden: not on the card (CONTACT while its gate is down).
 export type OptionState =
   | { kind: 'open'; price: PriceMeter | null; now: string | null }
   | { kind: 'needs'; need: string; named: boolean; price: PriceMeter | null }
@@ -170,7 +171,7 @@ function emptyShipOption(state: Readonly<GameState>, piece: EndingPiece, seen: r
 // • MERGE: MERGE_COST_CHARGE REPAIR CHARGE (its meter); `NOW:` names the drivers it would give back (R15's interim words).
 // • SPARE: THE EMPTY SHIP. SUNSET: THE EMPTY SHIP, unless step 1's pick gave it to the root (`SPARE GIVES IT THE SHIP`, R8).
 // • STAY: a ★ ON TARGET ship of this run (R9).
-// • CONTACT: absent until 7d (R11).
+// • CONTACT: SIGNALS_FOR_CONTACT signal fragments held (R41; absent while ENDINGS_BUILT.contact is down, R11).
 export function optionState(state: Readonly<GameState>, piece: EndingPiece, seen: readonly EndingPiece[]): OptionState {
   switch (piece) {
     case 'purge':
@@ -196,9 +197,14 @@ export function optionState(state: Readonly<GameState>, piece: EndingPiece, seen
       return emptyShipOption(state, piece, seen);
     case 'stay':
       return stayCandidates(state).length > 0 ? { kind: 'open', price: null, now: null } : needs(piece, seen, FINALE_TEXT.needs.onTarget, null);
-    case 'contact':
+    case 'contact': {
+      // 7d (R41): SIGNALS_FOR_CONTACT fragments held (systems/signals.ts signalCount: a note's, the signal ship's, a CONTACT
+      // stop's), never paid: the meter fills past its tick and nothing is spent.
       if (!ENDINGS_BUILT.contact) return { kind: 'hidden' };
-      throw new Error("optionState: CONTACT's row is 7d's (ENDINGS_BUILT.contact raised before its price was built)");
+      const have = signalCount(state.run);
+      const price: PriceMeter = { kind: 'signals', have, need: SIGNALS_FOR_CONTACT };
+      return have >= SIGNALS_FOR_CONTACT ? { kind: 'open', price, now: null } : needs(piece, seen, FINALE_TEXT.needs.signals(have, SIGNALS_FOR_CONTACT), price);
+    }
     default:
       throw new Error(`optionState: unknown piece '${String(piece)}'`);
   }

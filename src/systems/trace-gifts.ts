@@ -47,6 +47,7 @@ import type { Packet } from '@systems/carry';
 import type { Rng } from '@systems/rng';
 import { traceBuilt, TRACE_RULES, SUNSET_GIFT_PRIORITY } from '@data/traces';
 import { TRACE_TEXT } from '@data/trace-text';
+import { CONTACT_TEXT } from '@data/contact-text';
 import { INBOX_TEXT } from '@data/inbox-text';
 import { UPGRADES, UPGRADE_FILE_TEXT } from '@data/upgrades';
 import { REPO_FILES, repoFileSegments } from '@data/repository';
@@ -63,19 +64,28 @@ import {
 } from '@systems/memory-ops';
 import { isFirewall } from '@state/selectors';
 import {
-  TRACE_GIFT_CHARGE, TRACE_EXTRA_SEEDS, TRACE_MERGE_THREADS, THREAD_PLUS_THREADS, THREAD_PLUS_MAX_OWNED, FIREWALL_BLOCKS,
+  TRACE_GIFT_CHARGE, TRACE_EXTRA_SEEDS, TRACE_MERGE_THREADS, THREAD_PLUS_THREADS, THREAD_PLUS_MAX_OWNED, FIREWALL_BLOCKS, CONTACT_GIFT_CHARGE,
 } from '@data/tuning';
 
 type GiftKind = 'spare' | 'sunset' | 'stay';
 const GIFT_KINDS: readonly TraceKind[] = ['spare', 'sunset', 'stay'];
 const isGiftKind = (kind: TraceKind): kind is GiftKind => GIFT_KINDS.includes(kind);
 
-// The gift waiting at `slot` and not given yet, of a kind this build plays (CONTACT's signal stops are 7d's), or null.
+// The gift waiting at `slot` and not given yet, of a kind this build plays (CONTACT's signal stops: contactStopAt), or null.
 function giftAt(run: Readonly<Pick<RunState, 'traces' | 'map'>>, slot: number): (TracePlace & { kind: GiftKind }) | null {
   if (run.map.world !== 'arm') return null;
   const place = traceAt(run, slot);
   if (place === null || place.given || !isGiftKind(place.kind) || !traceBuilt(place.kind)) return null;
   return place as TracePlace & { kind: GiftKind };
+}
+
+// 7d (R41): a CONTACT signal stop waiting at `slot` and not given yet, while CONTACT is built, or null. Its gift is
+// CONTACT_GIFT_CHARGE through the arrival path and its `▓▓░▓` file (laid in rack A at the ship's build: systems/signals.ts
+// signalFileAt), whose SCAN finds its fragment (systems/unknown-events.ts).
+function contactStopAt(run: Readonly<Pick<RunState, 'traces' | 'map'>>, slot: number): TracePlace | null {
+  if (run.map.world !== 'arm' || !traceBuilt('contact')) return null;
+  const place = traceAt(run, slot);
+  return place !== null && place.kind === 'contact' && !place.given ? place : null;
 }
 
 // Is `slot` the run's final ship (the classic world holds no traces, so its LAST LIGHT plays none)?
@@ -141,7 +151,8 @@ export function traceGiftCharge(state: Readonly<GameState>, toSlot: number): num
   const run = state.run;
   const gift = giftAt(run, toSlot) !== null ? TRACE_GIFT_CHARGE : 0;
   const allowance = isFinal(run, toSlot) && finalTraces(run).reassignment ? TRACE_GIFT_CHARGE : 0;
-  return gift + allowance;
+  const stop = contactStopAt(run, toSlot) !== null ? CONTACT_GIFT_CHARGE : 0;
+  return gift + allowance + stop;
 }
 
 // --- The gifts' files ------------------------------------------------------------------------------------------------------
@@ -232,6 +243,8 @@ export function arrivalTraceLines(state: Readonly<GameState>, toSlot: number, mo
       : place.kind === 'sunset' ? sunsetNameOf(sunsetFileOf(run)) : null;
     lines.push({ kind: 'trace-gift', trace: place.kind, text: cacheLine(run, place, TRACE_GIFT_CHARGE, what) });
   }
+  // 7d (R41): a CONTACT signal stop says its charge and its file.
+  if (contactStopAt(run, toSlot) !== null) lines.push({ kind: 'trace-gift', trace: 'contact', text: CONTACT_TEXT.stopLine(CONTACT_GIFT_CHARGE) });
   return lines;
 }
 
@@ -344,6 +357,13 @@ export function traceBootLineSaid(store: Store<GameState>, kind: TraceBootLine['
     });
   } else if (isGiftKind(line.trace)) {
     giveGift(store, line.trace);
+  } else if (line.trace === 'contact') {
+    // 7d (R41): its charge crossed with the arrival and its file is in rack A since the build; the stop is given.
+    store.update((draft) => {
+      const place = draft.run.traces.places.find((candidate) => candidate.slot === slot && candidate.kind === 'contact');
+      if (place === undefined || place.given) throw new Error(`traceBootLineSaid: no CONTACT stop waiting on slot ${slot}`);
+      place.given = true;
+    });
   } else if (line.trace !== 'reassignment') {
     throw new Error(`traceBootLineSaid: a gift line for ${line.trace}`);
   }

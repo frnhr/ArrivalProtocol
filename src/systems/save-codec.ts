@@ -12,7 +12,7 @@ import type { SurveyState } from '@/types/survey';
 import { parseLastUnit, MetaCorrupt, endingOfV3LastUnit, parseEnding, parseEvent } from '@systems/meta-parse';
 import type { TraceKind } from '@/types/trace';
 import { traceRefusal, noTraces } from '@systems/traces';
-import { signalRefusal, SIGNAL_SOURCES } from '@systems/signals';
+import { signalRefusal, signalCount, SIGNAL_SOURCES } from '@systems/signals';
 import { hasUsableTool } from '@state/selectors';
 import { shipOnTarget } from '@systems/ending-rules';
 import { podsOnTarget } from '@systems/landing-rules';
@@ -39,7 +39,7 @@ import { REPO_CATALOGUE_VERSION } from '@data/repository';
 import { shipDefOf, validateShipDef } from '@data/ships';
 import { shipSummaryAt } from '@systems/map-run';
 import { currentSlot } from '@systems/map-streams';
-import { RUN_SAVE_VERSION, FIRST_UNIT_NUMBER, CYCLES_ARRIVED, FIRST_PICK_FLOOR_CYCLES, SURVEY_CELLS, NOTABLE_EVENTS_MAX } from '@data/tuning';
+import { RUN_SAVE_VERSION, FIRST_UNIT_NUMBER, CYCLES_ARRIVED, FIRST_PICK_FLOOR_CYCLES, SURVEY_CELLS, NOTABLE_EVENTS_MAX, SIGNALS_FOR_CONTACT } from '@data/tuning';
 import { shipCycles } from '@systems/run-score';
 import { bankOf } from '@systems/skill-tree';
 import { SKILL_IDS, levelPrice } from '@data/skills';
@@ -1099,6 +1099,7 @@ export function decodeRunSave(raw: string): DecodeResult {
 // • STAY's ship is ★ ON TARGET (review m2): an ended ship by its summaries (ending-rules shipOnTarget), the final ship by
 //   its live pods (landing-rules podsOnTarget). At ENDING CHOSEN the final tally is never lower than at the confirm: MERGE's
 //   restored pods only add soft LZ landings, as every colonist already counts in the denominator.
+// • CONTACT holds its SIGNALS_FOR_CONTACT signals (7d: held, never spent);
 // • the record is frozen at the confirm ('verdict', FINALE D11), so a finale from 'verdict' on ('last-landing', 'done')
 //   holds its ending record, which agrees with its choices, and one before the confirm none (review M4, m1).
 // Exported for ending/foundation (no save point falls in 'verdict' or 'last-landing', so only a direct call reaches them).
@@ -1118,6 +1119,8 @@ export function finaleRefusal(
     const onTarget = ended !== undefined ? shipOnTarget(ended) : podsOnTarget(landing.pods);
     if (!onTarget) return `STAY names slot ${finale.stay}, not a ★ ON TARGET ship of this run`;
   }
+  // Slice 7d (R41): CONTACT's price is held, not spent, so a CONTACT ending holds SIGNALS_FOR_CONTACT fragments still.
+  if (finale.you === 'contact' && signalCount(run) < SIGNALS_FOR_CONTACT) return `CONTACT with ${signalCount(run)} of ${SIGNALS_FOR_CONTACT} signals`;
   const restorable = new Set(landing.pods.filter((record) => record.restored).map((record) => record.pod));
   const stray = finale.restored.find((pod) => !restorable.has(pod));
   if (stray !== undefined) return `MERGE restored pod ${stray}, which it never gave back`;

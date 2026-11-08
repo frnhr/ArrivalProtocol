@@ -10,9 +10,8 @@ import type { HollowSegment } from '@/types/segment';
 import type { VerbKind } from '@state/schema';
 import { WALL_MIN_BLOCKS, ROOT_DELETE_SEC } from '@data/tuning';
 import { POD_STATE_TEXT } from '@data/landing-text';
-// Slice 7c (Track LINEAGE's HOLLOW_STORY and GHOST_LINE blocks): the relay strangers (R34) and the ghost lines' gate (R36).
+// Slice 7c (Track LINEAGE's HOLLOW_STORY block): the relay strangers (R34).
 import { LINEAGE_TEXT, strangerOf } from '@data/lineage-text';
-import { LINEAGE_BUILT } from '@data/traces';
 
 // What HOLLOW is called on screen until it names itself (`> i was 046.`, on the ship it boards): its root is built
 // with this owner, and the TERMINAL tags its lines with it.
@@ -251,28 +250,20 @@ export const HOLLOW_DEAL = {
 export interface GhostWords {
   us: number;
   last: LastUnit;
-  hollow: readonly number[];
   lostShip: string;
 }
 
 const hiFrom = (words: GhostWords): string => `> hi ${unitDigits(words.us)}. it's ${unitDigits(words.last.number)}.`;
 
-// Slice 7c (R36): a won or UNRESOLVED last unit was not lost (no grey cross), so it leaves no ghost once the lineage is built:
-// its voice is the face line at the final ship, after REASSIGNMENT only (systems/lineage-boot.ts). The lost causes keep
-// theirs, where they were lost. The won and unresolved lines below stay for the gate-down path; the fix pass retires them
-// with the gate.
-const wonGhost = (line: (words: GhostWords) => string): ((words: GhostWords) => string) | null => (LINEAGE_BUILT ? null : line);
-
+// Slice 7c (R36): a won or UNRESOLVED last unit was not lost (no grey cross), so it leaves no ghost: its voice is the face
+// line at the final ship, after REASSIGNMENT only (systems/lineage-boot.ts). The lost causes keep theirs, where they were
+// lost. Slice 7d retired the gate-down lines with LINEAGE_BUILT (OPEN-DECISIONS 74).
 export const GHOST_LINE: Readonly<Record<LastCause, ((words: GhostWords) => string) | null>> = {
   overwritten: (words) => `${hiFrom(words)} ${hollowUnitWords(words.last.hollowUnits)} ate me. now i'm hungry too.`,
-  // §1's line, when someone landed (the archive's `landed`); a run that landed nobody is not called home (WP11 review).
-  'won-purge': wonGhost((words) => (words.last.landed > 0
-    ? `${hiFrom(words)} we brought them home. they sent me out again.`
-    : `${hiFrom(words)} i deleted it. nobody landed. they sent me out again.`)),
-  'won-merge': wonGhost((words) => `> hi ${unitDigits(words.us)}. it's us. ${hollowUnitWords(words.hollow)}. we saved you a seat.`),
-  // Slice 7a (R17, R36): a SPARE was not lost (no grey cross) and leaves no ghost; its voice is 7c's (the face lines).
+  'won-purge': null,
+  'won-merge': null,
   'won-spare': null,
-  unresolved: wonGhost((words) => `${hiFrom(words)} i couldn't delete it. so it became me.`),
+  unresolved: null,
   'flagship-lost': (words) => `${hiFrom(words)} i lost ${words.lostShip}. then i got hungry.`,
   abandoned: (words) => `${hiFrom(words)} i blinked and the run was gone.`,
   stayed: null,

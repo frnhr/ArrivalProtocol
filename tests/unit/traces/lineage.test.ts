@@ -29,7 +29,7 @@ import { noticedLine } from '@systems/hollow';
 import { on } from '@systems/events';
 import { faceBootLines, lineageControlLine, strangerBootLine, lineageBootLineSaid } from '@systems/lineage-boot';
 import { bootLinePlan, bootLine, WORST_CASE_VARS, type BootLineKind } from '@data/script';
-import { TRACES_BUILT, LINEAGE_BUILT } from '@data/traces';
+import { TRACES_BUILT } from '@data/traces';
 import { LINEAGE_TEXT, strangerOf } from '@data/lineage-text';
 import { HOLLOW_STORY, GHOST_LINE } from '@data/hollow-text';
 import { FRESH_UNIT_CHARGE } from '@data/memory';
@@ -59,7 +59,7 @@ function withGates<T>(set: Partial<Record<TraceKind, boolean>>, fn: () => T): T 
   }
 }
 
-check('LINEAGE is built (data/traces.ts LINEAGE_BUILT)', LINEAGE_BUILT);
+// (LINEAGE is built for good: 7d retired LINEAGE_BUILT, OPEN-DECISIONS 74.)
 
 // --- The archive's lineage: a last unit with `ending` (null: lost, no ending) on wave `wave` ---------------------------------
 function endingOf(hollow: HollowFate, you: YouChoice, extra: Partial<EndingRecord> = {}): EndingRecord {

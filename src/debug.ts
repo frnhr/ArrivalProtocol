@@ -59,7 +59,7 @@ import { classicShip, CLASSIC_HOPS } from '@data/classic-five';
 import { nominalShipThreat, nominalRunThreat, planThreat, threatInputFor, fixedShipFacts, NO_FINAL_TRACES } from '@systems/threat-plan';
 import { finalTraceInput, finalTraces, noTraces, rootUnitsOf, runTracesOf, traceAt, type FinalTraces } from '@systems/traces';
 import { cardModel } from '@systems/desk';
-import { TRACES_BUILT, LINEAGE_BUILT } from '@data/traces';
+import { TRACES_BUILT } from '@data/traces';
 import { bookShape, type BookShape } from '@state/log-selectors';
 import type { LogBook, RunTraces, TraceKind } from '@/types/trace';
 import { huntTarget } from '@systems/trace-hunt';
@@ -433,7 +433,7 @@ interface DebugHooks {
   lastLanding: LastLandingDebug;
   // Slice 7c (§2.12): the run's traces and where their gifts wait, what the final ship plays of them (built kinds only) and the
   // gates; traces.as(kind) re-rolls this run's traces as if the last unit had ended with that piece (a step-1 piece with
-  // REASSIGNMENT, a step-2 piece after PURGE; CONTACT is 7d's), the places on this run's arm and stream.
+  // REASSIGNMENT, a step-2 piece after PURGE), the places on this run's arm and stream.
   traces: TracesDebug;
   skipEnding: () => boolean;
   // WP11 part 2: the game's events lately (name and payload, newest last; DEBUG_EVENT_KEEP of them), so a browser run
@@ -498,7 +498,7 @@ interface UnknownDebug {
 }
 
 interface TracesDebug {
-  (): { traces: RunTraces; final: FinalTraces; root: number[]; built: Readonly<Record<TraceKind, boolean>>; lineage: boolean };
+  (): { traces: RunTraces; final: FinalTraces; root: number[]; built: Readonly<Record<TraceKind, boolean>> };
   as: (kind: TraceKind) => RunTraces;
   // The shortest route (fewest ships, then the lowest slots) from the first ship to a final ship through every slot of
   // `via`, or null: for a script that jumps to a gift ship with __ap.route (the 7c review's e2e).
@@ -923,7 +923,6 @@ function debugUnknown(state: Readonly<GameState>, at?: number): UnknownDebug {
 // check (traceRefusal) holds. The ending's facts: the arm's final ship, a final year 3 years before this one's, STAY's colony
 // the last trail's first colony (or the first ship's world), the kit Scan, Repair and Rm, SUNSET's and SPARE's FUEL 25%.
 function debugTracesAs(store: Store<GameState>, kind: TraceKind): RunTraces {
-  if (kind === 'contact') throw new Error("__ap.traces.as: CONTACT is 7d's");
   const run = store.getState().run;
   if (run.map.world !== 'arm') throw new Error('__ap.traces.as: the arm only (the classic world holds no traces)');
   const final = run.map.arm.find((ship) => ship !== undefined && ship !== null && ship.kind === 'final');
@@ -1348,7 +1347,6 @@ export function mountDebug(store: Store<GameState>): void {
       const run = store.getState().run;
       return {
         traces: structuredClone(run.traces) as RunTraces, final: finalTraces(run), root: rootUnitsOf(run), built: { ...TRACES_BUILT },
-        lineage: LINEAGE_BUILT,
       };
     }, {
       as: (kind: TraceKind) => debugTracesAs(store, kind),
