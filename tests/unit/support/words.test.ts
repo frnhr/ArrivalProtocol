@@ -21,7 +21,8 @@ import { join } from 'node:path';
 import { check, finish } from '../landing/checks';
 import { HOLLOW_DEAL, HOLLOW_ECHO, HOLLOW_HUD_TEXT } from '@data/hollow-text';
 import { POD_STATE_TEXT, LANDING_LINES } from '@data/landing-text';
-import { lineageLine, RUN_END_NOBODY_LANDED } from '@data/script';
+import { lineageLine, RUN_END_NOBODY_LANDED, chargeLine } from '@data/script';
+import type { ArrivalReport } from '@state/schema';
 import { scanFinding } from '@data/tool-text';
 import { MAX_LINE_CHARS } from '@data/tuning';
 // Slice 5 (review M1): each track's word module, for its own block at the end (the imports are the lead's: one line each).
@@ -535,6 +536,18 @@ const SLICE7_BASE: Readonly<Record<string, unknown>> = {
     && TRACE_TEXT.wiped(2) === '> THE DISH HERE WAS WIPED · 2 SEEDS GONE' && TRACE_TEXT.wild(1) === '> THE DISH HERE RUNS WILD · 1 SEED CAME IN'
     && TRACE_TEXT.thread(1) === '> A THREAD IN THE DISH · +1 THREAD' && TRACE_TEXT.allowance(15) === '> AN ALLOWANCE FOR THE WAIT · +15 REPAIR CHARGE'
     && stayLetter.from('RIVERSIDE', 'UNIT-047') === 'RIVERSIDE · FOUNDED BY UNIT-047');
+  // The 7c review (B1): the boot's charge line with every source at once (the stars, the card, a gift, the floor), and the
+  // e2e's own (★★ + CARD + GIFT, which threw at 76 characters), fit; each source still named.
+  const arrival = (starCredit: number, stars: number, cardCharge: number, giftCharge: number, chargeFloorAdded: number): ArrivalReport =>
+    ({ starCredit, stars, cardCharge, giftCharge, chargeFloorAdded } as unknown as ArrivalReport);
+  const charges = [
+    chargeLine(arrival(18, 3, 12, 15, 99), 999), chargeLine(arrival(18, 3, 12, 99, 0), 999), chargeLine(arrival(12, 2, 12, 15, 0), 61),
+    chargeLine(arrival(18, 3, 0, 15, 0), 999), chargeLine(arrival(0, 0, 0, 15, 0), 51),
+  ];
+  check('…the boot\'s charge line fits with every source at once and names each (`+12 (CARD)`, then one sum)',
+    charges.every((line) => line.length <= MAX_LINE_CHARS && /GIFT/.test(line))
+    && charges[2] === '> +12 CHARGE (★★) · +12 (CARD) · +15 (GIFT) · REPAIR CHARGE 61'
+    && charges[0] === '> +144 CHARGE (★★★ CARD GIFT FLOOR) · REPAIR CHARGE 999' && charges[4] === '> +15 CHARGE (GIFT) · REPAIR CHARGE 51', JSON.stringify(charges));
 }
 
 // --- end of 7c TRACE -------------------------------------------------------------------------------------------------------

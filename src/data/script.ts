@@ -905,16 +905,25 @@ export function transitEccLine(hits: readonly TransitHit[]): string {
 
 // The arrival's REPAIR CHARGE (§5.1 2:20: `> +18 CHARGE (★★★)`, so 14 + 18 = 32), with the floor's top-up
 // when it gave some (§6.5) and the total the unit now has.
+// The 7c review (B1): with the stars, the card and a gift (REASSIGNMENT's allowance at the final ship) the full line ran to
+// 76 characters and say() threw, which stopped the final boot before the face. Over MAX_LINE_CHARS the later parts drop
+// their `CHARGE` (`+12 (CARD)`); still over (all four at their widest), one sum names every source.
 export function chargeLine(arrival: Readonly<ArrivalReport>, total: number): string {
-  const parts: string[] = [];
-  if (arrival.starCredit > 0) parts.push(`+${arrival.starCredit} CHARGE (${'★'.repeat(arrival.stars)})`);
+  const sources: { charge: number; what: string; full: string }[] = [];
+  if (arrival.starCredit > 0) sources.push({ charge: arrival.starCredit, what: '★'.repeat(arrival.stars), full: `+${arrival.starCredit} CHARGE (${'★'.repeat(arrival.stars)})` });
   // The +12 REPAIR CHARGE card picked at the TRANSMIT (WP8).
-  if (arrival.cardCharge > 0) parts.push(`+${arrival.cardCharge} CHARGE (CARD)`);
+  if (arrival.cardCharge > 0) sources.push({ charge: arrival.cardCharge, what: 'CARD', full: `+${arrival.cardCharge} CHARGE (CARD)` });
   // Slice 7c: a trace's gift (Track TRACE's words).
-  if (arrival.giftCharge > 0) parts.push(TRACE_TEXT.chargePart(arrival.giftCharge));
-  if (arrival.chargeFloorAdded > 0) parts.push(`+${arrival.chargeFloorAdded} CHARGE (FLOOR)`);
-  parts.push(`REPAIR CHARGE ${total}`);
-  return `> ${parts.join(ECC_SEPARATOR)}`;
+  if (arrival.giftCharge > 0) sources.push({ charge: arrival.giftCharge, what: 'GIFT', full: TRACE_TEXT.chargePart(arrival.giftCharge) });
+  if (arrival.chargeFloorAdded > 0) sources.push({ charge: arrival.chargeFloorAdded, what: 'FLOOR', full: `+${arrival.chargeFloorAdded} CHARGE (FLOOR)` });
+  const tail = `REPAIR CHARGE ${total}`;
+  const line = (parts: readonly string[]): string => `> ${[...parts, tail].join(ECC_SEPARATOR)}`;
+  const full = line(sources.map((source) => source.full));
+  if (full.length <= MAX_LINE_CHARS) return full;
+  const short = line(sources.map((source, i) => (i === 0 ? source.full : `+${source.charge} (${source.what})`)));
+  if (short.length <= MAX_LINE_CHARS) return short;
+  const sum = sources.reduce((acc, source) => acc + source.charge, 0);
+  return line([`+${sum} CHARGE (${sources.map((source) => source.what).join(' ')})`]);
 }
 
 // Charge that did not fit memory is lost loudly (§6.9), on a line of its own.
