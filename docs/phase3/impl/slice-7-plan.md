@@ -762,7 +762,8 @@ The epilogue samples are drafts for the tracks: `TODO(05)` where 05 gives no tex
   - the strip: `THE FINALE — choose what becomes of it`;
   - the asleep line: `> 047. wait. finish your landing. i'll be here.`;
   - the worst case is a 12-character ship name in `> mv unit_046·047 -> morning_star`.
-- **The report's ending line (7a CARD, in finale-text):** `THE END · PURGE · STAND BY` style: `ENDING · <step 1> · <title>`.
+- **The report's ending line (7a FINALE, in finale-text, with the title from NIGHT's `epilogue-text.ts ENDING_TITLE`; review
+  B1):** `THE END · PURGE · STAND BY` style: `ENDING · <step 1> · <title>`.
 - **epilogue-text.ts (7a NIGHT):**
   - the header `3060 · FORTY YEARS ON`;
   - the colony line `RIVERSIDE · 760 years · 120,000 people. Ada named the first tree.`, as two parts: a ≤ 70 head and a
@@ -1371,3 +1372,132 @@ Plan §4.4's other listed suites (`landing/flow`, `landing/hollow-landing`, `map
 - **NIGHT:** `setRunEndStage` moves the stages; `endingRecordOf(state)` is this run's ending while `run.phase === 'end'`;
   `archiveMeta().endingsSeen` already holds this run's pieces; `MAP_TEXT.runEnd.bridge` moves to the final card.
 - **The lead:** the independent contract review (§5.1 item 10) is next.
+
+## Deviations (7a foundation, review follow-up)
+
+These are the changes made after the independent review of a0fd347..45d0385 (`slice-7a-foundation-review.md`, where each
+finding is marked with how it was settled), as the lead decided them. Every gate is still down and nothing a player can reach
+changes. The unit tier is green: 207 passed, 0 failed, 11 balance-only skipped, 228 s on 4 workers
+(slice 6's fix pass running beside it), with `npm run typecheck` and the tests' tsc clean; `ending/foundation` has 60 checks. The sections above stand except where this one says otherwise; every line number below is as of this
+follow-up and replaces the ones above.
+
+### Blockers
+
+- **B1. The ending titles are NIGHT's table, shared.** `data/epilogue-text.ts ENDING_TITLE: Readonly<Record<EndingTitleKey,
+  (colony: string) => string>>` holds 05 §3.7's ten titles, R23's four UNRESOLVED drafts and CONTACT's three (the drafts
+  marked `TODO(05)`); only `stay:purge` reads the colony (`${colony}'S MIND`). NIGHT owns the words; FINALE imports the table
+  for `ending-rules.ts reportEndingLine` (the colony from the record's `stay`). The report's line is FINALE's (Deviation 13),
+  and §2.9's bullet is corrected. NIGHT's words block renders the table.
+- **B2. The FUEL notch's tooltip is a lead hook CARD fills:** `systems/finale-card.ts fuelStarTitle(state) => string | null`
+  (new, CARD's file; neutral null). `EngineWindow.ts` reads it on every paint (`:259`, `title ?? today's title`, in the paint's
+  key); the notch's position is untouched.
+
+### Majors
+
+- **M1. Spacers.** `audio-cues.ts`'s 7 ENDING block: CARD's three lines `:390–392`, the spacer comment `:393` (`// Track NIGHT's
+  cues …`), NIGHT's two lines `:394–395`, and `:396` (`// (end of NIGHT's cues)`). `ending/foundation.test.ts`: the gate lines
+  `:56` (FINALE), `:58` (NIGHT), `:60` (7d), each after a spacer comment; NIGHT's night check is its own block (`:136–140`,
+  `// The night's stubs (Track NIGHT's block …)`) after FINALE's stubs block, with blank lines around it.
+- **M2. `OptionState`'s final shape** (`ending-rules.ts`): `{ kind: 'open'; price: PriceMeter | null; now: string | null }`,
+  `{ kind: 'needs'; need: string; named: boolean; price: PriceMeter | null }`, `{ kind: 'hidden' }`, with `PriceMeter { kind:
+  'charge' | 'fuel' | 'signals'; have: number; need: number }`. The neutral stub answers in that shape: PURGE and
+  REASSIGNMENT open and free, MERGE open or `needs` with its charge meter (`have`, `need` 20), every other piece hidden. CARD's
+  `card-models` builds its rows from injected `OptionState`s (any shape above), never from the stub.
+- **M3. STAY's sub-pick** (the contract; `pickStep2` follows it now, `pickStay` stays FINALE's):
+  - the sub-row is CARD-local UI state, unsaved (a reload replays the ship anyway, R14);
+  - `[2] STAY` with one candidate: `pickStep2(store, 'stay')` confirms with that ship;
+  - with more than one: `pickStep2(store, 'stay')` refuses with `FINALE_TEXT.stayPick` (never throws), and CARD opens the
+    sub-row; its pick is `pickStay(store, slot)`, valid at `'step2'`, which refuses a slot not in `stayCandidates` and
+    otherwise confirms STAY;
+  - ESC in the sub-row closes the sub-row (CARD's); ESC on step 2 is `backToStep1`;
+  - the row's `> mount <colony>` names the newest candidate, `stayCandidates()[0]`.
+- **M4. The ending record is frozen at the confirm.** `FinaleState.record: EndingRecord | null` (inside v7): written once, in the
+  confirm's update (after the apply: MERGE's charge spent, PURGE's blocks gone, before MERGE reopens the landing), by
+  `ending-rules.ts endingRecordAt(state, hollow, you, stay)`; UNRESOLVED's decision writes it too. `endingRecordOf` returns it at
+  `'done'` on a final ship (and throws on a decided FINALE without one). The codec reads it with `parseEnding`, refuses a
+  decided FINALE without it, one that disagrees with `hollow`, `you` or `stay`, and one before `'done'`; the v6 migration
+  builds it for a decided finale (`save-codec.ts migratedRecord`: step 1 and REASSIGNMENT, the run's HOLLOW, the final ship's
+  slot, name and year, the kit and charge from the slices' memory). The shape pin's v7 gains `hollow.finale.record`.
+  `support/finale.ts decideFinale(draft, hollow, you)` now takes the draft and freezes the record as the confirm does.
+- **M5. The keep-set.** FINALE deletes no `HOLLOW_FINALE` key and no `finale.ts` export that a file outside its list reads:
+  `chooseFinale`, `finaleChoiceRefusal`, `FinaleChoice`, `finaleEndingLines`, `finaleEndingLineStartsSec`,
+  `finaleEndingShowing`, `skipFinaleEnding`, `mergeTickCharge`, `podsEatenHere`, and every `HOLLOW_FINALE` key (`purgeEnding`,
+  `mergeEnding`, the old card's words, `strip*`, `stripWaitsNobody`, `rootTag`, `endingUnknown`, `mergeNeeds`, …). The fix
+  pass after CARD's merge deletes the dead ones (`chooseFinale`, `finaleChoiceRefusal`, `FinaleChoice`, `finaleEndingLines`,
+  `purgeEnding`, `mergeEnding`, the old card's words) and `not-built.ts`. `support/words.test.ts:150–161` (WP11's finale
+  words) is FINALE's churn.
+- **M6. The confirm re-checks step 1.** `pickStep2` runs `optionState(state, hollow, [])` before applying: an option that can no
+  longer be paid sends the card back to `'step1'` (the pick kept, `'finale-open'` step 1 on the two-step path) and refuses with
+  its need; it never throws mid-apply. `ending/foundation.test.ts:129` pins it (MERGE picked at 25, confirmed at 19). FINALE's
+  `ending/finale-flow` adds the flown case (a REPAIR running under the card).
+- **M7.** `run-end.ts runEndTone` counts `'won-spare'` as won.
+
+### Minors
+
+- **m1.** `finaleCardUp` includes `'verdict'`.
+- **m2.** The strip's choice row (`script.ts:2400`) reads `FINALE_TEXT.strip` with `twoStep` up, WP11's `stripChoice` while
+  down.
+- **m3.** `.lr-ending` has its rule in `ending.css` (CARD owns the rule; FINALE the words).
+- **m4.** The `'won-spare'` placeholders moved to NIGHT's `epilogue-text.ts SPARE_RUN_END` (`title`, `why`, `lineage(hollowName)`);
+  `script.ts`'s `RUN_END_TITLE`, `RUN_END_WHY` and `LINEAGE_END` read them.
+- **m5.** META 3 → 4 adds `'reassignment'` to `endingsSeen` also when the last unit's cause is `'unresolved'`
+  (`ending/foundation` pins it).
+- **m6.** No sentinel left: `EndingRecord.finalYear` is the final ship's year on both worlds (the classic map has real years;
+  null only on a migrated record with no trail), and `stay.year` is the STAY ship's route year on both (`ending-rules.ts
+  routeYear(map, slot)`, for FINALE's `stayCandidates`). `finalSlot` stays null on the classic world.
+- **m7.** `settleFinale` throws before the root falls (`'none'`, `'duel'`). The wait for `'verdict'` → `'done'` and for
+  `cardAtAi` is FINALE's to add to `chooseEnding` when it builds the verdict and the open delay.
+- **m9.** `pickStep1` and `backToStep1` emit `'finale-open'` only on the two-step path (Deviation 9 now holds).
+- **m10.** `arrivalChoir` has its own event, `'epilogue-open'` (`events.ts`'s 7 ENDING block), on NIGHT's cue line
+  (`audio-cues.ts:394`). NIGHT reads the bridging line `MAP_TEXT.runEnd.bridge` through `run-end.ts runEndNext` and does not
+  move it out of `map-text.ts`.
+- **m12, recorded:** the arbiter is the one deliberate live seam with every gate down: the root's fall opens step 1, whose open
+  withdraws untimed TERMINAL choices, and `choiceMayOpen` is shut while the old card is up. No generated final ship holds a
+  sleeper, so nothing a player can reach changes; it is R18's intent.
+- **For the fix pass / the notes (not changed here):**
+  - m8: entry 12 is found as `'step1'` begins, `FINALE_OPEN_DELAY_SEC` before `cardAtAi`: CARD times entry 12's typing from
+    `cardAtAi`.
+  - m11: hand-built states against the stubs: `endingRecordOf` throws on a decided FINALE without its record, and
+    `stayCandidates` is `[]`, so NIGHT's `ending/epilogue` injects the record (an inner `epilogueOf(state, meta, record)`),
+    and CARD injects `OptionState`s (M2).
+  - The review's §4 note: R13's verdict will also move `views.test.ts:55–58` and `purge-fleet.test.ts:44` (FINALE's churn).
+  - The dry run (R5) was not run again: the follow-up changes no behaviour with `twoStep` raised beyond M6's refusal and m9's
+    emits, so its six movers stand.
+
+### The final contract changes, per track
+
+- **FINALE:**
+  - **Files:** `systems/finale.ts`, `systems/ending-rules.ts` (with `endingRecordAt`, `routeYear`, `PriceMeter`),
+    `data/finale-text.ts`, `story-log.ts:66`, `hollow-text.ts` HOLLOW_FINALE (`:187–285`, keep-set M5), the debug bodies of
+    `__ap.finale.pick/.back/.cont` and `__ap.ending`, `tests/unit/support/finale.ts` (may extend: m7), the movers.
+  - **Builds also:** `pickStay` and STAY by M3's flow; `reportEndingLine` with `ENDING_TITLE` (B1); `optionState`'s `price`
+    and `now` (M2); `endingRecordAt`'s STAY through `stayCandidates` with `routeYear` (m6). It keeps `pickStep2`'s re-check
+    (M6) and writes `record` at every confirm (M4).
+  - **Test and lead-file lines:** `data/endings.ts:15`; `tuning.ts:2435–2446`; `support/words.test.ts:150–161` (churn) and its
+    7a FINALE block `:430–441`; `ending/foundation.test.ts:56` (its gate), `:78–83` (the neutral stubs, as built), `:84–85`
+    (the throwing stubs, as built), `:129–132` (M6's case, if its refusal's words change); R5's movers.
+  - **Spacer blocks:** `ending/foundation.test.ts`'s gate lines (`// (Track NIGHT's gate line:)` follows FINALE's).
+- **CARD:**
+  - **Files:** `components/run/FinaleChoice.ts`, `styles/ending.css` (with the `.lr-ending` rule), `systems/finale-card.ts`
+    (`fuelStarTitle`, new: B2), `audio.ts`'s two new cues, `game.css`'s `.finale-choice` block (`:3140–3290`, delete), index.html's
+    `#finaleChoice`.
+  - **Test and lead-file lines:** `tuning.ts:2448–2453`; `audio-cues.ts:390–392` (`finale-open`, SPARE's `finale-chosen`,
+    `finale-step2`).
+  - **Spacer blocks:** `audio-cues.ts`'s `// Track CARD's cues (the card): …` comment opens CARD's lines; `// Track NIGHT's
+    cues (the epilogue): …` follows them.
+  - **Builds by:** M2's shapes (rows from `optionState`), M3's sub-row flow, m8's entry-12 timing from `cardAtAi`.
+- **NIGHT:**
+  - **Files:** `systems/epilogue.ts`, `data/epilogue-text.ts` (with `ENDING_TITLE` and `SPARE_RUN_END`: B1, m4),
+    `components/run/Epilogue.ts`, `FinalCard.ts`, `styles/night.css`, `RunEnd.ts`, `TitleCard.ts`'s ENDINGS line, index.html's
+    `#epilogue` and `#finalCard`.
+  - **Test and lead-file lines:** `data/endings.ts:17`; `tuning.ts:2455–2465`; `support/words.test.ts`'s 7a NIGHT block
+    `:445–457` (it renders `EPILOGUE_TEXT`, `ENDING_TITLE` and `SPARE_RUN_END`); `ending/foundation.test.ts:58` (its gate) and
+    its own block `:136–140`; `audio-cues.ts:394–395` (`epilogue-open` → `arrivalChoir`, `epilogue-line`).
+  - **Spacer blocks:** `audio-cues.ts`'s `// Track NIGHT's cues (the epilogue): …` (`:393`) and `// (end of NIGHT's cues)`
+    (`:396`); `ending/foundation.test.ts`'s `// (Track NIGHT's gate line:)` (`:57`), `// (7d's gate line:)` (`:59`) and
+    `// The night's stubs (Track NIGHT's block …)` (`:136`).
+  - **Builds by:** m10 (emit `'epilogue-open'` as the epilogue comes up; the bridge through `runEndNext`), m11 (inject the
+    record).
+- **The lead:** the merge probe was not re-run here (this worktree's isolation refuses a scratch clone's commits and
+  merges). `scratchpad/probe7.py <FINALE|CARD|NIGHT>` tags each track's lines at this follow-up's numbers, for the review's
+  probe to re-run before the tracks branch.
