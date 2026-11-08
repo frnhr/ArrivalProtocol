@@ -691,8 +691,8 @@ export interface BayClassModel {
 }
 
 // The refusals that outrank BAY OFFLINE in launchRefusal's order (the LaunchRefusal union's): the window shows those
-// words, and NO BAY CTRL over every later one.
-const OUTRANKS_BAY_OFFLINE: ReadonlySet<string> = new Set(['NOT LANDING', 'LANDING OVER', 'PAUSED']);
+// words, and NO BAY CTRL over every later one. MERGE FLYING too: THE LAST LANDING's pods leave from no bay (slice 7b).
+const OUTRANKS_BAY_OFFLINE: ReadonlySet<string> = new Set(['NOT LANDING', 'LANDING OVER', 'MERGE FLYING', 'PAUSED']);
 
 export interface BayWindowModel {
   launch: { label: string; look: LaunchLook; status: string };

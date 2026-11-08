@@ -40,6 +40,9 @@ export function driverName(pod: number, family: string): string {
 export const LAUNCH_REFUSAL_TEXT: Readonly<Record<LaunchRefusal, string>> = {
   'NOT LANDING': 'NOTHING TO LAUNCH YET',
   'LANDING OVER': 'THE LANDING IS OVER',
+  // Slice 7b (Track DROP, the lead's grant): THE LAST LANDING's pods are MERGE's to fly (R26: no input but [ENTER]), so the
+  // kid's [L], the POD BAY's LAUNCH and __ap.launch are refused while it flies.
+  'MERGE FLYING': 'MERGE IS FLYING THEM — [ENTER] SKIPS TO THE END',
   'PAUSED': 'PAUSED',
   'SHIP SCREEN': 'SHIP CONTROLS ARE ON THE AMBER SCREEN — [TAB]',
   // Bay Ctrl missing (§3.4's BAY OFFLINE). Said as BAND_COPY.bay.missing says it: "offline" next to pods would read as

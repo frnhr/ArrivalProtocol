@@ -12,8 +12,9 @@
 //   names the colony and its year; the ENDING CHOSEN save of it encodes and decodes (the codec's STAY and record checks).
 // • THE VERDICT (R13): at most 3 lines, the commands echoed in the TERMINAL, CONTROL's line on the radio once typed, 'done'
 //   after it, the LANDING REPORT and its ending line (`ENDING · PURGE · STAND BY`).
-// • MERGE (R15): the drivers back in place at the confirm, the landing reopened after the verdict ('last-landing'), the
-//   restored pod lands, then 'done'; the record keeps the charge as the confirm left it.
+// • MERGE (7b, in place of R15's interim): every block of HOLLOW taken in at the confirm, the eaten driver back by radio as
+//   THE LAST LANDING starts after the verdict ('last-landing'), the restored pod lands ([ENTER]), then 'done'; the record keeps
+//   the charge as the confirm left it.
 // • MERGE + SUNSET at FUEL 22% (review M1): the reopened landing's engine is shut, so the ship leaves with the record's FUEL.
 // • UNRESOLVED (R10): its card held while a pod falls (review m5); IT FOLLOWED YOU (no entry 12, no step-1 pick), CONTINUE, SUNSET still allowed, the root stays.
 import { check, finish } from '../wp1/harness';
@@ -30,6 +31,7 @@ import { replaceRange, requireAddr, newSegId } from '@systems/memory-ops';
 import { driverName } from '@data/landing-text';
 import type { HollowSegment } from '@/types/segment';
 import { mountStoryLog } from '@systems/story-log';
+import { skipLastLanding } from '@systems/last-landing';
 import {
   pickStep1, pickStep2, pickStay, backToStep1, continueFollowed, skipFinaleEnding, finaleEndingShowing,
 } from '@systems/finale';
@@ -324,7 +326,7 @@ function eatLeadDriver(): ReturnType<typeof driversInMemory>[number] {
   return lead;
 }
 
-// --- MERGE: the drivers back in place, the landing reopened after the verdict (R15) ---------------------------------------
+// --- MERGE: the drivers back by radio, THE LAST LANDING after the verdict (7b; R24–R28, in place of R15's interim) -------
 toArmDuel();
 {
   const lead = eatLeadDriver();
@@ -333,17 +335,19 @@ toArmDuel();
   settleFinale(h.store, () => h.step());
   setCharge(30);
   const pod = (): GameState['landing']['pods'][number] => state().landing.pods.find((record) => record.pod === lead.pod)!;
-  check(`MERGE with POD ${lead.pod}'s driver eaten: NOW: names it`, pod().driverLost === 'eaten' && pod().fate.kind === 'parked'
-    && (() => { const merge = optionState(state(), 'merge', []); return merge.kind === 'open' && merge.now === FINALE_TEXT.nowInterim(1); })());
-  check('…confirmed: the driver back in place at 80, the charge spent, the landing still ended under the verdict',
+  check(`MERGE with POD ${lead.pod}'s driver eaten: NOW: names it, its pod landing on its own (7b)`, pod().driverLost === 'eaten' && pod().fate.kind === 'parked'
+    && (() => { const merge = optionState(state(), 'merge', []); return merge.kind === 'open' && merge.now === FINALE_TEXT.now(1); })());
+  check('…confirmed: every block of HOLLOW taken in, the driver nowhere in memory (by radio, R24), the charge spent, the landing still ended under the verdict',
     chooseEnding(h.store, 'merge', 'reassignment', { verdict: 'type' }) === null && state().hollow.finale.phase === 'verdict'
-    && driversInMemory(state()).find((driver) => driver.pod === lead.pod)?.integrity === MERGE_DRIVER_INTEGRITY && chargeLeft(state()) === 30 - MERGE_COST_CHARGE
-    && state().landing.ended !== null && JSON.stringify(state().hollow.finale.restored) === `[${lead.pod}]`);
-  check('…the verdict typed: \'last-landing\', the landing reopened, the pod aboard again', untilPhase('last-landing', 30) && state().landing.ended === null
-    && pod().fate.kind === 'aboard' && pod().restored && finalePending(state()));
+    && !driversInMemory(state()).some((driver) => driver.pod === lead.pod) && !state().memory.some(isHollow) && chargeLeft(state()) === 30 - MERGE_COST_CHARGE
+    && state().landing.ended !== null && state().landing.lastLanding === null && JSON.stringify(state().hollow.finale.restored) === `[${lead.pod}]`);
+  check('…the verdict typed: THE LAST LANDING (\'last-landing\', the driver by radio at 80), the landing reopened, the pod released aboard',
+    untilPhase('last-landing', 30) && state().landing.ended === null && pod().fate.kind === 'aboard' && pod().restored && finalePending(state())
+    && state().landing.lastLanding?.drivers.some((driver) => driver.pod === lead.pod && driver.integrity === MERGE_DRIVER_INTEGRITY) === true);
   setCharge(3);
-  landInstantly(h.store);
-  check('…the restored pod lands, then \'done\'', pod().fate.kind === 'down' && untilPhase('done', 10));
+  skipLastLanding(h.store);
+  check('…[ENTER]: the restored pod lands, and \'done\' in the same call', pod().fate.kind === 'down' && state().hollow.finale.phase === 'done'
+    && state().landing.lastLanding === null);
   const end = h.wall() + 30;
   while (state().run.phase === 'landing' && h.wall() < end) h.step();
   check('…the LANDING REPORT; the record keeps the charge the confirm left (10), not the world\'s after (3)', state().run.phase === 'report'
@@ -371,7 +375,8 @@ toArmDuel();
     !engineOpen(state()) && refusal !== null && state().landing.goLow === null && Math.abs(state().burn.fuelPct - before) < 1e-9,
     `${refusal} ${state().burn.fuelPct} ${before}`);
   h.store.update((d) => { d.burn.firing = false; d.burn.firingSource = null; });
-  landInstantly(h.store);
+  // THE LAST LANDING may have flown its one pod within those 20 s; else [ENTER] flies it now (7b).
+  if (state().landing.lastLanding !== null) skipLastLanding(h.store);
   check('…the restored pod lands, \'done\'', state().landing.pods.find((record) => record.pod === lead.pod)?.fate.kind === 'down' && untilPhase('done', 10));
   const end = h.wall() + 30;
   while (state().run.phase === 'landing' && h.wall() < end) h.step();
