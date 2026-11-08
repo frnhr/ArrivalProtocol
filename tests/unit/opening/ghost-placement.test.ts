@@ -15,11 +15,9 @@ import { lockOn } from '../landing/harness-landing';
 import { setLandingMode } from '../support/landing-instant';
 import { receiveTransmission, skipBoot, bootSkipWaits } from '@systems/boot';
 import { startRun, continueAfterLoss } from '@systems/run';
-import { setCourseFromDesk } from '../support/desk';
-import { reachableFrom } from '@systems/map-hop';
+import { setCourseFromDesk, climbingRoutes } from '../support/desk';
 import { mapAlong, nominalAlong } from '@systems/arm-fixture';
 import { layerOf } from '@systems/map-geometry';
-import { END_SLOTS, FIRST_SLOT } from '@data/arm';
 import { actionRepair, setIntegrity } from '@state/actions';
 import { infectNow } from '@systems/hollow';
 import { getAiCore } from '@state/selectors';
@@ -58,21 +56,14 @@ function lineageAfter(cause: LastCause, lostSlot: number) {
 
 // Run 2's route for the scenario: from ship 1, a hop at a time, each stop one layer further out, to a final ship; HOLLOW's
 // forced boarding (the nominal route's verdict) on the beam into the stop before the final one, in the layer of `crossSlot`.
-// The shortest such route, the first by slot order (the arm is a fresh roll of the run seed).
+// The shortest such route, the first by slot order (support/desk climbingRoutes: the arm is a fresh roll of the run seed).
 function routeThroughBoarding(map: Readonly<RunMapState>, crossSlot: number): number[] {
-  const found: number[][] = [];
-  const walk = (path: number[]): void => {
-    const here = path.at(-1)!;
-    if (END_SLOTS.includes(here)) { found.push(path); return; }
-    for (const next of reachableFrom(map, here)) if (layerOf(next) > layerOf(here)) walk([...path, next]);
-  };
-  walk([FIRST_SLOT]);
-  const fits = found.filter((route) => {
+  const fits = climbingRoutes(map).filter((route) => {
     const boarding = route.length - 2;
     if (layerOf(route[boarding]!) !== layerOf(crossSlot)) return false;
     const along = mapAlong(map, route);
     return route.every((_, i) => i === 0 || (nominalAlong(along, route.slice(0, i + 1)).verdict.boards !== null) === (i === boarding));
-  }).sort((a, b) => a.length - b.length);
+  });
   const route = fits[0];
   if (route === undefined) throw new Error(`routeThroughBoarding: run ${map.run}'s arm has no route boarding in layer ${layerOf(crossSlot)}`);
   return route;
