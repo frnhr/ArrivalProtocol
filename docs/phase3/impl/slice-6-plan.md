@@ -1,5 +1,14 @@
 # Slice 6 plan: SURVEY
 
+**Lead decisions (2026-11-08).**
+- All of R1–R25 are adopted as written.
+- The [FRAN] items (R3, R4, R5, R7, R8, R17) are built as recommended here, and logged in `docs/phase3/OPEN-DECISIONS.md`
+  under "Slice 6".
+- Save: RUN_SAVE_VERSION is still 5 at this plan's start. The slice 5 fix pass made no bump, so the FOUNDATION's bump
+  is v5 → v6.
+- Process: FOUNDATION (in a worktree, while the slice 5 e2e runs on the main checkout), then a contract review, then
+  the SWATH and SITES tracks, then merge, review, fixes, the unit tier and one e2e run.
+
 **Status: proposal for the lead.** Every open call below has one recommendation. The [FRAN] items change gameplay: the
 lead builds them as recommended (Fran asked for best judgement while short on time) and logs each one in
 `docs/phase3/OPEN-DECISIONS.md` under a new "Slice 6" heading, with how to reverse it. The process is the one slices 4c–4e

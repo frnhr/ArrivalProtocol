@@ -119,3 +119,18 @@ Status words:
     peppers racks A and B, where WARDEN.sys sits, so a belt ship could lower it. Its health is only the cure's price (04
     §3.12), so a hit would raise that price at random, and at 0% it would stop firing but still lock and deal. Leftovers still
     take hits. To change: `zones.ts damageable`.
+
+## Slice 6 (SURVEY)
+
+33. **Exactly one bad guessed LZ per POOR planet,** ROCKY or WET, half and half (R3). BUILT.
+    - ROCKY: every pod lands hard (×0.5).
+    - WET: hard as well, and the bracket is a third narrower.
+    - The cost is about one cycle step: 12–25% of the points.
+34. **WET's narrower bracket is drawn and scored from the boot; only the word is hidden** (R4). BUILT. The reveal
+    changes no geometry, so a pod is never re-scored as off-site.
+35. **Without SURVEY, the first touchdown on the bad guess reveals it,** with CONTROL's lake or rocky line (R5). BUILT.
+36. **SURVEY starts by itself and stops at 100% mapped** (R7). BUILT. A PAUSE button in the SITES window releases its
+    thread; there is no new key.
+37. **SURVEY claims a thread only if one stays free,** and yields to AUTOBURN's and AUTODROP's claims, never to the
+    kid's ops (R8). BUILT.
+38. **The sleeper doesn't teach SURVEY;** its gift stays 4 cycles (R17). BUILT.
