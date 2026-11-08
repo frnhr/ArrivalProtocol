@@ -29,7 +29,7 @@ import { giveSkillFile } from '../support/skills';
 import { TRACE_TEXT } from '@data/trace-text';
 import { HOLLOW_STAGES } from '@data/threats';
 import {
-  TRACE_GIFT_CHARGE, TRACE_PURGE_BITE_MULT, TRACE_MERGE_THREADS, FINAL_ROOT_MAX_BLOCKS, SEED_BLOCKS, SEED_TOOL_GAP_BLOCKS, WALL_MIN_BLOCKS,
+  TRACE_ALLOWANCE_CHARGE, TRACE_PURGE_BITE_MULT, TRACE_MERGE_THREADS, FINAL_ROOT_MAX_BLOCKS, SEED_BLOCKS, SEED_TOOL_GAP_BLOCKS, WALL_MIN_BLOCKS,
 } from '@data/tuning';
 import { endingOf, lastUnitOf, startRun2, routeVia, beamTo, finalSlotOf, arm2 } from './trace-arm';
 
@@ -94,9 +94,9 @@ check('PURGE: the seeds the unit carried in are gone, the boot says `> THE DISH 
   purge.seeds.length === 0 && purge.lines[0] === TRACE_TEXT.wiped(2) && purge.said.includes(TRACE_TEXT.wiped(2)), JSON.stringify(purge.lines));
 check('…and the FINALE bites every 12 s × 0.85; its root is 16 blocks, the Core as it was',
   purge.spread === finaleSpread * TRACE_PURGE_BITE_MULT && purge.root === 16 && purge.capacity === none.capacity, String(purge.spread));
-check('REASSIGNMENT: +15 REPAIR CHARGE through the arrival path (`> AN ALLOWANCE FOR THE WAIT · +15 REPAIR CHARGE`), the charge laid out',
-  purge.giftCharge === TRACE_GIFT_CHARGE && purge.lines.at(-1) === TRACE_TEXT.allowance(TRACE_GIFT_CHARGE)
-  && chargeLeft(purge.state) === chargeLeft(none.state) + TRACE_GIFT_CHARGE && purge.said.length === purge.lines.length,
+check(`REASSIGNMENT: +${TRACE_ALLOWANCE_CHARGE} REPAIR CHARGE through the arrival path (\`${TRACE_TEXT.allowance(TRACE_ALLOWANCE_CHARGE)}\`), the charge laid out`,
+  purge.giftCharge === TRACE_ALLOWANCE_CHARGE && purge.lines.at(-1) === TRACE_TEXT.allowance(TRACE_ALLOWANCE_CHARGE)
+  && chargeLeft(purge.state) === chargeLeft(none.state) + TRACE_ALLOWANCE_CHARGE && purge.said.length === purge.lines.length,
   `${chargeLeft(purge.state)} vs ${chargeLeft(none.state)}`);
 check('…the root is the last unit (UNIT-047), its FINALE seeds hunt your best skill (\'near-skill\'), its RM goes for AUTOBURN.skl',
   JSON.stringify(rootUnitsOf(purge.state.run)) === '[47]' && purge.state.hollow.cfg.seed?.target === 'near-skill'
@@ -146,7 +146,7 @@ check('SUNSET (non-compliant): one wild seed on top of the beam\'s, `> THE DISH 
 check('…PURGE + SUNSET: the wipe takes the two the unit carried, never the wild one',
   purgeSunset.seeds.length === 1 && purgeSunset.lines.join(' | ') === `${TRACE_TEXT.wiped(2)} | ${TRACE_TEXT.wild(1)}`, JSON.stringify(purgeSunset.lines));
 check('…SPARE + REASSIGNMENT: the wild seed and the allowance (one seed however many non-compliant traces are held)',
-  spare.seeds.length === none.seeds.length + 1 && spare.lines.join(' | ') === `${TRACE_TEXT.wild(1)} | ${TRACE_TEXT.allowance(TRACE_GIFT_CHARGE)}`
+  spare.seeds.length === none.seeds.length + 1 && spare.lines.join(' | ') === `${TRACE_TEXT.wild(1)} | ${TRACE_TEXT.allowance(TRACE_ALLOWANCE_CHARGE)}`
   && finalTraces(spare.state.run).wild, JSON.stringify(spare.lines));
 check('…compliant endings owe none (PURGE / MERGE + REASSIGNMENT), and the gift charge is the allowance\'s alone',
   !finalTraces(purge.state.run).wild && !finalTraces(merge.state.run).wild && traceGiftCharge(none.state, finalSlot) === 0);

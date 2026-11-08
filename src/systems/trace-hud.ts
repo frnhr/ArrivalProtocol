@@ -29,7 +29,7 @@ import { CONTACT_TEXT } from '@data/contact-text';
 import { TRACE_HUD_TEXT } from '@data/trace-text';
 import { FINALE_TEXT } from '@data/finale-text';
 import { hollowUnitName, unitName } from '@data/hollow-text';
-import { TRACE_GIFT_CHARGE, TRACE_MERGE_THREADS, TRACE_EXTRA_SEEDS, FINAL_ROOT_MAX_BLOCKS } from '@data/tuning';
+import { TRACE_ALLOWANCE_CHARGE, TRACE_MERGE_THREADS, TRACE_EXTRA_SEEDS, FINAL_ROOT_MAX_BLOCKS } from '@data/tuning';
 
 export type TraceBuiltRule = (kind: TraceKind) => boolean;
 
@@ -85,7 +85,7 @@ export function nextRunBody(
   switch (kind) {
     case 'purge': return n.purge;
     case 'merge': return n.merge(TRACE_MERGE_THREADS, FINAL_ROOT_MAX_BLOCKS);
-    case 'reassignment': return n.reassignment(TRACE_GIFT_CHARGE);
+    case 'reassignment': return n.reassignment(TRACE_ALLOWANCE_CHARGE);
     case 'spare': return n.join(n.spare(hollowUnitName(rootUnits)), wild());
     case 'sunset': return n.join(n.sunset, wild());
     case 'stay': return n.join(n.stay, wild());

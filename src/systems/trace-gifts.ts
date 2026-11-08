@@ -30,7 +30,7 @@
 //   adds TRACE_EXTRA_SEEDS wild seed(s) by the beam-seed target rule (beam-seeds.ts rollExtraSeeds on the hop's own
 //   'traces' stream), which the wipe never takes, MERGE adds TRACE_MERGE_THREADS to the Core's capacity as its line is said
 //   (no seam: coreThreads reads the capacity, and nothing carries on from the final ship), REASSIGNMENT's allowance is
-//   TRACE_GIFT_CHARGE through the arrival path;
+//   TRACE_ALLOWANCE_CHARGE through the arrival path (slice 8: its own number, apart from the caches');
 // • a first ship has no arrival (ship 1 is a fresh unit from ARRIVAL CONTROL): SUNSET's first-ship fallback gives its
 //   charge at the boot itself, into the pool where it lies (the receiver's free run after it, past the files beside it),
 //   and its tool with it. Its line is read from the run (traceBootLines), and its charge from what fits as it is said.
@@ -64,7 +64,7 @@ import {
 } from '@systems/memory-ops';
 import { isFirewall } from '@state/selectors';
 import {
-  TRACE_GIFT_CHARGE, TRACE_EXTRA_SEEDS, TRACE_MERGE_THREADS, THREAD_PLUS_THREADS, THREAD_PLUS_MAX_OWNED, FIREWALL_BLOCKS, CONTACT_GIFT_CHARGE,
+  TRACE_GIFT_CHARGE, TRACE_ALLOWANCE_CHARGE, TRACE_EXTRA_SEEDS, TRACE_MERGE_THREADS, THREAD_PLUS_THREADS, THREAD_PLUS_MAX_OWNED, FIREWALL_BLOCKS, CONTACT_GIFT_CHARGE,
 } from '@data/tuning';
 
 type GiftKind = 'spare' | 'sunset' | 'stay';
@@ -145,12 +145,12 @@ export function traceSeedAllowance(state: Readonly<GameState>, toSlot: number, a
 // --- The charge (R32) -----------------------------------------------------------------------------------------------------
 
 // The REPAIR CHARGE a trace gives on arrival at `toSlot` (R32: TRACE_GIFT_CHARGE at a gift's ship not yet given, and
-// REASSIGNMENT's allowance at the final ship), laid out with the rest of the charge (carry.ts arrivalCharge's giftCharge),
+// REASSIGNMENT's allowance, TRACE_ALLOWANCE_CHARGE, at the final ship), laid out with the rest of the charge (carry.ts arrivalCharge's giftCharge),
 // so a squeezed receiver loses it as loudly as any.
 export function traceGiftCharge(state: Readonly<GameState>, toSlot: number): number {
   const run = state.run;
   const gift = giftAt(run, toSlot) !== null ? TRACE_GIFT_CHARGE : 0;
-  const allowance = isFinal(run, toSlot) && finalTraces(run).reassignment ? TRACE_GIFT_CHARGE : 0;
+  const allowance = isFinal(run, toSlot) && finalTraces(run).reassignment ? TRACE_ALLOWANCE_CHARGE : 0;
   const stop = contactStopAt(run, toSlot) !== null ? CONTACT_GIFT_CHARGE : 0;
   return gift + allowance + stop;
 }
@@ -231,7 +231,7 @@ export function arrivalTraceLines(state: Readonly<GameState>, toSlot: number, mo
     if (final.purge && mods.wiped > 0) lines.push({ kind: 'dish-wiped', trace: 'purge', text: TRACE_TEXT.wiped(mods.wiped) });
     if (final.wild && mods.extra > 0) lines.push({ kind: 'dish-wild', trace: wildKind(run), text: TRACE_TEXT.wild(mods.extra) });
     if (final.merge) lines.push({ kind: 'trace-gift', trace: 'merge', text: TRACE_TEXT.thread(TRACE_MERGE_THREADS) });
-    if (final.reassignment) lines.push({ kind: 'trace-gift', trace: 'reassignment', text: TRACE_TEXT.allowance(TRACE_GIFT_CHARGE) });
+    if (final.reassignment) lines.push({ kind: 'trace-gift', trace: 'reassignment', text: TRACE_TEXT.allowance(TRACE_ALLOWANCE_CHARGE) });
   } else if (mods.wiped > 0 && giftAt(run, toSlot)?.kind !== 'spare') {
     throw new Error(`arrivalTraceLines: ${mods.wiped} seeds wiped on a beam into slot ${toSlot}, neither SPARE's ship nor the final one`);
   }

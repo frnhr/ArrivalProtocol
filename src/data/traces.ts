@@ -35,7 +35,7 @@ export function traceBuilt(kind: TraceKind): boolean {
 // • gains: wipe-seeds (the seeds the unit carries into the final ship are gone), thread (+TRACE_MERGE_THREADS Core
 //   threads at the final boot), cache (+TRACE_GIFT_CHARGE and the first of THREAD+ / FIREWALL.sys the unit lacks; the
 //   beam into that ship carries no seeds), tool-cache (+TRACE_GIFT_CHARGE and a spare of a tool the last unit ended with,
-//   by SUNSET_GIFT_PRIORITY), supply (+TRACE_GIFT_CHARGE and the colony's letter), allowance (+TRACE_GIFT_CHARGE at the
+//   by SUNSET_GIFT_PRIORITY), supply (+TRACE_GIFT_CHARGE and the colony's letter), allowance (+TRACE_ALLOWANCE_CHARGE at the
 //   final boot), signal-stops (7d: two stops, +CONTACT_GIFT_CHARGE and a fragment each);
 // • costs: hungrier (the FINALE's bite interval × TRACE_PURGE_BITE_MULT), bigger-root (the final root
 //   FINAL_ROOT_MAX_BLOCKS), wild-seed (one extra seed at the final boot, once a run however many are held), root-is-you

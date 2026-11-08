@@ -2519,8 +2519,8 @@ export const LAST_LANDING_SKIP_MAX_STEPS = 200_000;
 
 // --- 7c lead ---------------------------------------------------------------------------------------------------------
 
-// Every gift's REPAIR CHARGE (R32; 05 §3.8, decision round 3 item 4): SPARE's cache, SUNSET's cache, STAY's supply packet
-// and REASSIGNMENT's allowance at the final boot. Through the arrival path (systems/carry.ts arrivalCharge's giftCharge), so
+// Every cache's REPAIR CHARGE (R32; 05 §3.8, decision round 3 item 4): SPARE's cache, SUNSET's cache and STAY's supply
+// packet. REASSIGNMENT's allowance at the final boot was this too until slice 8: it is TRACE_ALLOWANCE_CHARGE below. Through the arrival path (systems/carry.ts arrivalCharge's giftCharge), so
 // a squeezed receiver loses it as loudly as any charge.
 export const TRACE_GIFT_CHARGE = 15;
 // PURGE's cost (R33; 05 §3.8): the FINALE's bite interval times this (HOLLOW is hungrier: the hunger is all its own).
@@ -2546,6 +2546,9 @@ export const TRACE_SPARE_FALLBACK_LAYERS: readonly [number, number] = [2, 6];
 // The face line's wait (R35; 05 §3.5 `i've been at this dish 3 years`): this final ship's year minus the last one's, at
 // least this many years (02 §3.4: the next final ship approaches at least a gap's worth of years later).
 export const TRACE_ROOT_WAIT_MIN_YEARS = 1;
+// REASSIGNMENT's allowance at the final boot (R32; slice-8 plan §2.8, OPEN-DECISIONS 70 and 105): its own number since slice
+// 8, apart from the caches' TRACE_GIFT_CHARGE. Through the arrival path, as every gift.
+export const TRACE_ALLOWANCE_CHARGE = 15;
 
 // --- end of 7c lead --------------------------------------------------------------------------------------------------
 
