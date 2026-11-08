@@ -39,6 +39,7 @@ export type RevealBy = 'survey' | 'touchdown';
 
 export interface SurveyMove {
   lz: string;                   // the LZ's label
+  from: string;                 // the site it left (review M7: slice 7's `you moved LZ-B off the lake` reads it)
   site: string;                 // the site it moved to
 }
 
@@ -73,4 +74,5 @@ export interface SurveyRecord {
   found: number;                // candidates and wrecks found (guesses not counted)
   moves: SurveyMove[];
   badKept: { lz: string; ground: BadGround; known: RevealBy | null }[];   // LZs on bad ground at the end
+  movedOff: { lz: string; ground: BadGround; known: RevealBy | null }[];  // bad grounds an LZ left, by move (review M7)
 }

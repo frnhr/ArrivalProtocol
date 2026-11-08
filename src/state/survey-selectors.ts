@@ -6,7 +6,7 @@
 import type { GameState } from '@state/schema';
 import type { LandingState, LzGround, LzState } from '@/types/landing';
 import type { EffectiveVersion } from '@/types/skill';
-import type { SurveySite, SurveyState, SurveyRecord, BadGround } from '@/types/survey';
+import type { SurveySite, SurveyState, SurveyRecord, BadGround, RevealBy } from '@/types/survey';
 import { skillLive } from '@systems/capabilities';
 import { SKILL_TREE } from '@data/skills';
 
@@ -61,15 +61,22 @@ export function mappedPct(survey: Readonly<Pick<SurveyState, 'mapped'>>): number
 export function surveyRecordOf(landing: Readonly<Pick<LandingState, 'lzs' | 'survey'>>): SurveyRecord | null {
   const { survey } = landing;
   if (survey.site === 'good') return null;
+  // Who made a bad site known: its reveal, else SURVEY (a bad site rated before an LZ moved onto it has no reveal of its own).
+  const knownOf = (site: Readonly<SurveySite>): RevealBy | null =>
+    survey.reveals.find((reveal) => reveal.site === site.id)?.by ?? (site.groundKnown ? 'survey' : null);
   const badKept = landing.lzs.flatMap((lz) => {
     if (lz.ground === 'flat') return [];
     const site = lzSiteOf(landing, lz.label);
-    // A bad site rated before an LZ moved onto it has no reveal of its own: SURVEY made it known.
-    const known = site === null ? null : survey.reveals.find((reveal) => reveal.site === site.id)?.by ?? (site.groundKnown ? 'survey' : null);
-    return [{ lz: lz.label, ground: lz.ground as BadGround, known }];
+    return [{ lz: lz.label, ground: lz.ground as BadGround, known: site === null ? null : knownOf(site) }];
+  });
+  // Every move off a bad site, in order (review M7: the epilogue's `you moved LZ-B off the lake`).
+  const movedOff = survey.moves.flatMap((move) => {
+    const from = survey.sites.find((site) => site.id === move.from);
+    if (from === undefined) throw new Error(`surveyRecordOf: ${move.lz} moved off '${move.from}', which the survey does not have`);
+    return from.ground === 'flat' ? [] : [{ lz: move.lz, ground: from.ground as BadGround, known: knownOf(from) }];
   });
   return {
     ranAt: survey.ranAt, mappedPct: mappedPct(survey), found: foundSites(survey).length,
-    moves: survey.moves.map((move) => ({ ...move })), badKept,
+    moves: survey.moves.map((move) => ({ ...move })), badKept, movedOff,
   };
 }

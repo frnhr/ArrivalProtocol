@@ -184,7 +184,7 @@ const checkMap = rec({
 
 // A ship's survey record (slice 6, RUN_SAVE_VERSION 6; types/survey.ts SurveyRecord): null on a GOOD planet.
 const EFFECTIVE_VERSION_CHECK = oneOf(0, 1, 2, 3);
-const checkSurveyMove = rec({ lz: name, site: name });
+const checkSurveyMove = rec({ lz: name, from: name, site: name });
 const checkSurveyRecord = rec({
   ranAt: EFFECTIVE_VERSION_CHECK,
   mappedPct: (value, at) => {
@@ -194,6 +194,7 @@ const checkSurveyRecord = rec({
   found: whole,
   moves: list(checkSurveyMove),
   badKept: list(rec({ lz: name, ground: oneOf('rocky', 'wet'), known: oneOf('survey', 'touchdown', null) })),
+  movedOff: list(rec({ lz: name, ground: oneOf('rocky', 'wet'), known: oneOf('survey', 'touchdown', null) })),
 });
 
 const checkShipResult = rec({
@@ -510,6 +511,8 @@ function checkSurvey(landing: Readonly<Record<string, unknown>>, at: string): vo
     const where = `${at}.lzs[${i}].site`;
     if (lz.site === null) {
       if (survey.site === 'poor') shapeFail(where, 'is null on a POOR planet');
+      // Review m9: a GOOD planet's LZs are sound (01 §3.13).
+      if (lz.ground !== 'flat') shapeFail(`${at}.lzs[${i}].ground`, `is '${lz.ground}' on a GOOD planet`);
       return;
     }
     if (survey.site === 'good') shapeFail(where, 'names a site on a GOOD planet');
@@ -524,7 +527,9 @@ function checkSurvey(landing: Readonly<Record<string, unknown>>, at: string): vo
   });
   const labels = lzs.map((lz) => lz.label);
   survey.moves.forEach((move, i) => {
-    if (!labels.includes(move.lz) || !ids.includes(move.site)) shapeFail(`${at}.survey.moves[${i}]`, `names ${move.lz} → ${move.site}, which the slice does not have`);
+    if (!labels.includes(move.lz) || !ids.includes(move.from) || !ids.includes(move.site) || move.from === move.site) {
+      shapeFail(`${at}.survey.moves[${i}]`, `names ${move.lz}: ${move.from} → ${move.site}, which the slice does not have`);
+    }
   });
   survey.reveals.forEach((reveal, i) => {
     if (!ids.includes(reveal.site)) shapeFail(`${at}.survey.reveals[${i}]`, `names '${reveal.site}', which the survey does not have`);
