@@ -3,8 +3,8 @@
 // checks that the skip over frames (systems/last-landing.ts skipLastLandingFrames, the page's [ENTER] and button) ends
 // THE LAST LANDING in exactly the state the one-call skip ends it in, pod for pod and field for field, on the arm's LAST
 // LIGHT (ending/last-landing-arm.ts), with a fake frame scheduler and a fake wall clock:
-// • blind (no AUTODROP, 4 pods) and AUTODROP v2 (3), and at full depth v3 (6): every frame a few steps, the whole state equal
-//   at the end (a control first: two one-call skips from one setup are equal);
+// • blind (no AUTODROP: 2 pods, 4 at full depth), AUTODROP v2 (3 pods) and at full depth v3 (6): every frame a few steps,
+//   the whole state equal at the end (a control first: two one-call skips from one setup are equal);
 // • at full depth all 16 pods blind (the plan's worst case), with frames of one step;
 // • a pause between two frames (a hidden tab) is let go at the next, and the end is still the same;
 // • while it runs: a second [ENTER] and a second call do nothing, P is not heard, M is; the frames' budget is kept (no frame
@@ -95,8 +95,9 @@ const podsDown = (pods: number[]): boolean => pods.every((pod) => state().landin
 
 // --- Blind, v2 and v3: the end state equal, field for field -----------------------------------------------------------------
 // 4 ms per wall-clock read: a frame reads the clock once at its start and once per step, so 12 ms of budget is 3 steps.
-// v3 on 6 pods only at full depth: each case flies its landing twice, and the quick tier's two cover both fliers' code.
-for (const opts of byDepth<ArmOpts[]>([{ autodrop: null, eaten: 4 }, { autodrop: 2, eaten: 3 }],
+// Quick: blind on 2 pods and v2 on 3; full: blind on 4 and v3 on 6 too. Each case flies its landing twice, and the quick
+// tier's two cover both fliers' code.
+for (const opts of byDepth<ArmOpts[]>([{ autodrop: null, eaten: 2 }, { autodrop: 2, eaten: 3 }],
   [{ autodrop: null, eaten: 4 }, { autodrop: 2, eaten: 3 }, { autodrop: 3, eaten: 6 }])) {
   const once = skippedOnce(opts);
   const framed = skippedFramed(opts, 4);
