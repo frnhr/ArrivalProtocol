@@ -7,7 +7,8 @@ body:not(.survey) .survey-only { display: none !important; }
 
 /* ── The SITES window: the foot of the left column, under COMMS (which gives it the room, keeping two lines of radio).
  *    With SKILLS docked there too (a short desk) it sits above SKILLS. ── */
-.desktop > .tools-view { --sites-h: clamp(170px, 42%, 330px); }
+/* Up to 42% of the column, but never so tall that COMMS falls under its two-line floor (110 px) on a short desk. */
+.desktop > .tools-view { --sites-h: clamp(140px, min(42%, calc(100% - var(--comms-top) - 110px - 3 * var(--gutter))), 330px); }
 .sites-win {
   left: var(--gutter);
   bottom: var(--gutter);
