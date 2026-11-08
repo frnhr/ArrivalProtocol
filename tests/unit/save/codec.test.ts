@@ -8,6 +8,7 @@
 //   each content version, a missing or unknown key, the saved run field by field (a type, an Infinity in the wrong place,
 //   the envelope's copies against the run), a classic map, a route that doesn't match its point, a ship that doesn't build;
 // • saveRefusal finds a stale save; the size at each point is printed (INFO, risk 8).
+import { withClassicWorld } from '../support/classic-fixture';
 import { isDeepStrictEqual } from 'node:util';
 import { check, finish } from '../landing/checks';
 import type { GameState } from '@state/schema';
@@ -92,7 +93,7 @@ const throws = (fn: () => unknown): boolean => { try { fn(); return false; } cat
 check('encode throws on any other non-finite number (NaN fuel, an Infinity off a burst\'s end)',
   throws(() => encodeRunSave(buildRunSave(at('report', (state) => { state.burn.fuelPct = Number.NaN; }), 'ending-chosen', 1, null, 0)))
   && throws(() => encodeRunSave(buildRunSave(at('report', (state) => { state.burn.fuelPct = Infinity; }), 'ending-chosen', 1, null, 0))));
-const classic = createInitialState({ seed: SEED, phase: 'boot' });
+const classic = withClassicWorld(() => createInitialState({ seed: SEED, phase: 'boot' }));
 check('a classic-world map is never saved (encode throws)', classic.run.map.world === 'classic'
   && throws(() => encodeRunSave(buildRunSave(classic, 'run-start', 1, BOOT, 0))));
 check('a point written from the wrong moment throws (SHIP DONE off the desk; a boot point without its parts)',

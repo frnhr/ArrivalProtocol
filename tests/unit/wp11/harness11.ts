@@ -40,6 +40,8 @@ import { chooseEnding, finaleAtStep1 } from '../support/finale';
 export const LAST_LIGHT = 4;
 
 export interface LastLightOpts {
+  // The worked route's tools by LAST LIGHT (harness7 shipAlone's `kit`; the arm only).
+  kit?: boolean;
   // HOLLOW put to sleep for good (a flight suite measures the flight, not the fight).
   hollowAsleep?: boolean;
 }
@@ -181,7 +183,7 @@ export function createHarness11(seed = 1, opts: { soulsFound?: boolean } = {}): 
   return {
     ...base,
     lastLight(nextSeed, lastOpts = {}) {
-      base.shipAlone(LAST_LIGHT, nextSeed);
+      base.shipAlone(LAST_LIGHT, nextSeed, { kit: lastOpts.kit ?? false });
       if (lastOpts.hollowAsleep) base.store.update((d) => { d.hollow.phase = 'dormant'; });
       base.events.length = 0;
     },

@@ -1,19 +1,18 @@
 // Slice 1a, Track UI: the LANDING REPORT's view model (src/systems/landing-report.ts). Pure: worlds from the foundation's
 // constructors with each pod's fate written by hand (no store, no mounts, nothing flown).
+import '../support/classic-world';
 import { check, finish } from './checks';
 import type { GameState } from '@state/schema';
 import type { LaunchRecord, Place, PodFate, Touch } from '@/types/landing';
 import { createInitialState } from '@state/initial';
 import { beginLanding } from '@state/actions';
-import { freshUnitRacks } from '@systems/carry';
 import { podPoints } from '@systems/landing-rules';
 import { landingReportModel } from '@systems/landing-report';
 import { isDriver } from '@state/selectors';
 import { HARD_WORDS_POOL } from '@data/souls';
-import { classicShip } from '@data/classic-five';
 
 function world(shipIndex: number): GameState {
-  const state = createInitialState({ seed: 11, shipIndex, carried: shipIndex === 0 ? null : freshUnitRacks(classicShip(shipIndex)) });
+  const state = createInitialState({ seed: 11, shipIndex, carried: 'fresh' });
   state.run.phase = 'report';
   state.burn.status = 'locked';
   beginLanding(state);

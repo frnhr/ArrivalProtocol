@@ -17,6 +17,7 @@
 //   the charge as the confirm left it.
 // • MERGE + SUNSET at FUEL 22% (review M1): the reopened landing's engine is shut, so the ship leaves with the record's FUEL.
 // • UNRESOLVED (R10): its card held while a pod falls (review m5); IT FOLLOWED YOU (no entry 12, no step-1 pick), CONTINUE, SUNSET still allowed, the root stays.
+import { withClassicWorld } from '../support/classic-fixture';
 import { check, finish } from '../wp1/harness';
 import { createHarness11 } from '../wp11/harness11';
 import { toTheDuel } from '../wp11/duel';
@@ -435,7 +436,8 @@ toArmDuel();
 }
 
 // --- The classic LAST LIGHT, once (R5: one FINALE for both worlds) ------------------------------------------------------
-toTheDuel(h);
+// (Track RETIRE: built on the classic five explicitly now that the fixture world is the arm; it goes with them.)
+withClassicWorld(() => toTheDuel(h));
 {
   deleteRoot();
   landInstantly(h.store);

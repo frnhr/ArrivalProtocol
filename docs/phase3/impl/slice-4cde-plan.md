@@ -1848,3 +1848,78 @@ is the other fix agent's.
 - No file outside this agent's scope was edited, and no patch is requested.
 - `tests/e2e/run.mjs` gains `skills-4cde-sentry` here, and the landing agent's `skills-4cde-landing` goes in the same list:
   a small conflict to resolve at the merge (keep both rows).
+
+## Deviations (RETIRE)
+
+Track RETIRE, on branch `retire` from baffe52. OPEN-DECISIONS items 85–88 hold the calls.
+
+### Phase 1, done
+
+- `map/arm-parity` pins run 1's seed-7 arm three ways, each by the digest it had at baffe52: its 20 ShipDefs, every ship's
+  built world past ARES-VII, and the worked route flown by wp11's strip kid (18 moments). It held at every commit.
+- The authored blocks moved to `src/data/authored-ships.ts`. `run1-arm.ts` no longer imports `classic-five.ts`, and
+  `classic-five.ts` imports the blocks back (`map/memory-refactor` unchanged).
+- The probe, as §9.2 asked, but committed rather than behind a flag. The fixture default *is* the arm (OPEN-DECISIONS 85),
+  and the 88 quick suites that failed on it opted back into the classic five (`support/classic-world`). The 135 that passed
+  had the same number of checks as on the classic five. `AP_RETIRE_PROBE=arm` re-runs an opted-out suite on the arm.
+
+### Phase 2, partial
+
+- Moved: 33 of the 88, plus both BALANCE_ONLY harnesses (`wp12/playthrough`, `wp11/full-run`).
+- Deleted: none. `map/desk-flow` was the candidate, but it is the only suite that checks a lost ship's extras surviving
+  ◀ CHART, so it moved to HALCYON's arm desk instead.
+- **55 suites are left**, by what stops them on the arm:
+  - **The classic world itself:** `map/memory-refactor`, the classic digest. It goes with the classic five, and
+    `map/arm-parity` is its arm twin.
+  - **VESPER as phase 2's HOLLOW ship.** The arm's VESPER is calm and has no SWAP; HOLLOW is forced aboard at CORMORANT.
+    Each suite should move to CORMORANT, or to VESPER with a given verdict and `kit`.
+    - wp10: `copy-test`, `deal-test`, `fix1/fixes`, `p2/views`, `vesper-flow`, `vesper-sim`, `skip-through`.
+    - `final-fix/seed-spots`, `final-fix/two-screens`.
+    - `landing/engine-landing`, `landing/review-fixes`.
+    - `threat/arrival-story`, `ui/threat-models`.
+    - `wp12/p3/swap-pairing`, `wp12/fix1/fixes`.
+    - Ghost: `lead2/ghost-warp`, `wp4/capabilities`, `wp4/ghost-sim`. The arm's ghost bands are `ARM_GHOST_BY_BAND`.
+  - **Phase 2's FULL geometry.** `support/hollow-world` phase2Ship and phase2Halcyon need rack D and the unit at block
+    256, and run 1's HALCYON and KESTREL are COMPACT.
+    - `lead2/dodge-rules`, `wp7/bridge-test`, `wp7/p2-models`, `wp8/fix1/fixes`.
+    - `wp9/fix1/fixes`, `wp9/fix2/fixes2`, `wp9/seed-test`.
+    - `wp6/hollow-ship2`, `wp6/p2-hud`, `wp5/racks`.
+    - `threat/beam-seeds`, `threat/disguise`.
+  - **KESTREL's arm facts** (6 pods, the debris on rack B, the LZs rolled): `lead2/kestrel-debris` and its scenario,
+    `lead2/fix3/kestrel-skip-press`, `wp9/p2/ui-models`, `wp9/zones-sim`.
+  - **LAST LIGHT flown alone.** The arm rolls its approach (omega0), so the classic seeds' numbers move. Each needs `kit`
+    and seeds re-measured: `wp11/boss-sim`, `wp11/fix1/fix1` (one check), `wp11/lastlight-sim`, `wp11/p2/views`,
+    `wp12/p3/minors`, `ending/rules`.
+  - **The classic route's hops and numbers** (22 LY, 3 + 3 hits, LAST LIGHT as ship 5, HALCYON's two LZs).
+    - wp7: `soft-fails`, `fix1/run-end-and-boot`.
+    - wp8: `run-flow`, `draft`.
+    - `wp11/p2/purge-fleet`, `wp12/p3/repair-renewed`, `wp4/flight-coupling`.
+    - `opening/ghost-placement`, `opening/calm-ships`, `skills/sentry`.
+    - landing: `flow`, `pace-landing`, `report`, `review-1b`.
+- The tier stayed green at every commit. Its time was 206 s twice (four workers, the lead's e2e on the same machine).
+
+### Phase 3, not started
+
+- Gate: the 55 above are gone.
+- Then delete:
+  - `classic-five.ts` and `classic-slots.ts`;
+  - `useClassicFixture` / `inFixtureWorld` (state/initial.ts), `support/classic-world`, `support/classic-fixture` and the 17
+    suites' `withClassicWorld` checks;
+  - `classicRunMap` / `classicRoute` / `classicHop` and every `world` branch (16 src files name `'classic'`);
+  - `CLASSIC_LICENCES` and the classic schedule;
+  - `support/classic-flow` (its arm half becomes `support/desk`).
+- Re-base `nominalRunThreat` / `fixedShipFacts` / `nominalShipThreat` (still read by `run.ts`, `boot.ts`, `debug.ts`,
+  `carry.ts freshUnitRacks`) on `systems/arm-fixture.ts nominalAlong`.
+- `__ap.ship(n)` becomes `createInitialState`'s fixture: authored ship n on the worked route, through `debugRoute`.
+- The codec, per OPEN-DECISIONS 87.
+
+### e2e scenarios on classic paths
+
+None was run, as asked. No scenario uses `?world=classic`; these use `__ap.ship(n)`, which jumps to the classic world:
+
+- `label-hops`: HALCYON as the classic one;
+- `phone`: `__ap.ship(1)` and `(2)`;
+- `beam-blue`: classic and arm HALCYON compared, FULL against COMPACT;
+- `skills-4cde-sentry`: `__ap.ship(2)` and `(3)`.
+
+Phase 3's `__ap.ship` change breaks all four. Nothing on this branch touches them.

@@ -9,6 +9,8 @@
 import { actionRefusal } from '@state/actions';
 import { check, finish } from '../wp1/harness';
 import { layoutOf, wp3Fixture } from './harness3';
+import { layoutOf as memoryLayoutOf } from '@data/memory';
+import { FIRST_RUN_LINEAGE } from '@systems/meta';
 import { createStore } from '@state/store';
 import type { GameState, PendingPlacement } from '@state/schema';
 import type { Segment } from '@/types/segment';
@@ -21,7 +23,6 @@ import { actionMove, actionCopy, actionDelete, actionScan, cancelPlayerOp, moveS
 import { computeMoveRegion, isOpenFree, targetRefusal } from '@systems/tool-targets';
 import { assertMemoryInvariants, mergeAdjacentFree, replaceRange, freeSegment, splitFreeAt } from '@systems/memory-ops';
 import { createRng, type Rng } from '@systems/rng';
-import { MEMORY_LAYOUTS } from '@data/memory';
 
 const TICK = 0.05;
 const SEQUENCES = 2000;
@@ -31,8 +32,12 @@ const store = createStore<GameState>(createInitialState({ seed: 1 }));
 mountSay(store);
 mountOpsCore(store);
 
+const ONE_ARM = { ...FIRST_RUN_LINEAGE, armSeed: 1 };
+
 function freshState(seed: number, capacity: number): void {
-  store.update((d) => { Object.assign(d, createInitialState({ seed })); });
+  // Track RETIRE: run 1's arm rolled once (arm seed 1) for every sequence, the run seed still the sequence's: rolling a
+  // fresh arm for each of 2,000 seeds cost the tier 10 s, and the sequences' own rng is what they vary.
+  store.update((d) => { Object.assign(d, createInitialState({ seed, lineage: ONE_ARM })); });
   resetWorld();
   // WP4: the tools are licences now; install the WP3-era set (Repair, Mv, Cp, Rm) the sequences use.
   wp3Fixture(store);
@@ -137,13 +142,13 @@ for (let sequence = 0; sequence < SEQUENCES; sequence++) {
         ticks(1 + Math.floor(rng() * 40));
         counts.completed += Math.max(0, before - getOps().length);
       }
-      assertMemoryInvariants(memory(), MEMORY_LAYOUTS.FULL.totalBlocks);
+      assertMemoryInvariants(memory(), memoryLayoutOf(store.getState()).totalBlocks);
       const problem = consistency();
       if (problem) note(problem);
     }
     // Let everything finish (or cancel the rest), then nothing may be left half-done.
     if (rng() < 0.5) ticks(400); else getOps().forEach((operation) => cancelOp(operation.id));
-    assertMemoryInvariants(memory(), MEMORY_LAYOUTS.FULL.totalBlocks);
+    assertMemoryInvariants(memory(), memoryLayoutOf(store.getState()).totalBlocks);
     const leftover = settled();
     if (leftover) note(leftover);
   } catch (err) {
@@ -219,7 +224,7 @@ check('the sequences really exercised every op', counts.move > 1000 && counts.sl
   check('edge: a neighbour of the move region was deleted while the move ran', deleted && moveOp !== undefined && layoutOf(store.getState()) !== before);
   if (moveOp) cancelPlayerOp(store, moveOp.id);
   let ok = true;
-  try { assertMemoryInvariants(memory(), MEMORY_LAYOUTS.FULL.totalBlocks); } catch { ok = false; }
+  try { assertMemoryInvariants(memory(), memoryLayoutOf(store.getState()).totalBlocks); } catch { ok = false; }
   const commsBack = memory().includes(comms) && !comms.operating && (!('state' in comms) || comms.state !== 'transferring');
   // The restored free space merged with the deleted neighbour's: one free run from the neighbour's start.
   const merged = memory().find((seg) => seg.type === 'free' && freeAddr(seg) === regionStart - (neighbour?.size ?? 0));
@@ -273,7 +278,7 @@ check('the sequences really exercised every op', counts.move > 1000 && counts.sl
   const throws = (mutate: (copy: Segment[]) => void): boolean => {
     const copy = structuredClone(createInitialState({ seed: 1 }).memory);
     mutate(copy);
-    try { assertMemoryInvariants(copy, MEMORY_LAYOUTS.FULL.totalBlocks); return false; } catch { return true; }
+    try { assertMemoryInvariants(copy, memoryLayoutOf(store.getState()).totalBlocks); return false; } catch { return true; }
   };
   check('invariants: a wrong total throws', throws((copy) => { copy[0]!.size += 1; }));
   check('invariants: a zero size throws', throws((copy) => { copy.splice(1, 0, { id: 'zero', name: 'Free', type: 'free', size: 0 }); }));

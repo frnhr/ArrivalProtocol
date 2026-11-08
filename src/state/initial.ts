@@ -18,7 +18,12 @@ import { SKILL_IDS } from '@data/skills';
 import { repoToolKind } from '@data/repository';
 import { buildShipMemory, type CarriedRacks, type HurtDriver } from '@data/memory';
 import { hurtDriversFor } from '@data/driver-damage';
-import { classicRunMap, shipDefAt, currentSlot, shipRng } from '@systems/map-run';
+import { classicRunMap, shipDefAt, currentSlot, shipRng, createRunMap, noiseRng } from '@systems/map-run';
+import { rollNoiseClouds } from '@systems/map-noise';
+import { mapAlong, nominalAlong, workedRouteTo, authoredSlot, skippedResult } from '@systems/arm-fixture';
+import { shipCycles } from '@systems/run-score';
+import { freshUnitRacks } from '@systems/carry';
+import { classicShip } from '@data/classic-five';
 import { nominalRunThreat, nominalShipThreat, createRunThreat, applyThreat } from '@systems/threat-plan';
 import { createRunLog } from '@state/log-selectors';
 import { noTraces, runTracesOf, logBookOf } from '@systems/traces';
@@ -39,9 +44,10 @@ export interface InitialStateOpts {
   // The session's reduced-motion choice (the page reads prefers-reduced-motion; tests omit it).
   reducedMotion?: boolean;
   // The unit's own files on a ship that does not meet a fresh unit (every ship after ARES-VII): what
-  // systems/carry.ts laid out. Required there (buildShipMemory throws without it); a test that flies a
-  // later ship alone passes carry.ts freshUnitRacks(ship) explicitly.
-  carried?: CarriedRacks | null;
+  // systems/carry.ts laid out. Required there (buildShipMemory throws without it). 'fresh' (Track RETIRE): a fresh unit's
+  // files carried in over the hop that reaches the ship, laid out for its verdict (carry.ts freshUnitRacks), the way a
+  // suite that flies a later ship alone wants it (on ship 1: none, it meets a fresh unit by itself).
+  carried?: CarriedRacks | 'fresh' | null;
   // The ship's threat (systems/threat-plan.ts): left out, the nominal run's for shipIndex (every ship before it flown
   // with TRACE 0 and no DEAL, slice-2-plan risk 14), which run.threat matches. A suite that wants another verdict (a
   // seeds-only ship with seeds, a HUNT stage) passes its own.
@@ -54,8 +60,76 @@ export interface InitialStateOpts {
   // The page's run save (slice 3c, systems/save-write.ts openRunSave); a headless world has none ('none': never written).
   save?: SaveState;
   // The run's map at ship 1 (slice 3a): the page's first run is on the arm (systems/map-run.ts createRunMap, as NEW RUN's
-  // startRun); left out, the classic world with the unit on classic ship `shipIndex` (the suites' fixture world).
+  // startRun); left out, the fixture world's (fixtureMap below): run 1's arm with the unit on authored ship `shipIndex`.
   map?: RunMapState;
+}
+
+// --- The fixture world (Track RETIRE, slice-4cde-plan §9.2) -------------------------------------------------------------
+// The world a state built with no map is on: the headless suites' and the debug warp's. Run 1's arm (createRunMap on the
+// seed, so its arm seed is the run seed), the unit on authored ship `shipIndex` (systems/arm-fixture.ts: ARES-VII, HALCYON,
+// KESTREL, VESPER, LAST LIGHT) reached along the worked route; run.shipIndex is that stop's depth − 1 (LAST LIGHT is
+// depth 6, through CORMORANT). 'classic' is the frozen five (data/classic-five.ts), kept only for the suites the
+// retirement has not moved yet: each sets it with useClassicFixture (tests/unit/support/classic-world.ts) before it builds
+// a state. It goes with the classic five (phase 3); nothing in the game sets it.
+export type FixtureWorld = 'arm' | 'classic';
+let fixtureWorld: FixtureWorld = 'arm';
+
+export function useClassicFixture(): void {
+  fixtureWorld = 'classic';
+}
+
+// The fixture world set to `world` while `fn` runs, then put back (even when it throws): a suite on the arm that still
+// checks a classic-world branch builds that state inside (tests/unit/support/classic-fixture.ts withClassicWorld).
+export function inFixtureWorld<T>(world: FixtureWorld, fn: () => T): T {
+  const before = fixtureWorld;
+  fixtureWorld = world;
+  try {
+    return fn();
+  } finally {
+    fixtureWorld = before;
+  }
+}
+
+export function fixtureWorldNow(): FixtureWorld {
+  return fixtureWorld;
+}
+
+interface FixtureStop {
+  map: RunMapState;
+  slots: number[];
+  before: ReturnType<typeof nominalAlong>['before'];
+  verdict: ShipThreat;
+}
+
+// Memoized (pure in their inputs): a suite that builds thousands of states (wp3/memory-safety) would roll the arm and its
+// noise clouds for each. The arm is rolled once per arm seed (createRunMap's; the run seed only rolls the noise clouds, as
+// createRunMap does), and every caller gets its own copy.
+const fixtureStops = new Map<string, FixtureStop>();
+const fixtureArms = new Map<string, RunMapState>();
+
+function fixtureArm(lineage: Readonly<RunLineage>, seed: number): RunMapState {
+  const armSeed = (lineage.armSeed ?? seed) >>> 0;
+  const key = JSON.stringify([armSeed, lineage.wave, lineage.arm ?? null, lineage.history ?? null]);
+  let base = fixtureArms.get(key);
+  if (base === undefined) {
+    base = createRunMap({ ...lineage, armSeed }, seed);
+    fixtureArms.set(key, base);
+  }
+  const map = structuredClone(base);
+  map.noise = rollNoiseClouds(noiseRng(seed >>> 0));
+  return map;
+}
+
+function fixtureStop(seed: number, shipIndex: number, lineage: Readonly<RunLineage>): FixtureStop {
+  const key = JSON.stringify([seed >>> 0, shipIndex, lineage.wave, lineage.armSeed ?? null, lineage.arm ?? null, lineage.history ?? null]);
+  let stop = fixtureStops.get(key);
+  if (stop === undefined) {
+    const slots = workedRouteTo(authoredSlot(shipIndex));
+    const map = mapAlong(fixtureArm(lineage, seed), slots);
+    stop = { map, slots, ...nominalAlong(map, slots) };
+    fixtureStops.set(key, stop);
+  }
+  return structuredClone(stop);
 }
 
 export function createRunStats(): RunStats {
@@ -86,6 +160,11 @@ export function createRunSkills(): RunSkillState {
 export function createRunState(
   seed: number, phase: RunPhase, shipIndex: number, lineage: Readonly<RunLineage>, threat?: Readonly<ShipThreat>,
 ): RunState {
+  const classic = fixtureWorld === 'classic';
+  const stop = classic ? null : fixtureStop(seed, shipIndex, lineage);
+  // Every stop before the fixture's ship has a result (passed in orbit, nobody landed) and its earning, so the route, the
+  // results, the trail and RUN END's world update agree (systems/arm-fixture.ts skippedResult, as __ap.route records them).
+  const passed = stop === null ? [] : stop.slots.slice(0, -1).map((slot, i) => skippedResult(stop.map, slot, i + 1));
   return {
     rev: 0,
     phase,
@@ -96,16 +175,16 @@ export function createRunState(
     hollowUnits: [...lineage.hollowUnits],
     upgrades: [],
     tutorial: !lineage.tutorialDone,
-    shipIndex,
-    // The classic world (data/classic-five.ts): `shipIndex` is classic ship n, as it always meant here. The page's runs
-    // get their map from systems/run.ts startRun.
-    map: classicRunMap(seed, shipIndex, lineage.wave),
+    // The fixture world's (above): authored ship `shipIndex` on the worked route, or classic ship n. The page's runs get
+    // their map from systems/run.ts startRun (withRunMap).
+    shipIndex: stop === null ? shipIndex : stop.slots.length - 1,
+    map: stop === null ? classicRunMap(seed, shipIndex, lineage.wave) : stop.map,
     licences: ['scan'],
     hollowNamed: false,
     coreLost: false,
-    skills: createRunSkills(),
+    skills: { ...createRunSkills(), earned: passed.map((result) => shipCycles(result)) },
     repairRenewedOn: null,
-    ships: [],
+    ships: passed,
     stats: createRunStats(),
     pendingStarCredit: 0,
     pendingStars: 0,
@@ -115,9 +194,11 @@ export function createRunState(
     transit: null,
     arrival: null,
     endCause: null,
-    threat: threat === undefined
-      ? nominalRunThreat(shipIndex)
-      : applyThreat(shipIndex === 0 ? createRunThreat() : nominalRunThreat(shipIndex - 1), threat),
+    threat: stop !== null
+      ? applyThreat(stop.before, threat ?? stop.verdict)
+      : threat === undefined
+        ? nominalRunThreat(shipIndex)
+        : applyThreat(shipIndex === 0 ? createRunThreat() : nominalRunThreat(shipIndex - 1), threat),
     // Slice 7c (R37): the `???` file's book, chosen once here, at RUN START (046.log until LINEAGE_BUILT).
     log: createRunLog(logBookOf(lineage.wave, lineage.lastUnit, lineage.events)),
     // Phase 3 slice 3b: no request yet (the first desk's pick is the first), no mail opened.
@@ -363,9 +444,32 @@ export function createInitialState(opts: InitialStateOpts): GameState {
   if (opts.map !== undefined && (opts.map.route.length !== 1 || (opts.shipIndex ?? 0) !== 0)) {
     throw new Error('createInitialState: a map is given for ship 1 only (a later arm ship is reached by its hop)');
   }
-  const run = opts.map === undefined ? created : withRunMap(created, opts.map);
+  const shipIndex = opts.shipIndex ?? 0;
+  const lineage = opts.lineage ?? FIRST_RUN_LINEAGE;
+  let run: RunState;
+  let threat: ShipThreat;
+  let carried: CarriedRacks | null;
+  if (opts.map !== undefined) {
+    run = withRunMap(created, opts.map);
+    threat = opts.threat ?? nominalShipThreat(0);
+    if (opts.carried === 'fresh') throw new Error('createInitialState: a map is given for ship 1, which meets a fresh unit by itself');
+    carried = opts.carried ?? null;
+  } else if (fixtureWorld === 'classic') {
+    run = created;
+    threat = opts.threat ?? nominalShipThreat(shipIndex);
+    carried = opts.carried === 'fresh' ? (shipIndex === 0 ? null : freshUnitRacks(classicShip(shipIndex))) : opts.carried ?? null;
+  } else {
+    const stop = fixtureStop(opts.seed, shipIndex, lineage);
+    // Traces placed on the arm as at any RUN START (withRunMap; none on a first run).
+    run = withRunMap(created, stop.map);
+    threat = opts.threat ?? stop.verdict;
+    const hop = stop.map.route.at(-1)!.hop;
+    carried = opts.carried === 'fresh'
+      ? (hop === null ? null : freshUnitRacks(shipDefAt(stop.map, stop.slots.at(-1)!), hop.linkBlocks, threat))
+      : opts.carried ?? null;
+  }
   return {
-    ...createShipSlices(run, opts.carried ?? null, opts.threat ?? nominalShipThreat(run.shipIndex)),
+    ...createShipSlices(run, carried, threat),
     run,
     alerts: { list: [], rev: 0 },
     log: { entries: [], rev: 0 },

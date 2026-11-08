@@ -16,7 +16,7 @@ import { capabilitiesNow } from '@systems/capabilities';
 import { getOps, canStartOp } from '@systems/ops-core';
 import { packUnit, layoutCarried } from '@systems/carry';
 import { resetWorld } from '@systems/reset';
-import { createInitialState } from '@state/initial';
+import { createInitialState, fixtureWorldNow } from '@state/initial';
 import { nominalShipThreat } from '@systems/threat-plan';
 import { FRESH_UNIT_RACK_E, FRESH_UNIT_RACK_F } from '@data/memory';
 import { classicShip, CLASSIC_HOPS } from '@data/classic-five';
@@ -27,6 +27,8 @@ import { phase2HollowOf } from '../support/hollow-world';
 export const VESPER = 3;
 
 export interface VesperOpts {
+  // The worked route's tools by VESPER (harness7 shipAlone's `kit`; the arm only).
+  kit?: boolean;
   // HOLLOW put to sleep for good (a flight suite measures the flight, not the fight).
   hollowAsleep?: boolean;
   // Phase 3 slice 2: VESPER as phase 2 had it, HOLLOW's HUNT stage (seeds next to your tools, THE DEAL, a 14-block
@@ -78,8 +80,10 @@ export function createHarness10(seed = 1, opts: { soulsFound?: boolean } = {}): 
   return {
     ...base,
     vesper(nextSeed, vesperOpts = {}) {
-      base.shipAlone(VESPER, nextSeed);
+      base.shipAlone(VESPER, nextSeed, { kit: vesperOpts.kit ?? false });
       if (vesperOpts.hunt) {
+        // The classic five's VESPER with a HUNT verdict (Track RETIRE: not moved to the arm yet).
+        if (fixtureWorldNow() !== 'classic') throw new Error('harness10.vesper: { hunt } is the classic VESPER\'s (import support/classic-world)');
         const threat = huntVerdict();
         const ship = classicShip(VESPER);
         const files = [...FRESH_UNIT_RACK_E, ...FRESH_UNIT_RACK_F]

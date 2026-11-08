@@ -11,6 +11,7 @@
 // `DEBRIS C?` under PATH UNCERTAIN; the TOO WIDE line promises the dodge only while the correction can still make it.
 // (WP9 fix round 1: the promise counts down its deadline, `· 1:51 to dodge DEBRIS C`, then says `· too late to dodge
 // DEBRIS C`; and SKIP waits while the dodge is open, so the SKIP edge case asks once it has run out.)
+import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createHarness9 } from './harness9';
 import { getPrediction, getSensedPrediction } from '@systems/predict';

@@ -12,6 +12,7 @@
 //   VESPER → LAST LIGHT carries it at 16 with its fed share, and `NO RM · YOU CAN'T DELETE THE ROOT` without a working rm;
 // • the LOG READER (systems/log-view.ts): one row per entry (number, KEY, text or `[NOT FOUND YET]`), the open entry,
 //   the next key, the entry a chip click opens; story-log's actions open, mark read and close it.
+import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createStore, type Store } from '@state/store';
 import type { GameState } from '@state/schema';

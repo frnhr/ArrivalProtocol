@@ -19,7 +19,7 @@ import { transmitModel } from '@systems/transmit';
 import { CHARGE_ARRIVAL_FLOOR, STAR_CHARGE_BONUS } from '@data/tuning';
 import { classicShip, CLASSIC_HOPS } from '@data/classic-five';
 import { nominalShipThreat } from '@systems/threat-plan';
-import { MEMORY_LAYOUTS } from '@data/memory';
+import { layoutOf } from '@data/memory';
 
 const h = createHarness7(5, { soulsFound: false });
 const state = () => h.store.getState();
@@ -41,7 +41,7 @@ function spendAllCharge(): void {
 }
 
 const memoryValid = (): boolean => {
-  try { assertMemoryInvariants(state().memory, MEMORY_LAYOUTS.FULL.totalBlocks); return true; } catch { return false; }
+  try { assertMemoryInvariants(state().memory, layoutOf(state()).totalBlocks); return true; } catch { return false; }
 };
 
 // --- The layout on its own --------------------------------------------------------------------------
@@ -85,7 +85,7 @@ const memoryValid = (): boolean => {
   check('TRANSMIT ▸ with no charge left does not throw', error === '', error);
   check('…HALCYON boots with the promised REPAIR CHARGE (12)', state().run.phase === 'boot' && state().run.shipIndex === 1
     && chargeLeft(state()) === CHARGE_ARRIVAL_FLOOR, `${state().run.phase} ship ${state().run.shipIndex} charge ${chargeLeft(state())}`);
-  check('…memory is 384 blocks and valid', memoryValid());
+  check('…memory is its class\'s size and valid', memoryValid());
   check('…the boot\'s charge line says the floor', state().run.arrival?.chargeFloorAdded === CHARGE_ARRIVAL_FLOOR, JSON.stringify(state().run.arrival));
 }
 
@@ -111,7 +111,7 @@ const memoryValid = (): boolean => {
     const expected = Math.max(CHARGE_ARRIVAL_FLOOR, STAR_CHARGE_BONUS * earned + cardCharge);
     check('TRANSMIT ▸ does not throw, and HALCYON boots with max(12, 6·★ + the card)', error === '' && state().run.shipIndex === 1
       && chargeLeft(state()) === expected, `${error} charge ${chargeLeft(state())} (★ ${earned}, card ${cardCharge}, expected ${expected})`);
-    check('…memory is 384 blocks and valid', memoryValid());
+    check('…memory is its class\'s size and valid', memoryValid());
   }
 }
 

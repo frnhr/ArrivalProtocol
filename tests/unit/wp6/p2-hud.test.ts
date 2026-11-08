@@ -19,6 +19,7 @@
 // • the chew follows the total drain (half for one file at rest, full while the engine burns, silent
 //   when paused); the tug's beat follows the boundary speed (16.5 %/s → 8.25 Hz; slower while a burn
 //   doubles the drain) and its pitch the file's integrity.
+import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createHarness6 } from './harness6';
 import { biteClock, reachMarks, miniStripRows, chewLevel, tugTone } from '@systems/hollow-hud';

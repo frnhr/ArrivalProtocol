@@ -6,9 +6,7 @@
 import { createStore, type Store } from '@state/store';
 import type { GameState, Pace } from '@state/schema';
 import { createInitialState } from '@state/initial';
-import { freshUnitRacks } from '@systems/carry';
 import { DRIVER_RULES } from '@data/script';
-import { classicShip } from '@data/classic-five';
 import { advance } from '@systems/clock';
 import { mountOrbitSim } from '@systems/orbit-sim';
 import { mountPredictor, getPrediction, secUntil, type Prediction } from '@systems/predict';
@@ -83,7 +81,7 @@ if (HARNESS_ZONES !== 'live' && HARNESS_ZONES !== 'none') throw new Error(`AP_ZO
 export function harnessState(seed: number, soulsFound: boolean): GameState {
   const state = HARNESS_SHIP === 0
     ? createInitialState({ seed })
-    : createInitialState({ seed, shipIndex: HARNESS_SHIP, carried: freshUnitRacks(classicShip(HARNESS_SHIP)) });
+    : createInitialState({ seed, shipIndex: HARNESS_SHIP, carried: 'fresh' });
   if (HARNESS_SHIP !== 0) state.hollow.phase = 'dormant';
   if (HARNESS_ZONES === 'none') state.level.zones = [];
   if (HARNESS_GHOST === 'quiet') {

@@ -133,6 +133,7 @@ import type { SkillId, SkillVersion, LockLevel, DemoSkill, CellRow, RunSkillStat
 import { grantCycles, bankOf, treeCells, visitNow, type TrainRefusal, type TreeCell } from '@systems/skill-tree';
 import { skillPacketPlan } from '@systems/skill-files';
 import { shipCycles } from '@systems/run-score';
+import { skippedResult } from '@systems/arm-fixture';
 import type { SkillFileSegment } from '@/types/segment';
 import { seedSpotFor, seedsInMemory, threateningSeeds } from '@systems/hollow';
 import { knownHitRacks } from '@systems/zones';
@@ -783,13 +784,7 @@ function debugSlot(store: Store<GameState>, slot: number): Hop {
 // (no colony, no stars, every colonist not launched). A debug result: nothing a played ship ends with looks like it (no
 // LZ, no pod records, 0 % fuel), and the console says which ships were skipped.
 function debugSkippedResult(map: Readonly<RunMapState>, slot: number, depth: number): ShipResult {
-  const def = shipDefAt(map, slot);
-  const aboard = map.arm[slot]!.pods * COLONISTS_PER_POD;
-  return {
-    shipId: def.id, shipName: def.name, slot, depth, outcome: 'locked', stars: 0, fuelLeftPct: 0, ringMiss: null,
-    colonistsAboard: aboard, lzs: [], offSite: 0, noGo: 0, restored: 0, parked: [], notLaunched: aboard, landedInLz: 0, points: 0,
-    colony: null, pods: [], survey: null,
-  };
+  return skippedResult(map, slot, depth);
 }
 
 // __ap.route([s0, …, sn]): the run on the route's last ship, flown headless: the route's stops and years, the threat as the

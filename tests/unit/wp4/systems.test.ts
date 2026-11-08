@@ -24,7 +24,7 @@ import { selectCorruption, coreThreads, getByRole } from '@state/selectors';
 import { GUIDE_RULES, LICENCE_LINES } from '@data/script';
 import { TOOL_FILES } from '@data/fs-tools';
 import { MAX_LINE_CHARS, PLOT_STALE_TAC, BOOT_SKIP_GRACE_SEC } from '@data/tuning';
-import { MEMORY_LAYOUTS } from '@data/memory';
+import { layoutOf } from '@data/memory';
 
 const h = createHarness4(1);
 const memory = (): Segment[] => h.store.getState().memory;
@@ -48,7 +48,7 @@ const names = (): string[] => memory().map((seg) => seg.name);
   check('seed: the AI\'s own files are visible from the start (§3.2)', state.memory.every((seg) =>
     !(seg.type === 'core' || seg.type === 'tool' || seg.type === 'fs-tool') || seg.scanned));
   check('seed: ship files hide their health until scanned', state.memory.every((seg) => seg.type !== 'ship' || !seg.scanned));
-  check('seed: still 274 blocks, invariants hold', (() => { assertMemoryInvariants(state.memory, MEMORY_LAYOUTS.FULL.totalBlocks); return true; })());
+  check('seed: still 274 blocks, invariants hold', (() => { assertMemoryInvariants(state.memory, layoutOf(state).totalBlocks); return true; })());
   // WP10 added SWAP (§8: SWAP becomes a 1-block tool file built from actionSwap).
   check('seed: no Activate / Deactivate tool kinds remain', Object.keys(TOOL_FILES).join() === 'scan,repair,move,copy,delete,swap');
 }

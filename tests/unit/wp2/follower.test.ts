@@ -156,7 +156,9 @@ for (const mistake of mistakes()) {
   check('boot: a fresh press burns', h.store.getState().burn.firing && h.store.getState().burn.dvDeliveredKmS > 0);
   h.keyUp('Space');
   const bootLines = h.log().filter((entry) => entry.speaker === 'mind-sys').map((entry) => entry.text);
-  check('boot: all three TERMINAL lines were said, even when skipped', bootLines.length === 3 && bootLines[2]!.startsWith('> ECC:'), bootLines.join(' | '));
+  // Track RETIRE: on run 1's arm the boot's TERMINAL also says the INBOX line after the three (`> 1 NEW MESSAGE · INBOX`).
+  check('boot: all three TERMINAL lines were said, even when skipped, then the INBOX line', bootLines.length === 4 && bootLines[2]!.startsWith('> ECC:')
+    && bootLines[3]!.endsWith('INBOX'), bootLines.join(' | '));
 }
 
 finish();

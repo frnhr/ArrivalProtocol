@@ -6,6 +6,7 @@
 // soft fails: END LANDING parks; an eaten driver can't launch and ends parked, eaten; a ship that left orbit takes its
 // pods (NOT LAUNCHED); a Core lost while landing parks every pod; HOLLOW's story beat and LAST LIGHT's duel hold the
 // report (the duel's L0 on the strip). Last, the pooled receiver (§3.16) that lays out the unit at the next ship.
+import '../support/classic-world';
 import { check, finish } from './checks';
 import { byDepth } from '../depth';
 import { followLanding, landInstantly, lockOn } from './harness-landing';

@@ -5,6 +5,7 @@
 // and ▼ in the band; a 1.2 s kid printed as INFO); HOLLOW's drain and its projection with a burn in an open window;
 // AUTOBURN refused; a dry tank under the planet CRASHED with the pods aboard NOT LAUNCHED and the falling one scored; an
 // orbit outside the drop solver's domain (no throw); a ghost burst during the landing (risk 5).
+import '../support/classic-world';
 import { check, finish } from './checks';
 import { lockOn, ensureLandingKeys } from './harness-landing';
 import { createHarness7 } from '../wp7/harness7';

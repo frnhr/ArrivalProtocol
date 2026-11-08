@@ -9,6 +9,7 @@
 // every 25 tactical s), planted on a loop falling toward ▼ with the trim there far ahead, so a SKIP has somewhere to
 // go: three flights over the same stretch of game time, at the ?debug ladder's ×25 and ×200, and at the director's
 // pace with a kid who presses F whenever SKIP is offered. Each burst's start, length and Δv must agree.
+import '../support/classic-world';
 import { createHarness, check, finish } from '../wp1/harness';
 import { setDebugWarp, skipBlockReason } from '@systems/pace';
 import { getPrediction } from '@systems/predict';

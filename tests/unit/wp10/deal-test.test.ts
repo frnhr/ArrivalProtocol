@@ -20,6 +20,7 @@
 // ACCEPT leaves the seed clock alone (the first seed still waits for a calm flight after the pause) and a telegraph it
 // calls off comes back DEAL_SEED_CALLED_OFF_SEC after the pause, also held by a burn; an offer the ship's end cuts
 // short is recorded (invalidated).
+import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { byDepth } from '../depth';
 import { createHarness10 } from './harness10';

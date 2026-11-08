@@ -13,6 +13,7 @@
 // MIND CLEAR), and they do not both ask for a TAB. Also: maxShownSec and the one-shot completion are counted per lesson
 // (director.ts completedOneShots, outlivedOneShots), checked on the real rule table.
 // Usage: node_modules/.bin/tsx --tsconfig tsconfig.json tests/unit/final-fix/two-screens.test.ts
+import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createHarness11 } from '../wp11/harness11';
 import { followDirector } from '../wp2/harness2';

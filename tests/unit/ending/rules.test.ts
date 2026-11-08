@@ -9,13 +9,12 @@
 // • optionState (R11): open with its meter and NOW:, needs with its line and meter, `named` only when seen before, PURGE and
 //   REASSIGNMENT always open, SUNSET greyed by a SPARE pick (`SPARE GIVES IT THE SHIP`, named), CONTACT hidden;
 // • endingRecordAt / endingRecordOf (M4), finaleRunCause (R17), reportEndingLine with NIGHT's titles (B1).
+import '../support/classic-world';
 import { check, finish } from '../landing/checks';
 import type { GameState, ShipResult } from '@state/schema';
 import type { PodSummary, PodRecord, Touchdown, LaunchRecord } from '@/types/landing';
 import type { HollowSegment } from '@/types/segment';
 import { createInitialState } from '@state/initial';
-import { freshUnitRacks } from '@systems/carry';
-import { classicShip } from '@data/classic-five';
 import {
   emptyShip, stayCandidates, optionState, mergeRestorable, endingRecordAt, endingRecordOf, finaleRunCause, reportEndingLine, routeYear,
 } from '@systems/ending-rules';
@@ -26,7 +25,7 @@ import { EMPTY_SHIP_FUEL_PCT, MERGE_COST_CHARGE, STAY_PICK_MAX, DRIVER_BLOCKS } 
 
 const LAST_LIGHT = 4;
 const base = (): GameState => {
-  const state = createInitialState({ seed: 7, shipIndex: LAST_LIGHT, carried: freshUnitRacks(classicShip(LAST_LIGHT)) });
+  const state = createInitialState({ seed: 7, shipIndex: LAST_LIGHT, carried: 'fresh' });
   state.run.phase = 'landing';
   state.burn.status = 'locked';
   return state;

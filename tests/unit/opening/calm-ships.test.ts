@@ -12,6 +12,7 @@
 // • The other boots' keys (the rings: 02–03, 02–06, 02–11 for a ship flown alone), entry 12 from the root, the name derived from run.log (the simulation retry),
 //   and run 2's ship 1 with no ghost and no naming (risk 11 and its follow-up: the ghost speaks where the last unit was
 //   lost, opening/ghost-placement).
+import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createHarness7 } from '../wp7/harness7';
 import { followLanding, lockOn } from '../landing/harness-landing';

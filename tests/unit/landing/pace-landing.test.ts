@@ -5,11 +5,11 @@
 // 5…1 beeps, ending on LAUNCH NOW) as one exact conic jump; WINDOW OPEN and PODS IN
 // FLIGHT refuse it; a full LZ's window neither holds TACTICAL nor stops a SKIP; a controller that drops inside a SKIP
 // (holdsTactical false) lifts the window rule, and AUTODROP's armed controller keeps it (4c, R7); OVERCLOCK covers the landing.
+import '../support/classic-world';
 import { check, finish } from './checks';
 import { lockOn } from './harness-landing';
 import { createHarness5 } from '../wp5/harness5';
 import { createInitialState } from '@state/initial';
-import { freshUnitRacks } from '@systems/carry';
 import { resetWorld } from '@systems/reset';
 import { requestLaunch } from '@systems/landing';
 import { activeLandingController, registerLandingController, windowRuleHolds } from '@systems/landing-controller';
@@ -27,14 +27,13 @@ import { propagateConic, type OrbitState } from '@/types/orbit';
 import { DRIVER_RULES } from '@data/script';
 import { LANDING_SKIP_REFUSAL } from '@data/landing-text';
 import { LANDING_CRUISE_WARP, LANDING_TACTICAL_WARP, WINDOW_TACTICAL_LEAD_TAC } from '@data/tuning';
-import { classicShip } from '@data/classic-five';
 import type { GameState } from '@state/schema';
 
 const SHIP = 1;  // HALCYON
 const h = createHarness5(1, { soulsFound: true });
 h.resetTo('flight', 1);
 h.store.update((draft) => {
-  Object.assign(draft, createInitialState({ seed: 1, shipIndex: SHIP, carried: freshUnitRacks(classicShip(SHIP)) }));
+  Object.assign(draft, createInitialState({ seed: 1, shipIndex: SHIP, carried: 'fresh' }));
   draft.hollow.phase = 'dormant';
   draft.director.done.push(...DRIVER_RULES.map((rule) => rule.id), 'engine-io-fault');
 });

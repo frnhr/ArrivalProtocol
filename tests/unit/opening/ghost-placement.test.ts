@@ -5,6 +5,7 @@
 //   a skip waits while it types; LAST LIGHT's boot has none (it spoke once).
 // • HOLLOW's notice after VESPER's first fight is `> ...048?` both once the ghost has spoken this run (HOLLOW is the relay
 //   stranger UNIT-031, slice 7c: it never met the ghost) and on a run 2 whose ghost speaks further on (lost on LAST LIGHT).
+import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createHarness7 } from '../wp7/harness7';
 import { lockOn } from '../landing/harness-landing';

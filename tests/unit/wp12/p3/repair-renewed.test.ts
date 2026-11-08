@@ -2,6 +2,7 @@
 // licence back at the boot, loudly (the files arrive as a licence does, CONTROL says `Your REPAIR licence is renewed.
 // :)` once the flight starts). A unit with a working Repair, and ship 1 (no transmission), get nothing.
 // The crossing is the debug jump's (pack, lay out, the ship's own damage, startShip): the same calls TRANSMIT makes.
+import '../../support/classic-world';
 import { check, finish } from '../../wp1/harness';
 import { createHarness7, type Harness7 } from '../../wp7/harness7';
 import { startShip } from '@systems/run';

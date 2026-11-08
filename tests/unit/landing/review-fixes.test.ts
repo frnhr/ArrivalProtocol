@@ -11,6 +11,7 @@
 // • the minors: FUEL noted at the end of the landing (N3), the drop cache keyed on the orbit epoch and ω (N4), LOAD NEXT
 //   and END LANDING refusals (N7), RUN END's NOBODY WOKE judged on pods down (N2);
 // • issue 5: on a fresh unit VESPER's tool-hunting seed borders a tool (the pooled receiver's hunting ground).
+import '../support/classic-world';
 import { check, finish } from './checks';
 import { phase2HollowOf } from '../support/hollow-world';
 import type { ShipThreat } from '@/types/threat';
@@ -26,7 +27,6 @@ import { capabilitiesNow } from '@systems/capabilities';
 import { runEndModel } from '@systems/run-end';
 import { shipResultOf } from '@systems/run';
 import { createInitialState } from '@state/initial';
-import { freshUnitRacks } from '@systems/carry';
 import { stateFromElements } from '@/types/orbit';
 import { freeSegment, mergeAdjacentFree, segmentStarts } from '@systems/memory-ops';
 import { packUnit, layoutCarried } from '@systems/carry';
@@ -315,7 +315,7 @@ function forceLandAllButFirst(): void {
 // --- N2. NOBODY WOKE is judged on pods down, not on landedInLz ---------------------------------------------------------
 {
   const LAST = 4;
-  const world = createInitialState({ seed: 3, shipIndex: LAST, carried: freshUnitRacks(classicShip(LAST)) });
+  const world = createInitialState({ seed: 3, shipIndex: LAST, carried: 'fresh' });
   world.burn.status = 'locked';
   const lz = world.landing.lzs[0]!;
   // Every pod down, all MISLANDED (worth 150 each): people woke, though nobody landed in an LZ with room.

@@ -10,6 +10,7 @@
 //   pause (the review's M2): the duel runs with its verbs, and no deal UI stands beside FinaleChoice.
 // • Slice 5 (plan R8, Track WARDEN): one deal per ship. On a ship whose corrupted resident already offered its own DEAL,
 //   HOLLOW's waits: LAST LIGHT's folded DEAL is not offered at the wake (it comes on a later ship by its own rule).
+import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createHarness7 } from '../wp7/harness7';
 import { lockOn } from '../landing/harness-landing';
@@ -27,12 +28,10 @@ import { buildDirectorCtx } from '@systems/director';
 import { getPrediction } from '@systems/predict';
 import { GUIDE_RULES } from '@data/script';
 import { createInitialState, createResidentState } from '@state/initial';
-import { freshUnitRacks } from '@systems/carry';
 import { installTool } from '@systems/licences';
 import { HOLLOW_STORY, HOLLOW_DEAL } from '@data/hollow-text';
 import { foldArrivalWalls } from '@data/threats';
 import { MERGE_COST_CHARGE, DEAL_PAUSE_SEC } from '@data/tuning';
-import { classicShip } from '@data/classic-five';
 import type { GameState, LogEntry } from '@state/schema';
 import type { DriverSegment } from '@/types/segment';
 import { finaleAtStep1, settleFinale } from '../support/finale';
@@ -144,8 +143,8 @@ check('…bites every 25 s at 3.5 %/s after the fight', s().hollow.cfg.spreadEve
 
 // The review's minor 6: keepCharge is keyed on the current verdict's facts (run.threat.current), not on the story kind.
 {
-  const vesper = createInitialState({ seed: 3, shipIndex: VESPER, carried: freshUnitRacks(classicShip(VESPER)) });
-  const lastLight = createInitialState({ seed: 3, shipIndex: LAST_LIGHT, carried: freshUnitRacks(classicShip(LAST_LIGHT)) });
+  const vesper = createInitialState({ seed: 3, shipIndex: VESPER, carried: 'fresh' });
+  const lastLight = createInitialState({ seed: 3, shipIndex: LAST_LIGHT, carried: 'fresh' });
   const first = createInitialState({ seed: 3, shipIndex: 0 });
   const notOneHop = { ...vesper, run: { ...vesper.run, threat: { ...vesper.run.threat, current: { ...vesper.run.threat.current!, oneHopFromFinal: false } } } };
   const told = { ...vesper, run: { ...vesper.run, threat: { ...vesper.run.threat, told: { noticed: true, keepCharge: true } } } };

@@ -8,6 +8,7 @@
 // A lean harness: the store, the clock heartbeat and orbit-sim only, with the warp pinned, so
 // 400 runs of 120 tactical s take seconds. The ship sits on a circular loop at 12,000 km, outside
 // the ring, so nothing locks, crashes or runs dry.
+import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createStore } from '@state/store';
 import type { GameState } from '@state/schema';

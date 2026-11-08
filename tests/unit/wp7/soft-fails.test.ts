@@ -7,6 +7,7 @@
 // • BEAM OUT: refused on run 1's ship 1, without comms, and on a ship that is not doomed; offered on an
 //   impact within 20 tactical s or a tank that can't lift ▼ out of the planet; cancelled by the kid or by
 //   the path clearing the planet; when it fills before the impact the ship is ABANDONED (+2 hits).
+import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createHarness7 } from './harness7';
 import { lossPlan, startBeamOut, cancelBeamOut } from '@systems/run';

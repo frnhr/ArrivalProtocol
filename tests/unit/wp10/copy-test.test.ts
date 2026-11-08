@@ -15,6 +15,7 @@
 // • WP11 (the lead's TODO, WP10 question 3): a tool licensed on this ship that the kid has not used here yet
 //   (HollowState.untriedTools: COPY from VESPER's boot, SWAP from its first burst; never Repair) is not hunted, and no seed
 //   lands within bite of one; its first use makes it fair game. The pure calls above it pass `[]` (every tool tried).
+import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createHarness10 } from './harness10';
 import { nearToolsSeedSpot, threateningSeeds, hollowReach, seedSpotFor, type SeedSpot } from '@systems/hollow';

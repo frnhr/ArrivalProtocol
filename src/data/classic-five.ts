@@ -7,6 +7,10 @@ import { RACK_A, FRESH_UNIT_RACK_E, FRESH_UNIT_RACK_F, rootSlotRack } from '@dat
 import { ARES_RUN1_FAMILIES, ADA } from '@data/souls';
 import { WORLDS } from '@data/arm';
 import { CLASSIC_WORLD_SLOTS, CLASSIC_FINAL_INDEX } from '@data/classic-slots';
+import {
+  ARES_VII_LANDING, ARES_VII_LEAD, HALCYON_ARRIVAL, KESTREL_ARRIVAL, VESPER_ARRIVAL, VESPER_LANDING, LAST_LIGHT_LANDING,
+  LAST_LIGHT_POD_RACKS, LAST_LIGHT_LEAD,
+} from '@data/authored-ships';
 
 export { CLASSIC_WORLD_SLOTS, CLASSIC_FINAL_INDEX } from '@data/classic-slots';
 
@@ -17,7 +21,8 @@ export { CLASSIC_WORLD_SLOTS, CLASSIC_FINAL_INDEX } from '@data/classic-slots';
 // numbers do not move; no game run ever routes through it otherwise. VESPER → LAST LIGHT is 83 LY on the real arm, so
 // this route cannot exist there: the arm's own HALCYON, KESTREL, VESPER and LAST LIGHT are placed by data/run1-arm.ts
 // with run 1's sizes. Risk 15: retired after slice 4, once the suites fly arm fixtures.
-// Their flight blocks live in data/flight-templates.ts (they ARE the templates); everything else is here.
+// Their flight blocks live in data/flight-templates.ts (they ARE the templates), and the blocks run 1's arm writes as they
+// are (landings, arrival damage, LAST LIGHT's layout, the lead pods) in data/authored-ships.ts; everything else is here.
 
 // Ship 1: the tutorial crash course. rp0 3,000 is underground, so the page opens on a red
 // line and IMPACT 02:43 (3,265 game s at x20). OUT for about 8 tactical s lifts ▼ into the
@@ -51,20 +56,12 @@ const ARES_VII: ShipDef = {
       familiesSeedStream: 'families',
       damage: 'scripted',
       hurt: [{ pod: 2, integrity: 44 }],
-      lead: 1,
+      lead: ARES_VII_LEAD,
       firstRun: { families: ARES_RUN1_FAMILIES, leadIndex: 0, lead: ADA },
     },
   },
-  // Kepler-186f: one WIDE site for 3 pods on a GENTLE plain. LZ-A at 160° places the first window about 1–4 minutes of
-  // TACTICAL after a typical lock near ▼ (ω ≈ −34°, the dot about 80° ahead), the spec's `LZ-A in 3:40`.
-  landing: {
-    lzs: [{ label: 'LZ-A', centreDeg: 160, width: 'wide', pods: 3 }],
-    forgiveness: 'gentle',
-    terrain: 'PLAINS',
-    noGo: [],
-    colonyFirstRun: 'RIVERSIDE',
-    drag: false,
-  },
+  // Kepler-186f (data/authored-ships.ts).
+  landing: ARES_VII_LANDING,
   // Layer 1 (01-landing §3.15): calm, no beam seeds (04 §3.1: depth 1), and no final ship one hop away.
   layer: 1,
 };
@@ -87,7 +84,7 @@ const HALCYON: ShipDef = {
   pods: 5,
   approachYear: null,
   ...FLIGHT_TEMPLATES['wide'],
-  arrivalDamage: [{ role: 'sensor', maxIntegrity: 62 }],
+  arrivalDamage: HALCYON_ARRIVAL,
   zones: [],
   final: false,
   resident: null,
@@ -143,7 +140,7 @@ const KESTREL: ShipDef = {
   pods: 12,
   approachYear: null,
   ...FLIGHT_TEMPLATES['wide-b'],
-  arrivalDamage: [{ role: 'sensor', maxIntegrity: 45 }],
+  arrivalDamage: KESTREL_ARRIVAL,
   // §4.2: rack C on the written run (the story's C07–C12), rack B or C (seeded) on a later one.
   zones: [{ kind: 'debris', id: 'kestrel-debris', centre: { onInboundAtR: 14000 }, r: 900, rack: 'C', laterRacks: ['B', 'C'] }],
   final: false,
@@ -205,7 +202,7 @@ const VESPER: ShipDef = {
   pods: 12,
   approachYear: null,
   ...FLIGHT_TEMPLATES['capture'],
-  arrivalDamage: [{ role: 'thrust-ctrl', maxIntegrity: 31 }],
+  arrivalDamage: VESPER_ARRIVAL,
   zones: [],
   final: false,
   resident: null,
@@ -227,22 +224,8 @@ const VESPER: ShipDef = {
       firstRun: null,
     },
   },
-  // Cinder: ROUGH volcanic ground, three sites at 5 · 4 · 3 (the NARROW LZ takes the smallest count, §3.15). Two lava
-  // no-go arcs on the dot's path (slice 1b, plan §2.1): 5° at 187.4°, 90 km past LZ-B's edge (a late launch or a wide dot),
-  // and 6° at 293.4°, 88 km before NARROW LZ-C (an early one). A healthy sure launch at 6,000 km (±78 km) never reaches
-  // them; a degraded Sensor Interp (±117 km) or a failing driver does: §3.6's "a wide dot is a real risk".
-  landing: {
-    lzs: [
-      { label: 'LZ-A', centreDeg: 60, width: 'standard', pods: 5 },
-      { label: 'LZ-B', centreDeg: 180, width: 'standard', pods: 4 },
-      { label: 'LZ-C', centreDeg: 300, width: 'narrow', pods: 3 },
-    ],
-    forgiveness: 'rough',
-    terrain: 'VOLCANIC',
-    noGo: [{ centreDeg: 187.4, widthDeg: 5, word: 'LAVA' }, { centreDeg: 293.4, widthDeg: 6, word: 'LAVA' }],
-    colonyFirstRun: null,
-    drag: true,
-  },
+  // Cinder: ROUGH volcanic ground, three sites at 5 · 4 · 3, two lava arcs (data/authored-ships.ts).
+  landing: VESPER_LANDING,
   // Layer 5, depth 4, one hop from LAST LIGHT: HOLLOW boards here whatever TRACE says (04 §3.8). A clean beam (noise 0,
   // slice-2-plan risk 2): one ship of HOLLOW before the finale is already full of first-time mechanics.
   layer: 5,
@@ -283,32 +266,18 @@ const LAST_LIGHT: ShipDef = {
   // failing (data/driver-damage.ts), never POD 12 or the slot's neighbours.
   memory: {
     rackA: RACK_A,
-    podRacks: { B: 'P P P P P P P _8', C: 'P P P P _2 S _1 P _21', D: 'P P P P _32' },
+    podRacks: LAST_LIGHT_POD_RACKS,
     aiFiles: null,
     drivers: {
       familiesSeedStream: 'families',
       damage: 'rolled',
       hurt: [],
-      lead: 12,
+      lead: LAST_LIGHT_LEAD,
       firstRun: null,
     },
   },
-  // New Haven: GENTLE plains, the final ship's 16 pods over four sites, STANDARD ×3 and NARROW ×1 (§3.15's layer 8). The
-  // tutorial run calls its colony FIRST LIGHT. Its cliffs (slice 1b, plan §2.1): 6° at 286.6°, 88 km past NARROW LZ-D's
-  // edge, so the guard reads `LAUNCH INTO CLIFFS? scores 0`.
-  landing: {
-    lzs: [
-      { label: 'LZ-A', centreDeg: 10, width: 'standard', pods: 4 },
-      { label: 'LZ-B', centreDeg: 100, width: 'standard', pods: 4 },
-      { label: 'LZ-C', centreDeg: 190, width: 'standard', pods: 4 },
-      { label: 'LZ-D', centreDeg: 280, width: 'narrow', pods: 4 },
-    ],
-    forgiveness: 'gentle',
-    terrain: 'PLAINS',
-    noGo: [{ centreDeg: 286.6, widthDeg: 6, word: 'CLIFFS' }],
-    colonyFirstRun: 'FIRST LIGHT',
-    drag: true,
-  },
+  // New Haven: GENTLE plains, four sites, the cliffs, FIRST LIGHT (data/authored-ships.ts).
+  landing: LAST_LIGHT_LANDING,
   // Layer 8, the final ship (flagship): it plays FINALE whatever came before (04 §3.9). A clean beam (risk 2).
   layer: 8,
 };

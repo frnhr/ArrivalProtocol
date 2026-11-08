@@ -14,6 +14,7 @@
 //   the pause ends), FASTER while a REFUSE hastes it; the answer's stamps fit and never say HOLLOW;
 // • the final ship's boot ends with HOLLOW's own line in its pink (`> last ship, 047. i'm so tired.`); the cut to amber
 //   waits until it has typed; a skip jumps to it (it is said at once) and the cut still waits.
+import '../../support/classic-world';
 import { check, finish } from '../../wp1/harness';
 import { createHarness10, VESPER } from '../harness10';
 import { windowPip, plotReadouts, toggleAlert, choiceTicker } from '@systems/flight-hud';

@@ -4,6 +4,7 @@
 // sets, the reactor's thread share, two copies of one role, and the loud copy table.
 // Slice 1a: Bay Ctrl's `bay` role in Printer Uplink's place, and the drop: no DROP SOLUTION with Nav Plotter dead or
 // missing (01-landing §3.8). Slice 1b: Bay Ctrl's cadence by band and BAY OFFLINE, the drop factors and `uncertain`.
+import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createInitialState } from '@state/initial';
 import type { GameState } from '@state/schema';

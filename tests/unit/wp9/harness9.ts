@@ -11,7 +11,9 @@ import type { SkillFileSegment } from '@/types/segment';
 import { threateningSeeds } from '@systems/hollow';
 import { freshUnitRacks, arrivalDamage } from '@systems/carry';
 import { resetWorld } from '@systems/reset';
-import { createInitialState } from '@state/initial';
+import { createInitialState, fixtureWorldNow } from '@state/initial';
+import { currentShip } from '@systems/map-run';
+import type { GameState } from '@state/schema';
 import { actionRepair, actionDelete } from '@state/actions';
 import { canStartOp, getOpsBySeg } from '@systems/ops-core';
 import { getByRole, hasIntegrity } from '@state/selectors';
@@ -75,10 +77,18 @@ export function createHarness9(seed = 1, opts: { soulsFound?: boolean } = {}): H
     ...base,
     kestrel(nextSeed, kestrelOpts = {}) {
       base.resetTo('flight', nextSeed);
-      const ship = classicShip(KESTREL);
-      const carried = freshUnitRacks(ship);
-      if (kestrelOpts.arrivalDamage) arrivalDamage(carried.segs, ship.arrivalDamage);
-      const fresh = createInitialState({ seed: nextSeed, shipIndex: KESTREL, carried });
+      // Track RETIRE: on the fixture world's arm (state/initial.ts), the fresh unit is laid out for the hop into run 1's
+      // KESTREL, and the ship's own arrival damage then lands on the unit's files in memory (the classic five: on the racks).
+      let fresh: GameState;
+      if (fixtureWorldNow() === 'classic') {
+        const ship = classicShip(KESTREL);
+        const carried = freshUnitRacks(ship);
+        if (kestrelOpts.arrivalDamage) arrivalDamage(carried.segs, ship.arrivalDamage);
+        fresh = createInitialState({ seed: nextSeed, shipIndex: KESTREL, carried });
+      } else {
+        fresh = createInitialState({ seed: nextSeed, shipIndex: KESTREL, carried: 'fresh' });
+        if (kestrelOpts.arrivalDamage) arrivalDamage(fresh.memory, currentShip(fresh).arrivalDamage);
+      }
       if (kestrelOpts.sensorHealed) {
         const sensor = fresh.memory.find((seg) => seg.role === 'sensor');
         if (!sensor || !hasIntegrity(sensor)) throw new Error('harness9: no sensor');

@@ -11,6 +11,7 @@
 //   full Core release or refuse it;
 // • v3 under damage works as v2 (no FIREWALL, still the quick rm); the cap and NO ROOM; the salvage's FIREWALL card hidden
 //   while v3 works, and every other deal unchanged.
+import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createHarness7 } from '../wp7/harness7';
 import { lockOn } from '../landing/harness-landing';
