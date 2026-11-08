@@ -3209,7 +3209,10 @@ a CONTACT stop (720: two on every one of the 360 CONTACT runs), 293 of those sto
 ### Tests
 
 - `npm run typecheck` and the tests' tsc are clean.
-- **The quick tier, once at the end:** see the final report's numbers (the last run is after the docs commit).
+- **The quick tier, once at the end** (after the docs commit): 223 passed, 0 failed, 13 balance-only skipped, **289 s** on 4
+  workers; the 1-minute load average was 5.7 at the start and 9.7 at the end (the lead's e2e tier running in the main
+  checkout). Over the 265 s budget, under the 300 s cap: the 7d suites take about 7 s of CPU between them (about 2 s of
+  wall), so the overrun is the shared machine's. A quiet re-run is the lead's to confirm.
 - With UNKNOWN_EVENTS_BUILT raised alone: 218 passed, 3 failed (`residents/ui-models`, the glyph; and the not-yet-built
   CONTACT lines of `signals/foundation` and its tsc), 471 s under a load of 13 (the lead's e2e beside it).
 - With every 7d change in: 223 passed, 0 failed, 13 balance-only skipped, 292 s, then 287 s (load 3.0 at the start, 10.5 at
