@@ -9,12 +9,12 @@ import type { RunMapState } from '@/types/map';
 import { chargeLeft, hasUsableTool, isHollow } from '@state/selectors';
 import { currentSlot } from '@systems/map-streams';
 import { shownFuelPct } from '@systems/flight-hud';
-import { onTargetTally } from '@systems/landing-rules';
+import { onTargetTally, onTargetEarned } from '@systems/landing-rules';
 import { FS_TOOL_KINDS } from '@data/fs-tools';
 import { FINALE_TEXT } from '@data/finale-text';
 import { ENDING_TITLE } from '@data/epilogue-text';
 import { ENDINGS_BUILT, endingTitleKey } from '@data/endings';
-import { EMPTY_SHIP_FUEL_PCT, MERGE_COST_CHARGE, STAR_ON_TARGET_FRAC, STAY_PICK_MAX } from '@data/tuning';
+import { EMPTY_SHIP_FUEL_PCT, MERGE_COST_CHARGE, STAY_PICK_MAX } from '@data/tuning';
 
 // THE EMPTY SHIP (R8): the final ship in orbit after its landing (ORBIT LOCKED or ACCEPT ORBIT), no pod aboard (a parked
 // pod counts as released), and FUEL as shown at the landing's end ≥ EMPTY_SHIP_FUEL_PCT. `fuelPct` is that FUEL (null
@@ -47,9 +47,9 @@ export interface StayCandidate {
   year: number;
 }
 
-// A ship of the run is ★ ON TARGET by its pods (R9; landing-rules onTargetTally's rule on the summaries): the colonists down
-// soft in an LZ with room are at least STAR_ON_TARGET_FRAC of everyone it arrived with (its unlaunched pods count).
-// Exported for the save codec's STAY check (a ship of run.ships named by the record must be one).
+// A ship of the run is ★ ON TARGET by its pods (R9): landing-rules onTargetEarned, the one ★ rule (review m2), over its
+// summaries (a pod down soft in an LZ with room counts). Exported for the save codec's STAY check (a ship of run.ships
+// named by the record must be one).
 export function shipOnTarget(result: Readonly<Pick<ShipResult, 'pods'>>): boolean {
   let colonists = 0;
   let onTarget = 0;
@@ -57,7 +57,7 @@ export function shipOnTarget(result: Readonly<Pick<ShipResult, 'pods'>>): boolea
     colonists += pod.colonists;
     if (pod.fate === 'down' && pod.place === 'lz' && pod.touch === 'soft') onTarget += pod.colonists;
   }
-  return colonists > 0 && onTarget >= STAR_ON_TARGET_FRAC * colonists;
+  return onTargetEarned(onTarget, colonists);
 }
 
 export function stayCandidates(state: Readonly<GameState>): StayCandidate[] {
@@ -185,8 +185,8 @@ export function finaleRunCause(state: Readonly<GameState>): RunEndCause {
   }
 }
 
-// The ending record as the confirm writes it (review M4: systems/finale.ts, in the same update as 'done', after the apply:
-// MERGE's charge spent, PURGE's blocks gone), from the world at that moment and the two choices (STAY's ship by `stay`).
+// The ending record as the confirm writes it (review M4, FINALE D11: systems/finale.ts, in the confirm's update, at
+// 'verdict', after the apply: MERGE's charge spent, PURGE's blocks gone), from the world at that moment and the two choices (STAY's ship by `stay`).
 export function endingRecordAt(state: Readonly<GameState>, hollow: HollowFate, you: YouChoice, stay: number | null): EndingRecord {
   if ((you === 'stay') !== (stay !== null)) throw new Error(`endingRecordAt: STAY's ship ${String(stay)} with step 2 '${you}'`);
   let stayed: EndingRecord['stay'] = null;

@@ -830,8 +830,30 @@ export function landingResult(state: Readonly<GameState>, outcome: ShipOutcome):
   return tally;
 }
 
-// ★ ON TARGET (§3.9), live or final. A pod counts once it is down soft in an LZ with room; the denominator is every pod
-// the ship arrived with, launched or not.
+// ★ ON TARGET (§3.9), one rule (slice 7a review m2: onTargetTally, ending-rules shipOnTarget and the save codec's STAY
+// check all read these): a pod counts once it is down soft in an LZ with room, and the ★ is earned when those colonists
+// are at least STAR_ON_TARGET_FRAC of everyone the ship arrived with (its unlaunched pods count).
+export function onTargetEarned(onTargetColonists: number, colonists: number): boolean {
+  return colonists > 0 && onTargetColonists >= STAR_ON_TARGET_FRAC * colonists;
+}
+
+export function podOnTarget(record: Readonly<PodRecord>): boolean {
+  const { fate } = record;
+  return fate.kind === 'down' && fate.touchdown.place === 'lz' && fate.touchdown.touch === 'soft';
+}
+
+// A ship's pods, as they stand, earn the ★ (the final ship's live records; the codec's STAY check on the final ship).
+export function podsOnTarget(pods: readonly Readonly<PodRecord>[]): boolean {
+  let onTarget = 0;
+  let colonists = 0;
+  for (const record of pods) {
+    colonists += record.colonists;
+    if (podOnTarget(record)) onTarget += record.colonists;
+  }
+  return onTargetEarned(onTarget, colonists);
+}
+
+// ★ ON TARGET live or final, with what could still be earned (`possible`).
 export function onTargetTally(state: Readonly<GameState>): OnTargetTally {
   let onTargetPods = 0;
   let onTargetColonists = 0;
@@ -841,18 +863,17 @@ export function onTargetTally(state: Readonly<GameState>): OnTargetTally {
   for (const record of state.landing.pods) {
     colonists += record.colonists;
     const { fate } = record;
-    if (fate.kind === 'down' && fate.touchdown.place === 'lz' && fate.touchdown.touch === 'soft') {
+    if (podOnTarget(record)) {
       onTargetPods++;
       onTargetColonists += record.colonists;
     } else if (fate.kind === 'falling' || (fate.kind === 'aboard' && inMemory.has(record.pod))) {
       stillOpen += record.colonists;
     }
   }
-  const needed = STAR_ON_TARGET_FRAC * colonists;
   return {
     onTargetPods, pods: state.landing.pods.length, onTargetColonists, colonists,
-    earned: colonists > 0 && onTargetColonists >= needed,
-    possible: colonists > 0 && onTargetColonists + stillOpen >= needed,
+    earned: onTargetEarned(onTargetColonists, colonists),
+    possible: onTargetEarned(onTargetColonists + stillOpen, colonists),
   };
 }
 

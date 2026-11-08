@@ -11,6 +11,8 @@ import type { LzState } from '@/types/landing';
 import type { SurveyState } from '@/types/survey';
 import { parseLastUnit, MetaCorrupt, endingOfV3LastUnit, parseEnding } from '@systems/meta-parse';
 import { hasUsableTool } from '@state/selectors';
+import { shipOnTarget } from '@systems/ending-rules';
+import { podsOnTarget } from '@systems/landing-rules';
 import { FS_TOOL_KINDS } from '@data/fs-tools';
 import type { Segment } from '@/types/segment';
 import type { FinaleState } from '@state/schema';
@@ -1008,9 +1010,13 @@ export function decodeRunSave(raw: string): DecodeResult {
 // • STAY names a ship (a slot of an ended ship, or the final ship's), and nothing else names one;
 // • the pods MERGE gave back are pods of this ship restored by it (7a's interim restores in place, so their driver is no
 //   longer lost: their records say `restored`);
-// • a decided finale holds its ending record, which agrees with its choices, and an undecided one none (review M4).
-// STAY's ship being ★ ON TARGET is Track FINALE's rule (ending-rules stayCandidates); its check joins here when it is built.
-function finaleRefusal(
+// • STAY's ship is ★ ON TARGET (review m2): an ended ship by its summaries (ending-rules shipOnTarget), the final ship by
+//   its live pods (landing-rules podsOnTarget). At ENDING CHOSEN the final tally is never lower than at the confirm: MERGE's
+//   restored pods only add soft LZ landings, as every colonist already counts in the denominator.
+// • the record is frozen at the confirm ('verdict', FINALE D11), so a finale from 'verdict' on ('last-landing', 'done')
+//   holds its ending record, which agrees with its choices, and one before the confirm none (review M4, m1).
+// Exported for ending/foundation (no save point falls in 'verdict' or 'last-landing', so only a direct call reaches them).
+export function finaleRefusal(
   point: SavePoint, finale: Readonly<FinaleState>, landing: Readonly<ShipSlices['landing']>, run: Readonly<RunState>, slot: number,
 ): string | null {
   if (point === 'ship-done' && finale.phase !== 'none') return `SHIP DONE with the finale '${finale.phase}'`;
@@ -1021,12 +1027,19 @@ function finaleRefusal(
   if (finale.hollow === 'spare' && finale.you === 'sunset') return 'SPARE with SUNSET (SPARE gives the root the ship)';
   if ((finale.you === 'stay') !== (finale.stay !== null)) return `STAY's ship is ${finale.stay === null ? 'missing' : 'set without STAY'}`;
   if (finale.stay !== null && finale.stay !== slot && !run.ships.some((ship) => ship.slot === finale.stay)) return `STAY names slot ${finale.stay}, no ship of this run`;
+  if (finale.stay !== null) {
+    const ended = run.ships.find((ship) => ship.slot === finale.stay);
+    const onTarget = ended !== undefined ? shipOnTarget(ended) : podsOnTarget(landing.pods);
+    if (!onTarget) return `STAY names slot ${finale.stay}, not a ★ ON TARGET ship of this run`;
+  }
   const restorable = new Set(landing.pods.filter((record) => record.restored).map((record) => record.pod));
   const stray = finale.restored.find((pod) => !restorable.has(pod));
   if (stray !== undefined) return `MERGE restored pod ${stray}, which it never gave back`;
-  // Review M4: a decided finale's record, frozen at the confirm, agrees with its choices; an undecided one has none.
+  // Review M4 / FINALE D11 (m1): the record is frozen at the confirm ('verdict'), so it stands through 'verdict',
+  // 'last-landing' and 'done' (no save point falls in the first two: R14), and before the confirm there is none.
   const record = finale.record;
-  if (finale.phase !== 'done') return record === null ? null : `an ending record before the finale is decided ('${finale.phase}')`;
+  const decided = finale.phase === 'verdict' || finale.phase === 'last-landing' || finale.phase === 'done';
+  if (!decided) return record === null ? null : `an ending record before the confirm ('${finale.phase}')`;
   if (record === null) return 'a decided finale without its ending record';
   if (record.hollow !== finale.hollow || record.you !== finale.you || (record.stay?.slot ?? null) !== finale.stay) {
     return `the ending record (${record.hollow} + ${record.you}) is not the finale's (${finale.hollow} + ${finale.you})`;

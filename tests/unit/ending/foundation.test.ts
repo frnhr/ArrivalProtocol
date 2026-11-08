@@ -16,7 +16,7 @@ import type { GameState } from '@state/schema';
 import type { EndingRecord } from '@/types/ending';
 import { createStore } from '@state/store';
 import { createInitialState } from '@state/initial';
-import { decodeRunSave, migrateRunSave, encodeRunSave } from '@systems/save-codec';
+import { decodeRunSave, migrateRunSave, encodeRunSave, finaleRefusal } from '@systems/save-codec';
 import { resumeRun } from '@systems/run-save';
 import { pendingRunSave } from '@systems/save-write';
 import { parseMeta, recordRunEnd, freshMeta, META_MIGRATIONS, MetaCorrupt } from '@systems/meta';
@@ -212,6 +212,16 @@ const v6Run2 = fixture('run-save-v6-ship-done-run2.json');
     ['an unknown phase', base, (save) => { save.payload.slices.hollow.finale.phase = 'choice'; }, /finale\.phase/],
     ['ENDING CHOSEN at step 1', base, (save) => { save.payload.slices.hollow.finale.phase = 'step1'; }, /^route/],
     ['SHIP DONE with an open finale', desk, (save) => { save.payload.slices.hollow.finale.phase = 'duel'; }, /SHIP DONE with the finale 'duel'/],
+    // Review m2: STAY's ship must be ★ ON TARGET, an ended ship by its summaries, the final ship by its live pods.
+    ['STAY naming an ended ship off target', base, (save) => {
+      const ship = save.payload.run.ships[0];
+      for (const pod of ship.pods) Object.assign(pod, { fate: 'parked', place: null, lz: null, touch: null });
+      Object.assign(save.payload.slices.hollow.finale, { you: 'stay', stay: ship.slot });
+    }, /not a ★ ON TARGET ship/],
+    ['STAY naming the final ship off target', base, (save) => {
+      for (const record of save.payload.slices.landing.pods) if (record.fate.kind === 'down') record.fate.touchdown.touch = 'hard';
+      Object.assign(save.payload.slices.hollow.finale, { you: 'stay', stay: save.payload.run.map.route.at(-1).slot });
+    }, /not a ★ ON TARGET ship/],
     ['a last unit\'s ending with SPARE + SUNSET', desk, (save) => { Object.assign(save.payload.run.lastUnit.ending, { hollow: 'spare', you: 'sunset', fuelPct: 30 }); }, /SPARE rules out SUNSET/],
   ];
   for (const [what, from, edit, want] of cases) {
@@ -220,6 +230,14 @@ const v6Run2 = fixture('run-save-v6-ship-done-run2.json');
   }
   const roundTrip = decodeRunSave(encodeRunSave((decodeRunSave(JSON.stringify(base)) as { ok: true; save: never }).save));
   check('…and a v7 save round-trips', roundTrip.ok);
+  // Review m1: the record is frozen at the confirm, so it stands at 'verdict' and 'last-landing' too (no save point falls
+  // there, R14: the codec's own check is called), and before the confirm there is none.
+  const slices = base.payload.slices;
+  const at = (phase: string, record: unknown = slices.hollow.finale.record): string | null => finaleRefusal(
+    'beam', { ...slices.hollow.finale, phase, record }, slices.landing, base.payload.run, base.payload.run.map.route.at(-1).slot);
+  check('the codec takes the record at \'verdict\', \'last-landing\' and \'done\', refuses one at step 2, and none from \'verdict\' on',
+    at('verdict') === null && at('last-landing') === null && at('done') === null && /before the confirm \('step2'\)/.test(at('step2') ?? '')
+    && /without its ending record/.test(at('verdict', null) ?? ''), `${at('verdict')} | ${at('step2')} | ${at('verdict', null)}`);
 }
 
 // --- The archive: META 3 → 4 --------------------------------------------------------------------------------------------------
