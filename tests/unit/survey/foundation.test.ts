@@ -65,8 +65,8 @@ const GATES_AT_LOAD = { poor: SURVEY_BUILT.poor, built: SKILL_TREE.survey.built 
 // --- What this build plays (plan §5: one check per gate, so Track SWATH raises each line on its own) -----------------------
 // POOR: Track SWATH raised it first.
 check('built: POOR plays POOR (Track SWATH)', SURVEY_BUILT.poor === true);
-// SURVEY: Track SWATH raises it last (`=== 3`, `built: SURVEY v1–v3 (Track SWATH)`).
-check('built: SURVEY not yet (Track SWATH)', SKILL_TREE.survey.built === 0);
+// SURVEY: Track SWATH raised it last.
+check('built: SURVEY v1–v3 (Track SWATH)', SKILL_TREE.survey.built === 3);
 // (end of the built checks)
 
 // --- ShipDef.site and the gate -------------------------------------------------------------------------------------------
