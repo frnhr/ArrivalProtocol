@@ -34,7 +34,7 @@ import {
   windowOpenNow,
 } from '@systems/landing-rules';
 import { forgetDriver, parkPodsAboard } from '@state/actions';
-import { driversInMemory, finalePending, scriptFightOpen } from '@state/selectors';
+import { driversInMemory, finalePending, launchDrivers, scriptFightOpen } from '@state/selectors';
 import { groundAt, groundKnownAt } from '@state/survey-selectors';
 import { layoutOf } from '@data/memory';
 import { END_LANDING_REFUSAL_KEY, LANDING_ECHO, launchRefusalKey } from '@data/landing-text';
@@ -43,6 +43,7 @@ import {
   BAND_DEGRADED_MIN, BAY_RELOAD_TAC, BAY_SLOTS, BEEP_BURN_TAC, BEEP_JUMP_TAC, BEEP_REARM_TAC, LANDING_DONE_LINGER_SEC,
   LANDING_NONE_LEFT_SEC, POD_DESCENT_SEC, POD_FIRST_DESCENT_SEC, EARLY_BURN_GUARD_TAC, LATE_TRIM_TAC,
 } from '@data/tuning';
+import { BLIND_DROP_MULT, LAST_LANDING_CADENCE_SEC } from '@data/tuning';
 import { visitRng } from '@systems/map-streams';
 import { writeEndingChosen } from '@systems/save-write';
 import { sayOwedVerdict } from '@systems/finale';
@@ -86,21 +87,34 @@ function firstOfRun(state: Readonly<GameState>): boolean {
 
 // The driver uploads into its pod and leaves memory (§3.8), as a print did: the moment first (the chip can flash), then
 // any op on it aborted (its own onAbort settles it), the blocks freed, the pod falling, the bay spent, and the echo.
-// `spendBay`: false for forceLandAll (dev and tests), which skips the bay.
+// `spendBay`: false for forceLandAll (dev and tests), which skips the bay, and during THE LAST LANDING (no bay, R26).
+// Slice 7b (R24): a driver MERGE gave back by radio (one of landing.lastLanding.drivers) was never in memory: no op, no
+// blocks; it leaves the radio list instead, and THE LAST LANDING's cadence starts (LAST_LANDING_CADENCE_SEC, R26).
 function launchDriver(store: Store<GameState>, driver: DriverSegment, launch: LaunchRecord, spendBay: boolean): void {
   emit('pod-launched', { pod: driver.pod, source: launch.source, segId: driver.id });
-  for (const operation of getOpsBySeg(driver.id)) abortOp(operation.id);
-  const memory = store.getState().memory;
-  const start = requireAddr(memory, driver);
-  replaceRange(memory, start, start + driver.size, [freeSegment(driver.size)], { opId: null, own: [driver] });
-  mergeAdjacentFree(memory);
-  if (IS_DEV) assertMemoryInvariants(memory, layoutOf(store.getState()).totalBlocks);
+  const radio = store.getState().landing.lastLanding?.drivers.some((candidate) => candidate.pod === driver.pod) ?? false;
+  if (radio && store.getState().memory.some((seg) => seg.id === driver.id)) {
+    throw new Error(`launchDriver: pod ${driver.pod}'s driver is both by radio and in memory`);
+  }
+  if (!radio) {
+    for (const operation of getOpsBySeg(driver.id)) abortOp(operation.id);
+    const memory = store.getState().memory;
+    const start = requireAddr(memory, driver);
+    replaceRange(memory, start, start + driver.size, [freeSegment(driver.size)], { opId: null, own: [driver] });
+    mergeAdjacentFree(memory);
+    if (IS_DEV) assertMemoryInvariants(memory, layoutOf(store.getState()).totalBlocks);
+  }
   const cadenceTac = capabilitiesNow(store.getState()).bay.cadenceTac;
   if (spendBay && cadenceTac === null) throw new Error('launchDriver: Bay Ctrl is missing (launchRefusal says BAY OFFLINE)');
   store.update((draft) => {
     const record = draft.landing.pods.find((candidate) => candidate.pod === driver.pod);
     if (!record || record.fate.kind !== 'aboard') throw new Error(`launchDriver: pod ${driver.pod} is not aboard`);
     record.fate = { kind: 'falling', launch };
+    const lastLanding = draft.landing.lastLanding;
+    if (radio && lastLanding !== null) {
+      lastLanding.drivers = lastLanding.drivers.filter((candidate) => candidate.pod !== driver.pod);
+      lastLanding.cadenceLeftSec = LAST_LANDING_CADENCE_SEC;
+    }
     if (spendBay) {
       if (draft.landing.bay.loaded < 1) throw new Error('launchDriver: the bay is empty');
       draft.landing.bay.loaded--;
@@ -118,7 +132,9 @@ function launchRecordFor(state: Readonly<GameState>, driver: DriverSegment, sol:
   const dot = sol.dot;
   if (dot === null) throw new Error('requestLaunch: no drop dot (launchRefusal lets no launch through without one)');
   const R = state.level.planet.R;
-  const halfWidthKm = dropHalfWidthKm(dot.launchRadius, R, dropFactors(capabilitiesNow(state), driver));
+  // Slice 7b (R27): a blind drop of THE LAST LANDING doubles the spread, in the one product (landing-solve dropHalfWidthKm).
+  const factors = dropFactors(capabilitiesNow(state), driver);
+  const halfWidthKm = dropHalfWidthKm(dot.launchRadius, R, intent.blind === true ? { ...factors, blind: BLIND_DROP_MULT } : factors);
   const u = dropStream(state)() * 2 - 1;
   return {
     atTSec: state.clock.tSec,
@@ -151,8 +167,14 @@ function launchesFromMind(state: Readonly<GameState>, intent: LaunchIntent): boo
 // The ONLY way a pod launches (§3.3, §3.14): the kid's [L] (landing-controls playerLaunch) and every future controller go
 // through here, with the same refusals (launchRefusal) and guards (launchGuard: the inline confirm, answered by calling
 // again with `confirmed`). Only the player's refusals buzz and flash their line: a controller is asked every tick.
+// Slice 7b: THE LAST LANDING's launches (landing.lastLanding set, R26) spend no bay and meet no inline confirm (there is no
+// kid to ask: its controller decides by the rules, R27, and its pods score by the normal ones); only they may drop blind.
 export function requestLaunch(store: Store<GameState>, intent: LaunchIntent): LaunchResult {
   const state = store.getState();
+  const lastLanding = state.landing.lastLanding !== null;
+  if (intent.blind === true && (intent.source !== 'merge' || !lastLanding)) {
+    throw new Error(`requestLaunch: a blind drop asked by '${intent.source}'${lastLanding ? '' : ' outside THE LAST LANDING'}`);
+  }
   const sol = state.run.phase === 'landing' ? currentDropSolution() : null;
   const refusal = launchRefusal(state, sol, { source: intent.source, fromMind: launchesFromMind(state, intent) }, intent.pod);
   if (refusal !== null) {
@@ -160,14 +182,14 @@ export function requestLaunch(store: Store<GameState>, intent: LaunchIntent): La
     return { kind: 'refused', reason: refusal };
   }
   if (sol === null) throw new Error('requestLaunch: no drop solution in LANDING');
-  const guard = launchGuard(state, sol, intent.pod);
+  const guard = lastLanding ? null : launchGuard(state, sol, intent.pod);
   if (guard !== null && intent.confirmed !== guard.ask) {
     return { kind: 'confirm', ask: guard.ask, points: guard.points, text: launchGuardText(guard, state.landing.terrain) };
   }
-  const driver = intent.pod === undefined ? nextToLaunch(state) : driversInMemory(state).find((candidate) => candidate.pod === intent.pod);
+  const driver = intent.pod === undefined ? nextToLaunch(state) : launchDrivers(state).find((candidate) => candidate.pod === intent.pod);
   if (!driver) throw new Error('requestLaunch: no driver to launch (launchRefusal said NO POD READY otherwise)');
   const launch = launchRecordFor(state, driver, sol, intent);
-  launchDriver(store, driver, launch, true);
+  launchDriver(store, driver, launch, !lastLanding);
   // AUTODROP's demos (03 §3.3, plan §3.6): each launch of the kid's into a bracket, its offset from the window's centre in
   // tactical s. Off-site launches and the controllers' own are not demos.
   const demo = intent.source === 'player' ? playerDemo(state, sol, launch) : null;
@@ -679,7 +701,7 @@ export function forceLandAll(store: Store<GameState>): number {
   let landed = 0;
   for (;;) {
     const state = store.getState();
-    const driver = driversInMemory(state).find((candidate) => aboard(state, candidate.pod) && isLaunchable(candidate));
+    const driver = launchDrivers(state).find((candidate) => aboard(state, candidate.pod) && isLaunchable(candidate));
     if (!driver) break;
     const remaining = lzRemaining(state);
     const lz = state.landing.lzs.find((candidate) => (remaining[candidate.label] ?? 0) > 0) ?? state.landing.lzs[state.landing.lzs.length - 1];

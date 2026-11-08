@@ -300,6 +300,24 @@ export function driversInMemory(state: Readonly<GameState>): DriverSegment[] {
   return [...byPod.values()];
 }
 
+// Slice 7b (slice-7-plan R24, the FOUNDATION's swap): the drivers a launch may take, the one list every launch-path reader
+// reads (landing-rules' queue, driverFor, the can-ever rules and ★ ON TARGET's still-open; landing.ts requestLaunch and
+// forceLandAll; AUTODROP's plan and decide; the POD BAY's and the footer's launchable sets). Outside THE LAST LANDING it is
+// driversInMemory. During it (landing.lastLanding set) it is only the drivers MERGE gave back by radio, which never enter
+// memory (01 §3.17): the landing had ended before the FINALE opened, so every driver still in memory belongs to a pod parked
+// then, and THE LAST LANDING flies only the restored pods (R25). Readers that mean memory itself (HOLLOW, THE DEAL, the
+// sleeper, LOAD NEXT, the strip) keep driversInMemory.
+export function launchDrivers(state: Readonly<GameState>): DriverSegment[] {
+  const radio = state.landing.lastLanding;
+  return radio === null ? driversInMemory(state) : [...radio.drivers];
+}
+
+// THE LAST LANDING is running (7b; R26): MERGE's restored pods are being flown by radio. The SHIP view is forced while it
+// runs (systems/mode.ts setMode refuses the MIND).
+export function lastLandingOn(state: Readonly<GameState>): boolean {
+  return state.landing.lastLanding !== null;
+}
+
 // The ship's colonists by where their pod is (the footer, the mini-HUD, the LOST card): still aboard, falling, down
 // (and of those, in an LZ with room), parked in orbit, gone with a ship that left orbit.
 export interface ColonistCounts {

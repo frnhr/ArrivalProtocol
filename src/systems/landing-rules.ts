@@ -10,7 +10,7 @@ import type { SegmentRole } from '@/types/segment';
 import type { Capabilities } from '@systems/capabilities';
 import type { PredictOutcome } from '@systems/predict';
 import type { Rng } from '@systems/rng';
-import { autoburnHoldsLandingOrbit, driversInMemory, filesWithRole, integrityBand, repairPossible } from '@state/selectors';
+import { autoburnHoldsLandingOrbit, filesWithRole, integrityBand, launchDrivers, repairPossible } from '@state/selectors';
 import { bayCapability, capabilitiesNow, roleHealth } from '@systems/capabilities';
 import { groundAt } from '@state/survey-selectors';
 import { angleDelta, dropHalfWidthKm, secFromNow } from '@systems/landing-solve';
@@ -27,6 +27,9 @@ import {
 // (landing.ts), the guidance table, the views, AUTODROP and the tests share one answer. Only landing.ts writes state.
 
 // --- Drivers and the bay -----------------------------------------------------------------------------------------------
+
+// Slice 7b (slice-7-plan R24): every rule here that asks which drivers a launch may take reads selectors launchDrivers, the
+// drivers in memory, or during THE LAST LANDING only the ones MERGE gave back by radio (never in memory, 01 §3.17).
 
 // A driver the bay may launch now (§3.4): not being eaten, not worked on, not moving, repairing or offline, and not dead
 // (integrity ≥ BAND_FAILING_MIN). A repair started before its turn therefore always finishes first. Slice 5 (plan R7): and
@@ -66,7 +69,7 @@ export function podCounts(state: Readonly<GameState>): PodCounts {
 // The launch order (§3.4): LOAD NEXT's pod first if it can launch, then the lowest address that can. Launchable
 // drivers only: the bay count is a budget, so an infection never ejects anything, it just skips that driver.
 export function launchQueue(state: Readonly<GameState>): DriverSegment[] {
-  const launchable = driversInMemory(state).filter(isLaunchable);
+  const launchable = launchDrivers(state).filter(isLaunchable);
   const pinned = launchable.find((driver) => driver.pod === state.landing.loadNext);
   return pinned ? [pinned, ...launchable.filter((driver) => driver !== pinned)] : launchable;
 }
@@ -119,17 +122,18 @@ export function driverCanEverLaunch(state: Readonly<GameState>, driver: Readonly
   return repairPossible(state);
 }
 
-// A pod can still launch some day: it is aboard and its driver is in memory and can launch some day.
+// A pod can still launch some day: it is aboard and its driver is one a launch may take (launchDrivers) and can launch some
+// day.
 export function canEverLaunch(state: Readonly<GameState>, pod: number): boolean {
   if (podRecord(state, pod).fate.kind !== 'aboard') return false;
-  const driver = driversInMemory(state).find((candidate) => candidate.pod === pod);
+  const driver = launchDrivers(state).find((candidate) => candidate.pod === pod);
   return driver !== undefined && driverCanEverLaunch(state, driver);
 }
 
 // The drivers of the pods aboard that can launch some day (the table's anyCanEver, the auto-end, the moment's `awaited`).
 export function driversThatCanEverLaunch(state: Readonly<GameState>): DriverSegment[] {
   const aboard = new Set(state.landing.pods.filter((record) => record.fate.kind === 'aboard').map((record) => record.pod));
-  return driversInMemory(state).filter((driver) => aboard.has(driver.pod) && driverCanEverLaunch(state, driver));
+  return launchDrivers(state).filter((driver) => aboard.has(driver.pod) && driverCanEverLaunch(state, driver));
 }
 
 // --- Where a pod lands -------------------------------------------------------------------------------------------------
@@ -595,15 +599,15 @@ export function landingMoment(
   };
 }
 
-// The driver a launch would take: `pod`'s if named (it must be in memory), else nextToLaunch.
+// The driver a launch would take: `pod`'s if named (it must be one of launchDrivers), else nextToLaunch.
 function driverFor(state: Readonly<GameState>, pod: number | undefined): DriverSegment | null {
   if (pod === undefined) return nextToLaunch(state);
-  return driversInMemory(state).find((driver) => driver.pod === pod) ?? null;
+  return launchDrivers(state).find((driver) => driver.pod === pod) ?? null;
 }
 
 // A pod aboard whose driver is held by a resident's lock (slice 5): what makes an empty queue POD LOCKED, not NO POD READY.
 function lockedPodAboard(state: Readonly<GameState>): boolean {
-  return driversInMemory(state).some((driver) => driver.lockedBy !== undefined && podRecord(state, driver.pod).fate.kind === 'aboard');
+  return launchDrivers(state).some((driver) => driver.lockedBy !== undefined && podRecord(state, driver.pod).fate.kind === 'aboard');
 }
 
 // Who is asking for a launch: the source, and whether it may launch while the kid is in the MIND (the blue screen).
@@ -616,14 +620,19 @@ export interface LaunchFrom {
 // Why a launch can't go now, in the order of the LaunchRefusal union; null: it can. SHIP SCREEN applies whenever the
 // screen is the MIND and the asker may not launch from there. BAY OFFLINE (Bay Ctrl missing) comes next: nothing done on
 // the ship screen changes it, so it outranks every flight and drop reason.
+// Slice 7b (R26): during THE LAST LANDING (landing.lastLanding set) the pods leave from no bay: BAY OFFLINE and BAY EMPTY do
+// not apply and Bay Ctrl is not read; RELOADING is its own cadence (LastLandingState.cadenceLeftSec, LAST_LANDING_CADENCE_SEC
+// of game time from each launch, landing.ts launchDriver). Keyed on the machine, not on the source: a 'merge' controller on
+// an ordinary landing (skills/autodrop-review's wrapper) launches by the bay's rules.
 export function launchRefusal(
   state: Readonly<GameState>, sol: Readonly<DropSolution> | null, from: LaunchFrom, pod?: number,
 ): LaunchRefusal | null {
+  const radio = state.landing.lastLanding;
   if (state.run.phase !== 'landing') return 'NOT LANDING';
   if (state.landing.ended !== null) return 'LANDING OVER';
   if (state.clock.paused) return 'PAUSED';
   if (state.ui.mode === 'memory' && !from.fromMind) return 'SHIP SCREEN';
-  if (bayOfflineIn(state)) return 'BAY OFFLINE';
+  if (radio === null && bayOfflineIn(state)) return 'BAY OFFLINE';
   if (state.burn.lastTickDvKmS > 0) return 'ENGINE FIRING';
   if (sol === null || sol.block !== null || sol.dot === null) return 'NO DROP SOLUTION';
   if (!sol.dot.inBand) return 'OUT OF THE LAUNCH BAND';
@@ -631,6 +640,7 @@ export function launchRefusal(
   // Slice 5 (plan R7): the asked-for pod is locked, or, asked for none, nothing is ready but a locked pod.
   if (driver?.lockedBy !== undefined || (driver === null && pod === undefined && lockedPodAboard(state))) return 'POD LOCKED';
   if (driver === null || !isLaunchable(driver)) return 'NO POD READY';
+  if (radio !== null) return radio.cadenceLeftSec > 0 ? 'RELOADING' : null;
   if (state.landing.bay.cadenceLeftTac > 0) return 'RELOADING';
   if (state.landing.bay.loaded < 1) return 'BAY EMPTY';
   return null;
@@ -858,15 +868,15 @@ export function onTargetTally(state: Readonly<GameState>): OnTargetTally {
   let onTargetPods = 0;
   let onTargetColonists = 0;
   let colonists = 0;
-  let stillOpen = 0;  // colonists whose landing is not decided yet: aboard with a driver in memory, or falling
-  const inMemory = new Set(driversInMemory(state).map((driver) => driver.pod));
+  let stillOpen = 0;  // colonists whose landing is not decided yet: aboard with a driver to launch (launchDrivers), or falling
+  const withDriver = new Set(launchDrivers(state).map((driver) => driver.pod));
   for (const record of state.landing.pods) {
     colonists += record.colonists;
     const { fate } = record;
     if (podOnTarget(record)) {
       onTargetPods++;
       onTargetColonists += record.colonists;
-    } else if (fate.kind === 'falling' || (fate.kind === 'aboard' && inMemory.has(record.pod))) {
+    } else if (fate.kind === 'falling' || (fate.kind === 'aboard' && withDriver.has(record.pod))) {
       stillOpen += record.colonists;
     }
   }

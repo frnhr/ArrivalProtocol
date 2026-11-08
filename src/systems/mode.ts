@@ -5,6 +5,7 @@ import { resumeHeldThrottle } from '@systems/flight-controls';
 import { emit } from '@systems/events';
 import { markChannelRead, visibleChannel } from '@systems/say';
 import { cancelTool } from '@systems/fs-tools';
+import { lastLandingOn } from '@state/selectors';
 
 // SHIP ⇄ MIND (§3, §6.11). ui.mode is the single source of truth: the mode toggle and TAB both
 // write it here, and one subscriber (components/dock/ModeToggle) owns body.mode-memory, the
@@ -19,10 +20,13 @@ import { cancelTool } from '@systems/fs-tools';
 // only blue shows. Leaving blue puts it down as Esc does (INSPECT keeps the file it was used on),
 // so its follower card and crosshair never ride over the NAV PLOT, and a window pip selects its
 // file instead of the held tool's last target.
-
+//
+// Slice 7b (slice-7-plan R26): THE LAST LANDING forces the SHIP view, so the MIND is shut while it runs (the toggle, TAB and
+// every other way here do nothing; systems/last-landing.ts puts the SHIP view up as it starts).
 export function setMode(store: Store<GameState>, to: ViewMode): void {
   const from = store.getState().ui.mode;
   if (from === to) return;
+  if (to === 'memory' && lastLandingOn(store.getState())) return;
   if (to === 'tools' && store.getState().ui.activeTool) cancelTool(store);
   store.update((draft) => {
     draft.ui.mode = to;

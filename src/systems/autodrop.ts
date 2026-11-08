@@ -1,3 +1,5 @@
+// Slice 7b: the FOUNDATION swapped its drivers-to-launch reads to selectors launchDrivers (slice-7-plan R24: THE LAST
+// LANDING's radio drivers are never in memory); nothing else here changed.
 // Slice 4c–4e: Track DROP owns this file (docs/phase3/impl/slice-4cde-plan.md §2.1, §3, §7.2).
 //
 // AUTODROP (03 §3.3, §3.5, §3.8; 01 §3.3, §3.4, §3.14): the per-version controller, [L] held (v1), [G] (v2's pass, v3's
@@ -38,7 +40,7 @@ import { getPrediction } from '@systems/predict';
 import { landingOrbitAim } from '@systems/autoburn-v3';
 import { dropHalfWidthKm } from '@systems/landing-solve';
 import { bestRepairForDrop, dropFactors, landingView as landingViewOf, podCounts, lockCanBeFreed } from '@systems/landing-rules';
-import { autoburnHoldsLandingOrbit, driversInMemory } from '@state/selectors';
+import { autoburnHoldsLandingOrbit, launchDrivers } from '@state/selectors';
 import { demoSkill, AUTODROP_DEMO_TUNING } from '@systems/skill-tree';
 import {
   forgetPlanMemo, nextVolley, passCounts, passRows, planLanding, podSureSpan, windowsAhead, windowsAt,
@@ -175,7 +177,7 @@ function decidePlan(view: LandingView, state: Readonly<GameState>): LaunchIntent
   if (pod === undefined || !view.queue.includes(pod)) return null;
   const win = windowsAt(view.solution, now).find((candidate) => candidate.lz === row.lz);
   const lz = state.landing.lzs.find((candidate) => candidate.label === row.lz);
-  const driver = driversInMemory(state).find((candidate) => candidate.pod === pod);
+  const driver = launchDrivers(state).find((candidate) => candidate.pod === pod);
   if (win === undefined || lz === undefined || driver === undefined) return null;
   const s = dropHalfWidthKm(win.launchRadius, state.level.planet.R, dropFactors(capabilitiesNow(state), driver));
   const span = podSureSpan(win, lz, s);
@@ -573,7 +575,7 @@ function passOver(state: Readonly<GameState>, view: Readonly<LandingView>): bool
 function planOver(state: Readonly<GameState>): boolean {
   const busy = (role: 'sensor' | 'navplot'): boolean => roleHealth(state, role).offline !== null;
   const aboard = new Set(state.landing.pods.filter((record) => record.fate.kind === 'aboard').map((record) => record.pod));
-  const driverBusy = driversInMemory(state).some((driver) => aboard.has(driver.pod)
+  const driverBusy = launchDrivers(state).some((driver) => aboard.has(driver.pod)
     && (driver.state === 'repairing' || driver.state === 'transferring' || (driver.lockedBy !== undefined && lockCanBeFreed(state))));
   return !busy('sensor') && !busy('navplot') && !driverBusy;
 }
