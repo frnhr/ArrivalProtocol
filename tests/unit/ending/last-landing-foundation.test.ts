@@ -113,7 +113,7 @@ const record = state().landing.pods.find((candidate) => candidate.pod === radioP
 const machine = (cadenceLeftSec: number): LastLandingState => ({
   pods: [radioPod], drivers: [restoredDriver(record)], flier: 'blind', orbitsFlown: 0, cadenceLeftSec, skipped: false,
   // Track DROP's fields (its Deviations: the machine's own clocks and turns), at rest.
-  startTSec: state().clock.tSec, autodropUntilTSec: null, passedTSec: state().clock.tSec, turns: 0, target: null, stuckAiSec: 0,
+  startTSec: state().clock.tSec, autodropUntilTSec: null, passedTSec: state().clock.tSec, turns: 0, target: null, stuckAiSec: 0, pass: null,
 });
 h.store.update((draft) => { draft.landing.lastLanding = machine(0); });
 check('a driver both by radio and in memory is a bug: the launch throws', /both by radio and in memory/.test(threw(() => forceLandAll(h.store))));

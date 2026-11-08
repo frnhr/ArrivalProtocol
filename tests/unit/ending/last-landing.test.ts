@@ -13,8 +13,9 @@
 //   orbits, at the cadence, memory untouched, ★ ON TARGET's denominator; [ENTER] gives the same landing in one keypress
 //   (R28); v1 one pod per window in pass order, each in its sure part; blind ×2 spread within ±(W/2 + 150 km), one pod per
 //   window (its worth on 20 draws at full depth), its moments uniform; v2's pass armed on AUTODROP's own fields and at rest
-//   after; the two-orbit limit (a pod AUTODROP can't place drops blind after it); no drop solution (the landing ends, the
-//   pods parked). Landing points for every flier by planet class: ending/last-landing-sweep (BALANCE_ONLY).
+//   after, on its own pass (the kid's AUTODROP machine never written, its [−]/[+] and [G] shut); the two-orbit limit (a pod
+//   AUTODROP can't place drops blind after it); no drop solution (Nav Plotter dead: blind on the plotter-free geometry), the
+//   plotter lost mid-landing (blind from there), Bay Ctrl missing (nothing ends early), the ship lost mid-landing (7b review). Landing points for every flier by planet class: ending/last-landing-sweep (BALANCE_ONLY).
 // The landing stands while a scenario sets itself up ('manual' landing mode, tests/unit/support/landing-instant.ts).
 import { check, finish } from '../wp1/harness';
 import { createHarness11 } from '../wp11/harness11';
@@ -26,14 +27,14 @@ import { startRun, lossPlan } from '@systems/run';
 import { continueAfterReport } from '../support/classic-flow';
 import { runEndModel } from '@systems/run-end';
 import { actionDelete, recordDriverLost } from '@state/actions';
-import { podRecord, landingView, launchRefusal, onTargetTally } from '@systems/landing-rules';
+import { podRecord, landingView, launchRefusal, onTargetTally, landingStuck } from '@systems/landing-rules';
 import { isPodCode } from '../support/pod-code';
 import { setLandingMode, landInstantly } from '../support/landing-instant';
 import { getOpsBySeg, threadsTotal } from '@systems/ops-core';
 import { openRunArchive, closeArchive, archiveMeta, archiveLineage, archiveRunStarted, type MetaStorage } from '@systems/meta';
 import { hollowInspectState, hollowInspectDesc, HOLLOW_DESC, HOLLOW_INSPECT } from '@data/hollow-text';
 import { targetRefusal } from '@systems/tool-targets';
-import { segmentStarts, assertMemoryInvariants } from '@systems/memory-ops';
+import { segmentStarts, assertMemoryInvariants, mergeAdjacentFree } from '@systems/memory-ops';
 import { selectCorruption, chargeLeft, driversInMemory, isHollow } from '@state/selectors';
 import { RUN_END_NOBODY_LANDED } from '@data/script';
 import {
@@ -60,6 +61,9 @@ import { bayWindowModel } from '@systems/landing-hud';
 import { capabilitiesNow } from '@systems/capabilities';
 import { LAUNCH_REFUSAL_TEXT, launchRefusalKey } from '@data/landing-text';
 import { windowsAhead, planLanding } from '@systems/autodrop-plan';
+import { pressAutodrop, setPassCount } from '@systems/autodrop';
+import { endLandingLost } from '@systems/orbit-sim';
+import { lastLandingHeader } from '@systems/last-landing-hud';
 import type { LaunchRecord } from '@/types/landing';
 import {
   armLastLanding as arm, deleteRoot as deleteRootOf, dotFromCentreKm as armDotFromCentreKm, launchOf as armLaunchOf, normalS as armNormalS, type ArmOpts,
@@ -549,16 +553,24 @@ const normalS = (launch: Readonly<LaunchRecord>): number => armNormalS(state(), 
   skipLastLanding(h.store);
 }
 
-// --- v2: a pass armed each orbit on AUTODROP's own pass fields, at rest again after (R27) ---------------------------------
+// --- v2: a pass armed each orbit on the machine's own pass, the kid's AUTODROP machine never written (R27; 7b review) ---------
 const watchedV2 = new Map<number, string>();
 {
   const pods = armLastLanding({ autodrop: 2, eaten: 2 });
   const ll = state().landing.lastLanding!;
+  // The kid's pass fields (flownAs, the version flown at the last tick, moves with AUTODROP's own post tick).
+  const kidPass = (): string => { const ad = state().landing.autodrop; return JSON.stringify([ad.armed, ad.pass, ad.sent, ad.armedAtTSec]); };
+  const kidBefore = kidPass();
   h.stepFor(0.2);
-  const ad = state().landing.autodrop;
-  check('AUTODROP v2: flown by v2, its pass armed at the start with the counts [G] would prefill (the kid\'s machine itself unarmed)',
-    ll.flier === 'v2' && ad.armed === null && ad.armedAtTSec !== null && ad.armedAtTSec >= ll.startTSec
-    && Object.values(ad.pass).reduce((sum, n) => sum + n, 0) > 0, JSON.stringify(ad));
+  const pass = state().landing.lastLanding!.pass;
+  check('AUTODROP v2: flown by v2, its own pass armed at the start with the counts [G] would prefill, the kid\'s machine untouched',
+    ll.flier === 'v2' && pass !== null && pass.armedAtTSec >= ll.startTSec && Object.values(pass.pass).reduce((sum, n) => sum + n, 0) > 0
+    && kidPass() === kidBefore, JSON.stringify(pass));
+  // The POD BAY's [−]/[+] (setPassCount) and [G] (pressAutodrop) are the kid's: refused while MERGE flies (7b review).
+  setPassCount(h.store, Object.keys(pass?.pass ?? {})[0] ?? 'LZ-A', 0);
+  const g = pressAutodrop(h.store);
+  check('…the POD BAY\'s [−]/[+] change nothing, its [G] is refused MERGE FLYING', g === 'MERGE FLYING' && kidPass() === kidBefore
+    && JSON.stringify(state().landing.lastLanding!.pass) === JSON.stringify(pass), `${g} ${kidPass()}`);
   watchToEnd();
   for (const pod of pods) watchedV2.set(pod, JSON.stringify(fateOf(pod)));
   const launches = pods.map(launchOf);
@@ -600,18 +612,62 @@ const watchedV2 = new Map<number, string>();
     `until ${until.toFixed(0)}: ${launch.atTSec.toFixed(0)}/${launch.halfWidthKm.toFixed(0)}`);
 }
 
-// --- No drop solution (Nav Plotter dead): blind, nothing can launch, the landing ends and the pods stay parked ---------------
+// --- No drop solution (Nav Plotter dead): the pods drop blind on the plotter-free geometry (01 §3.17; 7b review) ------------
 {
   const pods = armLastLanding({ autodrop: 3, eaten: 2, navplot: 0 });
   const ll = state().landing.lastLanding!;
-  check('Nav Plotter dead: no drop solution, so the flier is blind (R27)', ll.flier === 'blind' && getDropSolution()?.block === 'no-solution');
+  check('Nav Plotter dead: no drop solution, so the flier is blind (R27)', ll.flier === 'blind' && !capabilitiesNow(state()).drop.solution);
+  h.stepFor(0.2);
+  const sol = getDropSolution();
+  check('…the drop cache solves the geometry anyway while THE LAST LANDING runs: a dot, grey (uncertain), windows', sol !== null && sol.block === null
+    && sol.dot !== null && sol.uncertain && sol.windows.length > 0);
   // Skipped while paused: [ENTER] lets the clock go first.
   h.press('KeyP');
   const paused = state().clock.paused;
   skipLastLanding(h.store);
-  check(`…nothing can launch: after ${LANDING_NONE_LEFT_SEC} s the landing ends, the pods parked, 'done'`, state().landing.lastLanding === null
-    && state().hollow.finale.phase === 'done' && pods.every((pod) => fateOf(pod).kind === 'parked') && state().landing.ended === 'no-drop' && paused
-    && !state().clock.paused);
+  check('…[ENTER] (paused: let go first): every pod dropped blind (×2 spread) and down, \'done\'', state().landing.lastLanding === null
+    && state().hollow.finale.phase === 'done' && pods.every((pod) => fateOf(pod).kind === 'down'
+      && Math.abs(launchOf(pod).halfWidthKm - BLIND_DROP_MULT * normalS(launchOf(pod))) < 1e-6) && paused && !state().clock.paused,
+    pods.map((pod) => fateOf(pod).kind).join());
+}
+
+// --- The plotter lost mid-landing (a belt hit): v3 turns blind for the pods left (R27; 7b review) ------------------------------
+{
+  const pods = armLastLanding({ autodrop: 3, eaten: 4 });
+  h.stepFor(0.2);
+  h.store.update((d) => { for (const seg of d.memory) if ('role' in seg && seg.role === 'navplot' && 'integrity' in seg) seg.integrity = 0; d.ui.memoryRev++; });
+  h.step();
+  const ll = state().landing.lastLanding!;
+  check('Nav Plotter dead mid-landing: the flier turns blind, AUTODROP\'s deadline gone', ll.flier === 'blind' && ll.autodropUntilTSec === null);
+  skipLastLanding(h.store);
+  check('…and every pod still comes down (blind)', pods.every((pod) => fateOf(pod).kind === 'down'), pods.map((pod) => fateOf(pod).kind).join());
+}
+
+// --- Bay Ctrl missing: no bay applies, so nothing ends the landing early (R26; 7b review) ----------------------------------------
+{
+  const pods = armLastLanding({ autodrop: 3, eaten: 3 });
+  h.store.update((d) => {
+    const i = d.memory.findIndex((seg) => 'role' in seg && seg.role === 'bay');
+    d.memory[i] = { id: 'free~bay', name: 'Free', type: 'free', size: d.memory[i]!.size };
+    mergeAdjacentFree(d.memory);
+    d.ui.memoryRev++;
+  });
+  check('Bay Ctrl missing: landingStuck does not end THE LAST LANDING (no bay applies)', landingStuck(state(), getDropSolution()) === null);
+  watchToEnd();
+  check('…every restored pod lands (v3), soft in an LZ with room', pods.every((pod) => { const fate = fateOf(pod); return fate.kind === 'down' && fate.touchdown.place === 'lz'; }),
+    pods.map((pod) => fateOf(pod).kind).join());
+}
+
+// --- The ship lost mid-landing: THE LAST LANDING ends with it, nothing throws (7b review) --------------------------------------
+{
+  const pods = armLastLanding({ autodrop: 3, eaten: 3 });
+  h.stepFor(0.3);
+  endLandingLost(h.store, 'crashed');
+  h.step();
+  check('the ship lost mid-landing: the landing ends \'ship-lost\' (its pods aboard NOT LAUNCHED), the machine cleared, \'done\', the layer down, nothing painted',
+    state().landing.ended === 'ship-lost' && state().landing.lastLanding === null && state().hollow.finale.phase === 'done' && activeLayer() === 'game'
+    && pods.some((pod) => fateOf(pod).kind === 'not-launched') && lastLandingHeader(state()) === null,
+    `${state().landing.ended} ${state().hollow.finale.phase} ${pods.map((pod) => fateOf(pod).kind).join()}`);
 }
 
 finish();

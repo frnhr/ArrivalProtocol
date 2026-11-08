@@ -73,8 +73,16 @@ function viewOf(state: Readonly<GameState>, sol: Readonly<DropSolution>): Landin
 // `lead` being one cadence and the edge margin: a window whose sure part can still take a launch after [G] is this pass's,
 // and the same LZ's next one (a period on) the next pass's; one whose sure part is over, or too nearly over for a launch,
 // at [G] (a [G] pressed at the tail of a window) is replaced by its next.
-function inPassOf(state: Readonly<GameState>, view: Readonly<LandingView>): (win: Readonly<WindowAt>) => boolean {
-  const armedAt = state.landing.autodrop.armedAtTSec;
+// `pass` is the pass's fields: the kid's machine's (state.landing.autodrop), or a wrapping source's own (AutodropOverride.pass:
+// THE LAST LANDING's v2, 7b review), so a wrapper never writes the kid's machine.
+export interface AutodropPassFields {
+  pass: Readonly<Record<string, number>>;
+  sent: Readonly<Record<string, number>>;
+  armedAtTSec: number | null;
+}
+
+function inPassOf(state: Readonly<GameState>, view: Readonly<LandingView>, fields: Readonly<AutodropPassFields> = state.landing.autodrop): (win: Readonly<WindowAt>) => boolean {
+  const armedAt = fields.armedAtTSec;
   const period = view.solution.periodSec;
   if (armedAt === null) return () => false;
   const lead = ((view.bay.cadenceTac ?? 0) + AUTODROP_EDGE_MARGIN_TAC) * state.level.tacticalWarp;
@@ -84,14 +92,14 @@ function inPassOf(state: Readonly<GameState>, view: Readonly<LandingView>): (win
   };
 }
 
-function passWant(state: Readonly<GameState>): (lz: string) => number {
-  const { pass, sent } = state.landing.autodrop;
+function passWant(state: Readonly<GameState>, fields: Readonly<AutodropPassFields> = state.landing.autodrop): (lz: string) => number {
+  const { pass, sent } = fields;
   return (lz) => Math.max(0, (pass[lz] ?? 0) - (sent[lz] ?? 0));
 }
 
 // The volley the armed pass flies next, or null (the pass is over).
-function passVolley(state: Readonly<GameState>, view: Readonly<LandingView>): NextVolley | null {
-  return nextVolley(state, view, passWant(state), inPassOf(state, view));
+function passVolley(state: Readonly<GameState>, view: Readonly<LandingView>, fields: Readonly<AutodropPassFields> = state.landing.autodrop): NextVolley | null {
+  return nextVolley(state, view, passWant(state, fields), inPassOf(state, view, fields));
 }
 
 // v1's volley: the next sure window of any LZ with room.
@@ -108,9 +116,11 @@ interface NextLaunch {
 }
 
 // `armed` is the machine's arm: the kid's (state.landing.autodrop.armed) or a wrapping source's (AutodropOverride.armed).
-function armedNext(state: Readonly<GameState>, view: Readonly<LandingView>, armed: AutodropArm | null): NextLaunch | null {
+function armedNext(
+  state: Readonly<GameState>, view: Readonly<LandingView>, armed: AutodropArm | null, fields: Readonly<AutodropPassFields> = state.landing.autodrop,
+): NextLaunch | null {
   if (armed === 'pass') {
-    const next = passVolley(state, view);
+    const next = passVolley(state, view, fields);
     return next === null ? null : volleyNext(next);
   }
   if (armed === 'plan') {
@@ -139,12 +149,18 @@ function volleyNext(next: Readonly<NextVolley>): NextLaunch {
 // press under an armed v3: no window open, nothing to decide, a later launch planned; pace stops that SKIP before it), so
 // the sleeper's RUN THE DROPS and MERGE's restored drivers share one rule. A wrapping source also names what it waits for
 // (`waitsFor`: the strip's wait row, review M1) and is told of its launches (`autodropLaunched`: the volley event, m4).
+// Slice 7b review: `pass` is a wrapping source's own pass (THE LAST LANDING's v2: LastLandingState.pass), read where the kid's
+// machine's pass fields would be, so the wrapper never writes landing.autodrop; `view` maps the landing's view to the one the
+// wrapper flies by (THE LAST LANDING's: no bay, its own cadence), for the decision and for what the controller names to pace
+// and the strip alike, so the three agree.
 export interface AutodropOverride {
   version: EffectiveVersion;
   queue: readonly number[];
   source?: ControllerSource;
   armed?: AutodropArm;
   skipBetween?: true;
+  pass?: Readonly<AutodropPassFields>;
+  view?: (state: Readonly<GameState>, view: Readonly<LandingView>) => LandingView;
 }
 
 // v1, held: the volley's next slot has come, and the window is sure for it now.
@@ -155,8 +171,8 @@ function decideHeld(view: LandingView, state: Readonly<GameState>): LaunchIntent
 }
 
 // v2, armed: the pass's next slot has come, and the window is sure for it now (its thread is checked by the controller).
-function decidePass(view: LandingView, state: Readonly<GameState>): LaunchIntent | null {
-  const next = passVolley(state, view);
+function decidePass(view: LandingView, state: Readonly<GameState>, fields: Readonly<AutodropPassFields> = state.landing.autodrop): LaunchIntent | null {
+  const next = passVolley(state, view, fields);
   if (next === null) return null;
   return launchDue(state, next.win, next.volley.firstAtTSec) ? { source: 'autodrop' } : null;
 }
@@ -213,9 +229,16 @@ export function autodropController(state: Readonly<GameState>, override?: Readon
   // own (review m6).
   const claimed = source !== 'autodrop' || ad.claimed;
   if (armed !== null && version >= 2) {
-    const decideArmed = (view: LandingView, now: Readonly<GameState>): LaunchIntent | null =>
-      (claimed ? as(armed === 'plan' && version >= 3 ? decidePlan(view, now) : decidePass(view, now)) : null);
-    const nextLaunchAtTSec = (now: Readonly<GameState>): number | null => withView(now, (view) => armedNext(now, view, armed)?.atTSec ?? null);
+    const fields = override?.pass;
+    const mapView = override?.view;
+    const viewFor = (now: Readonly<GameState>, view: LandingView): LandingView => (mapView === undefined ? view : mapView(now, view));
+    const decideArmed = (landingView: LandingView, now: Readonly<GameState>): LaunchIntent | null => {
+      if (!claimed) return null;
+      const view = viewFor(now, landingView);
+      return as(armed === 'plan' && version >= 3 ? decidePlan(view, now) : decidePass(view, now, fields ?? now.landing.autodrop));
+    };
+    const nextLaunchAtTSec = (now: Readonly<GameState>): number | null =>
+      withView(now, (view) => armedNext(now, viewFor(now, view), armed, fields ?? now.landing.autodrop)?.atTSec ?? null);
     const controller: LandingController = { source, holdsTactical: true, launchesFromMind: true, decide: decideArmed, nextLaunchAtTSec };
     if (source === 'autodrop') return controller;
     return {
@@ -227,7 +250,7 @@ export function autodropController(state: Readonly<GameState>, override?: Readon
         return now.landing.window === null && next !== null && next > now.clock.tSec ? 'skip' : null;
       },
       waitsFor: (now) => withView(now, (view) => {
-        const next = armedNext(now, view, armed);
+        const next = armedNext(now, viewFor(now, view), armed, fields ?? now.landing.autodrop);
         return next === null ? null : { lz: next.lz, n: next.n, atTSec: next.atTSec };
       }),
     };
@@ -402,6 +425,9 @@ function refuse(word: AutodropRefusal): AutodropRefusal {
 export function pressAutodrop(store: Store<GameState>): AutodropRefusal | null {
   const state = store.getState();
   if (!landingOn(state)) return refuse('NOT LANDING');
+  // Slice 7b review: THE LAST LANDING's pods are MERGE's to fly (R26), and an arm of the kid's machine then would reach ENDING
+  // CHOSEN armed (the codec refuses it). The [G] key is shut by its input layer; this shuts the POD BAY's button too.
+  if (state.landing.lastLanding !== null) return refuse('MERGE FLYING');
   if (state.clock.paused) return refuse('PAUSED');
   const live = skillLive(state.memory, 'autodrop');
   if (live.file === null) return refuse('NO AUTODROP');
@@ -473,7 +499,8 @@ export function setPassCount(store: Store<GameState>, lz: string, n: number): vo
   const state = store.getState();
   if (!state.landing.lzs.some((candidate) => candidate.label === lz)) throw new Error(`setPassCount: no ${lz} on this ship`);
   if (!Number.isFinite(n)) throw new Error(`setPassCount: ${n} pods`);
-  if (!landingOn(state)) return;
+  // Slice 7b review: not while THE LAST LANDING flies (its pods are MERGE's; R26).
+  if (!landingOn(state) || state.landing.lastLanding !== null) return;
   const sol = getDropSolution();
   if (sol === null) return;
   const view = viewOf(state, sol);

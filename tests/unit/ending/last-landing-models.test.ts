@@ -47,6 +47,7 @@ const machine = (flier: LastLandingState['flier']): LastLandingState => ({
   pods: [...restored],
   drivers: restored.map((pod) => restoredDriver(state().landing.pods.find((record) => record.pod === pod)!)),
   flier, orbitsFlown: 0, cadenceLeftSec: 0, skipped: false,
+  startTSec: 0, autodropUntilTSec: null, passedTSec: 0, turns: 0, target: null, stuckAiSec: 0, pass: null,
 });
 const stage = (flier: LastLandingState['flier'] | null, fates: Partial<Record<number, PodFate['kind']>>): void => {
   h.store.update((draft) => {

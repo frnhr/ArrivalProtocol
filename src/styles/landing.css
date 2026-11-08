@@ -621,7 +621,7 @@ body.reduced-motion .last-landing.ll-arrive .ll-title { animation: none; }
    POD BAY's LAUNCH, [G] and END LANDING (the input layer stops their keys, not their buttons; on a phone LAUNCH and [G]
    ride in the flight bar, found by id), and the bay's count, which no restored pod spends (R26: no bay). */
 body.ll-on .dock, body.ll-on #modeToggle,
-body.ll-on #podLaunchBtn, body.ll-on #pbGoBtn, body.ll-on #pbEnd { opacity: 0.35; pointer-events: none; }
+body.ll-on #podLaunchBtn, body.ll-on #pbGoBtn, body.ll-on #pbEnd, body.ll-on .pb-pass-step { opacity: 0.35; pointer-events: none; }
 body.ll-on .pb-bay-row { opacity: 0.35; }
 /* On a phone the header and the strip flow in two or three rows, so the strip sits at the foot instead, over the view tabs
    and the SHIP / MIND toggle that THE LAST LANDING shuts anyway; its button is the skip (no keyboard there). */

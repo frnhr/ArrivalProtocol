@@ -78,6 +78,17 @@ export interface LastLandingState {
   turns: number;
   target: LastLandingTarget | null;     // v1 and blind: the window the next pod goes in, and when
   stuckAiSec: number;                   // AI s nothing could fly (no drop dot, no in-band window): it ends the landing
+  // v2: the pass THE LAST LANDING arms each orbit, its own (autodrop.ts AutodropOverride.pass reads it), so the kid's AUTODROP
+  // machine (landing.autodrop) is never written while MERGE flies (7b review). null until the first arm, and for v1/v3/blind.
+  pass: LastLandingPass | null;
+}
+
+// v2's pass under THE LAST LANDING (7b review): the counts [G] would prefill, what has gone since the arm, and when it was
+// armed (a pass ends one period later), as AutodropState's own three fields.
+export interface LastLandingPass {
+  pass: Record<string, number>;
+  sent: Record<string, number>;
+  armedAtTSec: number;
 }
 
 // One pod's turn (v1 or blind): its window's LZ and centre (game s), the moment it launches (v1: the centre plus AUTODROP's

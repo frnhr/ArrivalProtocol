@@ -20,8 +20,8 @@ function split(counts: Readonly<Record<string, number>>, sign: '×' | '+'): stri
 // (data/script.ts REFUSAL_LINES, `AUTODROP|<word>`). Review M4: `NOTHING SET` is v2's (its [+]); v3 has no [+] and says
 // `NOTHING TO PLAN`; and with no sure window on this orbit for any LZ, either says `NO SURE WINDOW` with the REPAIR that
 // would give one (landing-rules bestRepairForDrop), one word per fix so the strip's flash can name it.
-export type AutodropRefusalWord = 'NOT LANDING' | 'NO AUTODROP' | 'AUTODROP OFF' | 'NOTHING SET' | 'NOTHING TO PLAN' | 'PAUSED' | 'ONLY v1'
-  | 'NO SURE WINDOW' | 'NO SURE WINDOW · SENSOR INTERP' | 'NO SURE WINDOW · NAV PLOTTER' | 'NO SURE WINDOW · DRIVERS';
+export type AutodropRefusalWord = 'NOT LANDING' | 'MERGE FLYING' | 'NO AUTODROP' | 'AUTODROP OFF' | 'NOTHING SET' | 'NOTHING TO PLAN' | 'PAUSED'
+  | 'ONLY v1' | 'NO SURE WINDOW' | 'NO SURE WINDOW · SENSOR INTERP' | 'NO SURE WINDOW · NAV PLOTTER' | 'NO SURE WINDOW · DRIVERS';
 
 export const AUTODROP_TEXT = {
   // The once-only lessons (data/script.ts SKILL_4CDE_RULES; their conditions are autodrop.ts autodropTutorialDue's).
@@ -75,6 +75,8 @@ export const AUTODROP_TEXT = {
   // Why [G] did nothing (said with the buzz).
   refusal: {
     'NOT LANDING': 'AUTODROP WORKS IN THE LANDING',
+    // Slice 7b review: THE LAST LANDING (MERGE flies the restored pods; the launch's own MERGE FLYING says the same).
+    'MERGE FLYING': 'MERGE IS FLYING THEM — [ENTER] SKIPS TO THE END',
     'NO AUTODROP': 'NO AUTODROP.skl ABOARD',
     'AUTODROP OFF': 'AUTODROP.skl IS TOO DAMAGED — REPAIR IT',
     'NOTHING SET': 'NOTHING SET — use the POD BAY\'s [+]',

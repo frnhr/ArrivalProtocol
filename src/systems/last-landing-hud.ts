@@ -21,6 +21,9 @@ export type RestoredPodState = 'waiting' | 'falling' | 'down';
 function restoredPodStates(state: Readonly<GameState>): { pod: number; at: RestoredPodState }[] | null {
   const machine = state.landing.lastLanding;
   if (machine === null) return null;
+  // 7b review: the ship lost mid-landing (the landing ended 'ship-lost', its pods aboard NOT LAUNCHED) takes THE LAST LANDING
+  // with it; the LOST card owns the screen, and last-landing.ts clears the machine in that tick's post tick.
+  if (state.landing.ended === 'ship-lost') return null;
   return machine.pods.map((pod) => {
     const record = state.landing.pods.find((candidate) => candidate.pod === pod);
     if (!record) throw new Error(`last-landing-hud: restored pod ${pod} is not on this ship`);

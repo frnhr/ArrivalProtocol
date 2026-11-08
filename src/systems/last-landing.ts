@@ -11,9 +11,10 @@
 //   'last-landing-start' is emitted.
 // • The flier (R27), decided once at the start: AUTODROP's effective version (capabilities skillLive), and whether a drop
 //   solution exists (a dot, and an in-band window on this orbit); with none the pods drop blind.
-//   - v2 / v3 fly through autodrop.ts autodropController(state, { version, queue, source: 'merge', armed, skipBetween }),
-//     deciding on THE LAST LANDING's view (lastLandingView: no bay, R26). v2's pass is armed here, once per orbit, on
-//     landing.autodrop's pass fields (the override's 'pass' reads them there), with the counts [G] would prefill.
+//   - v2 / v3 fly through autodrop.ts autodropController(state, { version, queue, source: 'merge', armed, skipBetween, pass,
+//     view }), deciding (and naming their next launch to pace and the strip) on THE LAST LANDING's view (lastLandingView: no
+//     bay, R26). v2's pass is armed here, once per orbit, on the machine's own pass (LastLandingState.pass, the override's
+//     `pass`: 7b review), with the counts [G] would prefill; the kid's AUTODROP machine is never written.
 //   - v1 and blind are this file's own: one pod per window in the order the ship passes them, whatever the counts (a full
 //     LZ means a mislanded pod). v1 times each pod (the window's centre plus AUTODROP's learned offset, inside the pod's
 //     sure part: a window with none is no window for v1); blind takes every in-band window, its moment uniform within
@@ -22,6 +23,9 @@
 //     also launches it (requestLaunch, source 'merge'): Deviation 3, autodrop.ts autodropLaunched throws on an off-site pod.
 //   - AUTODROP (any version) gets LAST_LANDING_AUTODROP_ORBITS; from then a pod it has not placed drops blind in the next
 //     window.
+//   - No drop solution (Nav Plotter dead or missing, 01 §3.17), at the start or mid-landing (a belt hit): blind. The drop
+//     cache solves the geometry anyway while THE LAST LANDING runs (the pods' own motors find their fall; its dot is grey), so
+//     the blind turns have windows; a flier that loses the plotter mid-landing turns blind there (7b review).
 // • The pace (R26): every controller holds TACTICAL, names its next launch, and asks for the SKIP between windows
 //   (AutodropOverride.skipBetween for v2/v3, the same rule here for v1 and blind). The cadence (LastLandingState.
 //   cadenceLeftSec, set by landing.ts launchDriver) counts down in tactical s of world time, as the bay's does.
@@ -29,7 +33,9 @@
 //   at LAST_LANDING_SKIP_MAX_STEPS (throws). The same rules and streams fly it.
 // • The end: every restored pod down (or parked as the landing ended), nothing of theirs falling: landing.lastLanding
 //   cleared and the FINALE 'done' in the same update (the codec refuses lastLanding set at ENDING CHOSEN), then
-//   'last-landing-end'. Nothing to fly for LANDING_NONE_LEFT_SEC (no drop dot, no in-band window) ends the landing first.
+//   'last-landing-end'. Nothing to fly for LANDING_NONE_LEFT_SEC (no drop dot, no in-band window: the ship out of the band)
+//   ends the landing first. A ship lost mid-landing (orbit-sim endLandingLost: the landing ends 'ship-lost' under the LOST
+//   card, the clock paused, so no AI tick comes) ends it in the post tick (7b review).
 // Module-level state: none of the game's (the machine is landing.lastLanding, the resolver is in the registry); `closeLayer`
 // is the input layer's handle (UI glue, let go at the end, the unmount and every world reset), and `mounted` the mount guard.
 import type { Store } from '@state/store';
@@ -44,7 +50,7 @@ import { autodropOffsetTac, passRows, podSureSpan, windowsAhead, type WindowAt }
 import { dropHalfWidthKm } from '@systems/landing-solve';
 import { getDropSolution } from '@systems/drop-cache';
 import { capabilitiesNow, skillLive } from '@systems/capabilities';
-import { advance, onAiTick, onGameTick, setPaused } from '@systems/clock';
+import { advance, onAiTick, onGameTick, onPostTick, setPaused } from '@systems/clock';
 import { onWorldReset } from '@systems/reset';
 import { emit } from '@systems/events';
 import { say, markChannelRead, visibleChannel } from '@systems/say';
@@ -74,10 +80,15 @@ function flying(state: Readonly<GameState>): boolean {
   return state.landing.lastLanding !== null && state.run.phase === 'landing' && state.landing.ended === null;
 }
 
-// AUTODROP v2/v3 fly the pods now: their flier, within their orbits.
+// AUTODROP v2/v3 fly the pods now: their flier, within their orbits, with a drop solution (a plotter lost this tick turns the
+// flier blind in the AI tick; until then AUTODROP does not fly on the plotter-free geometry).
 function autodropFlies(state: Readonly<GameState>, ll: Readonly<LastLandingState>): boolean {
-  return (ll.flier === 'v2' || ll.flier === 'v3') && ll.autodropUntilTSec !== null && state.clock.tSec < ll.autodropUntilTSec;
+  return (ll.flier === 'v2' || ll.flier === 'v3') && ll.autodropUntilTSec !== null && state.clock.tSec < ll.autodropUntilTSec
+    && capabilitiesNow(state).drop.solution;
 }
+
+// v2's pass before its first arm: nothing to send.
+const NO_PASS = { pass: {}, sent: {}, armedAtTSec: null } as const;
 
 // A drop solution AUTODROP or a blind drop can fly on: a dot, and an in-band window on this orbit (launchRefusal lets no
 // launch through without both).
@@ -111,16 +122,13 @@ export function lastLandingController(state: Readonly<GameState>): LandingContro
     const v3 = ll.flier === 'v3';
     const inner = autodropController(state, {
       version: v3 ? 3 : 2, queue: launchQueue(state).map((driver) => driver.pod), source: 'merge', armed: v3 ? 'plan' : 'pass',
-      skipBetween: true,
+      skipBetween: true, pass: ll.pass ?? NO_PASS, view: lastLandingView,
     });
     // Between windows it always asks for the SKIP, whatever AUTODROP has planned: with nothing planned (no sure window for
     // any pod) its orbits would otherwise pass at CRUISE with nobody to press SKIP (pace still stops the SKIP before every
     // window and every planned launch, and refuses it inside an open one).
     if (inner !== null) {
-      return {
-        ...inner,
-        decide: (view, now) => inner.decide(lastLandingView(now, view), now) ?? (now.landing.window === null ? 'skip' : null),
-      };
+      return { ...inner, decide: (view, now) => inner.decide(view, now) ?? (now.landing.window === null ? 'skip' : null) };
     }
   }
   return turnController;
@@ -217,11 +225,12 @@ export function startLastLanding(store: Store<GameState>, pods: readonly number[
   const now = state.clock.tSec;
   const sol = getDropSolution();
   const version = skillLive(state.memory, 'autodrop').version;
-  const flier: LastLandingState['flier'] = !solvable(sol, now) || version < 1 ? 'blind' : version >= 3 ? 'v3' : version === 2 ? 'v2' : 'v1';
+  const blind = version < 1 || !capabilitiesNow(state).drop.solution || !solvable(sol, now);
+  const flier: LastLandingState['flier'] = blind ? 'blind' : version >= 3 ? 'v3' : version === 2 ? 'v2' : 'v1';
   const autodropUntilTSec = flier === 'blind' || sol === null ? null : now + LAST_LANDING_AUTODROP_ORBITS * sol.periodSec;
   const machine: LastLandingState = {
     pods: [...pods], drivers: records.map((record) => restoredDriver(record)), flier, orbitsFlown: 0, cadenceLeftSec: 0,
-    skipped: false, startTSec: now, autodropUntilTSec, passedTSec: now, turns: 0, target: null, stuckAiSec: 0,
+    skipped: false, startTSec: now, autodropUntilTSec, passedTSec: now, turns: 0, target: null, stuckAiSec: 0, pass: null,
   };
   const fromMode = state.ui.mode;
   if (fromMode !== 'tools' && state.ui.activeTool) cancelTool(store);
@@ -257,8 +266,8 @@ function settled(state: Readonly<GameState>, ll: Readonly<LastLandingState>): bo
   });
 }
 
-// The end: the machine cleared and the FINALE decided in one update (AUTODROP's pass fields, which v2 armed, at rest with
-// it), the input layer down, then 'last-landing-end' with the restored pods that came down in an LZ with room.
+// The end: the machine cleared and the FINALE decided in one update (v2's pass goes with it: the kid's AUTODROP machine was
+// never written), the input layer down, then 'last-landing-end' with the restored pods that came down in an LZ with room.
 function finish(store: Store<GameState>): void {
   const state = store.getState();
   const ll = machineOf(state);
@@ -271,32 +280,23 @@ function finish(store: Store<GameState>): void {
   store.update((draft) => {
     draft.landing.lastLanding = null;
     draft.hollow.finale.phase = 'done';
-    const ad = draft.landing.autodrop;
-    if (ad.armed === null) {
-      ad.armedAtTSec = null;
-      ad.sent = {};
-    }
   });
   letGoOfLayer();
   emit('last-landing-end', { landed });
 }
 
 // v2's pass (R27: re-armed each orbit): the counts [G] would prefill (the POD BAY's rows on THE LAST LANDING's view: each
-// LZ's room, what its window this pass can fly), written on landing.autodrop's pass fields, which the override's 'pass'
-// reads; and this pass's sent counts, from the 'merge' launches since it was armed (autodrop.ts counts only its own).
+// LZ's room, what its window this pass can fly), written on the machine's own pass (LastLandingState.pass, the override's
+// `pass`); and this pass's sent counts, from the 'merge' launches since it was armed (autodrop.ts counts only its own).
 function passTick(store: Store<GameState>, sol: Readonly<DropSolution>): void {
   const state = store.getState();
   const now = state.clock.tSec;
-  const ad = state.landing.autodrop;
-  if (ad.armedAtTSec === null || now >= ad.armedAtTSec + sol.periodSec) {
+  const ad = machineOf(state)!.pass;
+  if (ad === null || now >= ad.armedAtTSec + sol.periodSec) {
     const view = lastLandingView(state, landingViewOf(state, sol, capabilitiesNow(state).bay.cadenceTac));
     const pass: Record<string, number> = {};
     for (const row of passRows(state, view, view.remaining)) pass[row.lz] = Math.min(row.fits, row.bayHas ?? row.fits);
-    store.update((draft) => {
-      draft.landing.autodrop.pass = pass;
-      draft.landing.autodrop.sent = {};
-      draft.landing.autodrop.armedAtTSec = now;
-    });
+    store.update((draft) => { draft.landing.lastLanding!.pass = { pass, sent: {}, armedAtTSec: now }; });
     return;
   }
   const sent: Record<string, number> = {};
@@ -307,7 +307,7 @@ function passTick(store: Store<GameState>, sol: Readonly<DropSolution>): void {
     sent[launch.aimLz] = (sent[launch.aimLz] ?? 0) + 1;
   }
   const same = Object.keys({ ...sent, ...ad.sent }).every((lz) => (sent[lz] ?? 0) === (ad.sent[lz] ?? 0));
-  if (!same) store.update((draft) => { draft.landing.autodrop.sent = sent; });
+  if (!same) store.update((draft) => { draft.landing.lastLanding!.pass!.sent = sent; });
 }
 
 // v1 and blind: the turn chosen when none stands, launched once its moment has come (refused, it tries again each tick:
@@ -361,6 +361,18 @@ function tick(store: Store<GameState>, dtAi: number): void {
     return;
   }
   if (ll.stuckAiSec !== 0) store.mutate((draft) => { draft.landing.lastLanding!.stuckAiSec = 0; });
+  // The plotter lost mid-landing (a belt hit; the MIND is shut, so nothing repairs it): no drop solution, so every pod left
+  // drops blind from here (R27), and the strip says so.
+  if (ll.flier !== 'blind' && !capabilitiesNow(state).drop.solution) {
+    store.update((draft) => {
+      const machine = draft.landing.lastLanding!;
+      machine.flier = 'blind';
+      machine.autodropUntilTSec = null;
+      machine.target = null;
+      machine.pass = null;
+    });
+    return;
+  }
   const orbits = Math.min(LAST_LANDING_AUTODROP_ORBITS, Math.floor((now - ll.startTSec) / sol.periodSec));
   if (ll.autodropUntilTSec !== null && orbits !== ll.orbitsFlown) store.update((draft) => { draft.landing.lastLanding!.orbitsFlown = orbits; });
   if (autodropFlies(state, ll)) {
@@ -377,6 +389,14 @@ function cadenceTick(store: Store<GameState>, dtWorld: number): void {
   if (ll === null || ll.cadenceLeftSec <= 0 || state.run.phase !== 'landing') return;
   const left = Math.max(0, ll.cadenceLeftSec - dtWorld / state.level.tacticalWarp);
   store.mutate((draft) => { draft.landing.lastLanding!.cadenceLeftSec = left; });
+}
+
+// A ship lost mid-landing (orbit-sim endLandingLost; landing.ts closes the landing 'ship-lost' in its post tick, its pods
+// aboard NOT LAUNCHED): THE LAST LANDING is over with it. The clock is paused under the LOST card, so no AI tick would end it,
+// and [ENTER]'s loop would spin to its cap. Run in the post tick, after landing.ts's.
+function lostTick(store: Store<GameState>): void {
+  const state = store.getState();
+  if (state.landing.lastLanding !== null && state.landing.ended === 'ship-lost') finish(store);
 }
 
 // --- [ENTER] (R28) -------------------------------------------------------------------------------------------------------
@@ -407,13 +427,15 @@ function letGoOfLayer(): void {
 }
 
 // Mounted after the FINALE (main.ts, wp6/harness6): the 'merge' resolver joins the controller registry, the AI tick (the
-// turns, v2's pass, the end), the game tick (the cadence), the 'last-landing' layer's keys ([ENTER], P, M) and the reset.
+// turns, v2's pass, the end), the game tick (the cadence), the post tick (a ship lost mid-landing), the 'last-landing'
+// layer's keys ([ENTER], P, M) and the reset.
 export function mountLastLanding(store: Store<GameState>): () => void {
   if (mounted) throw new Error('mountLastLanding: already mounted');
   mounted = true;
   const offResolver = registerLandingController('merge', lastLandingController);
   const offAi = onAiTick((dtAi) => tick(store, dtAi));
   const offGame = onGameTick((dtWorld) => cadenceTick(store, dtWorld));
+  const offPost = onPostTick(() => lostTick(store));
   const offKeys = registerKeys({
     layer: 'last-landing',
     codes: ['Enter', 'NumpadEnter', 'KeyP', 'KeyM'],
@@ -428,6 +450,7 @@ export function mountLastLanding(store: Store<GameState>): () => void {
     offResolver();
     offAi();
     offGame();
+    offPost();
     offKeys();
     offReset();
     letGoOfLayer();

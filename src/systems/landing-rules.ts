@@ -451,7 +451,8 @@ export function endLandingRefusal(state: Readonly<GameState>, outcome: PredictOu
 export function landingStuck(state: Readonly<GameState>, sol: Readonly<DropSolution> | null): LandingEnd | null {
   const aboard = state.landing.pods.some((record) => record.fate.kind === 'aboard');
   if (!aboard) return null;
-  if (bayOfflineIn(state)) return 'bay-offline';
+  // Slice 7b review: THE LAST LANDING's pods leave from no bay (R26), so a missing Bay Ctrl ends nothing there.
+  if (bayOfflineIn(state) && state.landing.lastLanding === null) return 'bay-offline';
   if (driversThatCanEverLaunch(state).length === 0) return 'no-driver-left';
   if (sol !== null && sol.block === null && sol.dot === null && state.burn.fuelPct <= 0) return 'no-drop';
   return null;

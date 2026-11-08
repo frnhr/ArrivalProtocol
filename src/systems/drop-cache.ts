@@ -71,7 +71,11 @@ function recompute(state: Readonly<GameState>): DropSolution {
   const { planet, ring } = state.level;
   // The solver's domain (landing-orbit dropSolvable, risk 9) gates dotTrack too: outside it the track would throw.
   const solvable = elementsFromState(state.orbit, planet.mu).e < 1 && dropSolvable(state.orbit, planet);
-  if (caps.drop.solution && solvable) {
+  // Slice 7b review (01 §3.17: "with no drop solution (Nav Plotter dead or missing) … the pods drop blind"): during THE LAST
+  // LANDING the pods' own motors find their fall without the plotter, so the geometry is solved anyway, its dot grey and
+  // uncertain (nobody aboard plots it); systems/last-landing.ts then flies every pod blind (capabilities drop.solution false).
+  const plotted = caps.drop.solution || state.landing.lastLanding !== null;
+  if (plotted && solvable) {
     const key = trackKeyOf(state);
     if (track === null || key !== trackKey) {
       track = dotTrack(state.orbit, planet.mu, planet.R, POD_AIM_RP_FRAC * planet.R);
@@ -86,11 +90,11 @@ function recompute(state: Readonly<GameState>): DropSolution {
     ring,
     lzs: state.landing.lzs,
     factors: dropFactors(caps, nextToLaunch(state)),
-    solution: caps.drop.solution,
-    uncertain: caps.drop.uncertain,
+    solution: plotted,
+    uncertain: caps.drop.uncertain || !caps.drop.solution,
     solvable,
     validUntilTSec: solvable ? nextKickTSec(state) : null,
-  }, caps.drop.solution && solvable ? track : null);
+  }, plotted && solvable ? track : null);
   cachedRev = state.run.rev;
   cachedEpoch = state.landing.orbitEpoch;
   cachedSitesRev = state.landing.sitesRev;
