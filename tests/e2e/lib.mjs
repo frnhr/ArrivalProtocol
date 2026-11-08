@@ -189,5 +189,44 @@ export function runKit(page, kit) {
   });
   // The SHIP CARD's TIMELINE marks under its text (3b): `2629 Swap`, late (red) after ▲.
   const deskMarks = () => st(() => [...document.querySelectorAll('#deskScreen .dc-tl-filetext')].map((mark) => ({ text: mark.textContent, late: mark.classList.contains('late') })));
-  return { lockInRing, landToReport, finishReport, capsText, desk, clickNode, pickCard, deskTabs, deskMarks };
+  // Slice 7a (R6, R7): the FINALE's two steps on the card. The card waits for the landing to settle (landed at once here, as
+  // landToReport does); step 1 once armed (`hollow`: PURGE, MERGE or SPARE's row; 'followed': UNRESOLVED's IT FOLLOWED YOU
+  // card and its CONTINUE), then step 2 once armed (`you`'s row). Rows are `button#fc<Piece>` (CARD's Deviation 10).
+  // Returns which step failed to come up ('step1', 'step2'), or null when both were taken.
+  const fcRow = (piece) => `button#fc${piece[0].toUpperCase()}${piece.slice(1)}`;
+  const finaleTwoSteps = async (hollow = 'purge', you = 'reassignment') => {
+    const step1 = await waitFor((followed) => {
+      const ap = window.__ap;
+      const s = ap.store.getState();
+      if (s.run.phase === 'landing' && s.landing.ended === null) ap.landAll();
+      return s.hollow.finale.phase === 'step1' && s.hollow.finale.rootFell !== followed
+        && document.getElementById('finaleChoice').classList.contains('armed');
+    }, 45000, 300, hollow === 'followed');
+    if (!step1) return 'step1';
+    await page.locator(hollow === 'followed' ? 'button#fcCont' : fcRow(hollow)).click();
+    const step2 = await waitFor(() => window.__ap.store.getState().hollow.finale.phase === 'step2'
+      && document.getElementById('finaleChoice').classList.contains('armed'), 8000);
+    if (!step2) return 'step2';
+    await page.locator(fcRow(you)).click();
+    return null;
+  };
+  // Slice 7a (R19): after CONTINUE, the night by keys: the RUN TALLY (pressed once it takes input) → the EPILOGUE (after
+  // EPILOGUE_ARM_SEC) → its typing whole → the FINAL CARD (after FINAL_CARD_ARM_SEC) → NEW RUN. Returns what was seen on
+  // the way: the epilogue's lines, the final card's title and endings line (null where a screen did not come).
+  const throughTheNight = async (key = 'Enter') => {
+    await page.keyboard.press(key);
+    const epilogueUp = await waitFor(() => window.__ap.store.getState().ui.runEndStage === 'epilogue' && !document.getElementById('epilogue').hidden, 4000);
+    await page.waitForTimeout(700);
+    await page.keyboard.press(key);   // finishes the typing
+    await page.waitForTimeout(200);
+    const epilogue = epilogueUp ? await st(() => [...document.querySelectorAll('#epilogue .ne-line')].map((line) => line.textContent.trim())) : null;
+    await page.keyboard.press(key);   // the final card
+    const finalUp = await waitFor(() => window.__ap.store.getState().ui.runEndStage === 'final' && !document.getElementById('finalCard').hidden, 4000);
+    const card = finalUp ? await st(() => ({ title: document.querySelector('#finalCard .nf-title')?.textContent ?? '',
+      endings: document.querySelector('#finalCard .nf-endings')?.textContent ?? '', kicker: document.querySelector('#finalCard .nf-kicker')?.textContent ?? '' })) : null;
+    await page.waitForTimeout(1300);
+    await page.keyboard.press(key);   // NEW RUN
+    return { epilogue, card };
+  };
+  return { lockInRing, landToReport, finishReport, capsText, desk, clickNode, pickCard, deskTabs, deskMarks, finaleTwoSteps, throughTheNight };
 }

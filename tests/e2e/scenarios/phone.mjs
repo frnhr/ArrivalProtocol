@@ -443,9 +443,85 @@ await shot('13-run-end');
 await overflow('RUN END');
 await page.locator('#reNew').scrollIntoViewIfNeeded();
 await onScreen('RUN END (scrolled to it)', '#reNew');
-// The screens' modal stack works by touch: NEW RUN brings the title back.
+// The screens' modal stack works by touch. Slice 7a (R19): the tally's button opens the EPILOGUE; a tap finishes its typing,
+// another opens the FINAL CARD, whose NEW RUN (armed after FINAL_CARD_ARM_SEC) brings the title back.
 await page.tap('#reNew');
+const epilogueUp = await waitFor(() => window.__ap.store.getState().ui.runEndStage === 'epilogue' && !document.getElementById('epilogue').hidden, 5000);
+await page.waitForTimeout(800);
+await page.tap('#epilogue');
+const typed = await waitFor(() => document.getElementById('epilogue').classList.contains('typed'), 4000);
+check('a tap on the tally\'s button opens the EPILOGUE; a tap shows it whole', epilogueUp && typed);
+await shot('13b-epilogue');
+await overflow('EPILOGUE');
+await page.tap('#epilogue');
+const finalUp = await waitFor(() => window.__ap.store.getState().ui.runEndStage === 'final' && !document.getElementById('finalCard').hidden, 4000);
+check('…another tap opens the FINAL CARD', finalUp);
+await page.waitForTimeout(1300);
+await shot('13c-final-card');
+await overflow('FINAL CARD');
+await page.locator('.nf-new').scrollIntoViewIfNeeded();
+await onScreen('FINAL CARD', '.nf-new');
+await page.tap('.nf-new');
 check('a tap on NEW RUN brings up the title', await waitFor(() => !document.getElementById('titleCard').hidden && document.getElementById('runEnd').hidden, 8000));
+
+// --- Slice 7a: the FINALE card as a phone sheet (review (b): the layout measured at 390×844) -------------------------------
+// LAST LIGHT on run 1's arm, flown headless (__ap.route), locked at once and landed; step 1 hand-opened over it (the root's
+// fall as the machine leaves it: rootFell, the card up now), then UNRESOLVED's IT FOLLOWED YOU the same way.
+await st(() => { window.__ap.saveClear(); window.__ap.archiveClear(); });
+await page.goto(BASE_URL + '?debug&seed=4', { waitUntil: 'networkidle' });
+await page.tap('#titleReceive');
+await waitFor(() => window.__ap.store.getState().run.phase === 'flight', 20000);
+await st(() => window.__ap.route([0, 2, 5, 11, 15, 19]));
+await waitFor(() => window.__ap.store.getState().run.phase === 'flight' && window.__ap.store.getState().level.shipName === 'LAST LIGHT', 30000);
+await st(() => window.__ap.skipBoot());
+await waitFor(() => window.__ap.store.getState().run.phase === 'flight', 10000);
+await st(() => { window.__ap.store.update((d) => { d.hollow.phase = 'dormant'; }); window.__ap.lockOn(); });
+await waitFor(() => window.__ap.store.getState().hollow.finale.phase === 'duel', 10000);
+await st(() => window.__ap.landAll());
+const handOpen = (rootFell) => st((fell) => window.__ap.store.update((d) => {
+  Object.assign(d.hollow, { phase: 'dormant', biteInSec: null, seedInSec: null, verbInSec: null, verb: null });
+  Object.assign(d.hollow.finale, { phase: 'step1', rootFell: fell, hollow: null, you: null, cardAtAi: d.clock.aiSec });
+}), rootFell);
+const cardArmed = () => waitFor(() => document.getElementById('finaleChoice').classList.contains('armed'), 8000);
+await handOpen(true);
+const step1Armed = await cardArmed();
+await page.waitForTimeout(600);
+await shot('25-finale-step1');
+await overflow('FINALE step 1');
+const sheet1 = await st(() => {
+  const box = (el) => { const r = el.getBoundingClientRect(); return { left: Math.round(r.left), right: Math.round(r.right), top: Math.round(r.top), bottom: Math.round(r.bottom), height: Math.round(r.height) }; };
+  return {
+    card: box(document.getElementById('fcCard')),
+    rows: [...document.querySelectorAll('#fcOptions button.fc-row')].map((row) => ({ id: row.id, ...box(row) })),
+    keys: [...document.querySelectorAll('#fcOptions .fc-key')].map((key) => getComputedStyle(key).display),
+  };
+});
+check('FINALE step 1 on a phone: the card fills the screen, each row a button ≥ 44 px tall inside the width, no digit caps', step1Armed
+  && sheet1.card.left <= 0 && sheet1.card.top <= 0 && Math.abs(sheet1.card.right - vw) <= 1 && Math.abs(sheet1.card.bottom - vh) <= 1
+  && sheet1.rows.length === 3 && sheet1.rows.every((row) => row.height >= 44 && row.left >= 0 && row.right <= vw)
+  && sheet1.keys.length === 3 && sheet1.keys.every((display) => display === 'none'), JSON.stringify(sheet1));
+await page.locator('button#fcPurge').scrollIntoViewIfNeeded();
+await page.tap('button#fcPurge');
+const step2Armed = await waitFor(() => window.__ap.store.getState().hollow.finale.phase === 'step2'
+  && document.getElementById('finaleChoice').classList.contains('armed'), 8000);
+await shot('26-finale-step2');
+await overflow('FINALE step 2');
+await page.locator('#fcBack').scrollIntoViewIfNeeded();
+await onScreen('FINALE step 2', '#fcBack');
+check('…a tap on PURGE opens step 2; its [ESC] BACK is a button', step2Armed && await st(() => document.getElementById('fcBack').tagName === 'BUTTON'));
+await page.tap('#fcBack');
+check('…a tap on BACK returns to step 1, the pick kept', await waitFor(() => window.__ap.store.getState().hollow.finale.phase === 'step1'
+  && window.__ap.store.getState().hollow.finale.hollow === 'purge', 4000));
+await handOpen(false);
+const followedArmed = await waitFor(() => !document.getElementById('fcCont').hidden && document.getElementById('finaleChoice').classList.contains('armed'), 8000);
+await shot('27-finale-followed');
+await overflow('FINALE IT FOLLOWED YOU');
+await page.locator('#fcCont').scrollIntoViewIfNeeded();
+await onScreen('FINALE IT FOLLOWED YOU', '#fcCont');
+await page.tap('#fcCont');
+check('UNRESOLVED on a phone: IT FOLLOWED YOU, a tap on CONTINUE goes to step 2', followedArmed
+  && await waitFor(() => window.__ap.store.getState().hollow.finale.phase === 'step2' && window.__ap.store.getState().hollow.finale.hollow === 'followed', 4000));
+await st(() => { window.__ap.saveClear(); window.__ap.archiveClear(); });
 
 // --- BEAM OUT on a phone (WP7 verify: its line was cut and both buttons sat in hidden tabs) --------------------------
 // Slice 3c: the run save goes first, so the reload abandons the run in progress (as every reload did before the save)

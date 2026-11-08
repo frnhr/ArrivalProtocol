@@ -378,9 +378,9 @@ if ((await st(() => window.__ap.store.getState().ui.mode)) !== 'memory') await p
 await page.waitForTimeout(800);
 await page.locator('#chip-delete').click({ force: true });
 await page.locator('.seg.hollow-root').first().click({ force: true });
-const choiceUp = await waitFor(() => !document.getElementById('finaleChoice').hidden && document.getElementById('finaleChoice').classList.contains('armed'), 25000);
-check('LAST LIGHT: the duel, the root deleted, the choice card', duel && choiceUp);
-await page.locator('#fcPurge').click();
+// Slice 7a (R6, R7): the card comes once the landing has settled; PURGE, then REASSIGNMENT.
+const twoSteps = await screens.finaleTwoSteps('purge', 'reassignment');
+check('LAST LIGHT: the duel, the root deleted, the card\'s two steps (PURGE, REASSIGNMENT)', duel && twoSteps === null, `stopped at ${twoSteps}`);
 const finalReport = await screens.landToReport();
 await waitFor(() => !document.getElementById('lrContinue').hidden, 30000, 200);
 await page.waitForTimeout(800);
@@ -424,7 +424,9 @@ const nextYear = Number(/^NEXT UNIT LAUNCHES (\d{4}) · UNIT-048$/.exec(tally.ne
 check('the RUN TALLY: `NEXT UNIT LAUNCHES <year> · UNIT-048` and the arm\'s update `THE ARM: n DONE · n MOVED ON · n REPORTED HOME`', nextYear >= 2300 && nextYear <= 2335
   && /^THE ARM: \d+ DONE · \d+ MOVED ON · \d+ REPORTED HOME$/.test(tally.summary ?? '') && tally.model?.unit === 48 && tally.model?.startYear === nextYear, JSON.stringify(tally));
 await shot('9-run-tally');
-await page.keyboard.press('Space');
+// Slice 7a (R19): the EPILOGUE and the FINAL CARD before NEW RUN.
+const night = await screens.throughTheNight('Space');
+check('…then the EPILOGUE and the FINAL CARD (`STAND BY`) before NEW RUN', night.epilogue !== null && night.card?.title === 'STAND BY', JSON.stringify(night.card));
 await waitFor(() => window.__ap.store.getState().run.phase === 'title' && !document.getElementById('titleCard').hidden, 6000);
 const run2Title = await settledTitle(kit);
 const gap = nextYear - 2300;

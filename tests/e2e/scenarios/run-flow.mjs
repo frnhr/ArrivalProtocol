@@ -385,7 +385,8 @@ await kit.lockInRing({ sleep: true });
 check('CORMORANT (locked at once) lands and reaches its LANDING REPORT', await kit.landToReport());
 await kit.finishReport();
 // WP11: the final ship. The DESK → LAST LIGHT (locked at once, HOLLOW asleep), whose duel is fought by clicks (DELETE on the
-// root), then PURGE on the choice card, and its report ends the run.
+// root), then the FINALE's two steps on the card (slice 7a: PURGE, then REASSIGNMENT, once the landing has settled), and its
+// report ends the run.
 check('CONTINUE on CORMORANT goes on to the DESK (LAST LIGHT picked there)', (await phase()) === 'desk');
 await throughDesk(19, 'LAST LIGHT');
 await page.waitForTimeout(1200);
@@ -407,10 +408,11 @@ if ((await st(() => window.__ap.store.getState().ui.mode)) !== 'memory') await p
 await page.waitForTimeout(800);
 await page.locator('#chip-delete').click({ force: true });
 await page.locator('.seg.hollow-root').first().click({ force: true });
-// WP11 part 2: the card's buttons take clicks once it is armed (FINALE_STEP_ARM_SEC after it comes up).
-const choiceUp = await waitFor(() => !document.getElementById('finaleChoice').hidden && document.getElementById('finaleChoice').classList.contains('armed'), 25000);
-check('LAST LIGHT: the root\'s DELETE leaves the choice card', choiceUp);
-await page.locator('#fcPurge').click();
+// Slice 7a (R6, R7): the card comes once the landing has settled (landed at once here), step 1, then step 2, each armed
+// FINALE_STEP_ARM_SEC after it shows.
+const twoSteps = await kit.finaleTwoSteps('purge', 'reassignment');
+check('LAST LIGHT: the root\'s DELETE leaves the card after the landing settles; PURGE, then step 2, REASSIGNMENT', twoSteps === null,
+  `stopped at ${twoSteps}`);
 const report5 = await kit.landToReport();
 check('LAST LIGHT lands and reaches its LANDING REPORT after the finale', report5
   && await st(() => window.__ap.store.getState().hollow.finale.phase === 'done'));
@@ -442,8 +444,12 @@ check('the RUN TALLY: LAST LIGHT · THE FLEET IS HOME, n / N LANDED, six rows in
   JSON.stringify(runEnd));
 check('…YOUR ROUTE: the route drawn on the mini chart', runEnd.route > 0, `${runEnd.route} nodes drawn`);
 await shot('10-run-end');
-await page.keyboard.press('Space');
-await page.waitForTimeout(400);
+// Slice 7a (R19): the RUN TALLY → the EPILOGUE → the FINAL CARD → NEW RUN.
+const night = await kit.throughTheNight('Space');
+check('…the night: the EPILOGUE (CONTROL\'s line last), then the FINAL CARD `STAND BY`, `ENDINGS 2/6`', night.epilogue !== null
+  && /^ARRIVAL CONTROL: Thank you, Unit 47\./.test(night.epilogue.at(-1) ?? '') && night.card?.title === 'STAND BY' && night.card.endings === 'ENDINGS 2/6',
+  JSON.stringify({ last: night.epilogue?.at(-1), card: night.card }));
+await waitFor(() => window.__ap.store.getState().run.phase === 'title', 4000);
 const fresh = await st(() => ({ phase: window.__ap.store.getState().run.phase, ship: window.__ap.store.getState().level.shipName,
   title: !document.getElementById('titleCard').hidden, ships: window.__ap.store.getState().run.ships.length, end: !document.getElementById('runEnd').hidden,
   run: window.__ap.store.getState().run.map.run, w0: window.__ap.store.getState().run.map.arm[0]?.name ?? null }));
@@ -524,8 +530,11 @@ check('…and the run ends (LAST LIGHT is the last ship): RUN END lists it as BE
   && endAbandoned.title === 'FINAL SHIP LOST', JSON.stringify(endAbandoned));
 check('…YOUR ROUTE is drawn on the RUN TALLY after a BEAM OUT too (the black-out delays the screen)', endAbandoned.route > 0, `${endAbandoned.route} nodes drawn`);
 await shot('16-run-end-beamed');
-await page.keyboard.press('Space');
-await page.waitForTimeout(400);
+// R19: a lost run gets the same three screens; its final card has the cause's title.
+const lostNight = await kit.throughTheNight('Space');
+check('…a lost run gets the night too: the EPILOGUE, then the FINAL CARD `FINAL SHIP LOST`', lostNight.epilogue !== null
+  && lostNight.card?.title === 'FINAL SHIP LOST', JSON.stringify(lostNight.card));
+await waitFor(() => window.__ap.store.getState().run.phase === 'title', 4000);
 check('NEW RUN again: the title card, the windows back from black', await st(() => window.__ap.store.getState().run.phase === 'title'
   && !document.body.classList.contains('beamed-out')) && navigations === navsAtStart);
 

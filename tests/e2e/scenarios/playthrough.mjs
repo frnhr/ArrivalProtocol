@@ -697,7 +697,11 @@ for (const [index, name] of SHIPS.entries()) {
       if (landView.phase === 'landing' && landView.deal.length > 0) deal.standingAfterLock++;
       if (['report', 'transmit', 'end'].includes(landView.phase)) break;
       if (landView.lostCard) await tap(page.locator('#burnResultRetry'));
-      else if (landView.choice) { if (await tap(page.locator('#fcPurge'))) choiceAt ??= Date.now(); }
+      else if (landView.choice) {
+        // Slice 7a (R7): the card's two steps, tapped by phase (look().choice is false between the steps and on the verdict).
+        const step = await st(() => window.__ap.store.getState().hollow.finale.phase);
+        if (await tap(page.locator(step === 'step2' ? 'button#fcReassignment' : 'button#fcPurge'))) choiceAt ??= Date.now();
+      }
       else if (landView.phase === 'landing') {
         if (landView.line && !landingLines.has(landView.line)) {
           if (TRACE) log(`${((Date.now() - landStart) / 1000).toFixed(1).padStart(6)} ${landView.mode.padEnd(6)} ${landView.pace.padEnd(8)} ${landView.line}`);
@@ -1141,7 +1145,12 @@ check('the kid read the mini-HUD\'s landing row in the MIND at least once', run.
 check('the kid followed the MIND by clicks at least once a ship', mindActions >= SHIPS.length, `${mindActions} actions, ${mindRefused} refused`);
 await shot('7-run-tally');
 const unitBefore = await st(() => window.__ap.store.getState().run.unitNumber);
-await page.keyboard.press('Space');
+// Slice 7a (R19, R20): the RUN TALLY → the EPILOGUE → the FINAL CARD → NEW RUN.
+const night = await runScreens.throughTheNight('Space');
+const epi = night.epilogue ?? [];
+check('the EPILOGUE: `<year> · FORTY YEARS ON`, CONTROL\'s line last, at most 16 lines', /^\d{4} · FORTY YEARS ON$/.test(epi[0] ?? '')
+  && /^ARRIVAL CONTROL:/.test(epi.at(-1) ?? '') && epi.length <= 16, JSON.stringify(epi));
+check('the FINAL CARD: `STAND BY` and the endings found (`ENDINGS 2/6`)', night.card?.title === 'STAND BY' && night.card.endings === 'ENDINGS 2/6', JSON.stringify(night.card));
 await waitFor(() => window.__ap.store.getState().run.phase === 'title' && !document.getElementById('titleCard').hidden, 6000);
 // Slice 3c: from run 2 the title's line rolls its year up before the gap's stamp lands (about 2.4 s).
 await waitFor(() => !document.getElementById('titleStamp').hidden, 6000);
