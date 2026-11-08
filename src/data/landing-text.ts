@@ -1,5 +1,6 @@
 // Slice 4c–4e: Track DROP owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): BULLSEYE. Others ask by message.
 import type { ForgivenessClass, LandingEnd, LaunchRefusal, Place, ParkReason, TerrainWord, Touch } from '@/types/landing';
+import type { BadGround } from '@/types/survey';
 import { formatCount } from '@data/format';
 import { STAR_FUEL_PCT } from '@data/tuning';
 import { podTag } from '@data/pod-ids';
@@ -89,8 +90,13 @@ export const LAUNCH_CONFIRM_TEXT = {
 export const LANDING_ECHO = {
   launch: (pod: number, aimLz: string | null): string => `> launch ${podTag(pod)} ... ${aimLz ?? 'OFF-SITE'}`,
   // `bullseye` (slice 4c): AUTODROP sent it and it came down soft in an LZ with room (`> pod03 ... LANDED · BULLSEYE`).
-  touchdown: (pod: number, place: Place, lz: string | null, touch: Touch, bullseye = false): string => {
+  // `revealing` (slice 6, plan §2.9; landing.ts touchDown works it out before 'pod-landed'): this touchdown makes a bad ground
+  // known, its LZ's ROCKY or WET; null otherwise (and on every GOOD planet).
+  touchdown: (pod: number, place: Place, lz: string | null, touch: Touch, bullseye = false, revealing: BadGround | null = null): string => {
     const hard = touch === 'hard' ? ' · HARD' : '';
+    // Slice 6 SWATH: its one line here appends SWATH_TEXT.echoTail(lz, revealing) when `revealing` is set
+    // (`> pod03 ... LANDED · HARD · LZ-B IS WET`).
+    void revealing;
     switch (place) {
       case 'lz': return `> ${podTag(pod)} ... LANDED${hard}${bullseye && touch === 'soft' ? AUTODROP_TEXT.bullseye : ''}`;
       case 'mislanded': return `> ${podTag(pod)} ... LANDED · ${lz ?? '?'} FULL${hard}`;

@@ -35,7 +35,7 @@ import {
 } from '@systems/landing-rules';
 import { forgetDriver, parkPodsAboard } from '@state/actions';
 import { driversInMemory, finalePending, scriptFightOpen } from '@state/selectors';
-import { groundAt } from '@state/survey-selectors';
+import { groundAt, groundKnownAt } from '@state/survey-selectors';
 import { layoutOf } from '@data/memory';
 import { END_LANDING_REFUSAL_KEY, LANDING_ECHO, launchRefusalKey } from '@data/landing-text';
 import { IS_DEV } from '@/env';
@@ -233,9 +233,13 @@ function touchDown(store: Store<GameState>, pod: number): void {
   // BULLSEYE (plan §3.2): a pod AUTODROP sent that came down soft in an LZ with room. On the event (review m11), so the
   // echo and the NAV PLOT's float read the one answer.
   const bullseye = launch.source === 'autodrop' && placement.place === 'lz' && touch === 'soft';
+  // Slice 6 (review M1): whether this touchdown makes its LZ's bad ground known, worked out before 'pod-landed' (SWATH's
+  // reveal handler marks the ground known on it), for the echo's tail.
+  const ground = groundAt(landing, placement.lz);
+  const revealing = placement.lz !== null && ground !== 'flat' && !groundKnownAt(landing, placement.lz) ? ground : null;
   emit('pod-landed', { pod, place: placement.place, lz: placement.lz, touch, points, firstOnShip, firstOfRun, bullseye });
   if (fillsLz && lzDef) emit('lz-full', { lz: lzDef.label });
-  say('cmd', LANDING_ECHO.touchdown(pod, placement.place, placement.lz, touch, bullseye), { critical: true });
+  say('cmd', LANDING_ECHO.touchdown(pod, placement.place, placement.lz, touch, bullseye, revealing), { critical: true });
 }
 
 // --- The end of the landing ------------------------------------------------------------------------------------------
