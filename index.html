@@ -515,36 +515,25 @@
     </div>
   </div>
 
-  <!-- LAST LIGHT's choice (§6.6, §9 WP11 item 5, FinaleChoice): the root is gone and one block is left. HOLLOW's last
-       words type on the card, then PURGE or MERGE, each with its command, what it means and what it costs (MERGE's
-       charge against its price, and why it is out of reach). The choice turns the card into the typed ending. -->
-  <div class="finale-choice" id="finaleChoice" hidden>
+  <!-- The FINALE card (slice 7a, Track CARD: FinaleChoice, 05 §3.7, §3.12): over the final ship's dark orbit view. Step 1,
+       what becomes of it (the root's last block, entry 12 typing from it, PURGE · MERGE · SPARE), or UNRESOLVED's IT FOLLOWED
+       YOU; step 2, what becomes of you (CONTROL's quote, SUNSET · STAY · REASSIGNMENT, STAY's sub-row, [ESC] BACK); then
+       the typed verdict. The rows are built from the card's model (systems/finale-card.ts). -->
+  <div class="finale-choice" id="finaleChoice" role="dialog" aria-modal="true" aria-labelledby="fcTitle" hidden>
     <div class="fc-card" id="fcCard">
+      <div class="fc-picked" id="fcPicked" hidden></div>
       <div class="fc-kicker" id="fcKicker"></div>
-      <div class="fc-last" aria-hidden="true"><span class="fc-block"></span></div>
+      <div class="fc-last" id="fcLast" aria-hidden="true"><span class="fc-block"></span></div>
+      <div class="fc-words" id="fcWords" hidden></div>
+      <div class="fc-quote" id="fcQuote" hidden></div>
       <div class="fc-title" id="fcTitle"></div>
-      <div class="fc-words" id="fcWords"></div>
-      <div class="fc-sub" id="fcSub"></div>
-      <div class="fc-options" id="fcOptions">
-        <button class="fc-btn fc-purge" id="fcPurge" tabindex="-1">
-          <span class="fc-head"><kbd class="keycap fc-key"></kbd><span class="fc-word"></span></span>
-          <span class="fc-cmd"></span>
-          <span class="fc-what"></span>
-          <span class="fc-cost"></span>
-        </button>
-        <button class="fc-btn fc-merge" id="fcMerge" tabindex="-1">
-          <span class="fc-head"><kbd class="keycap fc-key"></kbd><span class="fc-word"></span></span>
-          <span class="fc-cmd"></span>
-          <span class="fc-what"></span>
-          <span class="fc-cost"></span>
-          <span class="fc-price">
-            <span class="fc-meter"><span class="fc-meter-fill"></span><span class="fc-meter-tick"></span></span>
-            <span class="fc-price-text"></span>
-          </span>
-          <span class="fc-why" id="fcWhy" hidden></span>
-        </button>
+      <div class="fc-options" id="fcOptions"></div>
+      <div class="fc-stay-pick" id="fcStay" hidden></div>
+      <div class="fc-foot" id="fcFoot" hidden>
+        <button class="fc-back" id="fcBack" tabindex="-1" hidden></button>
+        <button class="fc-cont" id="fcCont" tabindex="-1" hidden></button>
       </div>
-      <!-- the typed ending (≤ 6 lines) the choice brings, then the hint that a click goes on -->
+      <!-- the typed verdict (≤ 3 lines) the confirm brings, then the hint that a click goes on -->
       <div class="fc-ending" id="fcEnding" hidden></div>
       <div class="fc-hint" id="fcHint" hidden></div>
     </div>

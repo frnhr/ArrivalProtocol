@@ -1,445 +1,647 @@
-// Slice 7a: Track CARD owns this file after the FOUNDATION (docs/phase3/impl/slice-7-plan.md §4.1, §5.1: the two-step card
-// replaces this one). The FOUNDATION kept WP11's one-step card on the v7 phases: it shows on step 1 once the root fell,
-// chooses through finale.ts chooseFinale (PURGE or MERGE, then REASSIGNMENT), and types the ending of a decided FINALE.
+// Slice 7a: Track CARD owns this file (docs/phase3/impl/slice-7-plan.md §2.10, §4.1, §5.1; review M2, M3, m8): the FINALE's
+// two-step card. It paints STATE: the face from systems/finale-card.ts cardStage, the rows from finaleCardModel over
+// systems/ending-rules.ts optionState (with the archive's endingsSeen), and it acts only through systems/finale.ts's card
+// actions (pickStep1, backToStep1, pickStep2, pickStay, continueFollowed). Nothing it shows is saved (R14), and nothing is
+// applied before step 2's confirm (R7).
 import type { Store } from '@state/store';
-import type { GameState, EndingLine, EndingVoice } from '@state/schema';
+import type { GameState, EndingVoice } from '@state/schema';
+import type { HollowChoice, YouChoice } from '@/types/ending';
 import {
-  chooseFinale, finaleChoiceRefusal, finaleEndingShowing, skipFinaleEnding, podsEatenHere, finaleEndingLineStartsSec,
-  type FinaleChoice,
+  pickStep1, pickStep2, pickStay, backToStep1, continueFollowed, skipFinaleEnding, finaleEndingLineStartsSec,
 } from '@systems/finale';
+import { optionState, stayCandidates } from '@systems/ending-rules';
+import {
+  cardStage, finaleCardModel, rowForKey, rootWordsAt, verdictRows, verdictTone,
+  type CardStage, type CardModel, type CardRow, type CardInput, type VerdictRow,
+} from '@systems/finale-card';
 import { hollowLabel, unitName } from '@systems/say';
+import { archiveMeta } from '@systems/meta';
 import { pushModal, registerKeys } from '@systems/input';
 import { togglePause } from '@systems/pace';
 import { onPostTick } from '@systems/clock';
 import { play, toggleMuted, type TypeVoice } from '@systems/audio';
-import { chargeLeft } from '@state/selectors';
-import { requireById, requireIn, make, replayAnimation } from '@components/dom';
+import { requireById, make, replayAnimation, guardPresses } from '@components/dom';
 import { renderKeyCaps } from '@components/hud/keycaps';
-import { createTypeQueue, unitsAt, type TypeQueue } from '@components/hud/typewriter';
+import { unitsAt } from '@components/hud/typewriter';
 import { HOLLOW_FINALE } from '@data/hollow-text';
+import { FINALE_TEXT } from '@data/finale-text';
+import { LOG_TEXT, logEntryLines } from '@data/log-text';
+import { FRESH_UNIT_CHARGE } from '@data/memory';
 import { echoWord } from '@data/tool-text';
-import { formatCount } from '@data/format';
-import { podCode } from '@data/landing-text';
-import {
-  MERGE_COST_CHARGE, HOLLOW_TYPE_CPS, FINALE_OPEN_DELAY_SEC, FINALE_STEP_ARM_SEC, FINALE_ENDING_CPS, CONTROL_CHIME_LEAD_SEC,
-  FINALE_CARD_FADE_MS,
-} from '@data/tuning';
+import { FINALE_STEP_ARM_SEC, FINALE_ENDING_CPS, CONTROL_CHIME_LEAD_SEC, FINALE_CARD_FADE_MS } from '@data/tuning';
 
-// LAST LIGHT's choice and its typed ending (§1, §6.6, §9 WP11 item 5): the payoff of the run.
-// • THE CARD. FINALE_OPEN_DELAY_SEC after the root's DELETE has completed (the tear and the collapse are seen
-//   first), a card comes up over a dimmed screen: ROOT DELETED, the last block pulsing, `UNIT-046 · ONE BLOCK LEFT`,
-//   and HOLLOW's last words typing in its pink (`> 047. wait.`). Then the two options, each with the command it runs
-//   in TERMINAL words, what it means and what it costs:
-//   – [1] PURGE `> rm unit_046`: clean and a little cold: "It is gone for good. The 400 it ate here stay lost."
-//   – [2] MERGE `> merge unit_046 -> unit_047`: warm and costly: "It becomes part of you. C13 · C14 come back, with
-//     missing memories." Its price is a meter of the kid's REPAIR CHARGE against the MERGE 20 tick (the 20 it will
-//     spend hatched out of it); short of it, the button is out of reach and says why: `NEEDS 20 CHARGE (you have 14)`.
-//   The buttons take clicks and keys FINALE_STEP_ARM_SEC after the card is up (a kid still clicking the root never
-//   chooses by accident). The card is a modal for its moment (§6.11's choice layer): 1 and 2 choose, P pauses, M mutes.
-//   The delay and the arming are AI seconds (§3.4: story timers stand still while paused).
-// • THE ENDING. The choice (systems/finale.ts) writes its typed ending in the same update as its phase; the card clears
-//   and types it, line by line, on the ending's own AI clock: every line from finaleEndingLineStartsSec after the
-//   ending's startAi, the very schedule the LANDING REPORT waits for, so the card can't fall behind the report or be cut
-//   off by it, and pause holds both (WP11 review: on its own wall-clock copy of the schedule it opened late and lost
-//   CONTROL's last line). The command echo, the narration, MERGE's merged voice (`> hi. it's us.`, pink into blue) and
-//   ARRIVAL CONTROL's verdict after its chime; every line's room is kept from the start, so nothing on the card moves
-//   as the next line comes. A click, SPACE or ENTER finishes the typing; once typed, one more ends it
-//   (skipFinaleEnding). When its time is up the card fades and the landing (MERGE's restored pods among it)
-//   finishes under the kid's eyes.
-// The choice's sounds (the hold under the card, PURGE's cold tone, MERGE's converging chord) are cued here and in
-// systems/audio-cues.ts ('finale-chosen'); the landing and the world go on underneath throughout (AI time).
+// THE FINALE CARD (05 §3.7, §3.12, §4), over the final ship's orbit view, still dark from the duel (the landing goes on
+// underneath on AI time):
+// • STEP 1, WHAT BECOMES OF IT? At cardAtAi (R6) the card comes up: ROOT DELETED · UNIT-046 · ONE BLOCK LEFT, the last
+//   block beating, and entry 12 typing from the root in HOLLOW's pink, on the AI clock from cardAtAi (m8). Then [1] PURGE,
+//   [2] MERGE, [3] SPARE, each a row: its key, word, command and meaning; its price meter with the caption (MERGE's charge
+//   against its 20, the empty ship's FUEL against the ★ 20%), or what it needs, greyed; its NOW: (MERGE's drivers); the
+//   NEXT RUN: row's room (R12: its lines are 7c's). An option out of reach that was never chosen reads `???` with its need.
+// • UNRESOLVED (R10): step 1 is IT FOLLOWED YOU, HOLLOW's line, CONTINUE [ENTER].
+// • STEP 2, WHAT BECOMES OF YOU? THE ARM IS DONE, CONTROL's quote, step 1's pick above the question, [1] SUNSET, [2] STAY,
+//   [3] REASSIGNMENT (and [4] CONTACT from 7d). SPARE greys SUNSET (`046 HAS THE SHIP`, FINALE's need). [ESC] BACK returns
+//   to step 1 with its pick kept as a pick (R7). STAY with several ★ ON TARGET ships opens the sub-row WHICH COLONY?, newest
+//   first, keys 1–8; ESC closes it (M3).
+// • THE VERDICT (R13): the confirm writes it (≤ 3 lines: the two echoes and CONTROL); the card types it on the verdict's
+//   own AI clock (finaleEndingLineStartsSec from its startAi, the schedule the LANDING REPORT waits for). A click, SPACE or
+//   ENTER finishes the typing; once typed, one more ends it (skipFinaleEnding). Reduced motion shows it whole. While the two
+//   steps are not built (ENDINGS_BUILT.twoStep down) the same face types WP11's ending.
+// Each step's options take keys and clicks FINALE_STEP_ARM_SEC (AI s) after the step is up. The card is a modal on the
+// choice layer: 1–8 pick, ESC goes back, ENTER goes on, P pauses, M mutes. The sounds are systems/audio-cues.ts's 7 ENDING
+// block ('finale-open', 'finale-chosen', 'finale-step2').
 
-type Stage = 'off' | 'waiting' | 'choosing' | 'ending' | 'closing';
+type Painted = CardStage | 'closing';
 
-// One typed line of the ending on the card: where its letters go, when it starts on the ending's clock, how many show.
-interface EndingRow {
-  line: EndingLine;
-  row: HTMLElement;
-  text: HTMLElement;
-  startSec: number;
-  shown: number;
-  chimed: boolean;
-}
+// The typing voice of each verdict voice: the echoes and CONTROL in the relay tick, a narration (WP11's ending) in the
+// strip's purr, the merged unit in HOLLOW's blips and the unit's ticks in turn.
+const VERDICT_TYPE_VOICE: Readonly<Record<Exclude<EndingVoice, 'us'>, TypeVoice>> = { cmd: 'sys', story: 'strip', control: 'sys' };
 
-// The typing voice each ending voice speaks with: the echo and CONTROL's words in the relay tick, the narration in the
-// strip's softer purr, and the merged unit in HOLLOW's blips and the unit's ticks in turn (two voices as one).
-const ENDING_TYPE_VOICE: Readonly<Record<Exclude<EndingVoice, 'us'>, TypeVoice>> = { cmd: 'sys', story: 'strip', control: 'sys' };
-// The card fades out over FINALE_CARD_FADE_MS once its ending is done (game.css .finale-choice.closing).
+const DIGITS: readonly string[] = Array.from({ length: 8 }, (_, i) => `Digit${i + 1}`);
+const NUMPAD: readonly string[] = Array.from({ length: 8 }, (_, i) => `Numpad${i + 1}`);
 
-interface OptionParts {
+// A row's DOM parts, filled from its CardRow on every model change (rebuilt only when the rows' pieces or kinds change).
+interface RowParts {
+  row: CardRow;
   button: HTMLButtonElement;
   key: HTMLElement;
   word: HTMLElement;
   cmd: HTMLElement;
   what: HTMLElement;
-  cost: HTMLElement;
+  price: HTMLElement;
+  fill: HTMLElement;
+  tick: HTMLElement;
+  caption: HTMLElement;
+  now: HTMLElement;
+  next: HTMLElement;
 }
 
-function optionParts(button: HTMLButtonElement, what: string): OptionParts {
-  return {
-    button,
-    key: requireIn(button, '.fc-key', `${what}'s .fc-key`),
-    word: requireIn(button, '.fc-word', `${what}'s .fc-word`),
-    cmd: requireIn(button, '.fc-cmd', `${what}'s .fc-cmd`),
-    what: requireIn(button, '.fc-what', `${what}'s .fc-what`),
-    cost: requireIn(button, '.fc-cost', `${what}'s .fc-cost`),
-  };
+// One typed line of the verdict: where its letters go and how many show.
+interface VerdictEntry {
+  line: VerdictRow;
+  row: HTMLElement;
+  text: HTMLElement;
+  shown: number;
+  chimed: boolean;
+}
+
+// The DOM id of a piece's row (`fcPurge`, `fcReassignment`): the e2e taps them.
+const rowId = (piece: string): string => `fc${piece.charAt(0).toUpperCase()}${piece.slice(1)}`;
+
+function buildRow(row: CardRow): RowParts {
+  const button = make('button', 'fc-row');
+  button.id = rowId(row.piece);
+  button.tabIndex = -1;
+  button.dataset.piece = row.piece;
+  const head = make('span', 'fc-head');
+  const key = make('kbd', 'keycap fc-key');
+  const word = make('span', 'fc-word');
+  const cmd = make('span', 'fc-cmd');
+  const what = make('span', 'fc-what');
+  head.append(key, word, cmd, what);
+  const price = make('span', 'fc-price');
+  const meter = make('span', 'fc-meter');
+  const fill = make('span', 'fc-meter-fill');
+  const tick = make('span', 'fc-meter-tick');
+  meter.append(fill, tick);
+  const caption = make('span', 'fc-caption');
+  price.append(meter, caption);
+  const now = make('span', 'fc-now');
+  const next = make('span', 'fc-next');
+  button.append(head, price, now, next);
+  return { row, button, key, word, cmd, what, price, fill, tick, caption, now, next };
+}
+
+function fillRow(parts: RowParts, row: CardRow): void {
+  parts.row = row;
+  const { button } = parts;
+  // A `???` wears no ending's tone: its colours would name it.
+  button.className = row.kind === 'unknown' ? 'fc-row unknown' : `fc-row fc-${row.piece} ${row.kind}`;
+  button.classList.toggle('picked', row.picked);
+  button.classList.toggle('ruled-out', row.ruledOut);
+  button.setAttribute('aria-disabled', String(row.kind !== 'open'));
+  parts.key.textContent = String(row.key);
+  parts.word.textContent = row.word;
+  parts.cmd.textContent = row.command ?? '';
+  parts.cmd.hidden = row.command === null;
+  parts.what.textContent = row.meaning ?? '';
+  parts.what.hidden = row.meaning === null;
+  // The price: a meter with its caption, or the need line alone (an option with no meter, a `???`).
+  parts.price.hidden = row.caption === null && row.meter === null;
+  const meter = row.meter;
+  parts.price.classList.toggle('metered', meter !== null);
+  parts.price.dataset.kind = meter?.kind ?? '';
+  parts.price.classList.toggle('short', meter !== null && !meter.ok);
+  if (meter !== null) {
+    parts.fill.style.width = `${meter.fillPct}%`;
+    parts.fill.style.setProperty('--spend-from', meter.spendFromPct === null ? '100%' : `${meter.spendFromPct}%`);
+    parts.tick.style.left = `${meter.tickPct}%`;
+  }
+  parts.caption.textContent = row.caption ?? '';
+  parts.now.textContent = row.now ?? '';
+  parts.now.hidden = row.now === null;
+  // R12: the NEXT RUN: row keeps its room while its traces are not built, so nothing moves when they turn on.
+  parts.next.textContent = row.nextRun === null ? '\u00a0' : `${FINALE_TEXT.nextRunLead} ${row.nextRun}`;
+  parts.next.classList.toggle('reserved', row.nextRun === null);
 }
 
 export function mountFinaleChoice(store: Store<GameState>): () => void {
   const root = requireById('finaleChoice');
   const card = requireById('fcCard');
+  const pickedEl = requireById('fcPicked');
   const kickerEl = requireById('fcKicker');
-  const titleEl = requireById('fcTitle');
+  const lastEl = requireById('fcLast');
   const wordsEl = requireById('fcWords');
-  const subEl = requireById('fcSub');
+  const quoteEl = requireById('fcQuote');
+  const titleEl = requireById('fcTitle');
   const optionsEl = requireById('fcOptions');
-  const whyEl = requireById('fcWhy');
+  const stayEl = requireById('fcStay');
+  const footEl = requireById('fcFoot');
+  const backBtn = requireById<HTMLButtonElement>('fcBack');
+  const contBtn = requireById<HTMLButtonElement>('fcCont');
   const endingEl = requireById('fcEnding');
   const hintEl = requireById('fcHint');
-  const purge = optionParts(requireById<HTMLButtonElement>('fcPurge'), 'PURGE');
-  const merge = optionParts(requireById<HTMLButtonElement>('fcMerge'), 'MERGE');
-  const meterFill = requireIn(merge.button, '.fc-meter-fill', 'MERGE\'s .fc-meter-fill');
-  const meterTick = requireIn(merge.button, '.fc-meter-tick', 'MERGE\'s .fc-meter-tick');
-  const priceText = requireIn(merge.button, '.fc-price-text', 'MERGE\'s .fc-price-text');
+  root.style.setProperty('--fc-fade-ms', `${FINALE_CARD_FADE_MS}ms`);
 
-  let stage: Stage = 'off';
+  let painted: Painted = 'off';
   let fadeTimer: ReturnType<typeof setTimeout> | null = null;
   let closeModal: (() => void) | null = null;
-  // AI seconds: when the card comes up (stage 'waiting') and when its buttons arm.
-  let showAtAi = Infinity;
+  // The step's options take keys and clicks from this AI second.
   let armAtAi = Infinity;
-  let wordsQueue: TypeQueue | null = null;
-  let endingRows: EndingRow[] = [];
-  // The kid finished the typing early (a click): every line shows whole.
-  let endingAll = false;
-  let endingTyped = false;
-  let lastPrice = '';
+  // STAY's sub-row (M3: CARD-local, unsaved).
+  let stayOpen = false;
+  let model: CardModel | null = null;
+  let modelKey = '';
+  let rowsKey = '';
+  let rows: RowParts[] = [];
+  // Entry 12's (or UNRESOLVED's line's) letters on screen, per line; a click shows them whole.
+  let wordLines: string[] = [];
+  let wordEls: HTMLElement[] = [];
+  let wordShown: number[] = [];
+  let wordsAll = false;
+  // The verdict.
+  let verdict: VerdictEntry[] = [];
+  let verdictAll = false;
+  let verdictTyped = false;
   const stopFade = (): void => {
     if (fadeTimer !== null) clearTimeout(fadeTimer);
     fadeTimer = null;
   };
-
   const aiNow = (): number => store.getState().clock.aiSec;
   const armed = (): boolean => aiNow() >= armAtAi;
-
-  // --- The card ---
-
-  function paintWords(): void {
-    const state = store.getState();
-    const hollow = hollowLabel(state.run);
-    const hollowWord = echoWord(hollow);
-    kickerEl.textContent = HOLLOW_FINALE.choiceKicker;
-    titleEl.textContent = HOLLOW_FINALE.choiceTitle(hollow);
-    subEl.textContent = HOLLOW_FINALE.choiceSub;
-    purge.key.textContent = HOLLOW_FINALE.purgeKey;
-    purge.word.textContent = HOLLOW_FINALE.purge;
-    purge.cmd.textContent = HOLLOW_FINALE.purgeCmd(hollowWord);
-    purge.what.textContent = HOLLOW_FINALE.purgeWhat;
-    merge.key.textContent = HOLLOW_FINALE.mergeKey;
-    merge.word.textContent = HOLLOW_FINALE.merge;
-    merge.cmd.textContent = HOLLOW_FINALE.mergeCmd(hollowWord, echoWord(unitName(state.run.unitNumber)));
-    merge.what.textContent = HOLLOW_FINALE.mergeWhat;
-    const eaten = podsEatenHere(state);
-    const eatenColonists = eaten.reduce((sum, record) => sum + record.colonists, 0);
-    purge.cost.textContent = HOLLOW_FINALE.purgeCost(eatenColonists > 0 ? formatCount(eatenColonists) : null);
-    merge.cost.textContent = HOLLOW_FINALE.mergeGain(eaten.map((record) => podCode(record.pod)));
-  }
-
-  // MERGE's price against the kid's charge: the meter's scale is the larger of the two, so the MERGE tick sits at the
-  // price and the fill is the charge; above the price the 20 MERGE spends is hatched off the fill's end. Short of it,
-  // the button is out of reach and says why. Repainted per tick (a repair still running spends charge in place).
-  function paintPrice(): void {
-    const state = store.getState();
-    const have = chargeLeft(state);
-    const refusal = finaleChoiceRefusal(state, 'merge');
-    // PAUSED refuses both and is the pause veil's to say; only MERGE's price is this card's.
-    const priced = refusal !== null && refusal !== finaleChoiceRefusal(state, 'purge');
-    const key = `${have}|${priced}|${refusal}`;
-    if (key === lastPrice) return;
-    lastPrice = key;
-    const scale = Math.max(have, MERGE_COST_CHARGE);
-    meterFill.style.width = `${(100 * have) / scale}%`;
-    meterTick.style.left = `${(100 * MERGE_COST_CHARGE) / scale}%`;
-    // Where, along the fill, the part MERGE would spend begins (the fill is the charge: its last MERGE_COST_CHARGE).
-    meterFill.style.setProperty('--spend-from', `${have > 0 ? (100 * Math.max(0, have - MERGE_COST_CHARGE)) / have : 0}%`);
-    priceText.textContent = HOLLOW_FINALE.mergePrice(MERGE_COST_CHARGE, have);
-    merge.button.classList.toggle('short', priced);
-    merge.button.setAttribute('aria-disabled', String(priced));
-    whyEl.hidden = !priced;
-    whyEl.textContent = priced ? refusal : '';
-  }
+  // A rebuild of the rows under a press would eat the click (components/dom.ts guardPresses): it waits for the release.
+  const guard = guardPresses(root, () => paintStep());
 
   function openModal(): void {
     if (!closeModal) closeModal = pushModal('choice');
   }
 
-  function showCard(): void {
-    stage = 'choosing';
+  // --- A step ---
+
+  function inputOf(state: Readonly<GameState>, stage: 'step1' | 'followed' | 'step2'): CardInput {
+    const finale = state.hollow.finale;
+    const seen = state.archive.status === 'ok' ? archiveMeta().endingsSeen : [];
+    const hollow = hollowLabel(state.run);
+    return {
+      step: stage === 'step2' ? 2 : 1,
+      hollow: finale.hollow,
+      followed: stage === 'followed',
+      names: {
+        hollow, hollowWord: echoWord(hollow), ours: echoWord(unitName(state.run.unitNumber)),
+        shipWord: echoWord(state.level.shipName), colony: state.landing.colony,
+      },
+      option: (piece) => optionState(state, piece, seen),
+      stay: stage === 'step2' ? stayCandidates(state) : [],
+      stayOpen,
+    };
+  }
+
+  // The words above the question: entry 12 from the root (step 1), HOLLOW's line on UNRESOLVED's card; none on step 2.
+  function setWords(lines: readonly string[]): void {
+    wordLines = [...lines];
+    wordEls = wordLines.map(() => make('div', 'fc-word-line pending'));
+    wordShown = wordLines.map(() => -1);
+    wordsAll = false;
+    wordsEl.replaceChildren(...wordEls);
+    wordsEl.hidden = wordLines.length === 0;
+  }
+
+  // Entry 12's letters at this AI second, from cardAtAi (m8). One typing tick per tick at most.
+  function paintWords(): void {
+    if (wordLines.length === 0) return;
+    const state = store.getState();
+    const from = state.hollow.finale.cardAtAi ?? aiNow();
+    const counts = wordsAll ? wordLines.map((line) => line.length) : rootWordsAt(wordLines, aiNow() - from);
+    let ticked = false;
+    counts.forEach((count, i) => {
+      if (count === wordShown[i]) return;
+      const line = wordLines[i]!;
+      if (!ticked && wordShown[i]! >= 0 && count > wordShown[i]! && line[count - 1] !== ' ' && !wordsAll) {
+        play('typeTick', { voice: 'hollow' });
+        ticked = true;
+      }
+      wordShown[i] = count;
+      const el = wordEls[i]!;
+      el.textContent = line.slice(0, count);
+      el.classList.toggle('pending', count === 0);
+      el.classList.toggle('typing', count > 0 && count < line.length);
+    });
+    const done = counts.every((count, i) => count >= wordLines[i]!.length);
+    if (done) optionsEl.classList.add('shown');
+  }
+
+  function paintStay(stay: CardModel['stay']): void {
+    stayEl.hidden = stay === null;
+    root.classList.toggle('stay-open', stay !== null);
+    if (stay === null) {
+      stayEl.replaceChildren();
+      return;
+    }
+    const title = make('div', 'fc-stay-title', stay.title);
+    const list = make('div', 'fc-stay-list');
+    for (const ship of stay.ships) {
+      const button = make('button', 'fc-stay-ship');
+      button.tabIndex = -1;
+      button.dataset.slot = String(ship.slot);
+      button.append(make('kbd', 'keycap fc-key', String(ship.key)), make('span', 'fc-stay-label', ship.label));
+      button.addEventListener('click', (event) => { event.stopPropagation(); chooseStay(ship.slot, button); });
+      list.append(button);
+    }
+    const back = make('button', 'fc-stay-back');
+    back.tabIndex = -1;
+    renderKeyCaps(back, stay.back);
+    back.addEventListener('click', (event) => { event.stopPropagation(); closeStay(); });
+    stayEl.replaceChildren(title, list, back);
+  }
+
+  // The step's face from the model: rebuilt when the rows change, refilled when only their numbers do.
+  function paintStep(): void {
+    if (painted !== 'step1' && painted !== 'followed' && painted !== 'step2') return;
+    const next = finaleCardModel(inputOf(store.getState(), painted));
+    const key = JSON.stringify(next);
+    if (key === modelKey) return;
+    if (guard.holds()) return;
+    modelKey = key;
+    model = next;
+    root.classList.toggle('face-root', next.face === 'root');
+    root.classList.toggle('face-followed', next.face === 'followed');
+    root.classList.toggle('face-you', next.face === 'you');
+    kickerEl.textContent = next.kicker;
+    lastEl.hidden = next.face !== 'root';
+    titleEl.textContent = next.title;
+    quoteEl.hidden = next.face !== 'you' || next.quote === null;
+    quoteEl.textContent = next.face === 'you' ? next.quote ?? '' : '';
+    pickedEl.hidden = next.picked === null;
+    pickedEl.replaceChildren();
+    if (next.picked !== null) {
+      pickedEl.append(make('span', `fc-picked-word fc-${store.getState().hollow.finale.hollow ?? ''}`, next.picked.word));
+      if (next.picked.command !== null) pickedEl.append(make('span', 'fc-picked-cmd', next.picked.command));
+    }
+    const shape = next.rows.map((row) => `${row.piece}:${row.kind}`).join('|');
+    if (shape !== rowsKey) {
+      rowsKey = shape;
+      rows = next.rows.map((row) => {
+        const parts = buildRow(row);
+        parts.button.addEventListener('click', (event) => { event.stopPropagation(); pick(parts.row.key); });
+        return parts;
+      });
+      optionsEl.replaceChildren(...rows.map((parts) => parts.button));
+    }
+    next.rows.forEach((row, i) => fillRow(rows[i]!, row));
+    optionsEl.hidden = next.rows.length === 0;
+    paintStay(next.stay);
+    footEl.hidden = next.back === null && next.cont === null;
+    backBtn.hidden = next.back === null;
+    if (next.back !== null) renderKeyCaps(backBtn, next.back);
+    contBtn.hidden = next.cont === null;
+    if (next.cont !== null) renderKeyCaps(contBtn, next.cont);
+  }
+
+  function showStep(stage: 'step1' | 'followed' | 'step2'): void {
+    stopFade();
+    const was = painted;
+    painted = stage;
+    if (stage !== 'step2') stayOpen = false;
     root.hidden = false;
-    root.className = 'finale-choice choosing';
-    card.className = 'fc-card';
+    root.className = `finale-choice choosing ${stage}`;
+    // The card comes up once; a step change slides its body (the card stays).
+    card.className = was === 'step1' || was === 'followed' || was === 'step2' ? 'fc-card turned' : 'fc-card';
+    if (card.classList.contains('turned')) replayAnimation(card, 'turned');
     endingEl.hidden = true;
     endingEl.replaceChildren();
     endingEl.style.minHeight = '';
     hintEl.hidden = true;
-    hintEl.classList.remove('pending');
-    optionsEl.classList.remove('shown');
-    paintWords();
-    lastPrice = '';
-    paintPrice();
+    verdict = [];
+    modelKey = '';
+    optionsEl.classList.toggle('shown', stage === 'step2');
     openModal();
-    play('finaleHold');
-    // HOLLOW's last words type in its pink and its slow voice; the options come up once they have.
-    wordsEl.textContent = '';
-    const words = HOLLOW_FINALE.lastWords(store.getState().run.unitNumber);
-    wordsQueue?.clear();
-    wordsQueue = createTypeQueue(() => true);
-    wordsQueue.push({
-      length: words.length,
-      cps: HOLLOW_TYPE_CPS,
-      onUnit: (index) => { if (words[index] !== ' ') play('typeTick', { voice: 'hollow' }); },
-      paint: (count, done) => {
-        wordsEl.textContent = words.slice(0, count);
-        wordsEl.classList.toggle('typing', !done);
-        if (done) optionsEl.classList.add('shown');
-      },
-    });
-    wordsQueue.kick();
-    armAtAi = aiNow() + FINALE_STEP_ARM_SEC;
+    const state = store.getState();
+    if (stage === 'step1') {
+      const lines = logEntryLines(12, { charge: FRESH_UNIT_CHARGE });
+      if (lines === null) throw new Error('FinaleChoice: entry 12 is not written');
+      setWords(lines.map((line) => LOG_TEXT.rootLine(line)));
+    } else if (stage === 'followed') {
+      setWords([FINALE_TEXT.followedLine]);
+    } else {
+      setWords([]);
+    }
+    // Arms from the card's own second the first time (the kid may still be clicking the root), from now on a step change.
+    const from = was === 'off' || was === 'waiting' || was === 'closing' ? Math.max(aiNow(), state.hollow.finale.cardAtAi ?? 0) : aiNow();
+    armAtAi = from + FINALE_STEP_ARM_SEC;
     root.classList.remove('armed');
+    paintStep();
+    paintWords();
   }
 
-  // Per tick while choosing: the buttons arm once their time is up (and show, even if the words are still typing).
+  // Per tick while a step is up: the options arm (and show, even if entry 12 is still typing).
   function armIfDue(): void {
-    if (stage !== 'choosing' || root.classList.contains('armed') || !armed()) return;
+    if (root.classList.contains('armed') || !armed()) return;
     root.classList.add('armed');
     optionsEl.classList.add('shown');
   }
 
-  function pick(choice: FinaleChoice): void {
-    if (stage !== 'choosing' || !armed()) return;
-    const refusal = chooseFinale(store, choice);
-    if (refusal !== null) replayAnimation(choice === 'merge' ? merge.button : purge.button, 'refused');
+  function buttonOf(key: number): HTMLElement | null {
+    return rows.find((parts) => parts.row.key === key)?.button ?? null;
   }
 
-  // --- The ending ---
+  function pick(key: number): void {
+    if ((painted !== 'step1' && painted !== 'step2') || !armed() || model === null) return;
+    const row = rowForKey(model, key);
+    if (row === null) return;
+    const state = store.getState();
+    let refusal: string | null;
+    if (painted === 'step1') {
+      refusal = pickStep1(store, row.piece as HollowChoice);
+    } else if (row.piece === 'stay' && row.kind === 'open' && stayCandidates(state).length > 1) {
+      // Review M3: several ★ ON TARGET ships: the sub-row asks which (pickStep2 would refuse with stayPick).
+      openStay();
+      return;
+    } else {
+      refusal = pickStep2(store, row.piece as YouChoice);
+      if (refusal === FINALE_TEXT.stayPick) {
+        openStay();
+        return;
+      }
+    }
+    if (refusal !== null) {
+      const button = buttonOf(key);
+      if (button !== null) replayAnimation(button, 'refused');
+    }
+  }
+
+  function openStay(): void {
+    stayOpen = true;
+    modelKey = '';
+    paintStep();
+  }
+
+  function closeStay(): void {
+    if (!stayOpen) return;
+    stayOpen = false;
+    modelKey = '';
+    paintStep();
+  }
+
+  function chooseStay(slot: number, button: HTMLElement | null): void {
+    if (painted !== 'step2' || !stayOpen || !armed()) return;
+    if (pickStay(store, slot) !== null && button !== null) replayAnimation(button, 'refused');
+  }
+
+  function stayByKey(key: number): void {
+    const ship = model?.stay?.ships.find((candidate) => candidate.key === key);
+    if (ship === undefined) return;
+    chooseStay(ship.slot, stayEl.querySelector<HTMLElement>(`[data-slot="${ship.slot}"]`));
+  }
+
+  function back(): void {
+    if (painted !== 'step2' || !armed()) return;
+    if (stayOpen) {
+      closeStay();
+      return;
+    }
+    backToStep1(store);
+  }
+
+  function cont(): void {
+    if (painted !== 'followed' || !armed()) return;
+    if (continueFollowed(store) !== null) replayAnimation(contBtn, 'refused');
+  }
+
+  // --- The verdict ---
 
   function typeTickFor(voice: EndingVoice, index: number): TypeVoice {
     if (voice === 'us') return index % 2 === 0 ? 'hollow' : 'sys';
-    return ENDING_TYPE_VOICE[voice];
+    return VERDICT_TYPE_VOICE[voice];
   }
 
-  // Every line's row is laid out from the start, still invisible ('pending'), and the ending's room is held at its final
-  // height (holdEndingHeight), so the centred card never grows and the lines already read never move as the next one
-  // comes in (WP11 review: the card grew and re-centred with every line).
-  function lineRow(line: EndingLine, startSec: number): EndingRow {
+  function verdictEntry(line: VerdictRow): VerdictEntry {
     const row = make('div', `fc-line voice-${line.voice} pending`);
-    if (line.voice === 'control') row.append(make('span', 'fc-line-tag', HOLLOW_FINALE.controlTag));
+    if (line.tag !== null) row.append(make('span', 'fc-line-tag', line.tag));
     const text = make('span', 'fc-line-text');
     row.append(text);
-    return { line, row, text, startSec, shown: 0, chimed: false };
+    return { line, row, text, shown: 0, chimed: false };
   }
 
-  function startEnding(): void {
-    const ending = store.getState().hollow.finale.ending;
-    if (ending === null) throw new Error('FinaleChoice: the choice was made but wrote no ending');
+  function startVerdict(): void {
+    const state = store.getState();
+    const ending = state.hollow.finale.ending;
+    if (ending === null) throw new Error('FinaleChoice: a verdict with no lines');
     stopFade();
-    wordsQueue?.clear();
-    stage = 'ending';
-    endingTyped = false;
-    endingAll = false;
+    painted = 'verdict';
+    stayOpen = false;
+    verdictTyped = false;
+    // Reduced motion shows the verdict whole (§2.10).
+    verdictAll = state.ui.reducedMotion;
     root.hidden = false;
-    root.className = `finale-choice ending chose-${ending.choice.hollow}`;
-    card.className = `fc-card chose-${ending.choice.hollow}`;
+    root.className = `finale-choice ending ${verdictTone(ending.choice)}`;
+    card.className = `fc-card ${verdictTone(ending.choice)}`;
     openModal();
     renderKeyCaps(hintEl, HOLLOW_FINALE.endingHint, { own: 'SPACE' });
     hintEl.hidden = false;
     hintEl.classList.add('pending');
-    const starts = finaleEndingLineStartsSec(ending.lines);
-    endingRows = ending.lines.map((line, i) => lineRow(line, starts[i]!));
-    endingEl.replaceChildren(...endingRows.map((entry) => entry.row));
+    verdict = verdictRows(ending, finaleEndingLineStartsSec(ending.lines)).map(verdictEntry);
+    endingEl.replaceChildren(...verdict.map((entry) => entry.row));
     endingEl.hidden = false;
-    holdEndingHeight();
-    paintEnding();
+    holdVerdictHeight();
+    paintVerdict();
   }
 
-  // The ending's height with every line typed in full, measured once with the lines in place (invisible), then held as
-  // its min-height while they type from empty.
-  function holdEndingHeight(): void {
+  // Every line's room is laid out from the start (invisible), and the verdict's height held, so the centred card never
+  // grows and the lines already read never move as the next one comes (WP11 review).
+  function holdVerdictHeight(): void {
     endingEl.style.minHeight = '';
-    for (const entry of endingRows) entry.text.textContent = entry.line.text;
+    for (const entry of verdict) entry.text.textContent = entry.line.text;
     endingEl.style.minHeight = `${Math.ceil(endingEl.getBoundingClientRect().height)}px`;
-    for (const entry of endingRows) entry.text.textContent = '';
+    for (const entry of verdict) entry.text.textContent = '';
   }
 
-  // The ending's letters at this AI second: each line from its start on the ending's clock, at FINALE_ENDING_CPS
-  // (CONTROL's after its chime: a line's room stays dark until its first letter). One typing tick per tick at most.
-  function paintEnding(): void {
+  // The verdict's letters at this AI second, on its own clock (CONTROL's after its chime). One typing tick per tick at most.
+  function paintVerdict(): void {
     const ending = store.getState().hollow.finale.ending;
-    if (stage !== 'ending' || ending === null) return;
+    if (painted !== 'verdict' || ending === null) return;
     const elapsed = aiNow() - ending.startAi;
-    for (const entry of endingRows) {
+    let ticked = false;
+    for (const entry of verdict) {
       const length = entry.line.text.length;
-      if (!entry.chimed && entry.line.voice === 'control' && !endingAll && elapsed >= entry.startSec - CONTROL_CHIME_LEAD_SEC) {
+      if (!entry.chimed && entry.line.voice === 'control' && !verdictAll && elapsed >= entry.line.startSec - CONTROL_CHIME_LEAD_SEC) {
         entry.chimed = true;
         play('typeTick', { voice: 'control' });
       }
-      const count = endingAll ? length : unitsAt(elapsed, entry.startSec, FINALE_ENDING_CPS, length);
+      const count = verdictAll ? length : unitsAt(elapsed, entry.line.startSec, FINALE_ENDING_CPS, length);
       if (count === entry.shown) continue;
-      if (!endingAll && count > entry.shown && entry.line.text[count - 1] !== ' ') {
+      if (!verdictAll && !ticked && count > entry.shown && entry.line.text[count - 1] !== ' ') {
         play('typeTick', { voice: typeTickFor(entry.line.voice, count - 1) });
+        ticked = true;
       }
       entry.shown = count;
       entry.row.classList.toggle('pending', count === 0);
       entry.row.classList.toggle('typing', count > 0 && count < length);
       entry.text.textContent = entry.line.text.slice(0, count);
     }
-    const last = endingRows[endingRows.length - 1];
-    if (last !== undefined && last.shown >= last.line.text.length) endingDone();
+    const last = verdict[verdict.length - 1];
+    if (last !== undefined && last.shown >= last.line.text.length && !verdictTyped) {
+      verdictTyped = true;
+      hintEl.classList.remove('pending');
+    }
   }
 
-  function endingDone(): void {
-    if (endingTyped) return;
-    endingTyped = true;
-    hintEl.classList.remove('pending');
-  }
-
-  // A click, SPACE or ENTER on the ending: finish the typing, or (typed) end it now.
-  function advanceEnding(): void {
-    if (stage !== 'ending') return;
-    if (!endingTyped) {
-      endingAll = true;
-      paintEnding();
+  // A click, SPACE or ENTER on the verdict: finish the typing, or (typed) end it now.
+  function advanceVerdict(): void {
+    if (painted !== 'verdict') return;
+    if (!verdictTyped) {
+      verdictAll = true;
+      paintVerdict();
       return;
     }
     skipFinaleEnding(store);
     close();
   }
 
-  // Gone at once, no fade: the run moved on (the LANDING REPORT is up, a NEW RUN began).
-  function closeNow(): void {
+  // --- Closing ---
+
+  function reset(): void {
     stopFade();
-    wordsQueue?.clear();
     closeModal?.();
     closeModal = null;
-    showAtAi = Infinity;
     armAtAi = Infinity;
-    endingRows = [];
-    stage = 'off';
+    stayOpen = false;
+    model = null;
+    modelKey = '';
+    rowsKey = '';
+    rows = [];
+    verdict = [];
+    wordLines = [];
+    wordEls = [];
+    wordShown = [];
+  }
+
+  function clearDom(): void {
     root.hidden = true;
     root.className = 'finale-choice';
+    card.className = 'fc-card';
+    optionsEl.replaceChildren();
+    stayEl.replaceChildren();
+    wordsEl.replaceChildren();
     endingEl.replaceChildren();
     endingEl.style.minHeight = '';
   }
 
+  // Gone at once, no fade: the run moved on (the LANDING REPORT is up, a NEW RUN began, a reset).
+  function closeNow(): void {
+    reset();
+    painted = 'off';
+    clearDom();
+  }
+
+  // The verdict is over: the card fades out over FINALE_CARD_FADE_MS (ending.css .finale-choice.closing).
   function close(): void {
-    if (stage === 'off' || stage === 'closing') return;
-    stopFade();
-    wordsQueue?.clear();
-    closeModal?.();
-    closeModal = null;
-    showAtAi = Infinity;
-    armAtAi = Infinity;
-    endingRows = [];
+    if (painted === 'off' || painted === 'closing') return;
+    reset();
     if (root.hidden) {
-      stage = 'off';
+      painted = 'off';
       return;
     }
-    stage = 'closing';
+    painted = 'closing';
     root.classList.add('closing');
     fadeTimer = setTimeout(() => {
       fadeTimer = null;
-      stage = 'off';
-      root.hidden = true;
-      root.className = 'finale-choice';
-      endingEl.replaceChildren();
-      endingEl.style.minHeight = '';
+      painted = 'off';
+      clearDom();
     }, FINALE_CARD_FADE_MS);
   }
 
   // --- What the store says ---
 
   function sync(): void {
-    const state = store.getState();
-    const finale = state.hollow.finale;
-    if (state.run.phase !== 'landing') {
-      // A NEW RUN, a reset or the LANDING REPORT: nothing of the card stays (the report waited for the ending).
-      if (stage !== 'off') closeNow();
+    const want = cardStage(store.getState());
+    if (want === 'off' || want === 'waiting') {
+      if (painted === 'verdict') close();
+      else if (painted !== 'off' && painted !== 'closing') closeNow();
       return;
     }
-    if (finale.phase === 'step1' && finale.rootFell) {
-      if (stage === 'off') {
-        stage = 'waiting';
-        showAtAi = finale.cardAtAi ?? state.clock.aiSec + FINALE_OPEN_DELAY_SEC;
-      } else if (stage === 'choosing') {
-        paintPrice();
-      }
+    if (want === 'verdict') {
+      if (painted !== 'verdict') startVerdict();
+      else paintVerdict();
       return;
     }
-    if (finale.phase === 'done' && (finale.hollow === 'purge' || finale.hollow === 'merge')) {
-      // The choice writes its ending in the same update as its phase (systems/finale.ts): a chosen finale without one
-      // is a bug, never a card to close quietly.
-      if (finale.ending === null) throw new Error(`FinaleChoice: the finale chose '${finale.hollow}' but has no ending`);
-      if (finaleEndingShowing(state)) {
-        if (stage !== 'ending' && stage !== 'closing') startEnding();
-        return;
-      }
-    }
-    if (stage === 'waiting' || stage === 'choosing' || stage === 'ending') close();
+    if (painted !== want) showStep(want);
+    else paintStep();
   }
 
-  const onPurge = (event: MouseEvent): void => { event.stopPropagation(); pick('purge'); };
-  const onMerge = (event: MouseEvent): void => { event.stopPropagation(); pick('merge'); };
   const onCard = (): void => {
-    if (stage === 'ending') advanceEnding();
-    else if (stage === 'choosing') wordsQueue?.finishAll();
+    if (painted === 'verdict') advanceVerdict();
+    else if (painted === 'step1' || painted === 'followed') {
+      wordsAll = true;
+      paintWords();
+    }
   };
-  purge.button.addEventListener('click', onPurge);
-  merge.button.addEventListener('click', onMerge);
+  const onBack = (event: MouseEvent): void => { event.stopPropagation(); back(); };
+  const onCont = (event: MouseEvent): void => { event.stopPropagation(); cont(); };
   root.addEventListener('click', onCard);
+  backBtn.addEventListener('click', onBack);
+  contBtn.addEventListener('click', onCont);
   const offKeys = registerKeys({
     layer: 'choice',
-    codes: ['Digit1', 'Numpad1', 'Digit2', 'Numpad2', 'Space', 'Enter', 'NumpadEnter', 'KeyP', 'KeyM'],
+    codes: [...DIGITS, ...NUMPAD, 'Escape', 'Space', 'Enter', 'NumpadEnter', 'KeyP', 'KeyM'],
     onDown: (code) => {
       if (code === 'KeyP') { togglePause(store); return; }
       if (code === 'KeyM') { toggleMuted(); return; }
-      if (stage === 'ending') { advanceEnding(); return; }
-      if (code === 'Digit1' || code === 'Numpad1') pick('purge');
-      else if (code === 'Digit2' || code === 'Numpad2') pick('merge');
+      if (painted === 'verdict') {
+        if (code === 'Space' || code === 'Enter' || code === 'NumpadEnter') advanceVerdict();
+        return;
+      }
+      if (code === 'Escape') { back(); return; }
+      if (code === 'Enter' || code === 'NumpadEnter') { cont(); return; }
+      const digit = code.startsWith('Digit') ? Number(code.slice(5)) : code.startsWith('Numpad') ? Number(code.slice(6)) : NaN;
+      if (!Number.isInteger(digit)) return;
+      if (stayOpen) stayByKey(digit);
+      else pick(digit);
     },
   });
   const unsubs = [
     store.subscribe((s) => s.hollow.finale.phase, sync),
     store.subscribe((s) => s.hollow.finale.ending, sync),
     store.subscribe((s) => s.run.phase, sync),
-    store.subscribe((s) => s.ui.memoryRev, sync),
-    store.subscribe((s) => s.clock.paused, () => { lastPrice = ''; sync(); }),
+    store.subscribe((s) => s.clock.paused, () => { modelKey = ''; sync(); }),
   ];
-  // The card's delay, its arming and the ending are AI time (the LANDING REPORT waits on the same clock), and a repair
-  // spends charge in place: all are read per tick.
+  // The card's delay, its arming, entry 12, the verdict and the prices (a repair spends charge in place) are AI time: all
+  // are read per tick.
   const offTick = onPostTick(() => {
-    if (stage === 'waiting' && aiNow() >= showAtAi) showCard();
-    if (stage === 'choosing') {
+    sync();
+    if (painted === 'step1' || painted === 'followed' || painted === 'step2') {
       armIfDue();
-      paintPrice();
-    } else if (stage === 'ending') {
-      if (!finaleEndingShowing(store.getState())) close();
-      else paintEnding();
+      paintWords();
     }
   });
   sync();
 
   return () => {
-    purge.button.removeEventListener('click', onPurge);
-    merge.button.removeEventListener('click', onMerge);
     root.removeEventListener('click', onCard);
+    backBtn.removeEventListener('click', onBack);
+    contBtn.removeEventListener('click', onCont);
     offKeys();
     offTick();
     unsubs.forEach((unsub) => unsub());
-    stopFade();
-    wordsQueue?.clear();
-    closeModal?.();
-    closeModal = null;
+    guard.dispose();
+    reset();
   };
 }

@@ -1674,3 +1674,66 @@ No check was dropped. Each one now checks the two-step flow, mostly through `sup
    - CARD's card should treat `'verdict'` as up (`finaleCardUp`) and know that `skipFinaleEnding` advances the phase.
 5. **The strip (`script.ts:2398`)** shows `FINALE_TEXT.strip` only at `'step1' | 'step2'`. Whether `'verdict'` needs a
    strip line is the lead's call.
+
+## Deviations (Track CARD)
+
+Recorded by Track CARD (branch `card-7a`, from `found-7a` at 2625aa4). Built: the two-step FINALE card
+(`components/run/FinaleChoice.ts`), its models (`systems/finale-card.ts`, pure), the card's markup (index.html
+`#finaleChoice`), `styles/ending.css` (game.css's WP11 `.finale-choice` block deleted and moved here, grown two steps and a
+phone sheet), the FUEL notch's SUNSET tooltip (`fuelStarTitle`), and the two cues (`audio.ts` `spareNotes`, `sunsetRumble`;
+`audio-cues.ts`'s CARD lines). Suite: `ending/card-models` (50 checks, about 1.3 s). No save field, no tuning value changed.
+
+1. **The card's models are pure, in CARD's `systems/finale-card.ts`** (beside `fuelStarTitle`): `cardStage(state)` (which face
+   is up: `off`, `waiting` for `cardAtAi`, `step1`, `followed`, `step2`, `verdict`), `finaleCardModel(input)` over injected
+   OptionStates (M2, m11), `meterModel`, `stayRowModel`, `rootWordsAt` (entry 12 from `cardAtAi`, m8), `verdictRows`,
+   `verdictTone`. FinaleChoice only paints them and calls FINALE's actions; it never re-derives a price.
+2. **The card is two-step whatever `twoStep` says** (the foundation's Deviation 1 holds): with the gate down (this branch) the
+   root's fall opens step 1 at once, `pickStep1` then `pickStep2` confirm PURGE or MERGE with REASSIGNMENT, and the verdict face
+   types WP11's ending at `'done'`. SPARE, SUNSET and STAY stay hidden (the neutral stubs) until FINALE merges.
+3. **Phases the card reads:** `'done'` shows the verdict while `ending.untilAi` is ahead (WP11's ending, and FINALE's verdict
+   if it moves to `'done'` before its clock ends); `'last-landing'` closes the card (R15: the reopened landing is the kid's).
+   `'verdict'` with no `ending` throws.
+4. **Rows:** an open option shows its meter and caption (`FINALE_TEXT.price.charge` / `.fuel`) and `NOW:`; a named `needs`
+   option is greyed with its need line as the caption (its meter short); a `???` shows only its need line (no command,
+   meaning or meter) and wears no ending's colour, so nothing names it; `hidden` rows are absent and the others keep their
+   keys. An open CONTACT's caption is `FINALE_TEXT.needs.signals` (no `price.signals` word exists; 7d may add one). SUNSET
+   after SPARE is marked ruled out (struck through) beside FINALE's `046 HAS THE SHIP` need. The NEXT RUN: row keeps its room
+   with a blank line on desktop (R12); the phone drops the blank row to save height.
+5. **STAY (M3):** the card opens the sub-row itself when `stayCandidates` holds more than one ship (calling `pickStep2` first
+   would buzz a refusal at the kid), and also on `pickStep2`'s `FINALE_TEXT.stayPick` refusal. The sub-row has its own
+   `[ESC] BACK` and hides the step's. With no candidate the row's command names the colony just founded (`landing.colony`),
+   else `???`.
+6. **Entry 12** types on the card in HOLLOW's pink at `HOLLOW_TYPE_CPS`, one line after another with `FINALE_ENDING_GAP_SEC`,
+   on the AI clock from `cardAtAi` (about 16 s for the three lines). A click on the card shows it whole; the options arm at
+   `FINALE_STEP_ARM_SEC` whatever is typed. A step 1 seen again after `[ESC] BACK` shows it whole (the clock ran on). Reduced
+   motion shows the verdict whole (§2.10) but still types entry 12 (it is the story's one long line, and a click ends it).
+7. **Words borrowed until FINALE moves them:** the verdict's CONTROL tag and its hint read `HOLLOW_FINALE.controlTag` and
+   `.endingHint` (in M5's keep-set). The FUEL notch's title is composed from FINALE's words: `★ 20% · SUNSET: Take the empty
+   ship and go.` then `FINALE_TEXT.price.fuel(have)` or `.needs.fuel(have)` (the landing's end FUEL once it ended, the live
+   FUEL before); only on the final ship with `twoStep` up and SUNSET built.
+8. **Cues (the CARD lines of `audio-cues.ts`):** `'finale-open'` step 1 plays `finaleHold` (again after BACK, so a quick
+   back-and-forth can overlap two holds), step 2 plays CONTROL's chime (`typeTick` control: its quote heads the step) instead
+   of a second 9 s hold; SPARE's `'finale-chosen'` plays `spareNotes`; `'finale-step2'` plays `sunsetRumble` on SUNSET, else
+   the stamp. `'finale-open'` and `'finale-step2'` are emitted only with `twoStep` up (foundation Deviation 9), so on this branch
+   the card opens silent; FINALE merges first and raises the gate. (The old card played `finaleHold` itself; the new one leaves
+   every sound to the events.)
+9. **Look:** each ending has a tone named by local custom properties on `.finale-choice` (`--fc-*`, all tokens): PURGE cold
+   white, MERGE pink into blue, SPARE pink into the ship's amber, SUNSET the flare into dusk, STAY the soul green,
+   REASSIGNMENT CONTROL's amber, CONTACT the signal's pale blue. Step 2's card cools from HOLLOW's pink to the mind's blue.
+   The verdict's card carries both choices (`chose-<hollow> you-<you>`: SPARE's colours moving apart, SUNSET's dusk). The root's
+   name arrives with a short glitch (none in reduced motion).
+10. **The markup the e2e taps:** `#finaleChoice` keeps `.armed`; each row is `#fc<Piece>` (`#fcPurge`, `#fcMerge`, `#fcSpare`,
+    `#fcSunset`, `#fcStay`, `#fcReassignment`, `#fcContact`) with `data-piece`; STAY's ships are `.fc-stay-ship[data-slot]`;
+    `#fcBack`, `#fcCont`. A step is two presses now, so `playthrough.mjs:700`, `resume.mjs:383` and `run-flow.mjs:413` (which tap
+    `#fcPurge` and wait for the ending) must tap `#fcReassignment` (or press 3) once step 2 is up and armed.
+11. **No longer read by the card** (for M5's fix pass): `chooseFinale`, `finaleChoiceRefusal`, `finaleEndingShowing`,
+    `podsEatenHere`, the `FinaleChoice` type, and `HOLLOW_FINALE`'s `choiceKicker`, `choiceTitle`, `choiceSub`, `purgeKey`,
+    `mergeKey`, `purge`, `merge`, `purgeCmd`, `mergeCmd`, `purgeWhat`, `mergeWhat`, `purgeCost`, `mergeGain`, `mergePrice`
+    (some still read by `debug.ts`, `words.test` and `wp11/p2/views`). `lastWords` is still `finale.ts`'s.
+
+**Patches requested:**
+- **FINALE** (`data/finale-text.ts`): `fuelStar(have)` for the notch (Deviation 7; CARD then reads it instead of composing),
+  `verdictTag` and `verdictHint` (the CONTROL tag and `click or [SPACE] to go on`, so the fix pass can delete HOLLOW_FINALE's
+  copies), and optionally `price.signals(have, need)` for 7d.
+- **The lead (e2e, at the batch end):** Deviation 10's three taps, and `phone.mjs`'s FINALE sheet (rows, BACK and CONTINUE are
+  buttons; the phone hides the digit caps).
