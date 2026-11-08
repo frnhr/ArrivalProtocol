@@ -7,7 +7,7 @@ import type { Reservations } from '@/types/map';
 // boot, the signal ship's `▓▓░▓` file worth SIGNAL_EVENT_FRAGMENTS, the gone resident behind a `?` card (its note's fragment
 // as slice 5 built it), and the chart's `▓░` glyph on the `?` ships that carry fragments. Down: the three are ordinary cards,
 // the old colony and the signal ship hold nothing, and only the notes collect signals (slice 5's R18).
-export const UNKNOWN_EVENTS_BUILT: boolean = false;
+export const UNKNOWN_EVENTS_BUILT: boolean = true;
 
 export type UnknownEvent = NonNullable<Reservations['unknownEvent']>;
 

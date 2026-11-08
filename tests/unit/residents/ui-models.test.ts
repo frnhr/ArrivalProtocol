@@ -87,11 +87,12 @@ withResidentsBuilt(ALL, () => {
   check('glyph: none before the run holds a signal (PLOVER and SKYLARK carry one)', !signalGlyph(desk, 10) && !signalGlyph(desk, 12));
   const found = deskAt([0, 2, 4]);
   found.run.residents.signals.push({ slot: 4, depth: 3, source: 'note', n: 1 });
-  // Review D4: never where the card says `unknown` (it would tell a departed resident from a sleeper or a surprise), and in
-  // slice 5 every card ahead does: the glyph shows nowhere yet.
-  check('glyph (review D4): once one is found (HERON\'s), still none on PLOVER and SKYLARK: their cards say `unknown`',
-    !signalGlyph(found, 10) && !signalGlyph(found, 12) && residentCardRow(found, 10)?.value === T.card.unknown
-    && !chartModel(found).nodes.some((node) => node.signal));
+  // Review D4: never where the card says `unknown` (it would tell a departed resident from a sleeper or a surprise). Slice 7d
+  // (R40, OPEN-DECISIONS 49): the `?` ships that carry fragments wear it, PLOVER (the gone resident) and KITTIWAKE (the
+  // signal ship): their desk card is `??? · NO TRANSPONDER`, which promises no kind. SKYLARK's `unknown` card still none.
+  check('glyph (review D4, 7d R40): once one is found (HERON\'s), on the `?` PLOVER and KITTIWAKE; none on SKYLARK, whose card says `unknown`',
+    signalGlyph(found, 10) && signalGlyph(found, 14) && !signalGlyph(found, 12) && residentCardRow(found, 12)?.value === T.card.unknown
+    && chartModel(found).nodes.filter((node) => node.signal).map((node) => node.slot).join() === '10,14');
   // A card that already shows the kind (slice 7's; here a record of the ship put in by hand, off the route) gets it.
   const named = structuredClone(found);
   named.run.residents.met.push({ slot: 10, depth: 4, kind: 'left', name: 'BOSUN', shown: 'unknown', job: null, fate: 'left', podsParkedLocked: 0, leftoversEaten: 0 });
@@ -100,7 +101,7 @@ withResidentsBuilt(ALL, () => {
   check('glyph: never on the visited HERON, a ship with no fragment (CORMORANT), a sleeper or a corrupted ship',
     !signalGlyph(named, 4) && !signalGlyph(named, 15) && !signalGlyph(named, 7) && !signalGlyph(named, 9));
   const chart = chartModel(named);
-  check('glyph: the chart\'s nodes carry it, and the legend names it', chart.nodes.filter((node) => node.signal).map((node) => node.slot).join() === '10'
+  check('glyph: the chart\'s nodes carry it, and the legend names it', chart.nodes.filter((node) => node.signal).map((node) => node.slot).join() === '10,14'
     && chartLegend(chart).some((item) => item.kind === 'signal' && item.words === T.chart.legend));
   withResidents({ left: false }, () => check('glyph: never for a kind this build does not play', !signalGlyph(named, 10)));
 });
