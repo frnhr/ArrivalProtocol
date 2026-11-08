@@ -132,7 +132,7 @@ Status words:
 36. **SURVEY starts by itself and stops at 100% mapped** (R7). BUILT. A PAUSE button in the SITES window releases its
     thread; there is no new key.
 37. **SURVEY claims a thread only if one stays free,** and yields to AUTOBURN's and AUTODROP's claims, never to the
-    kid's ops (R8). BUILT.
+    kid's ops (R8). BUILT. Since the review fixes it steps aside whenever either holds a thread (55).
 38. **The sleeper doesn't teach SURVEY;** its gift stays 4 cycles (R17). BUILT.
 
 ## Slice 7 (endings and traces), from the plan; numbers are confirmed as each sub-slice lands
@@ -188,3 +188,25 @@ Status words:
       pods already down. Both were rejected: the first costs the kid time, the second changes scoring.
     - **Result:** v2 now shows the bad guess before its first pod on 42 of 42 ships (it was 20), and scores −0.7
       points against GOOD (it was −14.0). v3 scores +0.0. No SURVEY and v1 are unchanged.
+53. **SURVEY v1 is too flat.** It earns +0.24 cycles per POOR ship for a price of 2, so it pays back after about 8 POOR
+    ships, and a route meets about 1.3 (slice 6 review, "For the designer" 1–2; the sweep's 42 POOR ships, seeds 1–10).
+    v1 can't see ground, and the drop-dot swath (52) is v2+'s, so all it adds is ROOM, WIDTH and a blind move. v1 + v2
+    pays back after about 3.5 POOR ships. DEFERRED to slice 8 (R25 keeps prices fixed in slice 6). The options:
+    - price v1 at 1 cycle (03 §3.2 already says "SURVEY cheaper");
+    - let v1 rate ground roughly (say, `GROUND ?` against `FLAT?` on a guess the swath passes);
+    - or raise the POOR odds where SURVEY can open.
+54. **v3 over v2 adds +0.02 cycles for 4 more** (+0.7 points in the sweep). Its value is only the thread: the kid's
+    second op on a 2-thread Core, and mapping on a worn Core where v1/v2 wait all ship. The sweep can't see that, since
+    its kid runs no ops. DEFERRED to slice 8, to be measured with a kid who SCANs and DELETEs seeds on a POOR ship that
+    HOLLOW boards (CORMORANT, seed 7).
+55. **SURVEY steps aside while AUTOBURN or AUTODROP holds a thread** (slice 6 review M1; the lead's decision). BUILT in the
+    review fixes. Before, AUTOBURN's claim at START BURN took the thread SURVEY keeps free, so both held one and the capture
+    flew at a 0.5 reactor cap, not 0.75 (0.43 degraded, 0.30 failing), a burn the kid never chose. Now a preempting claim
+    takes SURVEY's thread whenever it holds one (`ops-core.ts reserveThread`), and SURVEY claims no spare thread while
+    either skill holds one (`survey.ts syncThread`). It never adds to their thrust or thread cost.
+    - **Measured** on seed 7's CORMORANT (healthy, the strip's kid, AUTOBURN v1 engaged within LOCK RANGE, FUEL at ORBIT
+      LOCK): no SURVEY 31.3%; SURVEY v1 or v2 before the fix 30.3%, the capture burn at 0.5 and half as long again (352
+      ticks against 233); after the fix 30.7%, the burn at 0.75 as with no SURVEY. The 0.6% left is the approach's THRUST
+      LIMIT while SURVEY maps (the kid's own burns, before AUTOBURN engages). v3 holds no thread: 31.3% either way.
+    - It captured either way here; the cut mattered most on a damaged reactor. To reverse: drop the step-aside in both
+      places, and correct R8's text back.

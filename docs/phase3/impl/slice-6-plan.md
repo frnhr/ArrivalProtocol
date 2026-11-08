@@ -137,14 +137,19 @@ Items tagged **[FRAN]** change gameplay. Every item has one recommendation.
    - **Recommend:**
      - it claims a thread only when one stays free after the claim (`SURVEY_KEEP_FREE_THREADS 1`), so it never takes the
        kid's last thread;
-     - it **yields** its thread to AUTOBURN's and AUTODROP's claims, and claims again when a spare one frees;
+     - it **yields** its thread to AUTOBURN's and AUTODROP's claims, and **steps aside** while either holds a thread
+      (review M1, the lead's correction): it claims no spare thread beside them, and claims again once they let go;
      - it never yields to the kid's own ops or to SENTRY's pre-empt. That is 03's "one op fewer".
    - **Why:**
      - a 2-thread Core with one op running would otherwise leave AUTOBURN no thread at START BURN, so a skill would
        sabotage a skill;
      - with a worn Core (1 thread) SURVEY would hold the only thread for minutes.
 
-     The thrust cost (C4) is the same whoever holds the thread, so the capture still pays it.
+     **Corrected (review M1).** This line used to say "the thrust cost (C4) is the same whoever holds the thread, so the
+     capture still pays it". That held only with no thread free. SURVEY keeps one free, so AUTOBURN's claim took the free
+     one and both held (0.5, not 0.75). Now a preempting claim takes SURVEY's thread whenever it holds one, and SURVEY claims none while
+     AUTOBURN or AUTODROP holds one: SURVEY never adds to their thrust or thread cost. The capture flies at 0.75, as it
+     would with no SURVEY aboard.
    - **Built as** `ops-core.ts reserveThread(owner, { yieldable })` and `canClaimThread()` (§2.4).
 9. **R9. The sites (01 §3.13).** Per POOR planet there are the guesses plus `lzs.length + SURVEY_EXTRA_SITES` (3)
    candidates:
@@ -420,6 +425,7 @@ from its boot, and then plays POOR (R2). That is intended, and the migration tes
 | `ops-core.ts` | the reservation's `yieldable` flag | beside `reservedThreads`, reset with the world |
 | `survey.ts` | `lastRunning`, the last `'survey-state'` it emitted (review m3), reset through `onWorldReset`; the machine itself is `landing.survey`, and whether it holds a thread is `claimed`, reconciled each tick with `holdsThread('survey')` | an emit "on a change" needs the last state, and a saved field for it would be a save change |
 | `survey-hud.ts` | none | |
+| `SitesWindow.ts` | `selected` (the site the kid clicked, shared with the plot's layer) and `repaint` (the mounted window's repaint, for `selectSite`), recorded by the review fixes (review m9) | a view's selection and its own repaint hook; reset on a world change (`offWorld`), on a move (`'lz-moved'`), and at unmount |
 
 ### 2.4 Seams the FOUNDATION builds (behaviour-neutral)
 
@@ -1490,3 +1496,110 @@ beyond those was touched and the save is untouched.
 ### Patches requested
 
 None. SITES needed no change outside its files and marked spots.
+
+## Deviations (review fixes)
+
+Recorded by the fix pass on `claude/modest-hawking-209t0f` (from a0fd347), against `slice-6-review.md` and the lead's decisions
+on it. Each finding there is marked with what was done. No saved field, no save bump, no tuning value moved, and no
+`SurveyRecord` shape change.
+
+### What changed
+
+1. **B1, a move under a falling pod.** `survey-model.ts assignRefusal` gains `'falling-under'` (`A POD IS FALLING — WAIT FOR
+   IT`, `survey-text.ts`), after `'falling'`. It judges every falling pod with `pendingTouchdowns` (so `classifyLanding` against
+   the fill as it will be) twice: against `landing.lzs` now, and against them with the moved LZ on the site. Any change of
+   place or LZ refuses. The review's optional refusal for a pod already *down* inside the destination is not built: its score
+   is fixed, so it is cosmetic. Pinned by `survey/model` (a pod falling off-site over SITE 1) and by the review's repro as a
+   `survey/flow` case (seed 7, CORMORANT, v2, launched off-site over SITE 1: refused, the pod lands off-site, the move is free
+   once it is down).
+2. **M1, the lead's decision: SURVEY steps aside** while AUTOBURN or AUTODROP holds a thread, so it never adds to their thrust
+   or thread cost. Two places:
+   - `ops-core.ts reserveThread`: a preempting claim takes a yieldable reservation whenever one is held, a thread free or
+     not (before, only with none free). `canClaimThread` is unchanged.
+   - `survey.ts syncThread`: SURVEY wants no thread while `holdsThread('autoburn')` or `holdsThread('autodrop')` (it releases
+     a held one, and claims none beside them), and claims again once they let go. The Skills row reads `WAITS FOR A SPARE
+     THREAD` meanwhile.
+
+   R8's text is corrected in place. Pinned by flow cases: SURVEY v1 claimed, then AUTOBURN's and AUTODROP's claim each with a
+   thread free: the reactor cap is 0.75 at the claim and after, one thread busy, SURVEY waiting, and claiming again on the
+   release. A real AUTOBURN v1 capture (engaged within LOCK RANGE by the strip's kid, AUTOBURN mounted for the case) flies
+   at 0.75 with SURVEY v1 aboard, never both threads held. **Measured** (FUEL at ORBIT LOCK, healthy CORMORANT): no SURVEY
+   31.3%; v1 or v2 before the fix 30.3% (cap 0.5, the burn 352 ticks against 233); after it 30.7% (cap 0.75); v3 31.3%. The
+   0.6% left is the approach's THRUST LIMIT before AUTOBURN engages. OPEN-DECISIONS 55.
+3. **m1.** SURVEY.skl aboard but OFF: SITES's status `SURVEY OFFLINE — REPAIR IT`, the guesses `GROUND ?` (the rows branch on
+   `fileLevel(memory, 'survey') !== null`, not on the version), the empty line `REPAIR SURVEY.skl TO MAP AND FIND BETTER
+   SITES`, and a new refusal `'offline'` (same words) for the pills, after `'closed'`'s phase check. `'closed'` keeps "no
+   SURVEY aboard, not built, a GOOD planet, no flight". The SITES words block in `support/words` now reads the pod-only
+   never-say rules (`offline`, `lost`) as the guard at its top does: they bind a line that talks about pods. `ARCHIVE OFFLINE`
+   and `RUN SAVE OFFLINE` are the precedent.
+4. **m2.** At v3 the pause reads `SURVEY v3 · PAUSED` (`window.status.pausedFree`), and the button's title is `Pausing stops
+   the mapping; RESUME starts it again`: the model's `pause` gains `title`, painted by SitesWindow. PAUSE stays offered at
+   v3, since it still stops the mapping.
+5. **m3.** `PLANET MAPPED · n SITES` (TERMINAL and SITES) and `DONE · n SITES` count the candidates only
+   (`survey-selectors.ts candidatesFound`): CORMORANT says 4. `SurveyRecord.found` keeps its meaning (candidates and wrecks).
+6. **m4.** `1 POD` (`sites-text.ts podsWord`; the LZ row's parameter is `podCount`, worst case 16 in `SITES_WORST`).
+7. **m5 and A1, with no record change.** `state/survey-selectors.ts surveyNetOutcome(record)` returns, per LZ the record
+   mentions (a move, or bad ground kept), `{ lz, endedSite, moved, groundBefore, groundAfter, knownBefore, knownAfter }`:
+   - after: `badKept` names every LZ left on bad ground;
+   - before: an LZ's first move leaves its guess; an LZ back on its guess started on the ground it ended on; with every move
+     off bad ground the guess was bad, with none it was FLAT;
+   - with some but not all, the record can't tell which move left the bad ground: `groundBefore` is null, and the epilogue
+     should claim nothing about the guess. That needs a move onto a bad candidate and off again, which is rare.
+
+   The SHIP CARD's `POOR · LZ-B MOVED` names only `moved` LZs: away and back reads `SURVEYED, KEPT`. Slice 7's epilogue
+   should read this too (`groundBefore === 'wet' && groundAfter === 'flat' && knownBefore !== null` is "you moved LZ-B off
+   the lake").
+8. **m6.** v2 rates only while `surveyRunning` is `'running'` or `'done'`, in the post tick and in `afterMapping` (so
+   `__ap.survey.map` rates as the tick would). The R11 latch case (rim mapped at v1, then v2) is `'done'` and still rates.
+9. **m7.** CONTROL's reveal quip only when the site is a guess. A bad candidate the kid moved onto gets the TERMINAL's
+   `> SURVEY: LZ-B IS WET ✕` (by v2), or the echo's tail (by a touchdown).
+10. **m8.** The report suffix names any site that is not the LZ's own guess: ` · LZ-A GUESS` for another LZ's.
+11. **m9.** SitesWindow's two module variables (`selected`, `repaint`) are listed in §2.3.
+12. **m10** left, as the lead decided: TRAINING's demos keep their words, like the older demos. **m11**: no action. The
+    dead Nav Plotter path is a flow case now.
+13. **A4.** `siteVisible(site)` and `lzOnSite(landing, siteId)` in `state/survey-selectors.ts`. `survey-model.ts`
+    (`'not-found'`, `'taken'`, `bestSwap`), `survey.ts` (its `lzOn` is gone) and `survey-hud.ts` (`freeSites`, the pill's
+    owner) read them. The report suffix's own hard count is left (the review's third copy).
+
+### Tests
+
+- `survey/model`: `'falling-under'` both ways, `'offline'`, `surveyNetOutcome` (none, off a bad guess, away and back,
+  a kept bad guess, off FLAT onto bad, the ambiguous case, a move off bad ground the moves don't have throws).
+- `survey/ui-models`: m1 (status, `GROUND ?`, the pills, the empty line), m2, m4, m5 (away and back reads KEPT), m8; the
+  done count without the wreck.
+- `survey/flow` (about 22 s, was 14): B1, M1 (both claims, a real AUTOBURN capture), m6 (a paused v2 rates nothing it finds,
+  then rates on RESUME), m7 by v2 (LZ-B moved onto WET SITE 3 at v1, rated by v2), a touchdown reveal on SITE 3 with the
+  report's ` · SITE 3 · WET · n HARD` and no CONTROL joke, a touchdown reveal on a mislanded pod (LZ-B written full by hand:
+  the next pod is mislanded, lands hard on the ROCKY guess and shows it), v2 in the LANDING with the Nav Plotter dead (no dot,
+  no throw, the ship's swath maps on).
+- New `survey/replan` (about 4 s): seed 7's CORMORANT with MOTH written into its reservation. Between windows, with a pod
+  down, LZ-B moves to SITE 5: AUTODROP v3's plan rows for LZ-B then lie in LZ-B's new windows, none at an old time, and every
+  LZ-B pod lands in SITE 5, in the LZ, soft; the same with MOTH's RUN THE DROPS (the `'resident'` controller, every pod
+  launched by MOTH).
+- The quick tier: 207 passed, 0 failed, 11 balance-only skipped, in 158 s (it was 146 s; the budget is 265 s).
+
+### e2e
+
+- New `tests/e2e/scenarios/survey.mjs`, registered as `survey`. It covers seed 7's CORMORANT by `__ap.route`, `__ap.skill`
+  and `__ap.survey`:
+  - no SURVEY: the first touchdown on LZ-B reveals ROCKY, with CONTROL's line, the stamp, the echo, the row and the report;
+  - v2: SITES maps (MAPPED % climbs), PAUSE and RESUME, then rated with the rim mapped; the NAV PLOT's wedge and the site
+    brackets; the strip's swap in orbit; SITE 5's row and its pill move LZ-B; at the DESK the window and its tab are gone;
+  - the phone's SITES tab.
+- `playthrough`: CORMORANT's card rows, its boot line's place (after the ECC lines, before the deliveries; none on the GOOD
+  ships), and at its landing the touchdown reveal (the stamp, CONTROL's two lines, the row's `· ROCKY · n HARD`). CORMORANT
+  still lands at once (LAND_BY_STRIP's default 1,2,6), and every points check already read the page, so no check was
+  weakened. The scenario passed 269/269 with the fixes before these checks were added.
+  - The stamps are read from a MutationObserver on `#stampLayer` alone. A first version watched the whole page (`body`,
+    subtree): its callback ran on every frame's DOM and slowed the real-time flights enough that CORMORANT's flight ran
+    past SHIP_MAX_MS (360 s, twice). On the stamp layer alone CORMORANT locked in 333 s. That flight was already close to
+    the limit before slice 6 (315 s and 342 s in earlier logs), so it is the scenario's tightest margin.
+  - Two of the runs also died at LAST LIGHT with `Execution context was destroyed` (a navigation). A run with navigation
+    logging saw none, and the final run passed. Not reproduced, so not chased further.
+- `map-desk` (seed 4): HALCYON's `SITE DATA · GOOD`; from VESPER's DESK (`__ap.route`) CORMORANT's POOR card in the warning
+  tone, `LZ: 2 · SURVEY NEEDED`, and TRAINING's AHEAD second line.
+- `run-flow` (seed 4, CORMORANT POOR, ROCKY or WET by the seed): the card's rows, the boot line, and the report's bad-ground
+  suffix shown by the first touchdown.
+- `phone`: on ARES-VII (GOOD) the SITES tab and window are hidden. Review m12: no scenario iterates every dock item (phone
+  taps four named tabs), so none needed to skip the `survey-only` ones.
+- Pass counts, each run alone: survey 26/26, playthrough 278/278, map-desk 87/87, run-flow 81/81, phone 112/112.
