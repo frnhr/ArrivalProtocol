@@ -10,7 +10,6 @@
 //   pause (the review's M2): the duel runs with its verbs, and no deal UI stands beside FinaleChoice.
 // • Slice 5 (plan R8, Track WARDEN): one deal per ship. On a ship whose corrupted resident already offered its own DEAL,
 //   HOLLOW's waits: LAST LIGHT's folded DEAL is not offered at the wake (it comes on a later ship by its own rule).
-import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createHarness7 } from '../wp7/harness7';
 import { lockOn } from '../landing/harness-landing';
@@ -28,6 +27,7 @@ import { buildDirectorCtx } from '@systems/director';
 import { getPrediction } from '@systems/predict';
 import { GUIDE_RULES } from '@data/script';
 import { createInitialState, createResidentState } from '@state/initial';
+import { fixtureBoardedVerdict } from '../support/arm-ship';
 import { installTool } from '@systems/licences';
 import { HOLLOW_STORY, HOLLOW_DEAL } from '@data/hollow-text';
 import { foldArrivalWalls } from '@data/threats';
@@ -57,7 +57,9 @@ const atCruise = (state: Readonly<GameState>): GameState => ({ ...state, clock: 
 
 // --- VESPER: the folded arrival ----------------------------------------------------------------------------------------
 setLandingMode('manual');
-h.shipAlone(VESPER, 11);
+// Track RETIRE: run 1's arm VESPER with HOLLOW forced aboard (the classic five's VESPER was the ship one hop from the final
+// one; the arm's is CORMORANT): support/arm-ship fixtureBoardedVerdict.
+h.shipAlone(VESPER, 11, { boarded: true });
 installTool(h.store, 'repair');
 check('VESPER plays ARRIVAL with WALLS folded in (\'arrives\'), a 10-block root in its slot, HOLLOW asleep',
   JSON.stringify(s().hollow.cfg) === JSON.stringify(foldArrivalWalls()) && s().memory.some((seg) => seg.type === 'hollow' && seg.root && seg.size === 10)
@@ -74,7 +76,7 @@ for (let i = 0; i < 100 && bitten === null; i++) {
 }
 const root = s().memory.find((seg) => seg.type === 'hollow' && seg.root)!;
 const beside = hollowReach(s().memory, s().clock.aiSec).filter((reach) => reach.hollowId === root.id).map((reach) => reach.neighbourId);
-check('the loop closes: one scripted bite, on the nearer driver beside the root (POD 09, the lead, across its GAP of 1)',
+check('the loop closes: one scripted bite, on the nearer driver beside the root (the lead, POD 12 on the arm VESPER, across its GAP of 1)',
   bitten !== null && beside.includes(bitten.id) && bitten.pod === s().landing.lead
   && s().memory.filter((seg) => seg.type === 'driver' && seg.infected).length === 1 && s().hollow.scriptTargetId === bitten.id, bitten ? `POD ${bitten.pod}` : 'none');
 check('…the fight is one-on-one: no bite timer runs during it, and it is not decided yet', s().hollow.biteInSec === null && !hollowFirstFightDecided(s()));
@@ -143,7 +145,7 @@ check('…bites every 25 s at 3.5 %/s after the fight', s().hollow.cfg.spreadEve
 
 // The review's minor 6: keepCharge is keyed on the current verdict's facts (run.threat.current), not on the story kind.
 {
-  const vesper = createInitialState({ seed: 3, shipIndex: VESPER, carried: 'fresh' });
+  const vesper = createInitialState({ seed: 3, shipIndex: VESPER, carried: 'fresh', threat: fixtureBoardedVerdict(VESPER, 3) });
   const lastLight = createInitialState({ seed: 3, shipIndex: LAST_LIGHT, carried: 'fresh' });
   const first = createInitialState({ seed: 3, shipIndex: 0 });
   const notOneHop = { ...vesper, run: { ...vesper.run, threat: { ...vesper.run.threat, current: { ...vesper.run.threat.current!, oneHopFromFinal: false } } } };

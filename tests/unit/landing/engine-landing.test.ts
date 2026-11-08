@@ -5,7 +5,7 @@
 // and ▼ in the band; a 1.2 s kid printed as INFO); HOLLOW's drain and its projection with a burn in an open window;
 // AUTOBURN refused; a dry tank under the planet CRASHED with the pods aboard NOT LAUNCHED and the falling one scored; an
 // orbit outside the drop solver's domain (no throw); a ghost burst during the landing (risk 5).
-import '../support/classic-world';
+import { capabilitiesNow } from '@systems/capabilities';
 import { check, finish } from './checks';
 import { lockOn, ensureLandingKeys } from './harness-landing';
 import { createHarness7 } from '../wp7/harness7';
@@ -242,29 +242,22 @@ function goLower(reactionSec: number): GoLowRun {
     `${h.shown()?.id} '${h.shown()?.text}'`);
 }
 
-// --- Ghost thrust during the landing (risk 5): VESPER's failing Thrust Ctrl fires there too -------------------------------
+// --- Ghost thrust during the landing (risk 5) ------------------------------------------------------------------------------
+// Track RETIRE: on the classic five VESPER's failing Thrust Ctrl fired in the landing too. Run 1's arm limps instead (slice
+// 3b, capabilities.ts ghostSpecOf): the controller fires nothing once the orbit is locked, so the pods' orbit is not decayed
+// by it. ENGINE FIRING's refusal of [L] is the SPACE scenario's above.
 {
   board(VESPER, false);
+  const before = capabilitiesNow(state()).thrustCtrl;
   lockOn(h);
   let burst = false;
-  let delivering = false;
-  let refusal = '';
   const off = on('ghost-start', () => { burst = true; });
   const end = h.wall() + 90;
   while (h.wall() < end && !burst) h.step();
-  // A tick that delivered the burst's thrust (review nit: the check passed vacuously on a tick with none).
-  const until = h.wall() + 2;
-  while (burst && h.wall() < until && !delivering) {
-    h.step();
-    delivering = state().burn.lastTickDvKmS > 0;
-  }
-  if (delivering) {
-    const result = requestLaunch(h.store, { source: 'player' });
-    refusal = result.kind === 'refused' ? result.reason : result.kind;
-  }
   off();
-  check('VESPER (Thrust Ctrl failing): the engine fires by itself during the landing, still in orbit, [L] refused ENGINE FIRING while it fires',
-    burst && delivering && state().burn.status === 'locked' && refusal === 'ENGINE FIRING', `burst ${burst} · delivering ${delivering} · ${refusal}`);
+  check('VESPER (Thrust Ctrl failing, it fired before the lock): the engine stays quiet through the landing (90 s), the orbit locked',
+    before.ghost !== null && !burst && capabilitiesNow(state()).thrustCtrl.ghost === null && state().burn.status === 'locked',
+    `before ${JSON.stringify(before.ghost)} · burst ${burst}`);
 }
 
 finish();

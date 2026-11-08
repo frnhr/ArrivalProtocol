@@ -15,7 +15,7 @@ import { actionRepair, actionMove } from '@state/actions';
 import { canStartOp, getOpsBySeg } from '@systems/ops-core';
 import { isBusy } from '@systems/tool-targets';
 import { createInitialState } from '@state/initial';
-import { giveWorkedKit } from '../support/arm-ship';
+import { giveWorkedKit, fixtureBoardedVerdict } from '../support/arm-ship';
 import { driversInMemory, isInfected } from '@state/selectors';
 import { DRIVER_RULES } from '@data/script';
 import { WALL_MIN_BLOCKS } from '@data/tuning';
@@ -28,7 +28,8 @@ export interface Harness7 extends Harness6 {
   // for suites that fly a later ship by itself.
   // `kit` (Track RETIRE, the arm only): the tools the worked route has delivered by that ship (support/arm-ship.ts), as the
   // classic five's schedule licensed them on a ship alone.
-  shipAlone: (index: number, seed: number, opts?: { kit?: boolean }) => void;
+  // `boarded` (the arm only): HOLLOW forced aboard (support/arm-ship fixtureBoardedVerdict), as the classic VESPER had it.
+  shipAlone: (index: number, seed: number, opts?: { kit?: boolean; boarded?: boolean }) => void;
   // One tick of the defender (see the header); true when it started something.
   defend: (reactSec?: number) => boolean;
   // Flies the ship by the strip with the defender on, until it is no longer approaching.
@@ -81,7 +82,8 @@ export function createHarness7(seed = 1, opts: { soulsFound?: boolean } = {}): H
     },
     shipAlone(index, nextSeed, aloneOpts = {}) {
       base.resetTo('flight', nextSeed);
-      const state = createInitialState({ seed: nextSeed, shipIndex: index, carried: 'fresh' });
+      const threat = aloneOpts.boarded ? fixtureBoardedVerdict(index, nextSeed) : undefined;
+      const state = createInitialState({ seed: nextSeed, shipIndex: index, carried: 'fresh', ...(threat ? { threat } : {}) });
       // A later ship is reached through ship 1, where the driver lessons were met (as harnessState marks them for found
       // colonists): slice 2's rolled arrival damage gives later ships failing drivers too, and a ship alone must not
       // replay run 1's POD 02 lesson there.

@@ -12,16 +12,17 @@
 //   VESPER → LAST LIGHT carries it at 16 with its fed share, and `NO RM · YOU CAN'T DELETE THE ROOT` without a working rm;
 // • the LOG READER (systems/log-view.ts): one row per entry (number, KEY, text or `[NOT FOUND YET]`), the open entry,
 //   the next key, the entry a chip click opens; story-log's actions open, mark read and close it.
-import '../support/classic-world';
+import { WORKED_ROUTE } from '@systems/arm-fixture';
 import { check, finish } from '../wp1/harness';
+import { fixtureBoardedVerdict } from '../support/arm-ship';
 import { createStore, type Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import type { HollowSegment, Segment } from '@/types/segment';
 import { createInitialState } from '@state/initial';
-import { freshUnitRacks } from '@systems/carry';
 import { traceMeter, reportTraceLine, biteClock, TRACE_UI_TEXT } from '@systems/hollow-hud';
 import { transmitModel } from '@systems/transmit';
-import { endShip, goTransmit } from '@systems/run';
+import { endShip, goTransmit, transmitNext } from '@systems/run';
+import { pickCard } from '@systems/draft';
 import { logChip, logReaderModel, logEntryToOpen, adjacentFoundEntry, LOG_UI_TEXT } from '@systems/log-view';
 import { openLogReader, closeLogReader, markLogEntryRead } from '@systems/story-log';
 import { noWorkingRm } from '@state/threat-selectors';
@@ -32,15 +33,15 @@ import { THREAT_TEXT } from '@data/threat-text';
 import { LOG_TEXT, LOG_ENTRY_COUNT } from '@data/log-text';
 import { HOLLOW_HUD_TEXT, UNNAMED_HOLLOW } from '@data/hollow-text';
 import { BEAM_SEED_FIRST_BITE_CALM_SEC, MAX_LINE_CHARS } from '@data/tuning';
-import { classicShip } from '@data/classic-five';
 
 const KESTREL = 2;
 const VESPER = 3;
 
-function world(shipIndex: number, seed = 7): Store<GameState> {
-  // A later ship meets a fresh unit carried in (the way the harnesses build a ship alone); ship 1 writes its own racks.
-  const carried = shipIndex === 0 ? null : freshUnitRacks(classicShip(shipIndex));
-  return createStore(createInitialState({ seed, shipIndex, carried }));
+// A later ship meets a fresh unit carried in (the way the harnesses build a ship alone); ship 1 writes its own racks.
+// `boarded` (Track RETIRE): HOLLOW forced aboard, as on the classic five's VESPER (run 1's arm forces it at CORMORANT).
+function world(shipIndex: number, seed = 7, boarded = false): Store<GameState> {
+  const threat = boarded ? fixtureBoardedVerdict(shipIndex, seed) : undefined;
+  return createStore(createInitialState({ seed, shipIndex, carried: 'fresh', ...(threat ? { threat } : {}) }));
 }
 
 // A 2-block beam seed cut from the front of the first free run that has room (memory stays 384 blocks).
@@ -82,7 +83,7 @@ function removeBeamSeeds(store: Store<GameState>): void {
   check('a beam seed in memory shows the meter at TRACE 0', meter().visible && meter().text === 'TRACE □□□');
   check('the meter\'s words fit a line', [meter().text, THREAT_TEXT.traceOneMore, TRACE_UI_TEXT.clean('■■■ +9')].every((line) => line.length <= MAX_LINE_CHARS));
 
-  const vesper = world(VESPER);
+  const vesper = world(VESPER, 7, true);
   const aboard = traceMeter(vesper.getState());
   const root = vesper.getState().memory.find((seg): seg is HollowSegment => seg.type === 'hollow' && seg.root);
   check('VESPER (HOLLOW aboard, the 10-block root in its slot): `IT RIDES WITH YOU · 10 BLOCKS` in the meter\'s place',
@@ -116,7 +117,7 @@ function removeBeamSeeds(store: Store<GameState>): void {
   const clean = reportTraceLine(store.getState());
   check('the beam\'s seeds all deleted: the line says nothing reports home (good)', clean?.text === TRACE_UI_TEXT.clean('■□□') && clean.tone === 'good', clean?.text);
 
-  const vesper = world(VESPER);
+  const vesper = world(VESPER, 7, true);
   plantBeamSeed(vesper, 'beam-seed-v');
   const fed = reportTraceLine(vesper.getState());
   check('HOLLOW aboard: a seed left feeds it (`1 SEED LEFT BEHIND · IT FEEDS ???`)', fed?.text === THREAT_TEXT.reportFed(1, UNNAMED_HOLLOW)
@@ -153,7 +154,7 @@ function removeBeamSeeds(store: Store<GameState>): void {
   store.update((draft) => { draft.hollow.wakeHeld = true; });
   check('…a debris dodge holding the wake shows no time', biteClock(store.getState()).time === HOLLOW_HUD_TEXT.noTimer);
 
-  const vesper = world(VESPER);
+  const vesper = world(VESPER, 7, true);
   const silent = biteClock(vesper.getState());
   check('VESPER before the capture: HOLLOW asleep on its scripted wake, `NEXT BITE ?:??`', vesper.getState().hollow.phase === 'asleep'
     && silent.secLeft === null && silent.text === `${HOLLOW_HUD_TEXT.nextBite} ${HOLLOW_HUD_TEXT.noTimer}`, silent.text);
@@ -163,15 +164,17 @@ function removeBeamSeeds(store: Store<GameState>): void {
 function toTransmit(store: Store<GameState>): void {
   store.update((draft) => { draft.run.phase = 'report'; });
   endShip(store, 'locked');
-  goTransmit(store, store.getState().run.shipIndex + 1);
+  // The worked route's next stop (Track RETIRE: run 1's arm; the classic five's next ship was shipIndex + 1).
+  goTransmit(store, WORKED_ROUTE[store.getState().run.map.route.length]!);
   if (store.getState().run.phase !== 'transmit') throw new Error(`toTransmit: phase ${store.getState().run.phase}`);
 }
 
 {
-  const store = world(KESTREL);
+  // On run 1's arm the beam HOLLOW is forced aboard is VESPER → CORMORANT (one hop from New Haven, M3).
+  const store = world(VESPER);
   toTransmit(store);
   const model = transmitModel(store.getState());
-  check('KESTREL → VESPER: HOLLOW boards (forced) and rides as the uninvited chip, `??? · 10 BLOCKS · NOT YOURS · RIDES FREE`',
+  check('VESPER → CORMORANT: HOLLOW boards (forced) and rides as the uninvited chip, `??? · 10 BLOCKS · NOT YOURS · RIDES FREE`',
     model.uninvited?.text === '??? · 10 BLOCKS · NOT YOURS · RIDES FREE' && model.uninvited.boards && model.uninvited.blocks === 10
     && model.uninvited.note === 'NOT YOURS · RIDES FREE' && model.uninvited.fedText === null, model.uninvited?.text);
   check('…it costs no link room (the packet\'s files are the unit\'s own)', model.files === store.getState().run.transit?.filesBlocks);
@@ -192,14 +195,20 @@ function toTransmit(store: Store<GameState>): void {
 }
 
 {
-  const store = world(VESPER);
+  // Track RETIRE: the final beam on run 1's arm is CORMORANT → LAST LIGHT. HOLLOW is aboard from VESPER (forced, as on the
+  // classic five), beamed on to CORMORANT (it rides), and from there the packet to LAST LIGHT.
+  const store = world(VESPER, 7, true);
   store.update((draft) => { draft.run.hollowNamed = true; });
+  toTransmit(store);
+  const plan = store.getState().run.transit!;
+  if (plan.pick === null && plan.offer.length > 0) pickCard(store, plan.offer[0]!.id);
+  transmitNext(store);
   toTransmit(store);
   // Track THREAT's endShip writes the ship's own tally (none left here), so the fed blocks are set after it.
   store.update((draft) => { draft.run.threat.lastTally = { left: 2, traceBefore: 1, traceAfter: 1, fed: true }; });
   const model = transmitModel(store.getState());
   const owner = model.uninvited?.owner ?? '';
-  check('VESPER → LAST LIGHT: HOLLOW rides at the FINALE\'s 16, named, not boarding (already aboard)', model.uninvited?.blocks === 16
+  check('CORMORANT → LAST LIGHT: HOLLOW rides at the FINALE\'s 16, named, not boarding (already aboard)', model.uninvited?.blocks === 16
     && owner !== UNNAMED_HOLLOW && !model.uninvited.boards && model.uninvited.text === THREAT_TEXT.uninvitedChip(owner, 16), model.uninvited?.text);
   check('…on the final beam feeding changes nothing (its root is the FINALE\'s 16): no `SEEDS FED IT` (minor 3)',
     model.uninvited?.fedText === null && model.uninvited.fed === 0, model.uninvited?.fedText ?? 'none');
@@ -222,9 +231,9 @@ function toTransmit(store: Store<GameState>): void {
 
 // INSPECT's `if left` row (minor 3): TRACE before HOLLOW boards, its next root once aboard, nothing on the final ship.
 {
-  const owner = hollowLabel(world(VESPER).getState().run);
+  const owner = hollowLabel(world(VESPER, 7, true).getState().run);
   check('INSPECT on a beam-born block: `if left` reports home (KESTREL), feeds HOLLOW (VESPER), and says nothing on the final ship',
-    beamIfLeftText(world(KESTREL).getState()) === BEAM_SEED_INSPECT.reports && beamIfLeftText(world(VESPER).getState()) === BEAM_SEED_INSPECT.feeds(owner)
+    beamIfLeftText(world(KESTREL).getState()) === BEAM_SEED_INSPECT.reports && beamIfLeftText(world(VESPER, 7, true).getState()) === BEAM_SEED_INSPECT.feeds(owner)
     && beamIfLeftText(world(VESPER + 1).getState()) === null);
 }
 
