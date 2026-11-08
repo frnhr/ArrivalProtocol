@@ -3,8 +3,8 @@
 // suites.
 // • chooseEnding(store, hollow, you = 'reassignment', opts): the ending, as the card makes it: step 1's pick, then step 2's
 //   (STAY's ship when given). The verdict is skipped (skipFinaleEnding: the FINALE goes on at once, to 'done', or to
-//   MERGE's reopened landing 'last-landing' in 7a), unless `opts.verdict` is 'type' (the suites that time the verdict); from
-//   7b THE LAST LANDING is skipped too. It returns the refusal (nothing changes then), as WP11's chooseFinale did: the card's
+//   MERGE's 'last-landing'), unless `opts.verdict` is 'type' (the suites that time the verdict). It does NOT skip 7b's
+//   THE LAST LANDING: a suite ends it with skipLastLanding (or flies it) itself. It returns the refusal (nothing changes then), as WP11's chooseFinale did: the card's
 //   step 1 must be up (the root fell, the landing settled and the card's open delay ran out: settleFinale, or `opts.step`
 //   to let this settle it).
 // • settleFinale(store, step): the root fell and HOLLOW sleeps ('asleep'): the landing is ended (END LANDING, or as the

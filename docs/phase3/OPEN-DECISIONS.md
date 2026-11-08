@@ -155,6 +155,14 @@ Status words:
     - v1 times each pod, but takes the windows in pass order;
     - with no AUTODROP they drop blind, at ±(W/2+150 km) and double spread;
     - AUTODROP gets two orbits.
+    - BUILT in 7b, with the cadence at 2.0 tactical seconds. The sweep on LAST LIGHT (168 pods per flier) measured:
+
+      | Room | Blind | v1 | v2 / v3 |
+      |---|---|---|---|
+      | Every LZ open | 56% landed, worth 0.78 GENTLE / 0.56 HARSH | 100% | 100% |
+      | Room only in LZ-B | 5% | 14% | 100% |
+
+    - The kid can't launch a restored pod by hand (`MERGE IS FLYING THEM — [ENTER] SKIPS TO THE END`).
 44. **Where the next run's gifts wait** (R31):
     - never on TIGHT, authored, `?`, first or final ships, except named fallbacks;
     - 046's cache goes on Marrow or Ostrava.

@@ -2475,7 +2475,7 @@ export const FINAL_CARD_ARM_SEC = 1.2;
 
 // --- 7b lead ---------------------------------------------------------------------------------------------------------
 
-// THE LAST LANDING's pace (R26; 01 §3.17): this many game seconds between two launches, wherever the pods are (no bay: the
+// THE LAST LANDING's pace (R26; 01 §3.17): this many tactical seconds (world time) between two launches, wherever the pods are (no bay: the
 // pods launch from the orbit, and the cadence keeps the rhythm readable).
 export const LAST_LANDING_CADENCE_SEC = 2.0;
 // AUTODROP flies the restored pods for at most this many orbits (R27; 01: "AUTODROP gets at most two orbits"); a pod it has
