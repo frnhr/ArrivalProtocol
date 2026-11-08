@@ -379,3 +379,38 @@ The calls one agent made building 7d's FOUNDATION and both its tracks (`docs/pha
     and stops are complete and tested (`signals/contact`, `ending/*`, `traces/*`, the e2e `signals.mjs`). Balance is slice
     8's: the sweep of 7c (`traces/traces-sweep`) does not fly CONTACT yet.
 
+## Retiring the classic world
+
+Track RETIRE (slice-4cde-plan §9; item 12). Phase 1 is done. Phase 2 is done for 168 of the 223 quick suites and for both
+BALANCE_ONLY playthrough harnesses. The other 55 suites still build the classic five, and phase 3 waits on them. The
+plan's "Deviations (RETIRE)" has the details and the list.
+
+85. **The headless fixture world is run 1's arm.** BUILT: `createInitialState` with no map builds run 1's arm on the seed,
+    with the unit on authored ship `shipIndex` (0 ARES-VII … 4 LAST LIGHT) along the worked route. Each stop carries its
+    real hop, the nominal route's threat and a passed result. `run.shipIndex` is that stop's depth − 1, so LAST LIGHT is
+    depth 6, through CORMORANT. `carried: 'fresh'` lays a fresh unit out for the hop. A suite not moved yet imports
+    `support/classic-world` first and stays on the classic five. `AP_RETIRE_PROBE=arm` shows how far it gets on the arm.
+    The probe: 135 of 223 quick suites passed unchanged, each with the same number of checks. 33 more moved after fixes:
+    the harness helpers learned the class's memory size, the worked-route desk, the kit and the passed results. Of those
+    33, 17 keep a check of a classic-only branch, built with `withClassicWorld`; those checks go in phase 3. `map/arm-parity` pins run 1's seed-7 arm (its 20
+    ShipDefs, its built ships, a flown run) and did not move.
+86. **A ship alone on the arm carries the worked route's kit** (`support/arm-ship.ts WORKED_KIT`, opt-in `kit`): MOVE by
+    HALCYON, DELETE by KESTREL, SWAP by CORMORANT (VESPER: none, it arrives 4 years late), COPY by LAST LIGHT. That is
+    what 02 §3.14's requests deliver (`map/run1-route` pins each delivery). The classic five's licence schedule played
+    this part. **For the lead:** the alternative is a kit per suite, which would make each suite's tools explicit.
+87. **The save codec refuses a `'classic'` world; it does not migrate one.** RECOMMENDED. No save ever held one: encode
+    always threw on it (3c), and the page never routes through the classic five. There is nothing to migrate to. A
+    classic save's route and ships have no arm counterpart: VESPER → LAST LIGHT is 83 LY, out of range. When phase 3
+    narrows `RunMapState.world` to `'arm'`, keep the field (no save bump). Let the codec's `oneOf('arm')` refuse any other
+    value as `shape`, and drop the separate `'classic'` refusal and its text (`map-text.ts`). Keep a codec check that a
+    hand-edited `world: 'classic'` payload is refused cleanly (`kind === 'shape'`), not thrown.
+88. **The BALANCE_ONLY harnesses fly the arm** (slice 8 needs them there). BUILT:
+    - `wp12/playthrough` plays the worked route (or `PT_ROUTE`). At each desk its kid makes the first pick, trains its
+      `buys` list (COMPETENT and LITERAL buy down AUTOBURN, AUTODROP and SENTRY; SLOPPY only the pick), requests the tag
+      and sets course.
+    - The strip-asked kids now read the landing's L0 row (`EVERY POD IS DOWN — now DELETE THE ROOT`) as the ask. That
+      ended item 66's `stuck:printing on LAST LIGHT` runs: 2 seeds each of COMPETENT, SLOPPY and LITERAL end.
+    - `wp11/full-run` checks the arm's facts (tools by request, the forced boarding at CORMORANT, VESPER without SWAP).
+    - **Known gap for slice 8:** on the worked route the MERGE-saving kid reaches the choice with 9–13 charge (seeds 1,
+      2, 4), short of MERGE's 20. `full-run`'s "both endings reached" fails in `npm run balance` until the rebalance
+      (slice-3a risk 6: "the MERGE margin moves to the route").

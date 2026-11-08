@@ -87,8 +87,11 @@ These are non-negotiable design tokens, defined as CSS custom properties in `src
 - The galaxy map (phase 3 slice 3a, `docs/phase3/02-map.md`): one arm of 20 worlds in 8 layers; run 1 is an authored
   arm, later runs a fresh roll (`src/systems/map-generator.ts`) with ships generated from five flight templates. Years,
   hops (link, hits, ECC, noise), memory classes FULL / COMPACT / TIGHT, the DESK (STAR CHART, SHIP CARD, SET COURSE)
-  between ships, the PACKET's room bar and the RUN TALLY. The old five ships survive as a frozen test fixture
-  (`src/data/classic-five.ts`, `__ap.ship(n)`); `__ap.route`, `__ap.slot` and `__ap.course` drive the arm.
+  between ships, the PACKET's room bar and the RUN TALLY. A state built with no map (the headless suites')
+  is run 1's arm, the unit on authored ship n along the worked route (`state/initial.ts`, `systems/arm-fixture.ts`; Track
+  RETIRE, `docs/phase3/impl/slice-4cde-plan.md` "Deviations (RETIRE)"). The old five ships survive as a frozen fixture
+  (`src/data/classic-five.ts`, `__ap.ship(n)`) for the suites not moved yet (`tests/unit/support/classic-world.ts`);
+  `__ap.route`, `__ap.slot` and `__ap.course` drive the arm.
 - The repository and the INBOX (slice 3b): one request per beam from ARRIVAL CONTROL's repository (tools, spares, the
   REPAIR v2 patch); requests travel by light, so far out they trail the unit or never arrive (`src/systems/
   delivery-rule.ts`); deliveries ride the packet as chips (SEND ON), can carry seeds, and are the only source of tools
