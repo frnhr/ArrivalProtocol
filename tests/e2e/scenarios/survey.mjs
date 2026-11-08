@@ -9,9 +9,10 @@
 // • SURVEY v2 (__ap.skill): SITES says it maps and holds a thread, MAPPED % climbs as the ship flies; the NAV PLOT draws the
 //   swath's wedge and, once found, the sites' dashed brackets; [ PAUSE ] gives the thread back and [ RESUME ] takes it; with the
 //   rim mapped (__ap.survey.map) the rows are rated (★, `ROCKY ✕` on LZ-B), the strip offers `SET SITE 5 AS LZ-B`; a click on
-//   SITE 5's row and its `SET AS LZ-B (800)` pill moves LZ-B (the stamp `LZ-B → SITE 5`, its row `LZ-B · SITE 5 · … FLAT ★★★`).
+//   SITE 5's row and its `SET AS LZ-B (800)` pill moves LZ-B (the stamp `LZ-B → SITE 5`, its row `LZ-B · SITE 5 · … FLAT ★★★`);
+//   at the DESK the window and its dock item are gone.
 // • The phone (360 × 740): the SITES tab in the dock, its window alone, a row tapped opens its pills, nothing wider than the
-//   page.
+//   page; at the DESK the tab is gone.
 // Usage: node tests/e2e/scenarios/survey.mjs   (env E2E_BASE_URL; tests/e2e/run.mjs runs it)
 import { launch, BASE_URL, SHOTS, checker, pageKit, runKit } from '../lib.mjs';
 import { join } from 'node:path';
@@ -187,6 +188,14 @@ const sites = (st) => st(() => {
     moved.lz.site === 'site-5' && moved.stamps.includes('LZ-B → SITE 5') && moved.view.lzs[1] === 'LZ-B · SITE 5 · 4 PODS · WIDE · FLAT ★★★', JSON.stringify(moved));
   check('…CONTROL: `You moved LZ-B? Bold! :)`', await waitFor(() => document.getElementById('commsLog').innerText.includes('You moved LZ-B? Bold! :)'), 15000));
   await page.screenshot({ path: join(SHOTS, 'survey-2-moved.png') });
+  // Off the planet (the LANDING REPORT, then the DESK): the window and its dock item go (review Tests 6).
+  const kit2 = runKit(page, game);
+  await kit2.landToReport();
+  await kit2.finishReport();
+  await waitFor(() => window.__ap.store.getState().run.phase === 'desk', 8000);
+  const gone = await st(() => ({ win: document.getElementById('sitesWin').hidden, survey: document.body.classList.contains('survey'),
+    dock: getComputedStyle(document.querySelector('.dock-item[data-tool="sites"]')).display }));
+  check('…at the DESK the SITES window and its dock item are gone', gone.win && !gone.survey && gone.dock === 'none', JSON.stringify(gone));
   check('v2: no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
   await game.context.close();
 }
@@ -215,6 +224,13 @@ const sites = (st) => st(() => {
   check('phone: a tapped row opens its pills, inside the window; nothing wider than the page (no sideways scroll)',
     layout.pills === 2 && layout.pillsIn && layout.wide === 0 && layout.scroll <= layout.inner, JSON.stringify(layout));
   await page.screenshot({ path: join(SHOTS, 'survey-3-phone.png') });
+  await st(() => window.__ap.lockOn());
+  const kit3 = runKit(page, game);
+  await kit3.landToReport();
+  await kit3.finishReport();
+  await game.waitFor(() => window.__ap.store.getState().run.phase === 'desk', 8000);
+  const closed = await st(() => ({ win: document.getElementById('sitesWin').hidden, dock: getComputedStyle(document.querySelector('.dock-item[data-tool="sites"]')).display }));
+  check('phone: at the DESK the SITES tab and its window are gone', closed.win && closed.dock === 'none', JSON.stringify(closed));
   check('phone: no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
   await game.context.close();
 }

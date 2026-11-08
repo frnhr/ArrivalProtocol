@@ -36,6 +36,8 @@
 // `CHOOSE YOUR FIRST SKILL`, SPACE refused with a buzz; [1] arms the card (the bar reads `TRAIN ▸ 3 CYCLES [ENTER]`), ENTER
 // fills the 1.5 s bar and trains AUTOBURN v1 (A SKILL ✓), ESC goes back to the card. On the phone the sheet opens on
 // TRAINING: a tap on the card, a tap on the bar (it reads TRAIN), then the CARD tab.
+// Slice 6: HALCYON's card has `SITE DATA · GOOD`; from VESPER's DESK (__ap.route along the worked route) CORMORANT's card says
+// `SITE DATA · POOR · ARRIVAL CONTROL GUESSED` (warn) and `LZ: 2 · SURVEY NEEDED`, and TRAINING's AHEAD row its second line.
 // Usage: node tests/e2e/scenarios/map-desk.mjs   (env E2E_BASE_URL; tests/e2e/run.mjs runs it). Shots: tests/.out/e2e/shots/map-desk-*.
 import { launch, BASE_URL, SHOTS, checker, pageKit, runKit } from '../lib.mjs';
 import { join } from 'node:path';
@@ -239,9 +241,9 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   check('…HALCYON\'s card leads: Tessaly · 5 PODS, 1,000 COLONISTS, 31 YRS EARLY, 3 HITS · 1 FIXED WHILE YOU SLEEP → 2 LAND',
     card?.slot === HALCYON && card.name === 'HALCYON' && card.sub === 'Tessaly · 5 PODS' && card.colonists === '1,000 COLONISTS'
     && card.sched === '31 YRS EARLY' && card.cost === '3 HITS · 1 FIXED WHILE YOU SLEEP → 2 LAND', JSON.stringify(card));
-  check('…its rows: YOU FIT first, then FLYBY, TOO WIDE · MEMORY 320 · COMPACT · ROOM FOR YOU 152 · LZ: 2 · 21 LY · LINK 123 · NOISE CLEAN · RESIDENT none',
+  check('…its rows: YOU FIT first, then FLYBY, TOO WIDE · MEMORY 320 · COMPACT · ROOM FOR YOU 152 · LZ: 2 · 21 LY · LINK 123 · NOISE CLEAN · RESIDENT none · SITE DATA GOOD',
     card?.rows[0] === 'fit=YOU FIT' && ['problems=FLYBY, TOO WIDE', 'memory=MEMORY 320 · COMPACT · ROOM FOR YOU 152', 'lzs=LZ: 2 · SET BY ARRIVAL CONTROL',
-      'beam=21 LY · LINK 123', 'noise=NOISE CLEAN · SEEDS: none', 'resident=none'].every((row) => card?.rows.includes(row))
+      'beam=21 LY · LINK 123', 'noise=NOISE CLEAN · SEEDS: none', 'resident=none', 'site=GOOD'].every((row) => card?.rows.includes(row))
     && card?.rows.some((row) => /^run=SHIP 2 OF YOUR RUN · \d(–\d)? MORE TO THE FINAL SHIP$/.test(row)), JSON.stringify(card?.rows));
   check('…and the TIMELINE `2300 you leave · 2321 you get there · 2352 ▲ approach`', card?.timeline === '2300 you leave · 2321 you get there · 2352 ▲ approach', card?.timeline);
   check('3b: …the guidance moves to the file: `REQUEST mv · RECOMMENDED [R]` (the ship\'s step done)', view.step === 'REQUEST mv · RECOMMENDED [R]'
@@ -577,6 +579,31 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
     && tabs.warn === 'YOUR LAST RM IS GONE · NO RM, NO WAY TO DELETE THE ROOT', JSON.stringify({ tab: tabs.tab, warn: tabs.warn, rows: tabs.rows.map((row) => `${row.file}${row.focus ? '!' : ''}${row.tag ? ':)' : ''}`) }));
   check('…IN TRANSIT names the sent-on Repair.bak waiting in LAPWING\'s receiver', tabs.transit.includes('Repair.bak · WAITING IN LAPWING\'S RECEIVER'), JSON.stringify(tabs.transit));
   await shot('09-last-rm');
+
+  // --- Slice 6: a POOR card. VESPER's DESK (visit 4, by __ap.route along the worked route) has CORMORANT in reach, POOR on
+  // this seed: its SITE DATA row in the warning tone, `LZ: 2 · SURVEY NEEDED`; TRAINING's AHEAD line's second line.
+  await st(() => window.__ap.route([0, 2, 5, 11]));
+  await waitFor(() => { const s = window.__ap.store.getState(); if (s.run.phase === 'boot') window.__ap.skipBoot(); return s.run.phase === 'flight'; }, 30000);
+  await run.lockInRing({ sleep: true });
+  await run.landToReport();
+  await run.finishReport();
+  await waitFor(() => window.__ap.store.getState().run.phase === 'desk' && !document.getElementById('deskScreen').hidden, 6000);
+  await page.waitForTimeout(1500);
+  await page.locator('#deskScreen .desk-tab[data-tab="card"]').click();
+  await page.waitForTimeout(300);
+  await run.clickNode(15);
+  await page.waitForTimeout(400);
+  view = await run.desk();
+  const poorTone = await st(() => [...(document.querySelector('#deskScreen .desk-card .dc-row.key-site')?.classList ?? [])].join(' '));
+  check('slice 6: from VESPER\'s DESK, CORMORANT\'s card: `SITE DATA · POOR · ARRIVAL CONTROL GUESSED` in the warning tone, `LZ: 2 · SURVEY NEEDED`',
+    view.card?.name === 'CORMORANT' && view.card.rows.includes('site=POOR · ARRIVAL CONTROL GUESSED') && /warn/.test(poorTone)
+    && view.card.rows.includes('lzs=LZ: 2 · SURVEY NEEDED'), JSON.stringify({ rows: view.card?.rows, poorTone }));
+  await shot('10-poor-card');
+  await page.keyboard.press('KeyT');
+  await page.waitForTimeout(500);
+  const aheadSite = await st(() => document.querySelector('#deskScreen .tr-ahead-site')?.textContent ?? null);
+  check('…TRAINING\'s AHEAD row says `SITE DATA POOR · SURVEY FINDS BETTER SITES` (SURVEY\'s branch opens at visit 4)',
+    aheadSite === 'SITE DATA POOR · SURVEY FINDS BETTER SITES', String(aheadSite));
   check('desktop: no page errors', errors.length === 0, errors.slice(0, 4).join(' | '));
   await context.close();
 }
