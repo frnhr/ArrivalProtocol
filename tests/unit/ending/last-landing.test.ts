@@ -658,6 +658,14 @@ const watchedV2 = new Map<number, string>();
     pods.map((pod) => fateOf(pod).kind).join());
 }
 
+// --- MERGE with no driver eaten: nothing to restore, no LAST LANDING (7b review) ----------------------------------------------
+{
+  const none = armLastLanding({ autodrop: 3, eaten: 0 });
+  check('MERGE with no driver eaten: no LAST LANDING, the FINALE decided at once, the layer and the resolver idle', none.length === 0
+    && state().landing.lastLanding === null && state().hollow.finale.phase === 'done' && activeLayer() === 'game'
+    && activeLandingController(state())?.source !== 'merge' && JSON.stringify(state().hollow.finale.restored) === '[]');
+}
+
 // --- The ship lost mid-landing: THE LAST LANDING ends with it, nothing throws (7b review) --------------------------------------
 {
   const pods = armLastLanding({ autodrop: 3, eaten: 3 });

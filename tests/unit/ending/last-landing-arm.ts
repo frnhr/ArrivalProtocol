@@ -92,7 +92,7 @@ export interface ArmOpts {
   room?: Readonly<Record<string, number>>;
 }
 
-// THE LAST LANDING started on the arm's LAST LIGHT; returns its pods.
+// THE LAST LANDING started on the arm's LAST LIGHT; returns its pods (none, and no LAST LANDING, with `eaten` 0).
 export function armLastLanding(h: Harness11, opts: ArmOpts): number[] {
   const state = (): Readonly<GameState> => h.store.getState();
   let eatenPods: number[] = [];
@@ -125,8 +125,9 @@ export function armLastLanding(h: Harness11, opts: ArmOpts): number[] {
   growCharge(h, 30);
   const refusal = chooseEnding(h.store, 'merge');
   const ll = state().landing.lastLanding;
-  if (refusal !== null || ll === null) throw new Error(`last-landing: MERGE did not start THE LAST LANDING (${refusal}, ${state().hollow.finale.phase})`);
-  return [...ll.pods];
+  // With no driver eaten (7b review) MERGE restores nothing: no LAST LANDING, the FINALE decided at once.
+  if (refusal !== null || (ll === null) !== (opts.eaten === 0)) throw new Error(`last-landing: MERGE did not start THE LAST LANDING (${refusal}, ${state().hollow.finale.phase})`);
+  return ll === null ? [] : [...ll.pods];
 }
 
 export function launchOf(state: Readonly<GameState>, pod: number): LaunchRecord {
