@@ -2,13 +2,16 @@ import type { ShipKind, MemoryClass, TemplateId, ModifierId, Reservations, PodRa
 import type { ArrivalDamage } from '@data/ships';
 import type { ShipLandingDef, ForgivenessClass, TerrainWord, NoGoArcDef } from '@/types/landing';
 import { WORLDS, FIRST_SLOT, END_SLOTS } from '@data/arm';
-import { CLASSIC_FIVE } from '@data/classic-five';
+import {
+  ARES_VII_LANDING, ARES_VII_LEAD, HALCYON_ARRIVAL, KESTREL_ARRIVAL, VESPER_ARRIVAL, VESPER_LANDING, LAST_LIGHT_LANDING,
+  LAST_LIGHT_POD_RACKS, LAST_LIGHT_LEAD,
+} from '@data/authored-ships';
 
 // RUN 1's ARM (docs/phase3/02-map.md §3.14; slice-3a-plan §2.3, §4.3): §3.14's table as AUTHORED STRUCTURE (who is where,
 // when, how big, which class, the reservations), the same for every player's first run. Everything else on a generated
 // ship (its template unless written here, extra modifiers, landing roll, families, omega0) is rolled from its ShipKey
 // (armSeed, 1, slot, 0) by Track GEN's map-generator assembleRun1Arm. The five authored ships keep their written details
-// (RUN1_AUTHORED) and take run 1's sizes. Cross-checked against docs/phase3/map-sim/ (example.py's run1): the years,
+// (RUN1_AUTHORED, from data/authored-ships.ts) and take run 1's sizes. Cross-checked against docs/phase3/map-sim/ (example.py's run1): the years,
 // LAST LIGHT's 3020 under half-up rounding, the classes (FULL 7, COMPACT 7, TIGHT 6), 907 routes.
 // Track GEN owns this file after the foundation.
 
@@ -88,12 +91,6 @@ export interface AuthoredOverride {
   debrisRack: 'B' | 'C' | null;                       // the written run's debris rack (KESTREL's pods are all in B)
 }
 
-const classic = (id: string) => {
-  const ship = CLASSIC_FIVE.find((candidate) => candidate.id === id);
-  if (!ship) throw new Error(`run1-arm: no classic ship '${id}'`);
-  return ship;
-};
-
 const NONE: AuthoredOverride = {
   modifiers: [], arrivalDamage: [], landing: null, forgiveness: null, terrain: null, lzPods: null, allWide: false, noGo: null,
   podRacks: null, lead: null, debrisRack: null,
@@ -103,30 +100,29 @@ export const RUN1_AUTHORED: Readonly<Record<NonNullable<Run1Row['authored']>, Au
   // ARES-VII: the written layer-1 row (one WIDE site, GENTLE, POD 02 at 44%, RIVERSIDE) and the fresh unit; COMPACT with
   // its three pods at the start of rack B.
   'ares-vii': {
-    ...NONE, landing: classic('ares-vii').landing, podRacks: { B: 'P P P _40', C: '_64' }, lead: classic('ares-vii').memory.drivers.lead,
+    ...NONE, landing: ARES_VII_LANDING, podRacks: { B: 'P P P _40', C: '_64' }, lead: ARES_VII_LEAD,
   },
   // HALCYON: Sensor Interp arrives at 62 (ship 2's lesson, slice-2-plan risk 10) and Tessaly is GENTLE grassland.
-  'halcyon': { ...NONE, arrivalDamage: classic('halcyon').arrivalDamage, forgiveness: 'gentle', terrain: 'GRASSLAND' },
+  'halcyon': { ...NONE, arrivalDamage: HALCYON_ARRIVAL, forgiveness: 'gentle', terrain: 'GRASSLAND' },
   // KESTREL: SENSOR DAMAGE and DEBRIS as written; Brine is HARSH ocean, two WIDE sites of 3, no no-go arcs; the written
   // run's debris names rack B, where its pods are.
   'kestrel': {
-    ...NONE, modifiers: ['sensor-damage', 'debris'], arrivalDamage: classic('kestrel').arrivalDamage, forgiveness: 'harsh',
+    ...NONE, modifiers: ['sensor-damage', 'debris'], arrivalDamage: KESTREL_ARRIVAL, forgiveness: 'harsh',
     terrain: 'OCEAN', lzPods: [3, 3], allWide: true, noGo: 'none', debrisRack: 'B',
   },
   // VESPER: ENGINE FAULT (Thrust Ctrl at 31%), never a resident; Cinder is ROUGH volcanic with its two lava arcs, three
   // sites of 6 · 5 · 5 at the written centres (the arcs are placed against LZ-B's and the NARROW LZ-C's written edges, so
   // the whole landing is written: rolled centres would leave the arcs beside nothing).
   'vesper': {
-    ...NONE, modifiers: ['engine-fault'], arrivalDamage: classic('vesper').arrivalDamage,
+    ...NONE, modifiers: ['engine-fault'], arrivalDamage: VESPER_ARRIVAL,
     landing: {
-      ...classic('vesper').landing,
-      lzs: classic('vesper').landing.lzs.map((lz, index) => ({ ...lz, pods: [6, 5, 5][index]! })),
+      ...VESPER_LANDING,
+      lzs: VESPER_LANDING.lzs.map((lz, index) => ({ ...lz, pods: [6, 5, 5][index]! })),
     },
   },
   // LAST LIGHT: the New Haven row as today (16 pods, FULL, the belt, the cliffs, FIRST LIGHT) and its written layout.
   'last-light': {
-    ...NONE, modifiers: ['radiation-belt'], landing: classic('last-light').landing, podRacks: classic('last-light').memory.podRacks,
-    lead: classic('last-light').memory.drivers.lead,
+    ...NONE, modifiers: ['radiation-belt'], landing: LAST_LIGHT_LANDING, podRacks: LAST_LIGHT_POD_RACKS, lead: LAST_LIGHT_LEAD,
   },
 };
 
