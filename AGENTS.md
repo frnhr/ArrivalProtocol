@@ -160,11 +160,23 @@ These are non-negotiable design tokens, defined as CSS custom properties in `src
 ## Next logical steps
 
 1. **Fran's playtest**: one full run by `docs/playtest-checklist.md`.
-2. **Phase 3** (`docs/PHASE3.md`, specs in `docs/phase3/`): landing, the calm opening and the galaxy map (slices 1a, 1b, 2
-   and 3a built; plans and deviations in `docs/phase3/impl/`), 3b (the repository, deliveries, the INBOX), 3c (the save,
-   archive v2, the arm carried between runs) and the skill tree's batches 4a+4b and 4c–4e also built, and the classic world
-   retired (`slice-4cde-plan.md` §9, "Deviations (RETIRE)"). Then slice 5 (residents and the grants), 6 (SURVEY), 7
-   (REASSIGNMENT, MERGE's pods, SUNSET, the endings) and 8 (the rebalance).
+2. **Phase 3** (`docs/PHASE3.md`, specs in `docs/phase3/`, plans and deviations in `docs/phase3/impl/`) is built
+   through slice 8:
+   - 1a/1b landing, 2 the calm opening, 3a–3c the galaxy map, the repository, the save and the arm;
+   - 4 the skill tree (AUTOBURN, AUTODROP, SENTRY, SURVEY);
+   - 5 resident AIs;
+   - 6 SURVEY;
+   - 7a–7d the endings, THE LAST LANDING, next-run traces and lineage, signals and CONTACT;
+   - the classic world retired;
+   - 8 the first rebalance pass.
+
+   Every call made without Fran is in `docs/phase3/OPEN-DECISIONS.md`. The latest balance report is
+   `docs/phase3/impl/balance-report-slice8.md`; re-run it with `npm run balance:report -- --quick`.
+   The next steps:
+   - Fran's answers to the ASK items;
+   - the AUTODROP rule fixes (OPEN-DECISIONS 120);
+   - SLOPPY's win rate (OPEN-DECISIONS 103);
+   - a full-profile balance run.
 3. **The refactors parked until after the playtest** (discuss the split before writing code): `src/data/script.ts`
    into its text and its director rules, `src/styles/game.css` by surface, `tuning.ts` and `script.ts` grouped by
    domain.
