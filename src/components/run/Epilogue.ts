@@ -2,7 +2,7 @@
 // EPILOGUE, RUN END's night (`.run-end`'s palette, styles/night.css), its lines typed at EPILOGUE_CPS with arrivalChoir under
 // it ('epilogue-open'; a tick per line, 'epilogue-line'); one click (or ENTER / SPACE) finishes the typing, a second goes on
 // to the FINAL CARD (ui.runEndStage 'final'). Reduced motion shows it whole. Mounted by main.ts after mountRunEnd, on
-// index.html's #epilogue; reached from the RUN TALLY's EPILOGUE ▸ (ENDINGS_BUILT.night). Presentation on wall time, like
+// index.html's #epilogue; reached from the RUN TALLY's EPILOGUE ▸. Presentation on wall time, like
 // RUN END: the world is stopped.
 // Every line is laid out whole from the start (its untyped rest transparent), so the typing never moves the lines below.
 import type { Store } from '@state/store';

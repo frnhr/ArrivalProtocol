@@ -361,7 +361,6 @@ export const RUN_END_TEXT = {
   lockMiss: (apsis: string, km: number, ship: string): string => `${apsis} was ${formatCount(km)} km from a perfect lock on ${ship}`,
   fuelMiss: (pct: number, ship: string): string => `${ship} locked with FUEL ${pct}% — the ★ is at ${STAR_FUEL_PCT}%`,
   seed: (seed: number): string => `SEED ${seed.toString(16).toUpperCase().padStart(8, '0')}`,
-  newRun: 'NEW RUN ▸ [SPACE]',
 } as const;
 
 

@@ -16,10 +16,8 @@ import { secUntil, type Prediction } from '@systems/predict';
 import { unitName, hollowLabel } from '@systems/say';
 import { hollowUnitName, HOLLOW_STORY, HOLLOW_VERB, HOLLOW_FINALE } from '@data/hollow-text';
 import { playsTutorial, type LastCause, type LastUnit } from '@systems/meta';
-import type { EndingPiece } from '@/types/ending';
 import { SPARE_RUN_END } from '@data/epilogue-text';
 import { FINALE_TEXT } from '@data/finale-text';
-import { ENDINGS_BUILT } from '@data/endings';
 import type { UpgradeForm } from '@data/upgrades';
 import { currentShip } from '@systems/map-run';
 import { solLy } from '@systems/map-geometry';
@@ -444,14 +442,6 @@ export function lineageLine(lastUnit: Readonly<LastUnit> | null): string | null 
   if (lastUnit === null) return null;
   if (lastUnit.cause === 'stayed') return `${unitName(lastUnit.number)} stayed with them.`;
   return `last: ${unitName(lastUnit.number)} · ${formatCount(lastUnit.landed)} landed · ${LINEAGE_END[lastUnit.cause](lastUnit)}`;
-}
-
-// The endings found so far (the title, §4.5's `ENDINGS 0/2`, and a won RUN END, WP11 part 2): the count, then every
-// ending found by name, then `???` for each still to find, so a kid who found one knows there is another way.
-export function endingsLine(seen: readonly EndingPiece[], all: readonly EndingPiece[]): string {
-  const found = all.filter((ending) => seen.includes(ending)).map((ending) => ending.toUpperCase());
-  const unknown = all.filter((ending) => !seen.includes(ending)).map(() => HOLLOW_FINALE.endingUnknown);
-  return [ARCHIVE_TEXT.endings(found.length, all.length), ...found, ...unknown].join(' · ');
 }
 
 // The archive's banners (§4.5: storage failure is loud) and ARCHIVE CORRUPT's two answers. CORRUPT offers them on the
@@ -2396,8 +2386,17 @@ const FINALE_RULES: readonly GuideRule[] = [
     priority: 'mind-urgent',
     outranksLeadIn: true,
     activeWhen: (ctx) => isLanding(ctx) && (ctx.state.hollow.finale.phase === 'step1' || ctx.state.hollow.finale.phase === 'step2'),
-    // Slice 7a (review m2): the two steps' line (FINALE's words) once they are built; WP11's PURGE OR MERGE until then.
-    text: () => (ENDINGS_BUILT.twoStep ? FINALE_TEXT.strip : HOLLOW_FINALE.stripChoice),
+    text: () => FINALE_TEXT.strip,
+  },
+  // Slice 7a (review m3): the verdict has its own line, so the strip never falls back to an order a modal card covers
+  // ('last-landing' needs none: the landing's own lines are there).
+  {
+    id: 'finale-verdict',
+    layer: 'mind',
+    priority: 'mind-urgent',
+    outranksLeadIn: true,
+    activeWhen: (ctx) => isLanding(ctx) && ctx.state.hollow.finale.phase === 'verdict',
+    text: () => FINALE_TEXT.stripVerdict,
   },
   {
     id: 'finale-no-delete',

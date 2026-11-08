@@ -11,23 +11,21 @@
 // • fuelStarTitle: the FUEL bar's ★ notch's tooltip on the final ship (05 §3.7: the notch at 20% also reads SUNSET; the
 //   notch's place is STAR_FUEL_PCT, which EMPTY_SHIP_FUEL_PCT equals), or null for the notch's own title
 //   (components/tools-view/EngineWindow.ts reads it on every paint).
-// Every word is FINALE's (data/finale-text.ts) or HOLLOW_FINALE's (the verdict's tag); this file only lays them out.
+// Every word is FINALE's (data/finale-text.ts); this file only lays them out.
 import type { GameState, FinaleEnding, EndingVoice } from '@state/schema';
 import type { EndingPiece, HollowFate, YouChoice } from '@/types/ending';
 import type { OptionState, PriceMeter, StayCandidate } from '@systems/ending-rules';
 import { shownFuelPct } from '@systems/flight-hud';
-import { ENDINGS_BUILT, STEP1_OPTIONS, step2Options, pieceBuilt, type EndingOption } from '@data/endings';
+import { STEP1_OPTIONS, step2Options, pieceBuilt, type EndingOption } from '@data/endings';
 import { FINALE_TEXT } from '@data/finale-text';
-import { HOLLOW_FINALE } from '@data/hollow-text';
 import { echoWord } from '@data/tool-text';
-import { EMPTY_SHIP_FUEL_PCT, STAY_PICK_MAX, HOLLOW_TYPE_CPS, FINALE_ENDING_GAP_SEC } from '@data/tuning';
+import { STAY_PICK_MAX, HOLLOW_TYPE_CPS, FINALE_ENDING_GAP_SEC } from '@data/tuning';
 
 // --- Which face is up ------------------------------------------------------------------------------------------------
 
 // off: no card (before the root fell, the duel, the asleep landing, the reopened landing after MERGE, any other run phase);
 // waiting: the finale is at step 1 but its card comes up at cardAtAi (R6: the tear and HOLLOW's line are seen first);
-// step1 / followed / step2: a step's choice (followed: UNRESOLVED's step 1, R10); verdict: the typed verdict (R13), or the
-// typed ending WP11's machine writes while ENDINGS_BUILT.twoStep is down.
+// step1 / followed / step2: a step's choice (followed: UNRESOLVED's step 1, R10); verdict: the typed verdict (R13).
 export type CardStage = 'off' | 'waiting' | 'step1' | 'followed' | 'step2' | 'verdict';
 
 export function cardStage(state: Readonly<GameState>): CardStage {
@@ -274,7 +272,7 @@ export interface VerdictRow {
 export function verdictRows(ending: Readonly<FinaleEnding>, starts: readonly number[]): VerdictRow[] {
   if (starts.length !== ending.lines.length) throw new Error(`verdictRows: ${ending.lines.length} lines with ${starts.length} starts`);
   return ending.lines.map((line, i) => ({
-    voice: line.voice, tag: line.voice === 'control' ? HOLLOW_FINALE.controlTag : null, text: line.text, startSec: starts[i]!,
+    voice: line.voice, tag: line.voice === 'control' ? FINALE_TEXT.verdictTag : null, text: line.text, startSec: starts[i]!,
   }));
 }
 
@@ -285,11 +283,9 @@ export function verdictTone(choice: Readonly<{ hollow: HollowFate; you: YouChoic
 
 // --- The FUEL notch (review B2) ----------------------------------------------------------------------------------------------
 
-// On the final ship, with SUNSET on the card (the two steps built), the ★ notch also says it is SUNSET's: `★ 20% · SUNSET: Take
-// the empty ship and go.`, then the FUEL against it as the card will price it. Null elsewhere: the notch's own title.
+// On the final ship, with SUNSET on the card, the ★ notch also says it is SUNSET's: FINALE_TEXT.fuelStar (review m4), with
+// the FUEL as the card will price it. Null elsewhere: the notch's own title.
 export function fuelStarTitle(state: Readonly<GameState>): string | null {
-  if (!state.landing.finalShip || !ENDINGS_BUILT.twoStep || !pieceBuilt('sunset')) return null;
-  const have = shownFuelPct(state.landing.fuelAtEndPct ?? state.burn.fuelPct);
-  const against = have >= EMPTY_SHIP_FUEL_PCT ? FINALE_TEXT.price.fuel(have) : FINALE_TEXT.needs.fuel(have);
-  return `★ ${EMPTY_SHIP_FUEL_PCT}% · ${FINALE_TEXT.word.sunset}: ${FINALE_TEXT.meaning.sunset}\n${against}`;
+  if (!state.landing.finalShip || !pieceBuilt('sunset')) return null;
+  return FINALE_TEXT.fuelStar(shownFuelPct(state.landing.fuelAtEndPct ?? state.burn.fuelPct));
 }

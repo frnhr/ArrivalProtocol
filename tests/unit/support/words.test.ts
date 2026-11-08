@@ -19,7 +19,7 @@ import ts from 'typescript';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { check, finish } from '../landing/checks';
-import { HOLLOW_DEAL, HOLLOW_ECHO, HOLLOW_FINALE, HOLLOW_HUD_TEXT } from '@data/hollow-text';
+import { HOLLOW_DEAL, HOLLOW_ECHO, HOLLOW_HUD_TEXT } from '@data/hollow-text';
 import { POD_STATE_TEXT, LANDING_LINES } from '@data/landing-text';
 import { lineageLine, RUN_END_NOBODY_LANDED } from '@data/script';
 import { scanFinding } from '@data/tool-text';
@@ -147,15 +147,6 @@ check("HOLLOW's eat echo: an eaten driver's pod CAN'T LAUNCH, a file is GONE",
   HOLLOW_ECHO.eat('pod08', true, '???').includes(cant) && HOLLOW_ECHO.eat('telemetry', false, '???').includes('GONE'));
 check("THE DEAL's ACCEPT stamp names the pod and says CAN'T LAUNCH", HOLLOW_DEAL.stampAccepted('POD 08') === `DEAL · POD 08 ${cant}`);
 check("the strip's eaten-driver moment says CAN'T LAUNCH", HOLLOW_HUD_TEXT.lostDriver === cant);
-check('PURGE leaves the eaten pods PARKED IN ORBIT · fate unknown', HOLLOW_FINALE.purgeCost('400').includes(POD_STATE_TEXT.parked)
-  && HOLLOW_FINALE.purgeCost('400').includes('400'));
-const pods = (count: number): string[] => Array.from({ length: count }, (_, i) => `POD ${String(i + 1).padStart(2, '0')}`);
-const gains = [1, 2, 3, 4, 5, 16].map((count) => HOLLOW_FINALE.mergeGain(pods(count)));
-check(`MERGE's line names its pods and stays one line (≤ ${MAX_LINE_CHARS}) up to a ship's 16`,
-  gains.every((text) => text.length <= MAX_LINE_CHARS) && gains[0]!.includes('POD 01') && gains[2]!.includes('POD 03')
-  && gains[5]!.includes('+13') && !gains[5]!.includes('POD 04') && !gains.some((text) => /missing memories/i.test(text)),
-  JSON.stringify(gains));
-check('MERGE over nobody says so', HOLLOW_FINALE.mergeGain([]) === 'It ate nobody here to give back.');
 // Slice 7a (R13): the typed endings became the short verdict (the commands echoed, CONTROL's line); the colonists' count moved
 // to the epilogue (NIGHT's block). What the FINALE's card still counts, it counts as drivers (MERGE's NOW:), never souls.
 const endings = [
@@ -438,7 +429,8 @@ const SLICE7_BASE: Readonly<Record<string, unknown>> = {
     // The longest command a verdict echoes: SPARE's with two units and a 12-letter ship.
     command: '> mv unit_046·047 -> morning_star',
   };
-  const lines = renderSlice6(FINALE_TEXT, [], 'FINALE_TEXT', { ...SLICE7_BASE, ...FINALE_WORST });
+  // The FUEL notch's title is two lines (review m4: FINALE_TEXT.fuelStar), each its own.
+  const lines = renderSlice6(FINALE_TEXT, [], 'FINALE_TEXT', { ...SLICE7_BASE, ...FINALE_WORST }).flatMap((text) => text.split('\n'));
   const bad = lines.filter((text) => text.length > MAX_LINE_CHARS || RULES.some((rule) => rule.re.test(text)));
   check(`7a FINALE words: every line (${lines.length}) fits (≤ ${MAX_LINE_CHARS}) at its worst case and says no never-say word`,
     lines.length > 0 && bad.length === 0, JSON.stringify(bad));

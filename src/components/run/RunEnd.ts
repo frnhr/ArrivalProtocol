@@ -1,23 +1,20 @@
 // Slice 7a: Track NIGHT owns this file after the FOUNDATION (docs/phase3/impl/slice-7-plan.md §4.1, §5.1; R19): the RUN
-// TALLY loses its ending block and the bridge (both move to the FINAL CARD), and its button goes on to the EPILOGUE. The
-// FOUNDATION's seam: with ENDINGS_BUILT.night raised the button reads EPILOGUE ▸ and sets ui.runEndStage 'epilogue' (the
-// keys answer only on the tally); while it is down it is NEW RUN, as before slice 7.
-// Track NIGHT: with the night raised the tally shows no endings line and no bridge (the FINAL CARD has both), and it steps
-// aside (`night-on`) while the EPILOGUE and the FINAL CARD are up; its modal layer stays open under them.
+// TALLY loses its ending block and the bridge (both move to the FINAL CARD), and its button goes on to the EPILOGUE: it
+// reads EPILOGUE ▸ and sets ui.runEndStage 'epilogue' (the keys answer only on the tally). The tally steps aside
+// (`night-on`) while the EPILOGUE and the FINAL CARD are up; its modal layer stays open under them. (The 7a fix pass dropped
+// the night gate and the tally's own NEW RUN, endings line and bridge: review (e).)
 // Slice 4: Track UI's UNSPENT stands. Others ask by message.
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import { runEndModel, type RunEndModel, type RunEndShipRow, type RunEndNext } from '@systems/run-end';
-import { startRun, setRunEndStage } from '@systems/run';
-import { ENDINGS_BUILT } from '@data/endings';
+import { setRunEndStage } from '@systems/run';
 import { EPILOGUE_TEXT } from '@data/epilogue-text';
-import { archiveLineage, archiveMeta, ENDINGS } from '@systems/meta';
-import { newRunSeed } from '@systems/rng';
+import { archiveMeta } from '@systems/meta';
 import { pushModal, registerKeys } from '@systems/input';
 import { play, toggleMuted } from '@systems/audio';
 import { requireById, replayAnimation, make } from '@components/dom';
 import { renderKeyCaps } from '@components/hud/keycaps';
-import { ARCHIVE_TEXT, endingsLine } from '@data/script';
+import { ARCHIVE_TEXT } from '@data/script';
 import { RUN_END_TEXT } from '@data/landing-text';
 import { chartModel } from '@systems/desk';
 import { drawChart, LANDSCAPE_ROTATE_DEG } from '@components/desk/chart-draw';
@@ -31,15 +28,13 @@ import {
 // (rolling up), every ship of the fleet landing one by
 // one with how it ended, its stars, its LANDED and its points (a ship the run never reached says so), then §4.4's
 // half-credit number as the run's SCORE (labelled, with what it counts) and the rank it earns, up to two
-// near misses, the seed, and NEW RUN ▸, which starts a fresh run in the page (systems/run.ts startRun: the
-// title card again, never a reload). When the archive did not keep the run (OFFLINE, PLAY WITHOUT) the last
+// near misses, the seed, and EPILOGUE ▸ (slice 7a: NEW RUN is the FINAL CARD's). When the archive did not keep the run (OFFLINE, PLAY WITHOUT) the last
 // line says the next unit will not remember it (WP8). Presentation on wall time, like the LANDING REPORT; the world is
 // stopped. After a BEAM OUT it waits for the old ship's windows to go black first.
 // Reduced motion: the rows and lines fade in place and the count is shown whole.
 // WP11 part 2 (the lead's item 2: the tone is the cause's): a won finale is the only celebratory screen. Its title takes
 // the ending's colour (PURGE a cold white, MERGE HOLLOW's pink running into the mind's blue), an orbit ring breathes
-// behind it, the endings found so far stand under it (`ENDINGS 1/2 · PURGE · ???`: there is another way), and a MERGE
-// says what it carries into the next run. Every other ending is sombre: a grey night, the title in the warning colour,
+// behind it (slice 7a: the endings found are the FINAL CARD's). Every other ending is sombre: a grey night, the title in the warning colour,
 // the count plain (no green glow), a falling tone instead of the choir.
 // Phase 3 slice 3a (02-map §4): the ships become the RUN TALLY: one row per ship the run visited (`3 · KESTREL · 2467`,
 // its outcome, stars, LANDED and points; a ship the route never took has no row), beside the route on a small chart
@@ -127,7 +122,6 @@ export function mountRunEnd(store: Store<GameState>): () => void {
   const kickerEl = requireById('reKicker');
   const titleEl = requireById('reTitle');
   const whyEl = requireById('reWhy');
-  const endingsEl = requireById('reEndings');
   const totalEl = requireById('reTotal');
   const missingEl = requireById('reMissing');
   const shipsEl = requireById('reShips');
@@ -139,10 +133,6 @@ export function mountRunEnd(store: Store<GameState>): () => void {
   const archiveEl = requireById('reArchive');
   const newBtn = requireById<HTMLButtonElement>('reNew');
   const tally = buildTally(shipsEl);
-  // Slice 3c (05 §3.12; slice 7 moves it to the final card): the bridging line under NEW RUN.
-  const bridgeEl = make('div', 're-bridge');
-  bridgeEl.hidden = true;
-  newBtn.after(bridgeEl);
   // Slice 4: RUN END's `UNSPENT n`, under the rank.
   const unspentEl = make('div', 're-unspent');
   unspentEl.hidden = true;
@@ -233,12 +223,6 @@ export function mountRunEnd(store: Store<GameState>): () => void {
     kickerEl.textContent = report.kicker;
     titleEl.textContent = report.title;
     whyEl.textContent = report.why;
-    // The archive's session copy: this run's ending is already in it (recorded as the run ended).
-    // Slice 7a (R19): with the night built, the endings found and the bridge are the FINAL CARD's.
-    const endings = ENDINGS_BUILT.night || report.ending === null || state.archive.status === 'none'
-      ? null : endingsLine(archiveMeta().endingsSeen, ENDINGS);
-    endingsEl.hidden = endings === null;
-    endingsEl.textContent = endings ?? '';
     totalEl.textContent = RUN_END_TEXT.total(0, report.fleetColonists);
     missingEl.textContent = '';
     missingEl.hidden = true;
@@ -255,11 +239,6 @@ export function mountRunEnd(store: Store<GameState>): () => void {
     unspentEl.hidden = skillLines === null;
     unspentEl.textContent = skillLines?.unspentLine ?? '';
     paintNext(tally.next, report.next);
-    const bridge = ENDINGS_BUILT.night ? null : report.next;
-    bridgeEl.hidden = bridge === null;
-    bridgeEl.replaceChildren(...(bridge === null ? [] : [
-      make('div', 're-bridge-line', bridge.bridge), make('div', 're-bridge-tail', bridge.bridgeTail),
-    ]));
     // The route's mini chart is drawn once the screen shows (show(): its size is the CSS box's, and a hidden box has none:
     // drawn here, under a BEAM OUT's delayed show, it was often empty; the e2e run), and again on a resize.
     tally.svg.replaceChildren();
@@ -272,7 +251,7 @@ export function mountRunEnd(store: Store<GameState>): () => void {
     const archiveLine = archive === 'ok' || archive === 'none' ? null : ARCHIVE_TEXT.runEnd[archive];
     archiveEl.hidden = archiveLine === null;
     archiveEl.textContent = archiveLine ?? '';
-    renderKeyCaps(newBtn, ENDINGS_BUILT.night ? EPILOGUE_TEXT.tallyOn : RUN_END_TEXT.newRun, { own: 'SPACE' });
+    renderKeyCaps(newBtn, EPILOGUE_TEXT.tallyOn, { own: 'SPACE' });
     newBtn.classList.add('arming');
     root.classList.remove('scored');
     inputFromMs = Infinity;
@@ -291,12 +270,10 @@ export function mountRunEnd(store: Store<GameState>): () => void {
     closeModal = null;
   }
 
-  // NEW RUN: a fresh run in the page (the title card again), once the screen has been up long enough. The
-  // next unit is the archive's (UNIT-048 after UNIT-047, with its ghost), kept or not (state.archive).
+  // EPILOGUE ▸ (R19), once the screen has been up long enough: the night goes on (the FINAL CARD starts the next run).
   function newRun(): void {
     if (!model || performance.now() < inputFromMs || store.getState().ui.runEndStage !== 'tally') return;
-    if (ENDINGS_BUILT.night) setRunEndStage(store, 'epilogue');
-    else startRun(store, newRunSeed(), archiveLineage());
+    setRunEndStage(store, 'epilogue');
   }
 
   const onNew = (event: MouseEvent): void => { event.stopPropagation(); newRun(); };

@@ -1,20 +1,11 @@
-// Slice 7a: the lead owns this file (docs/phase3/impl/slice-7-plan.md §2.1, §4.1). Track FINALE raises
-// ENDINGS_BUILT.twoStep (one line), Track NIGHT ENDINGS_BUILT.night (one line), 7d's CONTACT ENDINGS_BUILT.contact. Others
-// ask by message. Data and types only (support/import-guard): no system imports this file's readers' state.
+// Slice 7a: the lead owns this file (docs/phase3/impl/slice-7-plan.md §2.1, §4.1). 7d's CONTACT raises
+// ENDINGS_BUILT.contact (one line). Others ask by message. Data and types only (support/import-guard): no system imports this file's readers' state.
 import type { HollowChoice, HollowFate, YouChoice, EndingPiece } from '@/types/ending';
 
-// What this build plays of slice 7's endings (R11, R12, R19; each gate down until its track raises it):
-// • twoStep (Track FINALE): the FINALE's two steps and its timing (R6: the card waits for the landing to settle). While it
-//   is down the finale plays WP11's one step: the card opens as the root falls, PURGE or MERGE, and step 2 is
-//   REASSIGNMENT (05: the old endings stood the unit by), applied at once; the typed ending is WP11's.
-// • night (Track NIGHT): the run end's EPILOGUE and FINAL CARD after the RUN TALLY (R19). While it is down the RUN TALLY's
-//   NEW RUN starts the next run, as before slice 7.
-// • contact (7d): CONTACT's row on the FINALE card and its piece in the count (R11: absent until raised).
-export const ENDINGS_BUILT: Readonly<{ twoStep: boolean; night: boolean; contact: boolean }> = {
-  // Track FINALE raises this line.
-  twoStep: true,
-  // Track NIGHT raises this line.
-  night: true,
+// What this build plays of slice 7's endings (R11): contact (7d), CONTACT's row on the FINALE card and its piece in the
+// count (absent until raised). The 7a fix pass dropped the twoStep and night gates (raised for good by Tracks FINALE and
+// NIGHT) with the WP11 one-step and gate-down paths they switched (review (e)).
+export const ENDINGS_BUILT: Readonly<{ contact: boolean }> = {
   // 7d's CONTACT raises this line.
   contact: false,
 };

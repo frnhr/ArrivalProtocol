@@ -29,6 +29,7 @@ import { reserveThread, releaseThread, threadsTotal, canStartOp, getOps, cancelO
 import { typingSec } from '@systems/say';
 import { lineageLine, RUN_END_NOBODY_LANDED, RUN_END_PURGE_SHORT } from '@data/script';
 import { HOLLOW_FINALE, MERGE_TICK_TEXT, GHOST_LINE } from '@data/hollow-text';
+import { LANDING_LINES } from '@data/landing-text';
 import { TOOL_REFUSAL, echoWord } from '@data/tool-text';
 import { driversInMemory, finalePending, chargeLeft, isInfected } from '@state/selectors';
 import { onAny } from '@systems/events';
@@ -125,7 +126,7 @@ landInstantly(h.store);
   while (driversInMemory(state()).length > 0 && h.wall() < end) h.step();
   h.stepFor(0.6);
   check('every pod down before the root\'s end: the ship waits for the root, the strip says EVERY POD IS DOWN — now DELETE THE ROOT',
-    state().run.phase === 'landing' && h.shown()?.text === HOLLOW_FINALE.stripWaits, `${state().run.phase} | ${h.shown()?.text}`);
+    state().run.phase === 'landing' && h.shown()?.text === LANDING_LINES.L0, `${state().run.phase} | ${h.shown()?.text}`);
 }
 deleteRoot();
 h.stepFor(ROOT_DELETE_SEC + 0.3);

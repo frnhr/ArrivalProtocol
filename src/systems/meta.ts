@@ -91,10 +91,6 @@ export { ghostShipIndex, ghostPlaceReached } from '@systems/lineage';
 
 // --- The record (§4.5's shape; archive v2, slice 3c plan §2.4) ---------------------------------------------
 
-// WP11's two endings, the ones the title's ENDINGS n/2 and RUN END's endings line count until Track NIGHT moves them to the
-// built pieces (data/endings.ts builtPieces: ENDINGS n/6, R22). endingsSeen itself holds pieces (META 4).
-export type Ending = Extract<EndingPiece, 'purge' | 'merge'>;
-export const ENDINGS: readonly Ending[] = ['purge', 'merge'];
 
 // The run in progress (§4.5's { unit, startedAt }), brought up to date at each ship's start so a run left
 // mid-ship can still be named on the next title (WP8 deviation: the fields after startedAt). Archive v2: `landed` (was

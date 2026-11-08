@@ -4,7 +4,7 @@
 // bodies are in the track modules (autodrop.ts, sentry.ts, beam-seeds.ts, autoburn-v3.ts; resident-corrupted.ts,
 // resident-sleeper.ts; survey.ts). Tracks ask by message.
 import type { Store } from '@state/store';
-import type { GameState, Speaker, ObjectiveLine, LogEntry, ViewMode, TerminalStatus, EndingLine } from '@state/schema';
+import type { GameState, Speaker, ObjectiveLine, LogEntry, ViewMode, TerminalStatus } from '@state/schema';
 import { getPrediction, getSensedPrediction, type Prediction } from '@systems/predict';
 import { capabilitiesNow, CAPABILITY_ROLES, type Capabilities } from '@systems/capabilities';
 import { installTool } from '@systems/licences';
@@ -93,7 +93,7 @@ import { renderKeyCaps } from '@components/hud/keycaps';
 import { infectNow, cureNow, hollowReach, nameHollow, chooseVerb, verbWeights, type Reach, type Verb, type VerbWeights } from '@systems/hollow';
 import { verbNow } from '@systems/hollow-verbs';
 import {
-  chooseFinale, finaleChoiceRefusal, rootDeletable, skipFinaleEnding, finaleEndingShowing, finaleEndingLines, type FinaleChoice,
+  rootDeletable, skipFinaleEnding, finaleEndingShowing,
   pickStep1, pickStep2, pickStay, backToStep1, continueFollowed, decideFinaleNow,
 } from '@systems/finale';
 import { optionState, type OptionState } from '@systems/ending-rules';
@@ -391,10 +391,10 @@ interface DebugHooks {
   choiceTicker: () => { text: string; urgent: boolean } | null;
   // WP11 (LAST LIGHT): verbs is HOLLOW's verb state (the one counting down, its clock, how many came, were telegraphed,
   // landed and were blocked) with what it would pick now and the tools it spares (licensed here, not used yet); verbNow
-  // runs its clock out (the next tick telegraphs one); finale is the duel's and the choice's state, whether the root can
-  // still be deleted and why MERGE would be refused; choose makes the choice (as FinaleChoice's buttons do); glitch fires
-  // a glitchBurst (level 0..1, ms). WP11 part 2: finale also says whether the typed ending is on screen and for how many
-  // AI s more; skipEnding ends it early (as a click on it does); endingLines writes what an ending would say now.
+  // runs its clock out (the next tick telegraphs one); finale is the duel's and the choice's state and whether the root can
+  // still be deleted; glitch fires a glitchBurst (level 0..1, ms). WP11 part 2: finale also says whether the typed ending
+  // is on screen and for how many AI s more; skipEnding ends it early (as a click on it does). The 7a fix pass dropped
+  // WP11's choose, endingLines and the refusals: finale().options and finale.pick are the two steps' (review (e)).
   verbs: () => {
     verb: GameState['hollow']['verb']; inSec: number | null; moments: number; telegraphs: number; landed: number; blocked: number;
     wouldPick: Verb | null; weights: VerbWeights; untried: readonly FsToolKind[];
@@ -407,9 +407,7 @@ interface DebugHooks {
   finale: FinaleDebug;
   ending: (hollow: HollowFate, you: YouChoice, opts?: { stay?: number }) => void;
   night: () => { stage: RunEndStage; epilogue: EpilogueModel | null; card: FinalCardModel | null };
-  choose: (choice: FinaleChoice) => string | null;
   skipEnding: () => boolean;
-  endingLines: (choice: FinaleChoice) => EndingLine[];
   // WP11 part 2: the game's events lately (name and payload, newest last; DEBUG_EVENT_KEEP of them), so a browser run
   // can count what happened (belt hits on racks A–B, BLOCKED, the duel's spikes) without a listener of its own.
   events: (name?: GameEventName) => { name: GameEventName; payload: unknown; aiSec: number }[];
@@ -446,7 +444,7 @@ const HOLLOW_DEMO_WAKE_SEC = 12;
 // __ap.finale: the state, and the card's actions (slice 7a, §2.12).
 interface FinaleDebug {
   (): {
-    state: GameState['hollow']['finale']; rootDeletable: boolean; mergeRefusal: string | null; purgeRefusal: string | null;
+    state: GameState['hollow']['finale']; rootDeletable: boolean;
     endingShowing: boolean; endingLeftSec: number | null;
     options: { step1: { piece: EndingPiece; state: OptionState }[]; step2: { piece: EndingPiece; state: OptionState }[] };
   };
@@ -1172,7 +1170,6 @@ export function mountDebug(store: Store<GameState>): void {
       const rows = (pieces: readonly EndingPiece[]) => pieces.map((piece) => ({ piece, state: optionState(state, piece, seen) }));
       return {
         state: state.hollow.finale, rootDeletable: rootDeletable(state),
-        mergeRefusal: finaleChoiceRefusal(state, 'merge'), purgeRefusal: finaleChoiceRefusal(state, 'purge'),
         endingShowing: finaleEndingShowing(state), endingLeftSec: ending === null ? null : Math.max(0, ending.untilAi - state.clock.aiSec),
         options: { step1: rows(STEP1_OPTIONS.map((option) => option.piece)), step2: rows(step2Options().map((option) => option.piece)) },
       };
@@ -1195,10 +1192,8 @@ export function mountDebug(store: Store<GameState>): void {
       const meta = state.archive.status === 'ok' ? archiveMeta() : null;
       return { stage: state.ui.runEndStage, epilogue: epilogueModel(state, meta), card: finalCardModel(state, meta) };
     },
-    choose: (choice) => chooseFinale(store, choice),
     skipEnding: () => skipFinaleEnding(store),
     events: (name) => recentEvents.filter((event) => name === undefined || event.name === name),
-    endingLines: (choice) => finaleEndingLines(store.getState(), choice),
     glitch: (level, ms) => glitchBurst(level, ms),
     stripOverflow: (texts, maxLines) => {
       const textEl = document.getElementById('objectiveText');

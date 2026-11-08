@@ -91,7 +91,7 @@ import {
 //   stands still under TACTICAL like the countdown); verb-blocked → verbBlocked + the BLOCKED stamp's thud;
 //   verb-landed → verbLanded; root-unlocked → rootOpen; duel-spike → duelSpike (brighter as the DELETE nears its end),
 //   and while the root's DELETE runs, the duel's drone climbs with it; root-deleted → rootDeleted; finale-chosen →
-//   purgeTone or mergeChord (the choice card plays its own hold, FinaleChoice)
+//   purgeTone or mergeChord (slice 7a: the card's other sounds are the 7 ENDING block's events)
 // • Phase 3 slice 2 (04 §4): seed-landed-beam → seedLand (each beam seed's small thunk as the ECC line names it);
 //   hollow-boarded → hollowBoard (the root drops into the bay as the 108% unpack is said; the shake and the tear are
 //   Juice's and the glitch driver's); last-rm-lost → the LAST rm DELETED stamp's heavy thud. The boarding beam's stutter

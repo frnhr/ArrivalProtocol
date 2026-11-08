@@ -293,7 +293,7 @@ mountLandingReport(store);
 mountDeskScreen(store);
 mountTransmitScreen(store);
 mountRunEnd(store);
-// Slice 7a (R19): the night after the RUN TALLY (Track NIGHT's screens; inert until ENDINGS_BUILT.night).
+// Slice 7a (R19): the night after the RUN TALLY (Track NIGHT's screens).
 mountEpilogue(store);
 mountFinalCard(store);
 // Slice 2: the LOG READER, over TRANSMIT or the game (05 §4).

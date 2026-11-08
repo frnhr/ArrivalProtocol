@@ -490,10 +490,6 @@ body.reduced-motion .title-save-btn.primary { animation: none; }
 .re-next-summary { color: var(--report-dim); }
 .re-next-leave { color: var(--report-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .re-next-leave.more { opacity: 0.7; }
-.re-foot:has(.re-bridge:not([hidden])) { flex-direction: column; align-items: center; gap: 8px; }
-.re-bridge { max-width: 640px; text-align: center; font-size: 11px; letter-spacing: 0.14em; line-height: 1.6; color: var(--report-dim); }
-.re-bridge[hidden] { display: none; }
-.re-bridge-line { color: var(--report-text); }
 @media (max-width: 768px) {
   .re-tally { grid-template-columns: minmax(0, 1fr); }
   .re-tally-chart { height: 160px; }

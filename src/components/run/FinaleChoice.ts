@@ -23,7 +23,6 @@ import { play, toggleMuted, type TypeVoice } from '@systems/audio';
 import { requireById, make, replayAnimation, guardPresses } from '@components/dom';
 import { renderKeyCaps } from '@components/hud/keycaps';
 import { unitsAt } from '@components/hud/typewriter';
-import { HOLLOW_FINALE } from '@data/hollow-text';
 import { FINALE_TEXT } from '@data/finale-text';
 import { LOG_TEXT, logEntryLines } from '@data/log-text';
 import { FRESH_UNIT_CHARGE } from '@data/memory';
@@ -44,8 +43,7 @@ import { FINALE_STEP_ARM_SEC, FINALE_ENDING_CPS, CONTROL_CHIME_LEAD_SEC, FINALE_
 //   first, keys 1–8; ESC closes it (M3).
 // • THE VERDICT (R13): the confirm writes it (≤ 3 lines: the two echoes and CONTROL); the card types it on the verdict's
 //   own AI clock (finaleEndingLineStartsSec from its startAi, the schedule the LANDING REPORT waits for). A click, SPACE or
-//   ENTER finishes the typing; once typed, one more ends it (skipFinaleEnding). Reduced motion shows it whole. While the two
-//   steps are not built (ENDINGS_BUILT.twoStep down) the same face types WP11's ending.
+//   ENTER finishes the typing; once typed, one more ends it (skipFinaleEnding). Reduced motion shows it whole.
 // Each step's options take keys and clicks FINALE_STEP_ARM_SEC (AI s) after the step is up. The card is a modal on the
 // choice layer: 1–8 pick, ESC goes back, ENTER goes on, P pauses, M mutes. The sounds are systems/audio-cues.ts's 7 ENDING
 // block ('finale-open', 'finale-chosen', 'finale-step2').
@@ -455,7 +453,7 @@ export function mountFinaleChoice(store: Store<GameState>): () => void {
     root.className = `finale-choice ending ${verdictTone(ending.choice)}`;
     card.className = `fc-card ${verdictTone(ending.choice)}`;
     openModal();
-    renderKeyCaps(hintEl, HOLLOW_FINALE.endingHint, { own: 'SPACE' });
+    renderKeyCaps(hintEl, FINALE_TEXT.verdictHint, { own: 'SPACE' });
     hintEl.hidden = false;
     hintEl.classList.add('pending');
     verdict = verdictRows(ending, finaleEndingLineStartsSec(ending.lines)).map(verdictEntry);

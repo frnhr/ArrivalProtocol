@@ -6,13 +6,10 @@
 //   DUEL_SPIKE_EVERY_START_SEC quickening toward DUEL_SPIKE_EVERY_END_SEC, from DUEL_SPIKE_LEVEL_START rising toward
 //   DUEL_SPIKE_LEVEL_END ('duel-spike' carries the progress, rising); none after the root is gone, whose end is the
 //   biggest tear (ROOT_GONE_GLITCH_LEVEL).
-// • The typed endings (§9 WP11 item 5): ≤ FINALE_ENDING_MAX_LINES lines, each ≤ MAX_LINE_CHARS also with worst-case names,
-//   the design's words (`> rm unit_046 ... OK` / `LAST LIGHT · n colonists reached orbit.` / `the fleet is home.` / CONTROL's
-//   reassignment; `> merge unit_046 -> unit_047 ... OK` / `> hi. it's us.` / `we arrive together.` / compliant, review M2), with
-//   what PURGE leaves parked and what MERGE brought back; the LANDING REPORT waits for the ending's time (finaleEndingSec),
+// • The typed endings (§9 WP11 item 5), now the short verdict (below; each line ≤ MAX_LINE_CHARS with worst-case names), with what MERGE brought back; the LANDING REPORT waits for the ending's time (finaleEndingSec),
 //   skipFinaleEnding lets it come at once; MERGE's glitch.
 // • The MERGE tick (mergeTickCharge) from LAST LIGHT's boot to the choice, never on another ship.
-// • RUN END: the ending and MERGE's carry line; endingsLine (`ENDINGS 1/2 · MERGE · ???`).
+// • RUN END: the ending and MERGE's carry line (the endings found are the FINAL CARD's since slice 7a).
 // Slice 7a (R6, R13): the root's end puts HOLLOW to sleep while the landing goes on, the card comes up once it has settled
 // (support/finale.ts settleFinale), and the typed ending is the short verdict (≤ FINALE_VERDICT_MAX_LINES: the two commands
 // echoed and CONTROL's line; the story moved to the epilogue). Its worst-case words are checked for every ending.
@@ -28,9 +25,8 @@ import { continueAfterReport } from '../../support/classic-flow';
 import { say } from '@systems/say';
 import { actionDelete } from '@state/actions';
 import { driversInMemory, finalePending, quantizeCorruption } from '@state/selectors';
-import { HOLLOW_FINALE, HOLLOW_VERB, hollowUnitName } from '@data/hollow-text';
+import { HOLLOW_VERB, hollowUnitName } from '@data/hollow-text';
 import { echoWord } from '@data/tool-text';
-import { endingsLine } from '@data/script';
 import { CLASSIC_FIVE } from '@data/classic-five';
 import {
   MAX_LINE_CHARS, FINALE_VERDICT_MAX_LINES, GLITCH_BURST_LEVEL, DUEL_SPIKE_LEVEL_START, DUEL_SPIKE_LEVEL_END, ROOT_DELETE_SEC,
@@ -54,7 +50,6 @@ const eventsSince = (from: number, name: string): { payload: unknown; wall: numb
 // --- The text, with worst-case words -------------------------------------------------------------------------------
 {
   const worstHollow = echoWord(hollowUnitName([999, 998]));
-  const ours = echoWord('UNIT-999');
   // Slice 7a (R13): every ending's verdict at its worst-case names (two units in the root, unit 999, a 12-letter ship, the
   // longest colony STAY can mount).
   const worst = structuredClone(state()) as GameState;
@@ -81,16 +76,6 @@ const eventsSince = (from: number, name: string): { payload: unknown; wall: numb
   check('…each speaks as the TERMINAL\'s echoes, then CONTROL (UNRESOLVED has no step-1 echo)', verdicts.every((lines) => lines.at(-1)!.voice === 'control'
     && lines.slice(0, -1).every((line) => line.voice === 'cmd' && line.text.endsWith(' ... OK')))
     && verdicts[0]!.length === 3 && verdicts.at(-1)!.length === 2, JSON.stringify(verdicts.map((lines) => lines.map((line) => line.text))));
-  // MERGE's line with a whole rack of eaten pods (16, the most a ship carries): it names a few and counts the rest.
-  const sixteenPods = Array.from({ length: 16 }, (_, i) => `POD ${String(i + 1).padStart(2, '0')}`);
-  const cardWords = [
-    HOLLOW_FINALE.choiceTitle(hollowUnitName([999, 998])), HOLLOW_FINALE.purgeCmd(worstHollow), HOLLOW_FINALE.mergeCmd(worstHollow, ours),
-    HOLLOW_FINALE.purgeCost('3,200'), HOLLOW_FINALE.mergeGain(sixteenPods), HOLLOW_FINALE.mergeGain(sixteenPods.slice(0, 5)),
-    HOLLOW_FINALE.mergePrice(MERGE_COST_CHARGE, 999),
-    HOLLOW_FINALE.mergeNeeds(19), endingsLine(['purge', 'merge'], ['purge', 'merge']),
-  ];
-  check('the card\'s words and RUN END\'s lines are one line each (≤ 70 characters)', cardWords.every((text) => text.length <= MAX_LINE_CHARS),
-    JSON.stringify(cardWords.map((text) => text.length)));
   // Unlink pass (Fran, after the handover): HOLLOW's RM types `unlink`, four letters longer than `rm`. Its echoes still fit
   // one line with a file name as long as a chip allows and the longest name HOLLOW goes by.
   const worstFile = echoWord('W'.repeat(SEG_NAME_MAX_CHARS));
@@ -102,9 +87,6 @@ const eventsSince = (from: number, name: string): { payload: unknown; wall: numb
   check(`HOLLOW's verb echoes fit one line (≤ ${MAX_LINE_CHARS}) with worst-case names, and RM types \`unlink\``,
     verbLines.every((text) => text.length <= MAX_LINE_CHARS) && verbLines[0]!.startsWith('> unlink ') && HOLLOW_VERB.badge('rm', 4) === 'UNLINK 4',
     JSON.stringify(verbLines.map((text) => text.length)));
-  check('endingsLine: the found ones by name, then ??? for each still to find', endingsLine([], ['purge', 'merge']) === 'ENDINGS 0/2 · ??? · ???'
-    && endingsLine(['merge'], ['purge', 'merge']) === 'ENDINGS 1/2 · MERGE · ???'
-    && endingsLine(['merge', 'purge'], ['purge', 'merge']) === 'ENDINGS 2/2 · PURGE · MERGE');
 }
 
 // --- Ship 1 (the harness starts there): no MERGE tick -----------------------------------------------------------------

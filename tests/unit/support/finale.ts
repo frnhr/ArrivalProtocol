@@ -1,11 +1,10 @@
 // Slice 7a (docs/phase3/impl/slice-7-plan.md R5, §2.4): the FINALE for the suites. The lead owns this file; Track FINALE may
-// extend it. Every suite that ends a final ship goes through here, so the FINALE's two steps (ENDINGS_BUILT.twoStep) move
-// one helper, not twenty suites.
+// extend it. Every suite that ends a final ship goes through here, so the FINALE's two steps moved one helper, not twenty
+// suites.
 // • chooseEnding(store, hollow, you = 'reassignment', opts): the ending, as the card makes it: step 1's pick, then step 2's
-//   (STAY's ship when given). With the two steps down it is WP11's one step (systems/finale.ts chooseFinale: PURGE or MERGE,
-//   REASSIGNMENT). With them up the verdict is skipped (skipFinaleEnding: the FINALE goes on at once, to 'done', or to
+//   (STAY's ship when given). The verdict is skipped (skipFinaleEnding: the FINALE goes on at once, to 'done', or to
 //   MERGE's reopened landing 'last-landing' in 7a), unless `opts.verdict` is 'type' (the suites that time the verdict); from
-//   7b THE LAST LANDING is skipped too. It returns the refusal (nothing changes then), as chooseFinale did: the card's
+//   7b THE LAST LANDING is skipped too. It returns the refusal (nothing changes then), as WP11's chooseFinale did: the card's
 //   step 1 must be up (the root fell, the landing settled and the card's open delay ran out: settleFinale, or `opts.step`
 //   to let this settle it).
 // • settleFinale(store, step): the root fell and HOLLOW sleeps ('asleep'): the landing is ended (END LANDING, or as the
@@ -19,19 +18,16 @@
 // • decideFinale(draft, hollow, you) / openFinaleStep1(finale): a hand-built FINALE decided (with its ending record frozen
 //   from the draft, as the confirm writes it: review M4), or at step 1 after the root fell, as the suites that construct one
 //   used to set WP11's 'purged' or 'choice' (the card up: cardAtAi 0 unless set).
-// • withEndings(gates, fn): `fn` runs with data/endings.ts ENDINGS_BUILT set as given, put back after (the dry run's and the
-//   tracks' suites before they raise their gates).
+// • withEndings(gates, fn): `fn` runs with data/endings.ts ENDINGS_BUILT set as given, put back after (CONTACT's gate, 7d's).
 import type { Store } from '@state/store';
 import type { GameState, FinaleState } from '@state/schema';
 import type { HollowChoice, HollowFate, YouChoice } from '@/types/ending';
-import { chooseFinale, pickStep1, pickStep2, pickStay, skipFinaleEnding } from '@systems/finale';
+import { pickStep1, pickStep2, pickStay, skipFinaleEnding } from '@systems/finale';
 import { endLanding } from '@systems/landing';
 import { endingRecordAt } from '@systems/ending-rules';
 import { ENDINGS_BUILT } from '@data/endings';
 
 export interface EndingGates {
-  twoStep: boolean;
-  night: boolean;
   contact: boolean;
 }
 
@@ -99,12 +95,6 @@ export function chooseEnding(
   opts: { stay?: number; step?: () => void; verdict?: 'skip' | 'type' } = {},
 ): string | null {
   if (opts.step !== undefined) settleFinale(store, opts.step);
-  if (!ENDINGS_BUILT.twoStep) {
-    if (hollow === 'spare' || you !== 'reassignment' || opts.stay !== undefined) {
-      throw new Error(`chooseEnding: ${hollow} + ${you} needs the two steps (ENDINGS_BUILT.twoStep)`);
-    }
-    return chooseFinale(store, hollow);
-  }
   const first = pickStep1(store, hollow);
   if (first !== null) return first;
   const second = opts.stay === undefined ? pickStep2(store, you) : pickStay(store, opts.stay);

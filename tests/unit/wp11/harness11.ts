@@ -25,9 +25,9 @@ import { safestSpot } from '@systems/move-preview';
 import { isBusy } from '@systems/tool-targets';
 import type { PendingPlacement } from '@state/schema';
 import type { DriverSegment } from '@/types/segment';
+import type { HollowChoice } from '@/types/ending';
 import { canStartOp, getOpsBySeg, cancelOp } from '@systems/ops-core';
 import { theRoot, rootDeleteRunning, hollowReach } from '@systems/hollow';
-import { type FinaleChoice } from '@systems/finale';
 import { autoburnAvailable } from '@systems/autoburn';
 import { getPrediction, getSensedPrediction } from '@systems/predict';
 import { knownHitRacks } from '@systems/zones';
@@ -63,7 +63,7 @@ export interface Harness11 extends Harness10 {
   defend11: (opts?: DefendOpts) => boolean;
   flyLastLight: (maxWall: number, opts?: DefendOpts) => string[];
   // Defends until the finale's choice stands (or maxWall), makes `choice`, then defends on to the LANDING REPORT.
-  finishFinale: (choice: FinaleChoice, maxWall: number, opts?: DefendOpts) => { reachedChoice: boolean; refusal: string | null; reported: boolean };
+  finishFinale: (choice: HollowChoice, maxWall: number, opts?: DefendOpts) => { reachedChoice: boolean; refusal: string | null; reported: boolean };
 }
 
 export function createHarness11(seed = 1, opts: { soulsFound?: boolean } = {}): Harness11 {

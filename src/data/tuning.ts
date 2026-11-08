@@ -1396,11 +1396,10 @@ export const ROOT_GONE_GLITCH_MS = 900;
 export const MERGE_GLITCH_LEVEL = 0.5;
 export const MERGE_GLITCH_MS = 1600;
 // The choice card's delay and arming moved to slice 7a's FINALE block (FINALE_OPEN_DELAY_SEC, FINALE_STEP_ARM_SEC).
-// The typed ending (§9 WP11 item 5): at most this many lines, typed at FINALE_ENDING_CPS (slower than the TERMINAL: it is
-// the story's last words) with FINALE_ENDING_GAP_SEC between lines and CONTROL's chime before its line, then held for
+// The typed ending (§9 WP11 item 5; slice 7a: the verdict, at most FINALE_VERDICT_MAX_LINES lines), typed at
+// FINALE_ENDING_CPS (slower than the TERMINAL: it is the story's last words) with FINALE_ENDING_GAP_SEC between lines and CONTROL's chime before its line, then held for
 // FINALE_ENDING_HOLD_SEC to be read. The WAKE REPORT waits for it (finalePending); a click or a key ends it early.
 // UNRESOLVED's one line (`> you can't delete me now. …`) gets the same hold once it has typed (WP11 review).
-export const FINALE_ENDING_MAX_LINES = 6;
 export const FINALE_ENDING_CPS = 26;
 export const FINALE_ENDING_GAP_SEC = 0.7;
 export const FINALE_ENDING_HOLD_SEC = 4.0;

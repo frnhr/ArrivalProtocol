@@ -10,7 +10,7 @@
 //   ship (M3), CONTACT absent (R11), [ESC] BACK; STAY's sub-row (keys 1–8, newest first, capped at STAY_PICK_MAX);
 // • entry 12's typing from cardAtAi (m8), line after line;
 // • the verdict's rows (≤ 3: the echoes and CONTROL with its tag) and tone;
-// • the FUEL notch's SUNSET tooltip (B2): only on the final ship with the two steps built;
+// • the FUEL notch's SUNSET tooltip (B2, m4: FINALE_TEXT.fuelStar): only on the final ship;
 // • every line the models build fits (≤ MAX_LINE_CHARS) at its worst names (UNIT-046·047, MORNING STAR, MONTGOMERY LANDING).
 import { check, finish } from '../landing/checks';
 import type { GameState, FinaleEnding } from '@state/schema';
@@ -23,7 +23,6 @@ import {
 } from '@systems/finale-card';
 import { withEndings as withGates } from '../support/finale';
 import { FINALE_TEXT } from '@data/finale-text';
-import { HOLLOW_FINALE } from '@data/hollow-text';
 import { LOG_TEXT, logEntryLines } from '@data/log-text';
 import { FRESH_UNIT_CHARGE } from '@data/memory';
 import { MAX_LINE_CHARS, STAY_PICK_MAX, HOLLOW_TYPE_CPS, FINALE_ENDING_GAP_SEC, MERGE_COST_CHARGE } from '@data/tuning';
@@ -72,10 +71,10 @@ const verdict = (choice: FinaleEnding['choice'], untilAi: number): FinaleEnding 
   check('cardStage: step 1 with the root standing is UNRESOLVED\'s IT FOLLOWED YOU (R10)',
     f((finale) => { finale.phase = 'step1'; finale.rootFell = false; finale.cardAtAi = 99; }) === 'followed');
   check('cardStage: step 2', f((finale) => { finale.phase = 'step2'; finale.hollow = 'purge'; finale.cardAtAi = 50; }) === 'step2');
-  check('cardStage: the verdict types at \'verdict\', and at \'done\' while it is still on (WP11\'s ending with the gate down)',
+  check('cardStage: the verdict types at \'verdict\', and at \'done\' while it is still on',
     f((finale) => { finale.phase = 'verdict'; finale.ending = verdict({ hollow: 'purge', you: 'reassignment' }, 120); }) === 'verdict'
     && f((finale) => { finale.phase = 'done'; finale.ending = verdict({ hollow: 'purge', you: 'reassignment' }, 120); }) === 'verdict');
-  check('cardStage: \'done\' once the verdict is over, or with none (UNRESOLVED\'s gate-down end), is no card',
+  check('cardStage: \'done\' once the verdict is over, or with none, is no card',
     f((finale) => { finale.phase = 'done'; finale.ending = verdict({ hollow: 'purge', you: 'reassignment' }, 100); }) === 'off'
     && f((finale) => { finale.phase = 'done'; finale.ending = null; }) === 'off');
   check('cardStage: \'verdict\' with no verdict is a bug (throws)',
@@ -252,7 +251,7 @@ function input(options: Partial<Record<EndingPiece, OptionState>>, more: Partial
   const ending = verdict({ hollow: 'spare', you: 'stay' }, 130);
   const rows = verdictRows(ending, [0, 1.2, 2.9]);
   check('verdict: at most three lines (the two echoes, CONTROL), CONTROL\'s with its tag, each at its start',
-    rows.length === 3 && rows.length <= 3 && rows[2]?.tag === HOLLOW_FINALE.controlTag && rows[0]?.tag === null
+    rows.length === 3 && rows.length <= 3 && rows[2]?.tag === FINALE_TEXT.verdictTag && rows[0]?.tag === null
     && rows.map((row) => row.startSec).join() === '0,1.2,2.9' && rows[1]?.voice === 'cmd');
   check('verdict: starts that do not match its lines are a bug (throws)', throws(() => verdictRows(ending, [0, 1])));
   check('verdict: its tone names both choices (SPARE\'s colours, SUNSET\'s dusk)',
@@ -267,14 +266,13 @@ function input(options: Partial<Record<EndingPiece, OptionState>>, more: Partial
     state.burn.fuelPct = fuel;
     state.landing.fuelAtEndPct = end;
   });
-  check('FUEL notch: its own title while the two steps are not built', withGates({ twoStep: false }, () => fuelStarTitle(flying(30, true))) === null);
-  const title = withGates({ twoStep: true }, () => fuelStarTitle(flying(23, true)));
-  const short = withGates({ twoStep: true }, () => fuelStarTitle(flying(30, true, 12)));
+  const title = fuelStarTitle(flying(23, true));
+  const short = fuelStarTitle(flying(30, true, 12));
   check('FUEL notch: on the final ship it also reads SUNSET, and the FUEL as the card will price it',
     title !== null && title.includes(FINALE_TEXT.word.sunset) && title.includes(FINALE_TEXT.price.fuel(23)), String(title));
   check('FUEL notch: after the landing it reads the FUEL the landing ended with (short: the need line)',
     short !== null && short.includes(FINALE_TEXT.needs.fuel(12)), String(short));
-  check('FUEL notch: its own title on every other ship', withGates({ twoStep: true }, () => fuelStarTitle(flying(30, false))) === null);
+  check('FUEL notch: its own title on every other ship', fuelStarTitle(flying(30, false)) === null);
 }
 
 // --- Every line at its worst case --------------------------------------------------------------------------------------------------
@@ -302,7 +300,7 @@ function input(options: Partial<Record<EndingPiece, OptionState>>, more: Partial
     finaleCardModel({ ...input(all, { step: 2, hollow: 'spare', stay }), names: WORST }),
   ]);
   const lines = models.flatMap(texts);
-  const fuel = withGates({ twoStep: true }, () => fuelStarTitle(at((state) => { state.burn.fuelPct = 100; })) ?? '');
+  const fuel = fuelStarTitle(at((state) => { state.burn.fuelPct = 100; })) ?? '';
   const bad = [...lines, ...fuel.split('\n')].filter((text) => text.length > MAX_LINE_CHARS);
   check(`worst case: every line the card's models build fits (≤ ${MAX_LINE_CHARS}) at UNIT-046·047, MORNING STAR, MONTGOMERY LANDING`,
     lines.length > 40 && bad.length === 0, JSON.stringify(bad));

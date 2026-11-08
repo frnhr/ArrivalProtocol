@@ -3261,10 +3261,6 @@ body.reduced-motion .seg.verb-target, body.reduced-motion .verb-aim, body.reduce
   text-shadow: none; filter: drop-shadow(0 0 12px var(--merge-glow));
 }
 .run-end.tone-victory.ending-merge::before { border-color: var(--merge-glow); box-shadow: 0 0 40px var(--merge-glow), inset 0 0 40px var(--merge-glow-blue); }
-.re-endings { font-size: 11px; letter-spacing: 0.3em; color: var(--star); }
-.re-endings[hidden] { display: none; }
-/* A won ending over a flagship where nobody woke is found, but no prize: no gold on the grey night (WP11 review). */
-.run-end.tone-sombre .re-endings { color: var(--report-dim); }
 .title-endings.found { color: var(--star); }
 body.reduced-motion .run-end.tone-victory::before { animation: none; opacity: 0.3; }
 

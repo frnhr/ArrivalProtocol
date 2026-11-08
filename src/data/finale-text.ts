@@ -22,8 +22,9 @@ export const FINALE_TEXT = {
   followedContinue: 'CONTINUE [ENTER]',
   // The asleep line (R6): HOLLOW at the root's last block, as the landing goes on.
   asleep: (us: string): string => `> ${us}. wait. finish your landing. i'll be here.`,
-  // The strip while the card is up.
+  // The strip while the card is up: a step's, then the verdict's (review m3).
   strip: 'THE FINALE — choose what becomes of it',
+  stripVerdict: 'THE FINALE — click or [SPACE] to go on',
   // Each option's word, its command (the names templated: `hollowWord` unit_046, `ours` unit_047, `shipWord` last_light,
   // `colonyWord` riverside) and what it means.
   word: {
@@ -68,14 +69,19 @@ export const FINALE_TEXT = {
     ? 'NOW: + 1 eaten driver comes back · launch its pod'
     : `NOW: + ${drivers} eaten drivers come back · launch their pods`),
   nextRunLead: 'NEXT RUN:',
-  // The FUEL bar's ★ notch on the final ship (review B2: systems/finale-card.ts fuelStarTitle, Track CARD's hook): the notch
-  // is THE EMPTY SHIP's FUEL too (EMPTY_SHIP_FUEL_PCT = STAR_FUEL_PCT, R8).
-  fuelStar: `★ ${EMPTY_SHIP_FUEL_PCT}% FUEL · also THE EMPTY SHIP's: SPARE and SUNSET need it`,
+  // The FUEL bar's ★ notch on the final ship (review B2, m4: systems/finale-card.ts fuelStarTitle reads it): the notch is
+  // THE EMPTY SHIP's FUEL too (EMPTY_SHIP_FUEL_PCT = STAR_FUEL_PCT, R8), so its title says SUNSET's meaning, then the FUEL
+  // against it as the card prices it (`have`: the landing's end FUEL once it ended, the live FUEL before).
+  fuelStar: (have: number): string => `★ ${EMPTY_SHIP_FUEL_PCT}% · SUNSET: Take the empty ship and go.\n${
+    have >= EMPTY_SHIP_FUEL_PCT ? FINALE_TEXT.price.fuel(have) : FINALE_TEXT.needs.fuel(have)}`,
   // An option never earned and out of reach (R11).
   unknown: '???',
   // STAY's sub-row (R9), and step 2's way back.
   stayPick: 'WHICH COLONY?',
   back: '[ESC] BACK',
+  // The verdict's CONTROL tag and its way on, under it once typed (review m4: were HOLLOW_FINALE's controlTag, endingHint).
+  verdictTag: 'ARRIVAL CONTROL',
+  verdictHint: 'click or [SPACE] to go on',
   // The verdict (R13): each step's command echoed as the TERMINAL runs it (`> rm unit_046 ... OK`), then CONTROL's line:
   // compliant (thanks) unless the ending holds SPARE, SUNSET, STAY or CONTACT (systems/ending-rules.ts controlCompliant).
   echo: (command: string): string => `${command} ... OK`,

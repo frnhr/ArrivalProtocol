@@ -287,10 +287,9 @@ export interface GameEvents {
   // --- 7 ENDING ---
   // The root's DELETE left its last block and HOLLOW sleeps there (R6: no bites, seeds or verbs; the landing goes on).
   'finale-asleep': Record<string, never>;
-  // The FINALE's card shows a step (R6, R7): step 1 as it opens (and after [ESC] BACK), step 2 after step 1's pick. Emitted
-  // with the two steps built (ENDINGS_BUILT.twoStep); WP11's one-step card plays its own hold.
+  // The FINALE's card shows a step (R6, R7): step 1 as it opens (and after [ESC] BACK), step 2 after step 1's pick.
   'finale-open': { step: 1 | 2 };
-  // Step 2 was confirmed (with the two steps built; 'finale-chosen' follows the apply in the same moment).
+  // Step 2 was confirmed ('finale-chosen' follows the apply in the same moment).
   'finale-step2': { you: YouChoice };
   // The EPILOGUE came up (Track NIGHT, components/run/Epilogue.ts: its choir, review m10), and typed its line `n` (0-based).
   'epilogue-open': Record<string, never>;

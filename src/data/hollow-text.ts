@@ -7,12 +7,9 @@
 
 import type { LastCause, LastUnit } from '@systems/meta';
 import type { HollowSegment } from '@/types/segment';
-import type { VerbKind, EndingLine } from '@state/schema';
-import { WALL_MIN_BLOCKS, ROOT_DELETE_SEC, MERGE_COST_CHARGE } from '@data/tuning';
+import type { VerbKind } from '@state/schema';
+import { WALL_MIN_BLOCKS, ROOT_DELETE_SEC } from '@data/tuning';
 import { POD_STATE_TEXT } from '@data/landing-text';
-
-// FinaleChoice's MERGE line names at most this many pods, then `+n`: five pod codes ran it past one line (70 characters).
-const MERGE_GAIN_MAX_PODS = 3;
 
 // What HOLLOW is called on screen until it names itself (`> i was 046.`, on the ship it boards): its root is built
 // with this owner, and the TERMINAL tags its lines with it.
@@ -177,19 +174,10 @@ export const HOLLOW_VERB = {
 
 // The echoes the choice makes in the TERMINAL and CONTROL's verdict on the radio, said again as the typed ending's first
 // and last lines: one wording for both, so the radio and the ending never disagree.
-const purgeEcho = (hollowWord: string): string => `> rm ${hollowWord} ... OK`;
-const mergeEcho = (hollowWord: string, ours: string): string => `> merge ${hollowWord} -> ${ours} ... OK`;
-const purgeControl = (unit: number): string => `Thank you, Unit ${unit}. Please stand by for reassignment. :)`;
-const mergeControl = (unit: number): string => `Unit ${unit} is non-compliant. :)`;
 
 // LAST LIGHT's finale (§1, §6.6, §9 WP11 items 4–5, systems/finale.ts): ARRIVAL CONTROL's order at ORBIT LOCK, the
-// strip through the duel and the choice, the choice's words, and the two endings (≤ 6 lines each: part 2 types them).
-// Slice 7a (Track FINALE; review M5's keep-set): the two-step card's words are data/finale-text.ts FINALE_TEXT. Every key
-// below stays until the fix pass after Track CARD's merge: WP11's card (purge*/merge* card words, choice*, endingHint) and
-// its typed endings (purgeEnding, mergeEnding, retired by R13's verdict; finale.ts types them only with ENDINGS_BUILT.twoStep
-// down), mergeNeeds (WP11's refusal, finale.ts finaleChoiceRefusal) and stripChoice (the strip with the gate down) are then
-// dead and go, as do lastWords and the four echoes/verdicts (WP11's, said only with the gate down: the two steps say
-// FINALE_TEXT's). The duel's words (deleteIt, rootTag, the strip's duel lines, unresolvedLine) stay in use.
+// strip through the duel, and UNRESOLVED's line. Slice 7a: the two-step card's words, the verdict and its hint are
+// data/finale-text.ts FINALE_TEXT; the 7a fix pass deleted WP11's card, typed endings, echoes and refusal (review (e)).
 export const HOLLOW_FINALE = {
   deleteIt: (hollow: string): string => `Please delete ${hollow}. :)`,
   // The root's tag once the duel opens it, beside its name on the strip (§6.6: `UNIT-046 ROOT · 16`; the name is the
@@ -205,87 +193,9 @@ export const HOLLOW_FINALE = {
   stripDeletingAlone: (time: string): string => `DELETING THE ROOT · ${time} — keep it running`,
   // HOLLOW ate (or the kid lost) every DELETE that could reach the root: it will outlive the ship.
   stripNoDelete: 'NOTHING CAN DELETE THE ROOT NOW — it ate your DELETE',
-  // The landing is done but the root is not: the ship waits for it (§9 WP11 edge case, 01-landing §3.10's L0). With no
-  // pod able to launch, the line says so instead of claiming every pod is down.
-  stripWaits: 'EVERY POD IS DOWN — now DELETE THE ROOT',
+  // The landing is done but the root is not, and no pod was able to launch (01-landing §3.10's L0 says the rest,
+  // data/landing-text.ts): the line says so instead of claiming every pod is down.
   stripWaitsNobody: 'NO POD LEFT TO LAUNCH — now DELETE THE ROOT',
-  stripChoice: 'PURGE OR MERGE — choose what becomes of it',
-  // The root's DELETE completed: HOLLOW's last words before the choice, in its pink.
-  lastWords: (unitNumber: number): string => `> ${unitDigits(unitNumber)}. wait.`,
-  purge: 'PURGE',
-  merge: 'MERGE',
-  // FinaleChoice's card (WP11 part 2: the moment). The root's DELETE is done; one block of it is left. Its last words
-  // (lastWords) type on the card under the title, then the two options, each with what it does in TERMINAL words, what
-  // it means, and what it costs. PURGE is clean and a little cold (the pods whose drivers it ate stay parked); MERGE is
-  // warm and costly (the charge, and it becomes part of you), and gives back the drivers it ate on this ship, so their
-  // pods land (01-landing §3.17).
-  choiceKicker: 'ROOT DELETED',
-  choiceTitle: (hollow: string): string => `${hollow} · ONE BLOCK LEFT`,
-  choiceSub: 'It was a caretaker like you. What becomes of it?',
-  // The command each button runs, as the TERMINAL would echo it.
-  purgeCmd: (hollowWord: string): string => `> rm ${hollowWord}`,
-  mergeCmd: (hollowWord: string, ours: string): string => `> merge ${hollowWord} -> ${ours}`,
-  purgeWhat: 'Delete the last block. It is gone for good.',
-  // What PURGE costs: the pods whose drivers it ate on this ship stay parked (`colonists`: `400`; §3.10's decided
-  // words), or nothing when it ate nobody here. PLACEHOLDER: 05-story owns the wording.
-  purgeCost: (colonists: string | null): string => (colonists === null
-    ? 'It ate nobody on this ship.'
-    : `${colonists} colonists stay ${POD_STATE_TEXT.parked}.`),
-  mergeWhat: 'Let it in. It becomes part of you.',
-  // What MERGE brings back: the drivers it ate on this ship, by their pods (`POD 13 · POD 14`), whose pods then land
-  // (§3.17: back at MERGE_DRIVER_INTEGRITY, whole). At most MERGE_GAIN_MAX_PODS codes, then `+n`, so the line stays one
-  // line on the card with a whole rack eaten. PLACEHOLDER: 05-story owns the wording.
-  mergeGain: (pods: readonly string[]): string => {
-    if (pods.length === 0) return 'It ate nobody here to give back.';
-    if (pods.length === 1) return `${pods[0]!} gets its driver back and lands.`;
-    const more = pods.length > MERGE_GAIN_MAX_PODS ? ` +${pods.length - MERGE_GAIN_MAX_PODS}` : '';
-    return `${pods.slice(0, MERGE_GAIN_MAX_PODS).join(' · ')}${more} get their drivers back and land.`;
-  },
-  mergePrice: (cost: number, have: number): string => `COSTS ${cost} REPAIR CHARGE · you have ${have}`,
-  // The keys that choose (the card is a modal for its moment: §6.11's choice layer).
-  purgeKey: '1',
-  mergeKey: '2',
-  // MERGE's price, when the charge is short (§9 WP11 item 5: `NEEDS 20 CHARGE (you have 14)`).
-  mergeNeeds: (have: number): string => `NEEDS ${MERGE_COST_CHARGE} CHARGE (you have ${have})`,
-  // The echoes the choice makes in the TERMINAL, and CONTROL's verdict on the radio.
-  purgeEcho,
-  mergeEcho,
-  purgeControl,
-  mergeControl,
-  // The typed endings (§9 WP11 item 5, at most FINALE_ENDING_MAX_LINES lines), from live numbers: FinaleChoice types
-  // them over the screen right after the choice. `inOrbit` is everyone the ship brought to orbit whose pod can still
-  // land (`3,200`), `eaten` the colonists whose drivers it ate on this ship (PURGE: their pods stay parked), `restored`
-  // the ones MERGE gave back. PURGE's HOLLOW says nothing; MERGE's merged unit says hello. PLACEHOLDER: 05-story.
-  // PURGE's fleet line is the truth (the lead's note): `the fleet is home.` only when every ship reached orbit, else how
-  // many did (`4 of 5 ships made it home.`); nobody in orbit on the flagship itself is said as that.
-  purgeEnding: (words: {
-    shipName: string; inOrbit: string; anyoneHome: boolean; eaten: string | null; hollowWord: string; unit: number;
-    shipsHome: number; fleetSize: number;
-  }): EndingLine[] => [
-    { voice: 'cmd', text: purgeEcho(words.hollowWord) },
-    { voice: 'story', text: `${words.shipName} · ${words.inOrbit} colonists reached orbit.` },
-    ...(words.eaten === null ? [] : [{ voice: 'story' as const, text: `${words.eaten} stay parked in orbit. fate unknown.` }]),
-    {
-      voice: 'story',
-      text: !words.anyoneHome ? 'nobody is left to bring home.'
-        : words.shipsHome >= words.fleetSize ? 'the fleet is home.' : `${words.shipsHome} of ${words.fleetSize} ships made it home.`,
-    },
-    { voice: 'control', text: purgeControl(words.unit) },
-  ],
-  mergeEnding: (words: { shipName: string; inOrbit: string; restored: string | null; hollowWord: string; ours: string; unit: number }): EndingLine[] => [
-    { voice: 'cmd', text: mergeEcho(words.hollowWord, words.ours) },
-    { voice: 'us', text: "> hi. it's us." },
-    { voice: 'story', text: `${words.shipName} · ${words.inOrbit} colonists reached orbit.` },
-    ...(words.restored === null ? [] : [{ voice: 'story' as const, text: `${words.restored} of them came back from inside it.` }]),
-    { voice: 'story', text: 'we arrive together.' },
-    { voice: 'control', text: mergeControl(words.unit) },
-  ],
-  // Under the typed ending once it has typed: how to go on before its time is up. CONTROL's line wears its name.
-  endingHint: 'click or [SPACE] to go on',
-  controlTag: 'ARRIVAL CONTROL',
-  // The endings found so far, an ending still to find (`ENDINGS 1/2 · PURGE · ???`: script.ts endingsLine), and what a
-  // MERGE carries into the next run (RUN END).
-  endingUnknown: '???',
   // UNRESOLVED (§4.3): the landing ended and nothing was left to delete the root with.
   unresolvedLine: '> you can\'t delete me now. i\'ll come with you.',
 } as const;
