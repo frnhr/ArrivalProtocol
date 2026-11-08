@@ -57,7 +57,7 @@ import { podCode } from '@data/landing-text';
 import type { ShipDef, HollowDef } from '@data/ships';
 import { classicShip, CLASSIC_HOPS } from '@data/classic-five';
 import { nominalShipThreat, nominalRunThreat, planThreat, threatInputFor, fixedShipFacts, NO_FINAL_TRACES } from '@systems/threat-plan';
-import { finalTraceInput, finalTraces, rootUnitsOf, runTracesOf, type FinalTraces } from '@systems/traces';
+import { finalTraceInput, finalTraces, noTraces, rootUnitsOf, runTracesOf, type FinalTraces } from '@systems/traces';
 import { TRACES_BUILT, LINEAGE_BUILT } from '@data/traces';
 import { bookShape, type BookShape } from '@state/log-selectors';
 import type { LogBook, RunTraces, TraceKind } from '@/types/trace';
@@ -143,6 +143,7 @@ import { visitRng, currentShip, classicRunMap, shipDefAt, currentSlot, hopRng, c
 import { hopBetween, reachable, roomFit } from '@systems/map-hop';
 import { mapFacts, nominalRouteThreat } from '@systems/map-facts';
 import { layerOf } from '@systems/map-geometry';
+import { routes } from '@systems/map-route';
 import { FIRST_SLOT } from '@data/arm';
 import type { LastUnit } from '@/types/lineage';
 import { packedFiles, arrivalCharge } from '@systems/carry';
@@ -481,6 +482,9 @@ interface LogDebug {
 interface TracesDebug {
   (): { traces: RunTraces; final: FinalTraces; root: number[]; built: Readonly<Record<TraceKind, boolean>>; lineage: boolean };
   as: (kind: TraceKind) => RunTraces;
+  // The shortest route (fewest ships, then the lowest slots) from the first ship to a final ship through every slot of
+  // `via`, or null: for a script that jumps to a gift ship with __ap.route (the 7c review's e2e).
+  route: (via?: readonly number[]) => number[] | null;
 }
 
 // __ap.lastLanding: THE LAST LANDING's state, and its [ENTER] (slice 7b, §2.12).
@@ -669,6 +673,9 @@ function debugJump(store: Store<GameState>, index: number, threat: ShipThreat = 
     if (draft.run.map.world !== 'classic') {
       draft.run.map = classicRunMap(draft.run.seed, index - 1, draft.run.wave);
       draft.run.shipIndex = index - 1;
+      // Slice 7c (the review): the classic world holds no traces (systems/traces.ts runTracesOf); an arm run's would play on
+      // its final ship and refuse the save ('traces on the classic world').
+      draft.run.traces = noTraces();
     }
   });
   startShip(store, index, layout.racks, {
@@ -1284,7 +1291,14 @@ export function mountDebug(store: Store<GameState>): void {
         traces: structuredClone(run.traces) as RunTraces, final: finalTraces(run), root: rootUnitsOf(run), built: { ...TRACES_BUILT },
         lineage: LINEAGE_BUILT,
       };
-    }, { as: (kind: TraceKind) => debugTracesAs(store, kind) }),
+    }, {
+      as: (kind: TraceKind) => debugTracesAs(store, kind),
+      route: (via: readonly number[] = []) => {
+        const all = routes(armMapOf(store, 'traces.route')).filter((route) => via.every((slot) => route.includes(slot)));
+        if (all.length === 0) return null;
+        return [...all.reduce((best, route) => (route.length < best.length || (route.length === best.length && route.join() < best.join()) ? route : best))];
+      },
+    }),
     skipEnding: () => skipFinaleEnding(store),
     events: (name) => recentEvents.filter((event) => name === undefined || event.name === name),
     glitch: (level, ms) => glitchBurst(level, ms),

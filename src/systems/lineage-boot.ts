@@ -16,6 +16,7 @@
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import { emit } from '@systems/events';
+import { nameHollow } from '@systems/hollow';
 import { finalTraces, lastUnitRoot, onFinalShip, rootWaitYears } from '@systems/traces';
 import { LINEAGE_BUILT } from '@data/traces';
 import { LINEAGE_TEXT, strangerOf } from '@data/lineage-text';
@@ -85,7 +86,12 @@ export function lineageBootLineSaid(store: Store<GameState>, kind: LineageBootLi
   if (kind === 'face') {
     const from = faceFrom(state);
     if (from === null || ordinal >= faceBootLines(state).length) throw new Error(`lineageBootLineSaid: face line ${ordinal} is not due at this boot`);
-    if (ordinal === 0) emit('root-face', { unit: from.unit });
+    if (ordinal === 0) {
+      // The face says who it is (`it's 047`): a root no story beat named this run is named now, as it speaks (the 7c
+      // review: its blocks read `???` under a face that had just named itself).
+      nameHollow(store);
+      emit('root-face', { unit: from.unit });
+    }
     return;
   }
   if (kind === 'lineage-control' ? lineageControlLine(state) === null : strangerBootLine(state) === null) {

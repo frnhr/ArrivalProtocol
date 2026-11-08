@@ -152,6 +152,7 @@ const lineageKinds: readonly BootLineKind[] = ['face', 'lineage-control', 'stran
       && JSON.stringify(rootUnitsOf(earlier(state).run)) === '[31]' && hollowLabel({ ...earlier(state).run, hollowNamed: true }) === 'UNIT-031'));
   // The lines said as the boot says them (systems/boot.ts sayNextLine): the face's first takes the root over.
   const faced: number[] = [];
+  const namedBefore = store.getState().run.hollowNamed;
   const off = on('root-face', ({ unit }) => { faced.push(unit); });
   withGates({ reassignment: true }, () => {
     lineageBootLineSaid(store, 'face', 0);
@@ -163,6 +164,9 @@ const lineageKinds: readonly BootLineKind[] = ['face', 'lineage-control', 'stran
     JSON.stringify(faced) === '[47]'
     && /not due/.test(withGates({ reassignment: true }, () => threw(() => lineageBootLineSaid(store, 'face', 2))))
     && /not due/.test(withGates({ reassignment: true }, () => threw(() => lineageBootLineSaid(store, 'stranger', 0)))));
+  const rootOwners = store.getState().memory.filter((seg) => seg.type === 'hollow').map((seg) => (seg as { owner: string }).owner);
+  check('…the face\'s first line names a root no beat had named (the 7c review): its blocks read UNIT-047, not `???`',
+    !namedBefore && store.getState().run.hollowNamed && rootOwners.length > 0 && rootOwners.every((owner) => owner === 'UNIT-047'), JSON.stringify(rootOwners));
   check('…REASSIGNMENT not built (TRACE\'s gate down): no face and no CONTROL line at the final boot, the root the stranger',
     withGates({ reassignment: false }, () => faceBootLines(state).length === 0 && lineageControlLine(state) === null && strangerBootLine(state) === null
       && JSON.stringify(rootUnitsOf(state.run)) === '[31]'));
