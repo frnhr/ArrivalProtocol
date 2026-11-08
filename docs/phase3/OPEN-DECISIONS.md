@@ -134,3 +134,43 @@ Status words:
 37. **SURVEY claims a thread only if one stays free,** and yields to AUTOBURN's and AUTODROP's claims, never to the
     kid's ops (R8). BUILT.
 38. **The sleeper doesn't teach SURVEY;** its gift stays 4 cycles (R17). BUILT.
+
+## Slice 7 (endings and traces), from the plan; numbers are confirmed as each sub-slice lands
+
+39. **SUNSET's "empty ship"** is the final ship in orbit with no pod aboard and FUEL ≥ 20% (R8).
+    - The FUEL bar's ★ notch marks it.
+40. **STAY's colonies are judged per ship** (R9).
+    - A sub-pick appears only when there is more than one colony, newest first.
+41. **UNRESOLVED** (R10):
+    - an `IT FOLLOWED YOU` card;
+    - no `046.log` entry 12;
+    - SUNSET is still allowed.
+42. **Epilogue numbers** (R20):
+    - set 40 years on;
+    - doubling every 100 years;
+    - 2 significant figures;
+    - at most 16 lines, with older colonies folded.
+43. **Who flies MERGE's restored pods** (R27):
+    - AUTODROP v2 and v3 fly them through the override, with source `'merge'`;
+    - v1 times each pod, but takes the windows in pass order;
+    - with no AUTODROP they drop blind, at ±(W/2+150 km) and double spread;
+    - AUTODROP gets two orbits.
+44. **Where the next run's gifts wait** (R31):
+    - never on TIGHT, authored, `?`, first or final ships, except named fallbacks;
+    - 046's cache goes on Marrow or Ostrava.
+45. **What the gifts are** (R32):
+    - each is +15 REPAIR CHARGE through the normal arrival path;
+    - SUNSET adds a spare tool, Rm first.
+46. **The final ship's traces** (R33):
+    - PURGE wipes beam and delivery seeds, and bites ×0.85;
+    - MERGE gives +1 thread capacity and an 18-block root;
+    - the non-compliant choices cost one wild seed;
+    - REASSIGNMENT's root unlinks your highest-version `.skl` first.
+47. **The relay strangers alternate 031 and 038 by run** (R34).
+48. **The strangers' logs have 6 entries; `047.log` has 7** (R37).
+    - The segment id stays `log046`.
+49. **The `▓░` glyph shows on `?` ships that carry fragments** (R40).
+50. **CONTACT's trace** is two signal stops, each worth +8 charge and a fragment (R41).
+    - It is behind its own gate and may ship dark.
+51. **ENDING CHOSEN stays at the final report's open, not at step 2** (R14). This deviates from 02 §4.
+    - A reload during the FINALE replays the final ship, because the save can't hold a mid-landing state.

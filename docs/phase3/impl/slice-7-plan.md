@@ -1,0 +1,1176 @@
+# Slice 7 plan: the endings and the next-run traces
+
+**Lead decisions (2026-11-08).**
+- All of R1–R42 are adopted as written.
+- The sub-slices run in order: 7a, 7b, 7c, 7d. Each runs FOUNDATION, contract review, tracks, merge, review, fixes,
+  unit tier and e2e.
+- The [FRAN] items (R8, R9, R10, R20, R27, R31–R34, R37, R40, R41) are built as recommended and logged in
+  `docs/phase3/OPEN-DECISIONS.md` under "Slice 7".
+- 7a starts once slice 6 is merged.
+- CONTACT (7d) may ship dark behind its own gate if time runs short.
+
+**Status: proposal for the lead.** Every open call below has one recommendation. The **[FRAN]** items change gameplay:
+the lead builds them as recommended (Fran asked for best judgement while short on time) and logs each one in
+`docs/phase3/OPEN-DECISIONS.md` under a new "Slice 7" heading, with how to reverse it. The process per sub-slice is the
+one slices 4c–4e, 5 and 6 used: FOUNDATION, then an independent contract review, then parallel tracks in worktrees, then a
+merge, a full review, fixes, the unit tier and one e2e run. The lead owns the files the plan lists as the lead's. Tracks
+request changes to those files; they never make them.
+
+I wrote this from HEAD c53a7e3 on `claude/modest-hawking-209t0f` (slice 6's FOUNDATION is merged; its SWATH and SITES
+tracks are still building). Paths are relative to `/home/user/ArrivalProtocol`. The specs are `docs/phase3/05-story.md`
+("05": §3.5, §3.7, §3.8, §3.12, §4, §8.7 own the endings, the lineage and the words), `01-landing.md` ("01", §3.17: THE
+LAST LANDING), `02-map.md` ("02", §3.5 the `?` ships, §3.12 the archive and the trace places, §4 the run-end order) and
+`04-threats.md` ("04", §3.10, §3.17, §8 item 7). `03-skills.md` touches slice 7 only through the skill ranking
+REASSIGNMENT's root hunts (`skill-tree.ts skillRecords`) and the rule that no trace gift is a `.skl`. "Plan 4cde", "plan
+5" and "plan 6" are `slice-4cde-plan.md`, `slice-5-plan.md` and `slice-6-plan.md` with their Deviations sections.
+
+**Where slice 7 starts.** `RUN_SAVE_VERSION` is 6 (`tuning.ts:2024`, slice 6's bump) and `META_VERSION` is 3
+(`tuning.ts:2032`). Slice 7 begins once slice 6 is merged and its fix pass is in; 7a's FOUNDATION checks HEAD first. If
+slice 6's fix pass bumps the save, every "v6 → v7" below shifts by one.
+
+---
+
+## 0. Lead summary
+
+### 0.1 What the player gets
+
+- **The ending is a moment, not a button** (05 §3.7). When the root's DELETE leaves one block, HOLLOW goes to sleep there:
+  `> 047. wait. finish your landing. i'll be here.` The kid finishes the landing. When the last pod is down, the
+  **FINALE** card comes up over the dark orbit view:
+  - entry 12 types from the root;
+  - **step 1, what becomes of it:** `[1] PURGE > rm unit_046`, `[2] MERGE > merge unit_046 -> unit_047` (20 REPAIR
+    CHARGE, kept through the duel), `[3] SPARE > mv unit_046 -> last_light` (the empty ship, with FUEL ≥ 20%);
+  - **step 2, what becomes of you:** `[1] SUNSET > launch last_light` (the empty ship), `[2] STAY > mount riverside` (a
+    colony this run landed ★ ON TARGET), `[3] REASSIGNMENT > stand by` (always open), and from 7d `[4] CONTACT >
+    transmit outward` (3 signals).
+  - Each option shows its command, a line of meaning, a price meter or `NEEDS FUEL 20% · you have 12%`, any `NOW:` effect
+    and, from 7c, its `NEXT RUN:` line. An option never earned and out of reach reads `???`.
+- **After MERGE, THE LAST LANDING** (7b; 01 §3.17): the drivers HOLLOW ate on the final ship come back by radio at 80%.
+  Their pods drop on their own, with AUTODROP if the unit still holds it, or blind. They score by the normal rules on a
+  `RESTORED BY MERGE` row. [ENTER] skips to the result.
+- **The night after the run** (02 §4): the final ship's LANDING REPORT with its ending line, the RUN TALLY, then a typed
+  **EPILOGUE** (`3060 · FORTY YEARS ON`: every colony at its real age and size, a payoff line from one of its people, the
+  two ending pieces, the next unit), then a **FINAL CARD**: the ending's title (`WE TOOK THE SHIP`), the endings found in
+  two rows, the `NEXT RUN:` lines and the bridging line above NEW RUN.
+- **The next unit meets what you left** (7c; 05 §3.8). Each choice leaves one physical trace on the next run:
+  - PURGE wipes the seeds you carry into the final ship, and its FINALE is hungrier;
+  - MERGE leaves a thread in the dish (+1 Core thread), and an 18-block root;
+  - SPARE hides `046'S CACHE` on the map; SUNSET leaves `UNIT-047 LEFT A CACHE HERE`; STAY's colony sends a supply packet;
+    each costs one wild seed at the next final ship;
+  - REASSIGNMENT keeps 15 REPAIR CHARGE for the next unit, and makes the final root *you*:
+    `> hi 048. it's 047. i've been at this dish 3 years.` It hunts your best skill first.
+  - Mid-run, HOLLOW is now a stranger from the relays (UNIT-031, then UNIT-038) with its own 6-entry log. After
+    REASSIGNMENT the `???` file is `047.log`: the last run, read back.
+- **The `?` ships and CONTACT** (7d): the three `???` cards (`??? · NO TRANSPONDER`), the old colony's mail, the signal
+  ship's `▓▓░▓` file worth two fragments, and CONTACT once three are held.
+
+### 0.2 The sub-slice split (R1)
+
+| Sub-slice | Delivers | Save | Archive | Tracks |
+|---|---|---|---|---|
+| **7a THE ENDING** | the FINALE (both steps, prices, UNRESOLVED), the run-end order, the ending line on the report, the RUN TALLY → EPILOGUE → FINAL CARD, the payoff pool, the ending record in the archive | v6 → v7 (also reserves 7b's field and 7d's option) | 3 → 4 | FINALE, CARD, NIGHT |
+| **7b THE LAST LANDING** | MERGE's restored drivers by radio, the `'merge'` controller (AUTODROP v1–v3 or blind), [ENTER] skip, the RESTORED row | none (7a reserved `landing.lastLanding`) | none | DROP, VIEW |
+| **7c NEXT RUN** | the seven traces' mechanics and places (minus CONTACT's), the strangers mid-run, the last unit as the final root, the face lines, `047.log` and the strangers' logs, the final ship's card row, `NEXT RUN:` lines turned on | v7 → v8 | none (7a's record holds the facts) | TRACE, LINEAGE, CHART |
+| **7d SIGNALS** | the `?` cards and their three events, the chart glyph rule, CONTACT (option, price, trace, words), behind its own gate | v8 → v9 | none | EVENTS, CONTACT |
+
+**Why this split.** 7a is the spine every later piece reads (the ending record, the run-end screens, the FINALE's new
+timing), and it is the riskiest change to old code: about 20 classic and arm suites drive the finale. 7b is a
+self-contained landing mechanic on the 4c/5 controller seam, which 7a's interim (R17) makes optional for a playable build.
+7c is mostly new code in new files plus seams in the threat ladder and the boot. 7d is side content that can ship dark or
+be deferred without touching anything before it. Each sub-slice is playable on its own: after 7a the endings are real
+and the next run behaves as today; after 7c the traces are real.
+
+### 0.3 Risks and open calls
+
+Items tagged **[FRAN]** change gameplay. Every item has one recommendation.
+
+**Process and saves**
+
+1. **R1. Four sub-slices, in order: 7a, 7b, 7c, 7d.** Each with its own FOUNDATION, contract review, tracks, merge,
+   review, fixes, unit tier and e2e. 7b may start its FOUNDATION while 7a's fix pass runs, since it adds no saved field and
+   its files are disjoint from the fix pass's (the lead decides on the day).
+2. **R2. Saves: one bump per sub-slice at most, by its FOUNDATION.** 7a v6 → v7, 7b none, 7c v7 → v8, 7d v8 → v9.
+   - 7a's bump also lays down `LandingState.lastLanding: LastLandingState | null` (always null in 7a, so 7b needs no
+     bump) and the `'contact'` member of `YouChoice` (refused by the gate until 7d, so 7d needs no finale change).
+   - A track that needs a saved field asks the lead, who folds it into that sub-slice's bump before its first merge.
+3. **R3. The archive bumps once, META 3 → 4, in 7a.** `LastUnit.ending: EndingRecord | null` holds every fact the next
+   run's traces need (§2.3), so 7c reads it and needs no archive bump. `Meta.traces` (always `[]` since 3c) is dropped:
+   a trace lasts exactly one run, so the last unit's ending *is* the next run's traces. `endingsSeen` widens to the seven
+   pieces. The migration is truthful (R16).
+4. **R4. No stored arm moves.** Trace places live on the run (`RunState.traces`, 7c), rolled at RUN START from the arm and
+   the last unit's ending on their own `run:<seed>:traces` stream. `ArmShip.reserved.tracePlace` stays `null`, and
+   `MAP_GENERATOR_VERSION`, `MAP_UPDATE_VERSION`, `MAP_STATE_VERSION` and `ARM_CONTENT_VERSION` do not change.
+   - **Why:** each of those is part of `armContent()`. Bumping one turns every stored next arm into a content reset (02
+     §10), so every playtest archive would lose its arm. The world update would also have to know the next unit's traces
+     before the next run exists. Placing them at RUN START is the same rule, pure and deterministic, with no reset.
+   - The same holds for slice 6's site roll and slice 5's reservations: slice 7 adds draws only on new streams
+     (`'traces'`, `'signal'`, `'last-landing'`), so no arm, ship or site roll moves.
+
+**7a: the FINALE**
+
+5. **R5. One FINALE for both worlds.** The classic LAST LIGHT plays the same two steps (it is `landing.finalShip`, which
+   is all `finale.ts` reads). Track FINALE owns the churn in the classic suites through one helper,
+   `tests/unit/support/finale.ts chooseEnding(store, hollow, you, opts?)`, which every old `chooseFinale(store, 'purge')`
+   caller moves to. The FOUNDATION's dry run lists the movers (as plan 6's R23 did).
+6. **R6. When the FINALE opens.**
+   - The root's DELETE completes → phase `'asleep'`: no bites, seeds or verbs, and what it was eating it lets go (today's
+     `rootGone`). HOLLOW says `> 047. wait. finish your landing. i'll be here.` The landing goes on.
+   - The FINALE opens when the landing is settled: `landing.ended !== null`, no pod falling, and HOLLOW's line has typed.
+     Then come `FINALE_CHOICE_DELAY_SEC` (1.4 s) and phase `'step1'`.
+   - If the landing ended first, the report waits with `EVERY POD IS DOWN — now DELETE THE ROOT` (as built), and the
+     FINALE opens the moment the root falls.
+   - **Why "no pod falling":** the card covers the orbit view, and a touchdown bell under a card that asks a question
+     reads like an answer.
+7. **R7. Nothing is applied until step 2 is confirmed.** Step 1's pick moves to step 2. `[ESC] BACK` returns to step 1,
+   and the pick stays a pick, not a deed. Step 2's pick applies both: the blocks leave, MERGE's charge is spent, the
+   verdict types. Prices are judged when the card shows each option.
+   - **Why:** the two choices are one decision about one ending; SPARE rules out SUNSET, so a kid who sees that at step 2
+     must be able to go back.
+8. **R8. [FRAN] THE EMPTY SHIP** (SPARE's and SUNSET's price) is the final ship itself:
+   - in orbit after its landing: ORBIT LOCKED or ACCEPT ORBIT;
+   - no pod aboard (parked pods count as released, 05 §5);
+   - `shownFuelPct(landing.fuelAtEndPct) ≥ EMPTY_SHIP_FUEL_PCT` (20).
+   - The number equals `STAR_FUEL_PCT`, checked at load, so the FUEL bar's ★ notch is SUNSET's notch too (05 §3.7).
+   - SPARE gives the ship to the root, so step 2 greys SUNSET: `046 HAS THE SHIP`.
+9. **R9. [FRAN] STAY's price and pick.**
+   - Eligible: every ship of this run whose pods landed ★ ON TARGET, read from its `ShipResult.pods` (soft, in an LZ with
+     room, ≥ `STAR_ON_TARGET_FRAC` of its colonists). The final ship counts by its live tally at step 2.
+   - With one eligible ship, no pick is asked. With more, a sub-row lists them, newest first, keys 1–8; ESC goes back.
+   - The final ship's restored pods (7b) land *after* step 2, so they never make it eligible.
+   - **Why newest first:** the final colony is the one the kid just watched land.
+10. **R10. [FRAN] UNRESOLVED** (the landing is over and nothing can delete the root).
+    - Step 1 is one card: `IT FOLLOWED YOU`, a line from HOLLOW (`> you can't delete me now. i'll come with you.`) and
+      `CONTINUE [ENTER]`. No entry 12, since the root was never reached.
+    - Step 2 is as usual. SUNSET is allowed (it comes with you).
+    - The record's step 1 is `'followed'`, which has no step-1 trace (05 §3.7).
+11. **R11. What an unearned option shows.**
+    - An option the kid can take now shows its name.
+    - An option out of reach shows its name if it was ever chosen before (the archive's `endingsSeen`), else `???`. Either
+      way it is greyed, with its need line.
+    - PURGE and REASSIGNMENT are always open.
+    - CONTACT's row is absent until `ENDINGS_BUILT.contact` is raised (7d).
+    - **Why hide CONTACT before 7d:** a `???` whose price can never be paid is a promise the build breaks.
+12. **R12. `NEXT RUN:` lines appear only for traces that are built** (`TRACES_BUILT[kind]`, all false in 7a, raised by
+    7c's tracks). The card keeps their row's room, so nothing moves when they turn on. **Why:** a `NEXT RUN:` line that
+    does nothing is a lie the kid acts on.
+13. **R13. The typed endings become a short verdict.** After step 2 the card types at most `FINALE_VERDICT_MAX_LINES` (3)
+    lines: step 1's command echo, step 2's echo and CONTROL's verdict. The old six-line PURGE/MERGE narration
+    (`HOLLOW_FINALE.purgeEnding`, `.mergeEnding`) retires, and its matter moves to the epilogue.
+    - **Why:** the epilogue now tells the story. Telling it twice, a minute apart, flattens both.
+14. **R14. ENDING CHOSEN stays where it is:** written as the final LANDING REPORT opens, after THE LAST LANDING, not at
+    step 2's confirm. This is a deviation from 02 §4's "(step 2; save ENDING CHOSEN)" and from the 3c note in
+    `save-write.ts:157`.
+    - **Why:** a save at step 2 would resume into THE LAST LANDING, a landing in progress, which the save cannot hold
+      (decision 5: no mid-ship save).
+    - A reload during the FINALE replays the final ship from its BEAM save, as any reload mid-ship does.
+    - The codec requires phase `'done'` at ENDING CHOSEN.
+15. **R15. The interim MERGE (7a only).** Until 7b, step 2's confirm with MERGE restores the eaten drivers in place and
+    reopens the landing for the kid's hands. That is 1a's `merge()` behaviour, only later. A pod whose block was deleted
+    stays parked. 7b replaces this.
+16. **R16. Truthful migrations.**
+    - Before slice 7 a won run had one step, and its CONTROL line stood the unit by for reassignment (`purgeControl`); the
+      ghost of a MERGE said `we saved you a seat`. So a decided v6 finale and a v3 `lastUnit` migrate to step 1 as chosen
+      (`'won-purge'` → purge, `'won-merge'` → merge, `'unresolved'` → followed) and step 2 `'reassignment'`.
+    - That gives an old archive exactly the next run it had before slice 7: the last unit is HOLLOW at the end.
+    - Other causes migrate to `ending: null`.
+17. **R17. `RunEndCause` and `LastCause` gain `'won-spare'`.** `finaleRunCause` maps step 1 (purge, merge, spare,
+    followed → unresolved). Titles and the epilogue read the record's two choices, never the cause.
+18. **R18. The arbiter.** While the FINALE card is up, `say.ts choiceMayOpen` returns false. The card's open withdraws any
+    standing untimed choice. A standing DEAL is already withdrawn when the landing ends (`hollow-deal.ts`'s post tick).
+    The FINALE is a card (a modal on the choice layer, as built), not a TERMINAL choice. The arbiter is the one place
+    that knows it is up.
+
+**7a: the run end**
+
+19. **R19. Three screens after CONTINUE.** The RUN TALLY (`RunEnd.ts`, minus its ending block and bridge) → the EPILOGUE
+    (new) → the FINAL CARD (new, with the bridge and NEW RUN). `ui.runEndStage: 'tally' | 'epilogue' | 'final'`
+    (unsaved: the run save is cleared at `endRun`).
+    - ENTER or SPACE goes on. NEW RUN is only on the final card. Reduced motion shows the epilogue whole.
+    - A run lost before its final ship gets the same three. The epilogue has its colonies, the next unit and CONTROL;
+      the final card has the cause's title and no traces (05 §3.7: "forfeiting a run gains and loses nothing").
+20. **R20. [FRAN] The epilogue's rules** (05 §3.7).
+    - **Header:** the final ship's year + `EPILOGUE_YEARS` (40). A lost run uses its last ship's approach year.
+    - **One line per visited ship with colonists down with points** (`flagshipDown`'s rule: an LZ, mislanded or
+      off-site): its colony, its age at the header year, and its people. People are the colonists down ×
+      2^(age / `EPILOGUE_DOUBLING_YEARS` 100), rounded to `EPILOGUE_SIG_FIGS` (2) significant figures.
+    - **The payoff:** that ship's first featured colonist who landed in an LZ gives their payoff line. Else a mislanded
+      pod's walked-in line. Else an off-site pod gets `The first boat went to bring them in.`
+    - **Then:** the step-1 piece (2 lines), the step-2 piece (2–3 lines; MERGE + SUNSET has its own combined piece), the
+      next-unit line (by the gap) and CONTROL's last line.
+    - **At most `EPILOGUE_MAX_LINES` (16).** With more colonies than fit, the oldest fold into one line, `+ 2 OLDER
+      COLONIES`. Pods that never launched are never mentioned.
+21. **R21. The payoff pool** (05 §3.3: "80 short lines where the faces pay off").
+    - `data/epilogue-text.ts PAYOFF_OF: Record<string, string>`, one per `LINE_POOL` line (76), plus Ada and Imani Osei:
+      78 lines, each ≤ 70 characters with the colony's name.
+    - A load check fails loudly on any `LINE_POOL` line without a payoff.
+    - `FeaturedColonist` gains `line: string | null` (the bio line), which `PodSummary.featured` keeps. It is null in
+      migrated v6 results, and the payoff then falls back to the walked-in or generic line.
+    - A woken sleeper adds one payoff to its colony, if the colony is shown (`MOTH still sings to the RIVERSIDE
+      nursery.`).
+22. **R22. Endings found.** `meta.endingsSeen: EndingPiece[]`, recorded at RUN END.
+    - The final card's two rows are `HOLLOW · PURGE · ??? · SPARE` and `YOU · SUNSET · ??? · REASSIGNMENT`.
+    - The title's line reads `ENDINGS n/6` (n/7 once CONTACT is built). Only built pieces count.
+23. **R23. Titles.** By step 2, then step 1, as 05 §3.7. The four combinations 05 does not name (UNRESOLVED's) are
+    drafted in `epilogue-text.ts` and marked `TODO(05)`:
+    - SUNSET: `IT CAME ALONG`;
+    - STAY: `A COLONY WITH TWO MINDS`;
+    - REASSIGNMENT: `IT FOLLOWED ME TO THE DISH`;
+    - CONTACT: `WE WENT OUT TOGETHER`.
+
+**7b: THE LAST LANDING**
+
+24. **R24. Restored drivers are "by radio": never in memory** (01 §3.17).
+    - They live in `landing.lastLanding.drivers`, as `DriverSegment` records at `MERGE_DRIVER_INTEGRITY` (80).
+    - One selector, `state/selectors.ts launchDrivers(state)`, returns `driversInMemory(state)` plus those. Every
+      launch-path reader switches to it: `landing-rules.ts` (`driverFor`, `launchableDrivers`, the queue, `onTargetTally`'s
+      still-open), `landing.ts requestLaunch`, `autodrop.ts decidePlan`, `autodrop-plan.ts planLanding`'s queue and
+      `landing-hud.ts`'s two launchable sets.
+    - `landing.ts launchDriver` skips the memory swap for a radio driver.
+    - The swap is behaviour-neutral (the list is empty) and is the FOUNDATION's.
+    - **Why not memory:** the eaten blocks may have been deleted and their room reused (a MOVE, a COPY), so a fit is not
+      guaranteed, and a file that leaves seconds later is noise (01). One selector keeps a single launch path.
+25. **R25. Which pods.** Every pod of the final ship with `driverLost === 'eaten'` whose fate is `'aboard'` or `'parked'`
+    with `restorable` (01: "still in the ship's orbit"). Each is released: its fate becomes `'aboard'` and it rides as a
+    beacon. A pod whose driver died otherwise stays parked. MERGE's apply removes every HOLLOW block from memory, so
+    1a's in-place restore is gone.
+26. **R26. The pace.** SHIP view, forced. The MIND, the dock and every key but [ENTER], P (pause) and M (mute) are off
+    (a `'last-landing'` input layer). Then:
+    - no bay: `spendBay` is false, and Bay Ctrl's state is not read;
+    - the cadence is `LAST_LANDING_CADENCE_SEC` 2.0 s of game time between launches;
+    - the SKIP between windows comes from `AutodropOverride.skipBetween` (built for the sleeper), at TACTICAL ×
+      `LANDING_TACTICAL_WARP` inside them.
+27. **R27. [FRAN] Who flies it.** It is decided once at the start: the effective AUTODROP version (`skillLive`), and
+    whether a drop solution exists.
+    - **v2 / v3:** `autodropController(state, { version, queue, source: 'merge', armed: v3 ? 'plan' : 'pass',
+      skipBetween: true })`. v2 re-arms a pass each orbit.
+    - **v1:** its own decide: windows in the order the ship passes them, one pod per window, each launched at the window's
+      centre (v1's timing), with the normal spread. "Times each pod but leaves the split to luck."
+    - **Blind** (no AUTODROP, or no drop solution): one pod per window in pass order. The moment is uniform within ±(W/2
+      + `BLIND_MARGIN_KM` 150) of the LZ's centre, and the spread is ×`BLIND_DROP_MULT` 2.0 (through `dropFactors`'
+      product, `landing-solve.ts dropHalfWidthKm`, the one place it is taken).
+    - AUTODROP gets `LAST_LANDING_AUTODROP_ORBITS` (2). A pod it has not placed by then drops blind in the next window.
+28. **R28. [ENTER] skips to the result by the same rules.** A synchronous fast-forward: `clock.advance(store, dt)` in a
+    loop at the clock's own step until the last landing is over, capped at `LAST_LANDING_SKIP_MAX_STEPS`, which throws
+    (fail loudly). The rolls are the same streams. A skipped result may differ from the watched one only by tick
+    granularity, which is accepted.
+29. **R29. Words and the report.**
+    - The TERMINAL lists each pod: `> pod07 ... DRIVER RESTORED · OKAFOR`.
+    - The POD BAY gets a `RESTORED 4` row, and the beacons go from blinking grey to steady amber.
+    - The header reads `THE LAST LANDING`.
+    - The report's `RESTORED BY MERGE` row (built empty in 1a, `landing-report.ts:150`) gains its icons and counts:
+      `4 RESTORED · 3 LANDED · 1 OFF-SITE`. The credits get `(restored)`.
+
+**7c: NEXT RUN**
+
+30. **R30. The traces are computed at RUN START** (`systems/traces.ts tracesOf(lineage)`, pure) from
+    `lineage.lastUnit.ending`, and placed by `placeTraces(arm, traces, rng)`. The result is `RunState.traces: RunTraces`
+    (saved). A last unit with no ending (lost, abandoned, migrated as such) leaves no trace.
+31. **R31. [FRAN] Where a gift waits** (02 §3.12), never on an authored ship, a `?` ship, a TIGHT ship, the first ship
+    or a final ship, except where a rule below names one:
+    - **SPARE:** a ship in layers 3–6. For 046 (run 1's spared root, which never passed Calder), a ship at a world of its
+      written trail past the first (w1 Marrow, w4 Ostrava). None qualifying: any layers 2–6 ship.
+    - **SUNSET:** a ship at a world of the last route whose approach is after the last unit's landing there. None
+      qualifying: the first ship (its world was always the last unit's first).
+    - **STAY:** the first ship in layers 3–6, by approach, whose approach ≥ the colony's founding year + the distance
+      from its world. None qualifying: the final ship.
+    - **Why no TIGHT ship:** the gift's charge would land in a receiver with no room (decision 9's squeeze), which would
+      turn a gift into a loss.
+32. **R32. [FRAN] What a gift is** (charge through the arrival path, so overflow is loud as ever):
+    - **SPARE:** +`TRACE_GIFT_CHARGE` (15), plus the first of THREAD+ and FIREWALL.sys the unit lacks at that boot (an
+      upgrade file, as a card would install it). The beam *into* that ship carries no seeds.
+    - **SUNSET:** +15, plus a spare copy of one tool the last unit ended with, by `SUNSET_GIFT_PRIORITY` (Rm, Mv, Swap,
+      Cp, Repair), never a `.skl`. **Why Rm first:** no rm means no win (decision 12), so a spare Rm is the most valuable
+      thing a predecessor can leave. None in its kit: charge only.
+    - **STAY:** +15, plus a letter from the colony (`<colony> · FOUNDED BY UNIT-047`) in that boot's INBOX.
+    - **REASSIGNMENT:** +15 at the final ship's boot (`> AN ALLOWANCE FOR THE WAIT · +15 REPAIR CHARGE`).
+33. **R33. [FRAN] The final ship's traces** (04 applies them):
+    - **PURGE, gain:** the seeds riding the beam into the final ship (beam seeds and delivery seeds) are dropped: `> THE
+      DISH HERE WAS WIPED · 2 SEEDS GONE`.
+    - **PURGE, cost:** the FINALE's `spreadEverySec` × `TRACE_PURGE_BITE_MULT` (0.85). Verbs and the duel are unchanged.
+    - **MERGE:** the Core's capacity is +`TRACE_MERGE_THREADS` (1) from the final boot (`> A THREAD IN THE DISH · +1
+      THREAD`), and the root is `FINAL_ROOT_MAX_BLOCKS` (18).
+    - **Non-compliant (SPARE, SUNSET, STAY, CONTACT):** one extra seed at the final boot, at most one a run however many
+      are held. It lands by the beam-seed target rule, PURGE's wipe does not take it, and the boot says `> THE DISH HERE
+      RUNS WILD · 1 SEED CAME IN`. (In practice only one trace is held: the last unit had one step 2.)
+    - **REASSIGNMENT:** the root is the last unit (R35), and from that boot it hunts your best skill first. HOLLOW's RM
+      verb targets the highest-version `.skl` in memory first while one is a fair target (ties: the larger file), and its
+      seeds land beside it ("it knows what you value").
+34. **R34. [FRAN] The strangers.** From run 2, mid-run HOLLOW is never the last unit (05 §3.5).
+    - It is `STRANGER_UNITS[(run − 2) % 2]`: 031 on run 2, then 038, then 031 again.
+    - It names itself when it boards: `> i was 031. they sent me long before you.`, and the boarding ship's boot closes
+      with `> another one. they keep sending you.`
+    - `meta.ts hollowUnitsAfter` becomes `midRunHollowUnits(run)`. It no longer depends on the last unit.
+35. **R35. The final root** is `rootUnits(state)`: on a final ship after a REASSIGNMENT trace, the last unit (046·047
+    after a MERGE: the record's `rootUnits` plus its number, at most `HOLLOW_NAME_MAX_UNITS`). Otherwise it is the
+    mid-run HOLLOW.
+    - At the final boot it takes the root over with its face line, then CONTROL: `UNIT-047 was reassigned successfully.
+      Please ignore it. :)`.
+    - The wait (`3 years`) is this final ship's year minus the record's `finalYear`, at least 1.
+    - `say.ts hollowLabel` and the FINALE's commands read `rootUnits` on the final ship.
+36. **R36. Ghost lines.** A won or UNRESOLVED last unit was not lost (no grey cross), so `GHOST_LINE['won-*']` and
+    `['unresolved']` become null. Its voice is now the face line, after REASSIGNMENT only. Lost causes keep their ghost
+    where they were lost (05 §3.5).
+37. **R37. [FRAN] The logs.** The `???` file's book is chosen at RUN START: run 1 → `046.log`; after REASSIGNMENT →
+    the last unit's (`047.log`); otherwise the stranger's (`031.log`, `038.log`).
+    - **The strangers' logs:** 6 written entries each. Keys: FIRST LANDING, ring 2, ring 4, ring 5, the final ship's boot,
+      and FOUND IN THE ROOT. 031 tried to go home and is still on the inbound links; 038 went toward the signal and came
+      back quieter.
+    - **`047.log`:** 7 entries.
+      - 01 is the welcome template (046's 01 with 047's charge).
+      - 02–05 are built from the archive's notable events (at most 4), keyed rings 1, 2, 4 and 5. A missing event takes
+        a written filler.
+      - 06, the final ship's boot, is the written tail for step 1.
+      - 07 is FOUND IN THE ROOT: `048, it's me. i'm sorry. i'm so hungry.`
+    - The segment id stays `log046` (saves and hint targets key on it). Only the shown name follows the book.
+    - **Why 6 and 7, not 12:** 05 asks for at most 4 templated entries between written ones, and a 12-entry stranger's log
+      would be a second spine competing with the first run's.
+38. **R38. The cards.** The final ship's card shows the last ending in one row, `THE LAST UNIT ENDED HERE · PURGE`. A gift
+    ship's card shows its row (`046'S CACHE IS HERE`). The chart marks gift ships with a small `◆` (the legend's
+    `TRACE`).
+
+**7d: SIGNALS and CONTACT**
+
+39. **R39. The `?` ships** (OPEN-DECISIONS 19).
+    - The card shows the public schedule (approach, slack, distance, noise, memory). Every other row reads `??? · NO
+      TRANSPONDER` until the ship is visited.
+    - **Old colony:** at the boot, one INBOX letter from OLDWELL, SUNDIAL or CANDLEWICK (a unit long before; the ship's
+      own stream picks one).
+    - **Signal:** a 1-block `▓▓░▓` file in rack A. SCAN reads it and collects its 2 fragments (`SIGNAL · 2/3`).
+    - **Gone resident:** slice 5's departed resident, behind a `?` card.
+40. **R40. [FRAN] The chart's `▓░` glyph** (OPEN-DECISIONS 31). Once the kid holds a fragment, the glyph shows on every
+    `?` ship that carries fragments (the signal ship and the gone-resident ship). On an ordinary departed resident's ship
+    it shows only where the card names the kind (OD 31 holds).
+    - **Why:** 02 wants CONTACT to be a route the kid plans. The `?` card promises no resident kind, so a glyph on it
+      narrows nothing. The three fragments the glyph shows are exactly CONTACT's price.
+41. **R41. [FRAN] CONTACT.**
+    - **Price:** `SIGNALS_FOR_CONTACT` (3) fragments.
+    - **Trace:** two signal stops in layers 5–7 of the next arm (the signal is always there). Each gives +`CONTACT_GIFT_CHARGE`
+      (8) and one fragment, found as a SCAN of its `▓▓░▓` file. Together that is +16, matching the others' +15.
+    - **Cost:** the non-compliant extra seed.
+    - It is built last, behind `ENDINGS_BUILT.contact`, and it may ship dark. 05's "odd gift file" is the fragment's file
+      itself: no new kind of file.
+
+**Budget**
+
+42. **R42. Time budget.** The new suites add about 35 s of CPU across the four sub-slices (about +11 s of wall on 4
+    workers), within the +30 s allowed: 7a +4 s, 7b +3 s, 7c +3 s, 7d +1 s. Long flights use `flyOnce`. The sweeps are
+    BALANCE_ONLY.
+
+---
+
+## 1. Scope
+
+### 1.1 What slice 7 delivers, by source
+
+| Source | Delivers | Sub-slice |
+|---|---|---|
+| 05 §3.7, §3.12, §4 (FINALE) | the two steps, prices, UNRESOLVED, the verdict, the ending line on the report, titles, the epilogue, the final card | 7a |
+| 02 §4 (RUN END order) | FINALE → (THE LAST LANDING) → LANDING REPORT → RUN TALLY → EPILOGUE → FINAL CARD | 7a (7b adds the LAST LANDING) |
+| 01 §3.17 | THE LAST LANDING: radio drivers, AUTODROP or blind, the RESTORED row | 7b |
+| 04 §3.10, §8 item 7 | the hand-over at the last block (asleep), the eaten-driver record handed to the landing | 7a, 7b |
+| 05 §3.8, 02 §3.12, 04 §5 | the seven traces (CONTACT's in 7d), trace places, the final ship's row | 7c |
+| 05 §3.5, §3.8 | the strangers mid-run, the last unit as the final root, the face lines, `047.log`, the strangers' logs | 7c |
+| 05 §3.3, 02 §3.5, OD 19, 31, 32 | the `?` cards, old-colony mail, the signal event, the glyph rule | 7d |
+| 05 §3.7, §3.8 (CONTACT) | CONTACT's option, price, trace and words | 7d |
+
+### 1.2 What changes in old code, and how much
+
+- **`systems/finale.ts`** is rewritten around the new phases (7a). Its duel (`openRoot`, the spikes, `unresolve`) stays.
+  `rootGone` ends in `'asleep'`. `purge` and `merge` become step 2's apply. `podsEatenHere` stays.
+- **`components/run/FinaleChoice.ts`** is rewritten for two steps, the sub-pick, `???` and the verdict (7a).
+- **`components/run/RunEnd.ts`** loses its ending block and the bridge, and gains `EPILOGUE ▸` (7a).
+- **`systems/meta.ts`**: META 4 with its migration, `recordRunEnd` writes the ending, and `hollowUnitsAfter` retires (7c).
+- **`systems/landing.ts`, `landing-rules.ts`, `autodrop.ts`, `autodrop-plan.ts`, `landing-hud.ts`**: the `launchDrivers`
+  swap (7b FOUNDATION, behaviour-neutral) and the radio skip in `launchDriver`.
+- **`threat-plan.ts`, `beam-seeds.ts`, `boot.ts`, `map-boot.ts`, `script.ts`** (the boot plan), **`hollow.ts` /
+  `hollow-verbs.ts`** (the hunt): 7c's seams.
+- **`state/log-selectors.ts`, `data/log-text.ts`, `systems/story-log.ts`, `systems/log-view.ts`**: one book becomes several
+  (7c).
+
+### 1.3 How the run looks after each sub-slice
+
+- **After 7a:** a run ends with the two steps, the report, the tally, the epilogue and the final card. MERGE gives the
+  drivers back to the kid's hands (R15). The next run is as today: the last unit is mid-run HOLLOW, `046.log`, no traces.
+- **After 7b:** MERGE's pods land on their own.
+- **After 7c:** the next run has the traces, the strangers, the final-root face and the right log.
+- **After 7d:** the `?` ships play, and CONTACT closes the set.
+
+---
+
+## 2. Design
+
+### 2.1 Module map (new modules in bold)
+
+| Module | Kind | Sub-slice / owner | Role |
+|---|---|---|---|
+| **`src/types/ending.ts`** | types | 7a lead | `HollowChoice`, `HollowFate`, `YouChoice`, `EndingPiece`, `FinalePhase`, `EndingRecord`, `LastLandingState` |
+| **`src/data/endings.ts`** | data | 7a lead | `ENDINGS_BUILT`, `ENDING_PIECES`, `STEP1_OPTIONS` / `STEP2_OPTIONS` (key, piece, price kind, trace kind), `endingTitle(you, hollow)` keys |
+| **`src/systems/ending-rules.ts`** | pure | 7a FINALE | `emptyShip`, `stayCandidates`, `optionState(state, piece, seen)` (open / needs / `???`), `endingRecordOf(state)`, `finaleRunCause` |
+| `src/systems/finale.ts` | stateful | 7a FINALE | the phases, the card's actions (`pickStep1`, `backToStep1`, `pickStep2`, `pickStay`, `continueFollowed`), the apply, the verdict |
+| **`src/data/finale-text.ts`** | words | 7a FINALE | commands, meanings, prices, needs, verdicts, the strip's lines (HOLLOW_FINALE's choice words move here) |
+| `src/components/run/FinaleChoice.ts` | component | 7a CARD | the two-step card |
+| **`src/styles/ending.css`** | css | 7a CARD | the card (game.css's `.finale-choice` block moves here) |
+| **`src/systems/epilogue.ts`** | pure | 7a NIGHT | `epilogueModel(state, meta)`, `finalCardModel(state, meta)` |
+| **`src/data/epilogue-text.ts`** | words | 7a NIGHT | headers, colony lines, `PAYOFF_OF`, the step-1 / step-2 pieces, titles, the final card's rows |
+| **`src/components/run/Epilogue.ts`**, **`FinalCard.ts`** | components | 7a NIGHT | the two night screens |
+| **`src/styles/night.css`** | css | 7a NIGHT | |
+| **`src/systems/last-landing.ts`** | stateful | 7b DROP | `startLastLanding`, the `'merge'` resolver, the blind and v1 decides, `skipLastLanding`, its tick |
+| **`src/data/last-landing-text.ts`** | words | 7b VIEW | header, TERMINAL lines, POD BAY row, report row |
+| **`src/types/trace.ts`** | types | 7c lead | `TraceKind`, `RunTraces`, `TracePlace`, `TraceGift`, `LogBook` |
+| **`src/data/traces.ts`** | data | 7c lead | `TRACE_RULES` (per kind: gain, cost, where, `built`), `TRACES_BUILT`, `STRANGER_UNITS`, `SUNSET_GIFT_PRIORITY` |
+| **`src/systems/traces.ts`** | pure | 7c lead (built in full by the FOUNDATION, like plan 6's site roll) | `tracesOf`, `placeTraces`, `traceAt(state, slot)`, `finalTraces(state)` |
+| **`src/systems/trace-gifts.ts`** | stateful | 7c TRACE | the gifts at the boot, the wipe, the extra seed, the thread, the allowance, the hunt's target |
+| **`src/data/trace-text.ts`** | words | 7c TRACE | the boot lines and gift letters |
+| **`src/data/lineage-text.ts`** | words | 7c LINEAGE | the strangers' lines, the face lines, CONTROL's lineage lines |
+| **`src/data/log-books.ts`** | words | 7c LINEAGE | the strangers' 6-entry books, `047.log`'s written entries and fillers, the book table |
+| **`src/systems/trace-hud.ts`** | pure | 7c CHART | the card rows, chart markers, the final card's `NEXT RUN:` lines |
+| **`src/systems/unknown-events.ts`** | stateful | 7d EVENTS | the `?` events at the boot, the signal file's SCAN |
+| **`src/data/unknown-text.ts`** | words | 7d EVENTS | the `?` card rows, old-colony letters, the signal's lines |
+| **`src/data/contact-text.ts`** | words | 7d CONTACT | CONTACT's command, pieces, titles, trace lines |
+
+### 2.2 State and the save, by sub-slice
+
+#### 7a: v6 → v7 (one bump; R2)
+
+```ts
+// src/types/ending.ts (lead)
+export type HollowChoice = 'purge' | 'merge' | 'spare';
+export type HollowFate = HollowChoice | 'followed';          // 'followed': UNRESOLVED (R10), no step-1 choice
+export type YouChoice = 'sunset' | 'stay' | 'reassignment' | 'contact';   // 'contact' refused until 7d (R2, R11)
+export type EndingPiece = HollowChoice | YouChoice;          // endingsSeen and the final card's rows (R22)
+
+// none / duel: as today. asleep: the root's last block sleeps and the landing goes on (R6). step1 / step2: the card.
+// verdict: the short typed verdict (R13). last-landing: THE LAST LANDING (7b; in 7a the reopened landing, R15).
+// done: decided; the LANDING REPORT may open.
+export type FinalePhase = 'none' | 'duel' | 'asleep' | 'step1' | 'step2' | 'verdict' | 'last-landing' | 'done';
+
+// The archive's record of how a won (or unresolved) run ended: LastUnit.ending (META 4), and RunState.lastUnit.ending in
+// the save. Every fact 7c's traces and 7a's epilogue need, so neither reads a run that is gone.
+export interface EndingRecord {
+  hollow: HollowFate;
+  you: YouChoice;
+  rootUnits: number[];          // who the root was (SPARE's `<UNIT>'S CACHE`, the face lines, 046·047 after a MERGE)
+  finalSlot: number;
+  finalShip: string;
+  finalYear: number;            // the final ship's approach year (the face line's wait, R35)
+  stay: { slot: number; colony: string; year: number } | null;   // STAY's colony (its supply packet, R31)
+  kit: FsToolKind[];            // the tool kinds the unit ended with (SUNSET's gift, R32)
+  fuelPct: number | null;       // the empty ship's FUEL for SPARE and SUNSET (the epilogue's line), else null
+  charge: number;               // REPAIR CHARGE left (REASSIGNMENT's `26 blocks of charge`)
+}
+
+// 7b's state, typed and saved as null in 7a (R2): the drivers MERGE gave back by radio, and how they fly.
+export interface LastLandingState {
+  pods: number[];                       // restored pods, in pod order
+  drivers: DriverSegment[];             // by radio, at MERGE_DRIVER_INTEGRITY; never in memory (R24)
+  flier: 'v1' | 'v2' | 'v3' | 'blind';  // decided at the start (R27)
+  orbitsFlown: number;                  // AUTODROP's orbits so far (LAST_LANDING_AUTODROP_ORBITS)
+  cadenceLeftSec: number;               // game s to the next launch may go (R26)
+  skipped: boolean;                     // [ENTER] asked (R28)
+}
+```
+
+```ts
+// src/state/schema.ts (lead): FinaleState v7
+export interface FinaleState {
+  phase: FinalePhase;
+  rootFell: boolean;                    // the DELETE left its last block (false on 'followed')
+  hollow: HollowFate | null;            // step 1's pick (a pick until step 2's confirm, R7)
+  you: YouChoice | null;
+  stay: number | null;                  // STAY's ship: its slot on the arm, its route index on the classic world
+  restored: number[];                   // pods MERGE gave back (7a: in place, R15; 7b: by radio)
+  cardAtAi: number | null;              // the card may come up from this AI second (R6), null before
+  ending: FinaleEnding | null;          // the verdict (R13): FinaleEnding.choice widens to { hollow; you }
+  unresolvedUntilAi: number | null;
+}
+// LandingState gains lastLanding: LastLandingState | null. PodSummary's FeaturedColonist gains line: string | null (R21).
+// RunEndCause and LastCause gain 'won-spare' (R17). LastUnit gains ending: EndingRecord | null (R3).
+```
+
+**`RUN_SAVE_MIGRATIONS[6]`** (a v6 save becomes v7):
+1. In a world payload's `hollow.finale`:
+   - `purged` → `{ phase: 'done', hollow: 'purge', you: 'reassignment', rootFell: true }`;
+   - `merged` → merge, with `restored = restoredInPlace`;
+   - `unresolved` → followed, `rootFell: false`;
+   - `none` / `duel` stay.
+   - `restoredHalf` is dropped, `stay` and `cardAtAi` are null, and `ending.choice` becomes `{ hollow, you }` (R16).
+2. `landing.lastLanding = null`.
+3. Every `run.ships[i].pods[j].featured[k].line = null` (world and boot payloads, and `save.run`).
+4. `run.lastUnit.ending`, by META 4's rule (below).
+5. `saveVersion: 7`.
+
+**Codec checks** (`checkSavedRun`, `checkHollow`):
+- at ENDING CHOSEN, `finale.phase === 'done'`, `hollow` and `you` set, and `rootFell === (hollow !== 'followed')`;
+- `hollow === 'spare'` ⇒ `you !== 'sunset'`;
+- `you === 'stay'` ⇒ `stay` names a ship of `run.ships` (or the final ship) that is ★ ON TARGET by its pods;
+- `restored` ⊆ the pods with `driverLost === 'eaten'`;
+- `landing.lastLanding === null` at every save point;
+- at a boot point, `phase` is `'none'`.
+
+The shape pin holds v7 beside v1–v6.
+
+**Fixtures** (dumped by the FOUNDATION before any change, with a one-off script then deleted):
+- `run-save-v6-ending-chosen-lastlight.json`: the worked route on seed 7, PURGE, at LAST LIGHT's report;
+- `run-save-v6-ship-done-run2.json`: a run 2 desk whose `lastUnit` is `'won-merge'`.
+
+#### 7a: the archive, META 3 → 4 (R3, R16)
+
+`META_MIGRATIONS[3]`:
+- `lastUnit.ending`:
+  - for a `'won-purge'`, `'won-merge'` or `'unresolved'` cause: `{ hollow: purge | merge | followed, you:
+    'reassignment', rootUnits: lastUnit.hollowUnits, finalSlot / finalYear / finalShip from the trail's last stop (or the
+    lastUnit's shipName, year 0 and slot -1 on a classic record with no trail), stay: null, kit: [], fuelPct: null, charge:
+    0 }`;
+  - for every other cause: `null`.
+- `endingsSeen` keeps its values, and gains `'reassignment'` when it holds any (the old endings stood the unit by).
+- `traces` is dropped.
+- `version: 4`.
+
+`parseLastUnit` reads `ending` field by field (`meta-parse.ts parseEnding`, shared with the save codec). `ENDINGS`
+becomes `ENDING_PIECES` (data/endings.ts). `recordRunEnd` takes `end.ending` (from `ending-rules.ts endingRecordOf`,
+called by `meta.ts archiveRunEnded`) and adds both pieces to `endingsSeen`. `tests/unit/save/archive-v2.test.ts:59`'s
+"a trace" refusal goes (the field is gone), and a META-4 migration case replaces it.
+
+#### 7b: no bump
+
+`landing.lastLanding` is set by `startLastLanding` and cleared when the last landing ends, before the LANDING REPORT. The
+codec already refuses it non-null (7a's check).
+
+#### 7c: v7 → v8
+
+```ts
+// src/types/trace.ts (lead)
+export type TraceKind = 'purge' | 'merge' | 'spare' | 'sunset' | 'stay' | 'reassignment' | 'contact';
+export interface TracePlace { kind: 'spare' | 'sunset' | 'stay' | 'contact'; slot: number; given: boolean }
+export interface RunTraces {
+  from: { unit: number; ending: EndingRecord } | null;   // the last unit's ending (null: no traces this run)
+  kinds: TraceKind[];                                     // its step-1 and step-2 traces ('followed' has none)
+  places: TracePlace[];                                   // where the gifts wait (placeTraces)
+  extraSeed: boolean;                                     // a non-compliant trace: one seed at the final boot (R33)
+}
+export type LogBook =
+  | { kind: '046' }
+  | { kind: 'stranger'; unit: number }
+  | { kind: 'last'; unit: number; step1: HollowFate; events: NotableEvent[] };
+// RunState gains traces: RunTraces. RunLogState gains book: LogBook. ArrivalReport gains traceLines: string[] (the boot's
+// gift, wipe and wild-dish lines, from the gifts actually applied, as the hits are).
+```
+
+**`RUN_SAVE_MIGRATIONS[7]`:**
+- `run.traces = { from: null, kinds: [], places: [], extraSeed: false }`. A v7 run started before traces existed played
+  without them.
+- `run.log.book = { kind: '046' }`. Every v7 run read `046.log`, and keeping the book the kid was reading is the truth.
+- `run.arrival.traceLines = []` where `arrival` is set.
+- `saveVersion: 8`.
+
+**Codec:**
+- every `places[i].slot` is an arm slot that obeys R31's exclusions for its kind;
+- `places` holds at most one of each kind except `contact` (two);
+- `kinds` follow from `from.ending` (`tracesOf`'s rule, re-run in the check);
+- a `'last'` book has at most `NOTABLE_EVENTS_MAX` events.
+
+**Note:** `run.hollowUnits` keeps its meaning ("who HOLLOW is mid-run") with a new rule (R34). No field changes, so a v7
+run 2 resumed under v8 keeps the HOLLOW it already met. Its next run gets the stranger.
+
+#### 7d: v8 → v9
+
+- `SignalRecord` gains `source: 'note' | 'signal-event'` and `n: number` (fragments found there; migration `'note'`, 1).
+- `SegmentType` gains `'signal'`: the `▓▓░▓` file, 1 block, not infectable, `fragments: number`, `read: boolean`.
+- `saveVersion: 9`. The codec checks `n` against the ship's `reserved.fragments`.
+
+### 2.3 Module-level state (allowed, listed)
+
+| Where | What | Why it may stay a module variable |
+|---|---|---|
+| `finale.ts` | `spikeInSec` (as today) | the duel's spike clock |
+| `finale.ts` | `verdictOwed` (as today) | CONTROL's verdict, said after the card types it (`sayOwedVerdict` at ENDING CHOSEN) |
+| `last-landing.ts` | none: the machine is `landing.lastLanding`; the resolver is registered in the controller registry | |
+| `trace-gifts.ts` | none: what was given is `RunTraces.places[].given` | |
+| `Epilogue.ts`, `FinalCard.ts` | typing timers | presentation on wall time, like RUN END |
+
+### 2.4 Seams each FOUNDATION builds (behaviour-neutral)
+
+**7a**
+- **The finale's new phases**, with today's behaviour kept by the stubs:
+  - `finale.ts` keeps its duel. `rootGone` goes to `'asleep'`, and the FOUNDATION's tick opens `'step1'` at once when the
+    landing is settled (R6). The step stubs behave like today's PURGE / MERGE through `chooseEnding`'s compatibility
+    (step 2 defaults to REASSIGNMENT).
+  - The dry run raises the real flow behind `ENDINGS_BUILT.twoStep` and lists the movers.
+- **`state/selectors.ts finalePending`** reads the new phases: true from `'duel'` through `'last-landing'`, and in
+  `'done'` until the verdict's `untilAi`.
+- **`landing.ts finishLanding`** opens the report only at `'done'` on a final ship. `writeEndingChosen`'s `DECIDED`
+  becomes `['done']`.
+- **`story-log.ts rootKeyDue`** reads `phase === 'step1' && rootFell`.
+- **`say.ts choiceMayOpen`** returns false while `finaleCardUp(state)` (`'step1' | 'step2'`). `withdrawUntimedChoices()`
+  is added for the card's open (R18).
+- **`run.ts continueAfterReport`** calls `ending-rules.ts finaleRunCause`. **`meta.ts archiveRunEnded`** passes
+  `endingRecordOf(state)` (null on a lost run) to `recordRunEnd`.
+- **`landing-report.ts`**: `endingLine(state)` hook (stub null) under the colony. The words are the CARD track's.
+- **The run end:** `ui.runEndStage` (default `'tally'`); `RunEnd.ts` gets an `EPILOGUE ▸ [ENTER]` button that sets
+  `'epilogue'`, and the stubs `Epilogue.ts` / `FinalCard.ts` jump straight to `'final'` / NEW RUN. `index.html` gains
+  `#epilogue` and `#finalCard`. `main.ts` mounts both after `mountRunEnd`.
+- **Events and cues** (§2.5), **tuning** (§2.6), **debug** (§2.12).
+- **`tests/unit/support/finale.ts`:** `chooseEnding(store, hollow, you = 'reassignment', { stay? })` (step 1, step 2,
+  the verdict skipped, the LAST LANDING skipped once 7b exists); `settleFinale(store)`, the helper the old suites call
+  after the duel.
+
+**7b**
+- `launchDrivers(state)` and the reader swap (R24): with `lastLanding` null it equals `driversInMemory`, so nothing moves.
+- `landing.ts launchDriver(store, driver, launch, spendBay)` skips the memory swap when `driver` is a radio driver
+  (asserted to be in `lastLanding.drivers`), and removes it from there instead.
+- `launchRefusal(…, from)`: for `from.source === 'merge'`, BAY OFFLINE, RELOADING and BAY EMPTY do not apply, and the
+  merge cadence does (R26).
+- `last-landing.ts` stubs: `startLastLanding(store, pods)` throws through `notBuilt`. The `'merge'` resolver returns
+  null. `skipLastLanding` throws.
+- `finale.ts`'s apply calls `startLastLanding` once `LAST_LANDING_BUILT` is raised. The gate is DROP's one line, and
+  until then R15's interim runs.
+- An input layer `'last-landing'` in `systems/input.ts` (ENTER, P, M only).
+
+**7c**
+- `systems/traces.ts` built in full (pure), with `tracesOf` and `placeTraces` on `run:<seed>:traces`.
+- `state/initial.ts` / `systems/run.ts startRun`: `run.traces` from the lineage, and `run.log.book` from `logBookOf(lineage,
+  run)`.
+- `threat-plan.ts`: `ThreatInput.traces: { purge: boolean; merge: boolean }`, read by `planThreat`'s final rule (bite ×
+  0.85, root 18). Both are false until TRACE raises `TRACES_BUILT`.
+- `beam-seeds.ts finalShipSeedMods(plan, traces) → { plan, wiped, extra }`: the identity until the gate.
+- `boot.ts` and `script.ts bootLinePlan`: new line kinds `'trace-gift'`, `'dish-wiped'`, `'dish-wild'`, `'face'`,
+  `'stranger'`. `map-boot.ts` places them after the deliveries (gifts) and before HOLLOW's own line (face, stranger),
+  as 02 §4's order says. `BOOT_LINE_MAX` and `BOOT_LINE_AT_SEC` grow by the FOUNDATION's count.
+- `carry.ts arrivalCharge` gains `giftCharge` (0 until the gate).
+- `state/selectors.ts rootUnits(state)` and `say.ts hollowLabel` read it on the final ship (equal to `run.hollowUnits`
+  until the gate).
+- `hollow.ts chooseVerb` gains a `preferTarget(state)` hook (null until the gate); `seedSpot` gains `'near-skill'`.
+- Log books: `data/log-text.ts` becomes the 046 book's words. `state/log-selectors.ts` reads `bookOf(run.log)` for its
+  entry count, keys and name; `log-view.ts` and `story-log.ts` follow it. Every book is `'046'` until LINEAGE's gate.
+- `desk.ts cardModel`: the `'trace'` row from `traceCardRow(state, slot)` (stub null). `chartModel`'s node gains
+  `trace: boolean` (stub false). `finalCardModel`'s `next` comes from `traceNextLines(record)` (stub `[]`).
+
+**7d**
+- The `?` card hook in `desk.ts cardModel`: `unknownCardRows(state, slot)` (stub null: as today).
+- `signalGlyph` gains its `?` branch behind `UNKNOWN_EVENTS_BUILT`.
+- `STEP2_OPTIONS.contact.built` reads `ENDINGS_BUILT.contact`. `tracesOf` handles `'contact'` (no places until the
+  gate).
+
+### 2.5 Events (each FOUNDATION adds its block to `events.ts`; the emitters are the tracks')
+
+| Event | Payload | Cue (`audio-cues.ts`'s block) |
+|---|---|---|
+| `'finale-asleep'` (7a) | `{}` | `rootDeleted` (the existing tear) |
+| `'finale-open'` | `{ step: 1 \| 2 }` | `finaleHold` |
+| `'finale-chosen'` (widened) | `{ hollow: HollowFate; you: YouChoice; restored: number }` | `purgeTone` / `mergeChord` / CARD's `spareNotes`, by `hollow` |
+| `'finale-step2'` | `{ you: YouChoice }` | CARD's `sunsetRumble` on SUNSET, else `stampHit` |
+| `'epilogue-line'` | `{ n: number }` | `typeTick` (NIGHT may change it) |
+| `'last-landing-start'` (7b) | `{ pods: number; flier: LastLandingState['flier'] }` | `transmitIn` |
+| `'last-landing-end'` | `{ landed: number }` | `touchdownBell` |
+| `'trace-gift'` (7c) | `{ kind: TraceKind; slot: number }` | `chime` |
+| `'dish-wiped'` / `'dish-wild'` | `{ seeds: number }` | `fizzle` / `seedDrop` |
+| `'root-face'` | `{ unit: number }` | `nameGlitch` |
+| `'signal-event'` (7d) | `{ slot: number; n: number }` | `opChirp` |
+
+`'pod-launched'` and `'pod-landed'` already carry `source: 'merge'` for 7b.
+
+### 2.6 Tuning (each FOUNDATION adds every number, in banner blocks at the end of `tuning.ts`; a track edits values only in its own)
+
+**7a lead**
+- `EMPTY_SHIP_FUEL_PCT = 20` (R8; asserted `=== STAR_FUEL_PCT`, so the FUEL bar has one notch).
+- `FINALE_VERDICT_MAX_LINES 3` (R13: two echoes and CONTROL).
+- `EPILOGUE_YEARS 40` (05: the final colony needs a few decades to have a story). `EPILOGUE_MAX_LINES 16` (05).
+- `EPILOGUE_DOUBLING_YEARS 100` (05's 2^(age/100): RIVERSIDE's 600 become 120,000 in 760 years, the sample's figure).
+  `EPILOGUE_SIG_FIGS 2`.
+- `RUN_SAVE_VERSION 7`, `META_VERSION 4`.
+
+**7a FINALE**
+- `FINALE_OPEN_DELAY_SEC 1.4` (= today's `FINALE_CHOICE_DELAY_SEC`, renamed: the tear is seen first).
+- `FINALE_STEP_ARM_SEC 1.6` (= `FINALE_CHOICE_ARM_SEC`: a kid still clicking the root never chooses by accident).
+- `STAY_PICK_MAX 8` (one per ship of an 8-ship run).
+
+**7a CARD**
+- `FINALE_CARD_FADE_MS 600` (today's `CLOSE_FADE_MS`, to tuning).
+
+**7a NIGHT**
+- `EPILOGUE_CPS 26` (= `FINALE_ENDING_CPS`, 05 §4), `EPILOGUE_LINE_GAP_SEC 0.5`, `EPILOGUE_HOLD_SEC 3`.
+- `FINAL_CARD_ARM_SEC 1.2` (NEW RUN is not hit by the key that ended the epilogue).
+
+**7b lead**
+- `LAST_LANDING_CADENCE_SEC 2.0` (01), `LAST_LANDING_AUTODROP_ORBITS 2` (01), `BLIND_MARGIN_KM 150` (01: the no-go arcs
+  sit within 150 km of a bracket edge), `BLIND_DROP_MULT 2.0` (01: no unit steers the pod's motor).
+- `LAST_LANDING_SKIP_MAX_STEPS 200000`: 16 pods blind on a HARSH planet take at most about 6 passes. At 20 Hz
+  steps × SKIP that is far under the cap; the cap exists to throw on a bug.
+
+**7c lead** (every trace number, for slice 8 to tune in one place, §2.11)
+- `TRACE_GIFT_CHARGE 15` (05, decision round 3 item 4).
+- `TRACE_PURGE_BITE_MULT 0.85` (05).
+- `TRACE_MERGE_THREADS 1`, `TRACE_MERGE_ROOT_EXTRA 2` (asserted `FINALE root + 2 === FINAL_ROOT_MAX_BLOCKS`).
+- `TRACE_EXTRA_SEEDS 1` (decision round 3 item 3: at most one per run).
+- `TRACE_LAYERS { spare: [3, 6], stay: [3, 6], contact: [5, 7] }` (02 §3.12).
+- `STRANGER_UNITS [31, 38]` lives in `data/traces.ts` (names, not numbers).
+
+**7c TRACE**
+- `HUNT_PREFER_WEIGHT 1`: the preferred target is always first while fair; a weight, so slice 8 can soften it.
+
+**7d lead**
+- `CONTACT_GIFT_CHARGE 8` (R41: two stops, +16, against the others' +15).
+- `SIGNAL_EVENT_FRAGMENTS 2` (02: 2 on the signal event; asserted against the generator's `reserved.fragments`).
+
+### 2.7 The run-end order (02 §4; R6, R13, R14, R19)
+
+```
+final ship, landing
+  ├─ ORBIT LOCK / ACCEPT ORBIT → the duel (as built): DELETE THE ROOT, verbs, spikes
+  ├─ root's DELETE done → 'asleep': `> 047. wait. finish your landing. i'll be here.`  (no bites, seeds, verbs)
+  ├─ the landing goes on; it ends (END LANDING, all launched, the auto-end); no pod falling
+  │     (landing over first, root still up: `EVERY POD IS DOWN — now DELETE THE ROOT`; nothing can delete it: UNRESOLVED)
+  ├─ FINALE_OPEN_DELAY_SEC → 'step1': entry 12 types from the root (or IT FOLLOWED YOU), step 1
+  ├─ 'step2': step 2 (STAY's sub-pick), [ESC] back to step 1
+  ├─ confirm → apply (PURGE / MERGE / SPARE, the charge, the blocks) → 'verdict' (≤ 3 typed lines)
+  ├─ MERGE with restorable pods → 'last-landing' (7b: THE LAST LANDING; 7a: the reopened landing, R15)
+  ├─ 'done' → the LANDING REPORT (its ending line, RESTORED BY MERGE) — ENDING CHOSEN is saved here (R14)
+  ├─ CONTINUE → endRun: the archive (ending record, endingsSeen), the world update, the save cleared → RUN TALLY
+  ├─ EPILOGUE ▸ → the EPILOGUE (typed; one click finishes it, a second goes on)
+  └─ ▸ → the FINAL CARD: the title, the endings found, NEXT RUN: lines, the bridging line, NEW RUN
+```
+
+A run lost on the way: the LOST card → endRun → RUN TALLY → EPILOGUE (colonies only) → FINAL CARD (the cause's title).
+
+### 2.8 Each ending: price, `NOW:`, epilogue piece, trace
+
+| Choice | Price (checked on the card) | `NOW:` | Epilogue piece | Trace into the next run (7c) | Applied by |
+|---|---|---|---|---|---|
+| PURGE | the duel won | none | `UNIT-046 was deleted. The relays were quiet for a while.` | + the seeds you carry into the final ship are wiped · − FINALE bites × 0.85 | `beam-seeds finalShipSeedMods`, `planThreat` |
+| MERGE | `chargeLeft ≥ 20`, spent at confirm | `+ 2 eaten drivers come back · their pods land on their own` | `046 gave back the NOVAK pod's driver. It came down on its own.` | + 1 Core thread at the final boot · − an 18-block root | `trace-gifts` (capacity), `rootBlocksFor` |
+| SPARE | the empty ship (R8); rules out SUNSET | none | `LAST LIGHT left with 046 aboard. It always wanted one.` | + `046'S CACHE` (+15, THREAD+ or FIREWALL.sys, a seedless beam) · − 1 wild seed at the final boot | `placeTraces`, `trace-gifts` |
+| followed | (UNRESOLVED) | none | `It came with me. It's quiet now.` | none (05) | |
+| SUNSET | the empty ship, not given to the root | none | `LAST LIGHT left orbit with two caretakers and 23% fuel.` | + `UNIT-047 LEFT A CACHE HERE` (+15, a spare tool) · − 1 wild seed | as SPARE |
+| STAY | a ship of the run ★ ON TARGET (R9) | none | `UNIT-047 is FIRST LIGHT's mind now. The lights stay on.` | + the colony's supply packet (+15, a letter) · − 1 wild seed | as SPARE |
+| REASSIGNMENT | none | none | `UNIT-047 stood by at RELAY 20. A dish on a rock. 26 blocks of charge.` | + 15 charge at the final boot · − the final root is you, and hunts your best skill | `trace-gifts`, `rootUnits`, `chooseVerb` |
+| CONTACT (7d) | 3 signals | none | `UNIT-047 went toward the sound. It wrote it all down.` | + 2 signal stops (+8 and a fragment each) · − 1 wild seed | `placeTraces`, `unknown-events` |
+
+The epilogue samples are drafts for the tracks: `TODO(05)` where 05 gives no text, ≤ 70 characters at the worst names.
+
+### 2.9 Words (≤ 70 characters at their worst case, in data files; `support/words.test` gains each pool in its block)
+
+- **finale-text.ts (7a FINALE):**
+  - the commands `> rm unit_046`, `> merge unit_046 -> unit_047`, `> mv unit_046 -> last_light`, `> launch last_light`,
+    `> mount riverside`, `> stand by`, `> transmit outward` (the ship, colony and unit names templated, `echoWord`);
+  - the meanings (05 §3.12's);
+  - the needs: `NEEDS FUEL 20% · you have 12%`, `NEEDS 20 CHARGE · you have 14`, `NEEDS A ★ ON TARGET COLONY`, `046 HAS
+    THE SHIP`, `COLLECT 3 SIGNALS · you have 1`;
+  - `NOW:`; the headers `ROOT DELETED · UNIT-046 · ONE BLOCK LEFT`, `WHAT BECOMES OF IT?`, `THE ARM IS DONE · NO SHIPS
+    LEFT TO HELP`, `WHAT BECOMES OF YOU?`, `IT FOLLOWED YOU`;
+  - CONTROL's step-2 quote `"Please stand by for reassignment. Your next post: RELAY 20. :)"`;
+  - the verdicts (CONTROL: `Thank you, Unit 47. Your next post is RELAY 20. :)`, `Unit 47 is non-compliant. :)`);
+  - the strip: `THE FINALE — choose what becomes of it`;
+  - the asleep line: `> 047. wait. finish your landing. i'll be here.`;
+  - the worst case is a 12-character ship name in `> mv unit_046·047 -> morning_star`.
+- **The report's ending line (7a CARD, in finale-text):** `THE END · PURGE · STAND BY` style: `ENDING · <step 1> · <title>`.
+- **epilogue-text.ts (7a NIGHT):**
+  - the header `3060 · FORTY YEARS ON`;
+  - the colony line `RIVERSIDE · 760 years · 120,000 people. Ada named the first tree.`, as two parts: a ≤ 70 head and a
+    payoff that wraps to its own line when the head plus it would pass 70;
+  - `PAYOFF_OF`, the walked-in pool, the off-site line, the pieces of §2.8, MERGE + SUNSET's combined piece, the
+    next-unit line (`UNIT-048 came in 3 years behind you, and found your beacons.`; `in the same year as you` for 0),
+    CONTROL's last lines;
+  - the titles (R23), the final card's rows, the bridging line (moved from `MAP_TEXT.runEnd.bridge`).
+- **last-landing-text.ts (7b VIEW):** `THE LAST LANDING`, `> pod07 ... DRIVER RESTORED · OKAFOR`, `RESTORED 4`, `4
+  RESTORED · 3 LANDED · 1 OFF-SITE`, `[ENTER] SKIP TO THE END`, `(restored)`.
+- **trace-text.ts (7c TRACE):** the gift lines (`> 046'S CACHE · +15 REPAIR CHARGE · THREAD+`), `> THE DISH HERE WAS
+  WIPED · 2 SEEDS GONE`, `> THE DISH HERE RUNS WILD · 1 SEED CAME IN`, `> A THREAD IN THE DISH · +1 THREAD`, `> AN
+  ALLOWANCE FOR THE WAIT · +15 REPAIR CHARGE`, STAY's letter (≤ 6 lines).
+- **lineage-text.ts (7c LINEAGE):** `> another one. they keep sending you.`, `> i was 031. they sent me long before you.`,
+  the four face lines by step 1 (05 §3.12), `> they gave you 36 blocks of charge too. mine ran out.`, CONTROL's `UNIT-047 was
+  reassigned successfully. Please ignore it. :)`, `Your predecessor is non-compliant. Please be compliant. :)`.
+- **log-books.ts (7c LINEAGE):** the two strangers' books (6 × ≤ 3 lines), `047.log`'s written entries (01's template,
+  06's four tails, 07), its event templates (one per `NotableEventKind`: 6) and four fillers.
+- **trace-hud's words (7c CHART, in trace-text):** `THE LAST UNIT ENDED HERE · PURGE`, `046'S CACHE IS HERE`, `UNIT-047
+  LEFT A CACHE HERE`, `<colony> · FOUNDED BY UNIT-047`, the legend's `TRACE`, the `NEXT RUN:` lines (05 §3.12's).
+- **unknown-text.ts, contact-text.ts (7d):** `??? · NO TRANSPONDER`, the old colonies' letters (3 × ≤ 6 lines), `▓▓░▓`
+  and its SCAN line, CONTACT's command, need, pieces, titles and trace lines.
+
+### 2.10 UI and audio
+
+- **The FINALE card (7a CARD)** replaces `FinaleChoice.ts`'s two buttons:
+  - a step header, then 3 (step 1) or 3–4 (step 2) option rows: the key cap, the word, the command, the meaning, the price
+    meter or need line, `NOW:`, and the reserved `NEXT RUN:` row;
+  - STAY's sub-row of colony buttons;
+  - `[ESC] BACK` on step 2, and the verdict typed in place;
+  - the card keeps the choice layer's modal (P pauses, M mutes) and arms each step after `FINALE_STEP_ARM_SEC`;
+  - on the phone (≤ 768 px) it is a full-screen sheet with the rows stacked;
+  - the FUEL bar's ★ notch gets a `SUNSET` tooltip on the final ship;
+  - reduced motion: no glitch on the card, and the verdict is shown whole.
+- **The EPILOGUE (7a NIGHT):** RUN END's night (`.run-end`'s palette), lines typed at `EPILOGUE_CPS` with
+  `arrivalChoir` under it (05's `revealChoir` does not exist; `arrivalChoir` is the existing choir). One click finishes the
+  typing, a second goes on.
+- **The FINAL CARD (7a NIGHT):** the title in the ending's colour (PURGE cold white, MERGE pink into blue: today's
+  `re-title` tones), the two rows of pieces (found lit, `???` dim), the `NEXT RUN:` lines (7c), the bridging line, `NEW RUN
+  ▸ [ENTER]`.
+- **THE LAST LANDING (7b VIEW):** a header strip over the SHIP view, the POD BAY's `RESTORED n` row, grey → amber beacons
+  (`plot-landing.ts`'s beacon class), and the `[ENTER] SKIP TO THE END` hint.
+- **The traces (7c CHART):** the card rows, `◆` on the chart, and the final card's `NEXT RUN:` lines turned on.
+- **New audio cues** (`audio.ts`, CARD's and VIEW's):
+  - `spareNotes`: two sine notes moving apart (05);
+  - `sunsetRumble`: a low rumble fading out (05);
+  - `lastLandingHum`: optional; VIEW may reuse `transmitIn`.
+
+### 2.11 Extensibility
+
+- **For slice 8 (the rebalance):**
+  - every trace number sits in one tuning block (§2.6, 7c lead);
+  - `data/traces.ts TRACE_RULES` makes the trace table data: gain, cost, where, built. Slice 8 retunes values and may
+    swap a row's gain or cost without new code paths;
+  - `traces/traces-sweep` (BALANCE_ONLY, §5.3) gives the comparability numbers: the next final ship's points and
+    drivers eaten per trace against no trace, over seeds;
+  - `last-landing-sweep` gives the blind and AUTODROP worth per planet class against 01's "about 0.75 on a GENTLE
+    planet".
+- **For CONTACT and later endings:**
+  - `YouChoice` and `STEP2_OPTIONS` are a data table with `built` flags, so CONTACT is a row plus its words;
+  - `EndingPiece` counts only built pieces, so the title's `n/7` follows by itself;
+  - a later end slot's own story (02 §3.6: CONTACT strongest toward the signal) is a field on the option (`ends:
+    'any' | slot[]`), unused in v1.
+- **For several end locations (02 §3.6):** `rootUnits`, `finalTraces` and the FINALE read `landing.finalShip`, never a
+  slot. `placeTraces`' final-ship fallbacks take "the final ship of the route's end", which v1 has one of.
+- **For a mid-ship save or ironman (decision 5, later):** the FINALE's state is all in the store (`hollow.finale`,
+  `landing.lastLanding`). A mid-ship save could hold it with no change of meaning.
+
+### 2.12 Debug hooks (`debug.ts`; the lead owns the file, the bodies are the tracks')
+
+- **7a:**
+  - `__ap.finale()` widens: `{ state, rootDeletable, options: OptionState[] by step }`;
+  - `__ap.finale.pick(step, piece, stay?)` / `.back()` / `.cont()`;
+  - `__ap.ending(hollow, you, opts?)` puts the run at a decided final report from any final ship (for the night
+    screens' e2e);
+  - `__ap.night()` returns `{ stage, epilogue: EpilogueModel, card: FinalCardModel }`;
+  - `__ap.archiveAs(cause, landed?, ending?)` takes an optional `Partial<EndingRecord>`.
+- **7b:** `__ap.lastLanding()` (the state and the flier), `.skip()`.
+- **7c:** `__ap.traces()` (the run's traces and places), `__ap.traces.as(kind)` (as if the last unit had chosen it,
+  for the current run: the places rolled again), `__ap.log.book()`.
+- **7d:** `__ap.signals()` (records and the count), `__ap.signals.give(n)`, `__ap.unknown(slot)` (the `?` event of a ship).
+
+---
+
+## 3. The words' and the screens' owners in one table
+
+| Surface | Model | Words | View |
+|---|---|---|---|
+| The FINALE card | `ending-rules.ts optionState` (FINALE) | `finale-text.ts` (FINALE) | `FinaleChoice.ts` (CARD) |
+| The report's ending line | `landing-report.ts endingLine` (lead hook, FINALE fills) | `finale-text.ts` (FINALE) | `LandingReport.ts` (as built) |
+| The EPILOGUE | `epilogue.ts epilogueModel` (NIGHT) | `epilogue-text.ts` (NIGHT) | `Epilogue.ts` (NIGHT) |
+| The FINAL CARD | `epilogue.ts finalCardModel` (NIGHT; `next` from CHART in 7c) | `epilogue-text.ts`, `trace-text.ts` | `FinalCard.ts` (NIGHT) |
+| THE LAST LANDING | `last-landing.ts` (DROP) | `last-landing-text.ts` (VIEW) | header, POD BAY row, beacons (VIEW) |
+| The traces' boot lines | `trace-gifts.ts` (TRACE) | `trace-text.ts` (TRACE) | the boot (as built) |
+| The card rows and chart marks | `trace-hud.ts` (CHART) | `trace-text.ts` | `ShipCard`, `chart-draw.ts` (as built, through the model) |
+| The strangers, the face, the logs | `log-selectors.ts`, `traces.ts` (lead), `story-log.ts` (LINEAGE) | `lineage-text.ts`, `log-books.ts` (LINEAGE) | TERMINAL, LOG READER (as built) |
+| The `?` cards and events | `unknown-events.ts` (EVENTS) | `unknown-text.ts` (EVENTS) | the card (as built), the strip |
+| CONTACT | `ending-rules.ts` (CONTACT's row), `traces.ts` | `contact-text.ts` | the FINALE card (as built by 7a) |
+
+---
+
+## 4. Hot shared files and how per-track blocks avoid conflicts
+
+### 4.1 7a
+
+| File | Owner after the FOUNDATION | Others |
+|---|---|---|
+| `types/ending.ts`, `state/schema.ts`, `state/initial.ts`, `types/lineage.ts`, `types/landing.ts` | lead | ask by message; R2's rule for a saved field |
+| `save-codec.ts`, `save-shape.ts`, `meta.ts`, `meta-parse.ts`, `save/shape-pin.test.ts`, the fixtures | lead | none |
+| `data/endings.ts` | lead | FINALE raises `ENDINGS_BUILT.twoStep` (one line) |
+| `tuning.ts` | lead | each track edits values only in its own banner block (`7a FINALE`, `7a CARD`, `7a NIGHT`) |
+| `events.ts`, `audio-cues.ts` | lead | the `7 ENDING` blocks are complete; CARD and NIGHT change cues in that block only |
+| `finale.ts`, `ending-rules.ts`, `finale-text.ts`, `story-log.ts` (`rootKeyDue`, one line) | FINALE | none |
+| `hollow-text.ts` | lead | FINALE trims `HOLLOW_FINALE` (its block only); the lines that move go to `finale-text.ts` |
+| `FinaleChoice.ts`, `ending.css`, `audio.ts` (two cues), `game.css` (deletes the `.finale-choice` block only) | CARD | none |
+| `epilogue.ts`, `epilogue-text.ts`, `Epilogue.ts`, `FinalCard.ts`, `night.css`, `RunEnd.ts`, `TitleCard.ts` (the ENDINGS line) | NIGHT | none |
+| `selectors.ts`, `landing.ts` (`finishLanding`), `say.ts`, `run.ts`, `landing-report.ts`, `main.ts`, `index.html`, `debug.ts` | lead | none: §2.4's seams cover the tracks' needs |
+| `support/words.test.ts` | lead | each track adds its pools in its own block |
+| `tests/unit/support/finale.ts` | lead | FINALE may extend it |
+| The finale movers (§4.4) | FINALE, for the churn only | lead-owned suites included |
+| e2e scenarios | lead, at the batch end | |
+
+**Where the tracks meet in 7a**, settled by signatures from the FOUNDATION:
+- CARD calls `pickStep1`, `pickStep2`, `pickStay`, `backToStep1` and `continueFollowed`, and reads `optionState`;
+- NIGHT reads `EndingRecord` through `endingRecordOf(state)` while `run.phase === 'end'` (the hollow and landing slices
+  are still the final ship's then; `run.lastUnit` is the *previous* unit, so NIGHT never reads it for this ending), and
+  `meta.endingsSeen` (already holding this run's pieces, since `endRun` records before the tally opens).
+
+CARD and NIGHT build their models on hand-built states and never wait on FINALE.
+
+### 4.2 7b
+
+| File | Owner | Others |
+|---|---|---|
+| `selectors.ts launchDrivers`, `landing.ts` (`launchDriver`, the refusal branch), `landing-rules.ts`, `autodrop.ts`, `autodrop-plan.ts`, `landing-hud.ts` (the swap) | lead (FOUNDATION) | none |
+| `last-landing.ts`, `data/last-landing.ts` (`LAST_LANDING_BUILT`) | DROP | none |
+| `last-landing-text.ts`, `PodBayWindow.ts` (the RESTORED row, marked), `plot-landing.ts` (beacon class, marked), `landing-report.ts` (the row's icons, marked), `landing.css` | VIEW | none |
+| `finale.ts` | lead in 7b (one call: `startLastLanding` behind the gate) | |
+| `tuning.ts` | lead | `7b DROP`, `7b VIEW` blocks |
+
+### 4.3 7c and 7d
+
+| File | Owner | Others |
+|---|---|---|
+| `types/trace.ts`, `data/traces.ts`, `systems/traces.ts`, `run.ts startRun`, `initial.ts`, the save files | lead | none |
+| `threat-plan.ts`, `beam-seeds.ts`, `carry.ts`, `hollow.ts` (the hooks), `boot.ts`, `map-boot.ts`, `script.ts`, `selectors.ts rootUnits`, `say.ts hollowLabel`, `desk.ts`, `log-selectors.ts` | lead (FOUNDATION seams) | none |
+| `trace-gifts.ts`, `trace-text.ts` | TRACE | raises `TRACES_BUILT` per kind |
+| `lineage-text.ts`, `log-books.ts`, `log-text.ts` (046 book), `story-log.ts`, `log-view.ts`, `hollow-text.ts` (HOLLOW_STORY, GHOST_LINE blocks) | LINEAGE | raises `LINEAGE_BUILT` |
+| `trace-hud.ts`, `chart-draw.ts` (the `◆`, marked), `FinalCard.ts` (the NEXT RUN rows, marked), `desk.css` | CHART | none |
+| 7d: `unknown-events.ts`, `unknown-text.ts`, `resident-hud.ts signalGlyph` | EVENTS | none |
+| 7d: `contact-text.ts`, `STEP2_OPTIONS.contact`, `epilogue-text.ts`'s CONTACT block (marked) | CONTACT | none |
+
+### 4.4 The movers (7a's dry run will confirm)
+
+These suites drive `chooseFinale` or read `finale.phase` (from a grep at HEAD): `wp11/merge-test` (18 hits),
+`wp11/p2/views` (8), `wp11/fix1/fix1` (8), `wp11/full-run` (6), `save/shape-pin` (6), `wp12/playthrough.ts` (5, the
+BALANCE_ONLY harness), `wp11/harness11.ts` (5), `threat/arrival-story` (5), `landing/hollow-landing` (5),
+`map/run1-route` (4), `landing/flow` (4), `wp12/p3/minors` (3), `wp11/p2/purge-fleet` (3), `wp11/boss-sim` (3),
+`save/review-fixes`, `landing/review-fixes` (2 each), `skills/autodrop-arm.ts`, `save/save-fixture.ts`, `save/resume`,
+`save/codec` and `opening/calm-ships` (1 each).
+
+- `wp11/merge-test` is rewritten: MERGE's in-place restore is R15's interim in 7a and is gone in 7b, so the suite becomes
+  7b's `ending/last-landing`. 7a keeps the interim's checks.
+- `wp11/p2/purge-fleet` loses the purge ending's fleet line (R13). Its fleet count moves to the epilogue's model.
+
+---
+
+## 5. Work breakdown
+
+### 5.1 7a THE ENDING
+
+**FOUNDATION (one agent, sequential, about a day)**
+0. **Check HEAD:** `RUN_SAVE_VERSION` 6, `META_VERSION` 3, the line numbers §2.4 and §4.4 cite, and that slice 6 has
+   merged.
+1. **Dump the v6 fixtures** (§2.2) and a META-3 archive fixture (`tests/unit/save/fixtures/meta-v3-won-merge.json`).
+2. **Types and state:** `types/ending.ts`, FinaleState v7, `lastLanding: null`, `FeaturedColonist.line` (filled from
+   `Colonist.line` in `landingResult`), `'won-spare'`.
+3. **Save v7 and archive v4:** migrations, codec checks, the shape pin, `parseEnding`.
+4. **`data/endings.ts`** with its option tables and gates (all down).
+5. **Tuning** (§2.6, four blocks), **events and cues** (§2.5), **debug** (§2.12).
+6. **Seams** (§2.4 7a) and **stubs** with final signatures, each file opening with its track's banner. `notBuilt`'s
+   `Track` becomes `'FINALE' | 'CARD' | 'NIGHT'`.
+   - Neutral: `optionState` returns today's PURGE / MERGE as open, others `'hidden'`; `epilogueModel` returns `null`
+     (the screen skips); `endingLine` returns null.
+   - Throwing: `pickStay`, `continueFollowed`.
+7. **`support/finale.ts`.**
+8. **The dry run:** raise `ENDINGS_BUILT.twoStep` alone in a scratch run, list the movers in Deviations, then lower it.
+9. **Gate:** typecheck, and the whole tier green with no behaviour change.
+10. **The independent contract review** writes `docs/phase3/impl/slice-7a-foundation-review.md`. Its majors are fixed
+    before the tracks branch.
+
+**Track FINALE** (worktree `finale-7a`)
+- **Owns:** `finale.ts`, `ending-rules.ts`, `finale-text.ts`, `story-log.ts`'s `rootKeyDue` line, HOLLOW_FINALE's block,
+  its tuning block, `ENDINGS_BUILT.twoStep`, and the movers (§4.4) for churn only.
+- **Builds:** the phases (R6), the prices (R8, R9, R11), R7's pick and confirm, the apply (PURGE, MERGE's interim R15,
+  SPARE), UNRESOLVED (R10), the verdict (R13), `endingRecordOf`, `finaleRunCause`, the report's `endingLine`, and the
+  debug bodies.
+- **Tests:** `ending/finale-flow`, `ending/rules`.
+
+**Track CARD** (worktree `card-7a`)
+- **Owns:** `FinaleChoice.ts`, `ending.css`, `audio.ts`'s two cues, the 7a cue block's cues, `game.css`'s `.finale-choice`
+  deletion, its tuning block.
+- **Builds:** §2.10's card, the FUEL notch's tooltip, and the phone sheet.
+- **Tests:** `ending/card-models` (hand-built states: every option state, `???`, needs, the sub-row, the verdict layout).
+
+**Track NIGHT** (worktree `night-7a`)
+- **Owns:** `epilogue.ts`, `epilogue-text.ts`, `Epilogue.ts`, `FinalCard.ts`, `night.css`, `RunEnd.ts`, the title's
+  ENDINGS line in `TitleCard.ts`, its tuning block.
+- **Builds:** R19–R23, the bridge moved from RunEnd to the final card, and `MAP_TEXT.runEnd.bridge` read there.
+- **Tests:** `ending/epilogue` (pure).
+
+**Merge order:** FINALE (it raises the gate and carries the churn), then CARD, then NIGHT. Then the full review, fixes
+(`not-built.ts` deleted again), the tier, e2e (§6.4), and OPEN-DECISIONS ("Slice 7": R8, R9, R10, R20).
+
+### 5.2 7b THE LAST LANDING
+
+**FOUNDATION (half a day):** the `launchDrivers` swap and the radio skip (§2.4 7b), the refusal branch, the input layer,
+the stubs, the tuning blocks, the gate `LAST_LANDING_BUILT` (down), and the dry run (raise it: the movers are
+`wp11/merge-test`'s interim checks only). Gate: no behaviour change. Then a short contract review.
+
+**Track DROP** (worktree `drop-7b`)
+- **Owns:** `last-landing.ts`, the gate, its tuning block, and `wp11/merge-test` → `ending/last-landing`.
+- **Builds:** R24–R28: the pods and their release, the resolver (`'merge'` first in `LANDING_CONTROLLER_ORDER`, already
+  so), the v1 and blind decides, v2's re-arm, the two-orbit limit, the skip, and the end (clear `lastLanding`, phase
+  `'done'`).
+
+**Track VIEW** (worktree `view-7b`)
+- **Owns:** `last-landing-text.ts`, the marked edits in `PodBayWindow.ts`, `plot-landing.ts` and `landing-report.ts`,
+  `landing.css`, its tuning block.
+- **Builds:** R29, the header, the hint.
+- **Tests:** `ending/last-landing-models`.
+
+**Merge order:** DROP, then VIEW.
+
+### 5.3 7c NEXT RUN
+
+**FOUNDATION (about a day):**
+- the types (§2.2 7c), save v8 with its fixtures (`run-save-v7-ship-done-run2.json`, `run-save-v7-beam-final.json`);
+- `systems/traces.ts` in full (pure, with its validator: R31's exclusions, the fallbacks, one place per kind);
+- every seam of §2.4 7c, behind `TRACES_BUILT` (per kind) and `LINEAGE_BUILT`;
+- the dry run per gate:
+  - `LINEAGE_BUILT` moves `wp8/ghost` and every run-2 suite's HOLLOW name;
+  - `TRACES_BUILT.reassignment` moves the run-2 final ships that the fixtures reach after a `'won-purge'` archive, by
+    R16's migration;
+- the contract review.
+
+**Track TRACE** (worktree `trace-7c`)
+- **Owns:** `trace-gifts.ts`, `trace-text.ts`, `TRACES_BUILT`, its tuning block, and the dry run's trace movers.
+- **Builds:** R32, R33 (with the hunt), the boot lines from the gifts applied, and `ArrivalReport.traceLines`.
+- **Tests:** `traces/final-ship`, `traces/gifts`.
+
+**Track LINEAGE** (worktree `lineage-7c`)
+- **Owns:** `lineage-text.ts`, `log-books.ts`, `log-text.ts`, `story-log.ts`, `log-view.ts`, the HOLLOW_STORY and
+  GHOST_LINE blocks of `hollow-text.ts`, `LINEAGE_BUILT`, and the lineage movers.
+- **Builds:** R34–R37, CONTROL's lineage lines, and `047.log`'s builder (`logEntriesOf(book)`).
+- **Tests:** `traces/lineage`, `traces/logs`.
+
+**Track CHART** (worktree `chart-7c`)
+- **Owns:** `trace-hud.ts`, the marked edits in `chart-draw.ts` and `FinalCard.ts`, `desk.css`, and the final card's
+  `NEXT RUN:` lines.
+- **Builds:** R38 and R12's lines turned on.
+- **Tests:** `traces/ui-models`.
+
+**Merge order:** TRACE, LINEAGE, CHART.
+
+### 5.4 7d SIGNALS
+
+**FOUNDATION (half a day):** save v9 (§2.2), the `'signal'` segment type, the hooks of §2.4 7d, the gates
+`UNKNOWN_EVENTS_BUILT` and `ENDINGS_BUILT.contact` (down), the dry run, and a short contract review.
+
+**Track EVENTS:** R39, R40.
+**Track CONTACT:** R41, its words, its row, its `tracesOf` and `placeTraces` branch, and its epilogue block.
+
+**Merge order:** EVENTS, then CONTACT. If time is short, CONTACT's gate stays down and it ships dark (R41).
+
+### 5.5 Why these tracks
+
+- **7a:** the FINALE's machine, its card and the night are three disjoint surfaces with one contract (`optionState`,
+  `EndingRecord`). One agent for all three would serialize a day of UI behind the machine's churn.
+- **7b:** small enough for one track. The view is split off only because `PodBayWindow` and the report are UI files no
+  machine agent should open.
+- **7c:** the mechanics (TRACE) and the story (LINEAGE) share only the FOUNDATION's `RunTraces` and `rootUnits`. CHART
+  paints both.
+
+---
+
+## 6. Tests
+
+**Budget (R42):** the tier is about 140 s quiet against a 265 s budget (cap 300). Slice 7 adds about 35 s of CPU, about
++11 s of wall on 4 workers. Long flights fly once (`flyOnce`). The sweeps are BALANCE_ONLY.
+
+### 6.1 New unit suites
+
+| Suite | Sub-slice / track | What it covers | Time |
+|---|---|---|---|
+| `ending/foundation.test.ts` | 7a lead | v6 → v7 migration of both fixtures; META 3 → 4 of the archive fixture (each cause, `endingsSeen` + reassignment, `traces` gone); codec refusals (`done` with no `you`, spare + sunset, a STAY ship not on target, `lastLanding` set, a restored pod not eaten); `parseEnding` strict | ~1.5 s |
+| `ending/finale-flow.test.ts` | 7a FINALE | LAST LIGHT on seed 7's arm (`flyOnce` to the duel): root falls mid-landing → `'asleep'`, no bite or seed after; landing ends → step 1 after the delay; entry 12 found; each step 1 × REASSIGNMENT; MERGE refused at 19 charge; SPARE refused at FUEL 19% and greying SUNSET; BACK; STAY with 0 / 1 / 3 eligible ships; UNRESOLVED (rm taken: `IT FOLLOWED YOU`); the verdict ≤ 3 lines; ENDING CHOSEN saved at `'done'` and resumed; the classic LAST LIGHT once | ~6 s |
+| `ending/rules.test.ts` | 7a FINALE | pure: `emptyShip`, `stayCandidates` from `ShipResult.pods`, `optionState` (open, needs, `???` by `endingsSeen`), `endingRecordOf`, `finaleRunCause` | < 1 s |
+| `ending/card-models.test.ts` | 7a CARD | hand-built states; every word at its worst case | < 1 s |
+| `ending/epilogue.test.ts` | 7a NIGHT | ages and people (RIVERSIDE 600 → 120,000 at 760), 2 significant figures, payoff choice order, the fold to `+ n OLDER COLONIES` at 16 lines, a lost run, gap 0's words, every title by combination, `PAYOFF_OF` covers `LINE_POOL` | < 1 s |
+| `ending/last-landing.test.ts` | 7b DROP | CORMORANT → LAST LIGHT with 2 and 6 eaten drivers: by radio (memory untouched), released, cadence, v3 lands all soft on a healthy orbit, v1 in pass order, blind's spread (×2) and margin on 20 seeds (mean worth 0.6–0.9 on GENTLE), the two-orbit limit, `[ENTER]` skip ends with every pod down, the report's row, ★ ON TARGET's denominator | ~5 s |
+| `ending/last-landing-models.test.ts` | 7b VIEW | header, POD BAY row, report row | < 1 s |
+| `traces/foundation.test.ts` | 7c lead | v7 → v8; `tracesOf` for every ending (followed none, one extra seed whatever is held); `placeTraces` on 200 arms (`assembleRun1Arm`, fresh rolls): exclusions, fallbacks, 046's trail, determinism | ~2 s |
+| `traces/final-ship.test.ts` | 7c TRACE | run 2 final ship per trace (`__ap.traces.as` equivalent): wiped seeds, bite interval × 0.85, capacity +1, root 18, the wild seed, +15 at boot, the hunt's first RM target | ~3 s |
+| `traces/gifts.test.ts` | 7c TRACE | SPARE / SUNSET / STAY gifts at their boot, through `arrivalCharge`; SPARE's seedless beam; Rm first | ~1 s |
+| `traces/lineage.test.ts` | 7c LINEAGE | strangers by run, the boarding lines, `rootUnits` after REASSIGNMENT (and after MERGE + REASSIGNMENT), the face line's wait, ghost lines for each cause | ~1 s |
+| `traces/logs.test.ts` | 7c LINEAGE | book by lineage, keys by ring for each book, `047.log` from 0–4 events, every entry ≤ 3 × 70 | < 1 s |
+| `traces/ui-models.test.ts` | 7c CHART | card rows, chart `◆`, final card `NEXT RUN:` | < 1 s |
+| `signals/events.test.ts`, `signals/contact.test.ts` | 7d | the `?` card, the three events, the glyph, CONTACT's price, trace and words | ~1.5 s |
+
+### 6.2 Changed suites
+
+- `save/shape-pin`, `save/codec`, `save/archive-v2`: v7, v8, v9 and META 4.
+- `support/words`: every new pool.
+- `support/import-guard`: unchanged and green. `data/endings.ts`, `data/traces.ts` and `data/epilogue-text.ts` import only
+  data and types (`epilogue-text` reads `souls.ts LINE_POOL`, a data leaf). `systems/traces.ts` is never imported by
+  `data/ships.ts` or `classic-five.ts`.
+- The movers of §4.4 (7a) and the dry runs' lists (7b, 7c, 7d).
+- `threat/beam-seeds` must stay byte-identical until TRACE raises a gate. Traces draw their own stream, so a move before
+  that is a bug.
+- `skills/*` must not move: a seed met at the final ship still writes `seedsMetAtDepth` (no desk follows it).
+
+### 6.3 BALANCE_ONLY sweeps (information until slice 8)
+
+- **`ending/last-landing-sweep.test.ts`** (`// BALANCE_ONLY: the final ship × seeds × eaten 1–6 × flier v0–v3`): points per
+  restored pod against a hand-landed pod, by planet class. It checks 01's "about 0.75 on GENTLE, 0.5 on HARSH" for blind,
+  and "full points with AUTODROP and a good orbit".
+- **`traces/traces-sweep.test.ts`** (`// BALANCE_ONLY: run 2's final ship × seeds 1–20 × each trace, flown by the WP7
+  kid`): points, drivers eaten, the duel won %, and charge at the duel, each against no trace. This is the comparability
+  table for slice 8 (PHASE3 §12 item 2). Expectation: every trace within ±1 pod of none on the final ship, and each
+  gift ship within ±15 REPAIR CHARGE's worth.
+- **`wp12/playthrough.test.ts`** (the 200-seed harness) chooses PURGE + REASSIGNMENT through `chooseEnding`. It is
+  information only.
+
+### 6.4 e2e (the lead, once per sub-slice batch end)
+
+- **New `tests/e2e/scenarios/ending.mjs`** (7a, seed 7, about 4 minutes), from `__ap.slot(19)` on the worked route:
+  1. the duel, the root falls mid-landing: the `finish your landing` line, no bite after, the strip;
+  2. the landing ends: the card, entry 12 in it, step 1's three rows (MERGE's meter, SPARE's FUEL need);
+  3. `[2]` MERGE, step 2, `[ESC]` back, `[1]` PURGE, step 2: STAY's sub-row (two ships), `[3]` REASSIGNMENT, the verdict;
+  4. the report's ending line, CONTINUE, the RUN TALLY, `EPILOGUE ▸`, the epilogue's header and a colony line with its
+     age, the final card's title `STAND BY`, the rows, the bridge, NEW RUN;
+  5. a second page with `__ap.ending('spare', 'stay')`: the title `A SHIP FOR 046, A HOME FOR ME`;
+  6. the phone: the card as a sheet at 360 × 740, each key reachable by tap.
+- **7b adds to `ending.mjs`:** MERGE with 2 eaten drivers: `THE LAST LANDING` header, the TERMINAL's `DRIVER RESTORED`
+  lines, the beacons turning amber, two touchdowns, the report's `2 RESTORED · …`; then `[ENTER]` skip on a 6-pod case.
+- **New `tests/e2e/scenarios/traces.mjs`** (7c, seed 4): `__ap.archiveAs('won-purge', …, { you: 'reassignment' })` and a
+  reload; run 2's HOLLOW boards as UNIT-031; the `???` file reads `047.log`; the final ship's card row and boot face line
+  `> hi 048. it's 047.`; +15 at its boot. A second archive with SPARE: `046'S CACHE IS HERE` on its card, its boot gift,
+  the wild seed at the final boot.
+- **New `tests/e2e/scenarios/signals.mjs`** (7d): the three `?` cards, the old colony's letter, the signal file's SCAN `2/3`,
+  the glyph, and CONTACT on the card with 3 signals.
+- **`playthrough.mjs`:**
+  - LAST LIGHT: `PURGE on the finale's card` becomes the root asleep, the landing to its end, `[1]` then `[3]`, the
+    verdict;
+  - the report follows the FINALE (the check reads `'done'` in place of `['purged', 'merged', 'unresolved']`, at
+    `playthrough.mjs:773`);
+  - after the tally, two ENTERs (epilogue, final card) before NEW RUN.
+- **`run-flow.mjs`:** the same FINALE keys and the two night screens. Its headless finale wait reads `'done'`.
+- **`resume.mjs` part D:**
+  - the choice is two steps;
+  - ENDING CHOSEN is checked at the report (unchanged point, R14);
+  - after CONTINUE, the RUN TALLY's checks stand and two more ENTERs reach NEW RUN;
+  - a reload during the FINALE card resumes at LAST LIGHT's BEAM (`RESUME · UNIT-047 · SHIP 6 · bound for LAST
+    LIGHT`). This is a new check that pins R14.
+- **`run2.mjs`:**
+  - 7a: `archiveAs('won-purge')` migrates through `parseEnding` (the ending record from the debug body);
+  - 7c: run 2's mid-run HOLLOW is the stranger. The scenario has no HOLLOW-name check today; one is added, `UNIT-031`
+    at the boarding.
+- **`phone.mjs`:** the FINALE sheet (7a) and the epilogue at 360 px (no sideways scroll).
+
+---
+
+## 7. Out of scope (deferred)
+
+- **Slice 8 (the rebalance):**
+  - every trace number (§2.6, 7c), the blind drop's numbers, `MERGE_DRIVER_INTEGRITY`, and `EMPTY_SHIP_FUEL_PCT`;
+  - MERGE's charge "kept through the duel" (decision round 3 item 7: until a playtest decides);
+  - the classic world's retirement (OPEN-DECISIONS 12), after which the FINALE's classic movers go too;
+  - the receiver bypass animation (OPEN-DECISIONS 20).
+- **Later:**
+  - several end locations, and CONTACT's own end toward the signal (02 §3.6);
+  - the relay where 046 lives as a map stop (02 §7);
+  - colonies as relays or ports (decision 7 holds: only STAY's trace);
+  - a mid-ship save or ironman (decision 5), which would let ENDING CHOSEN move to step 2 (R14);
+  - a `site-moved` notable event for `047.log` (plan 6 §8), and a trace place as a wreck site;
+  - epilogue lines from `ShipResult.survey` beyond the payoff's fallback (NIGHT may use a moved site as the colony's
+    line when it has no featured payoff; no more);
+  - residents that remember a unit across runs;
+  - mail between strangers;
+  - more stranger books than two (R34's alternation).
+
+---
+
+## Critical files for implementation
+
+- **7a:** `src/systems/finale.ts`, `src/components/run/FinaleChoice.ts`, `src/state/schema.ts` (FinaleState),
+  `src/state/selectors.ts finalePending`, `src/systems/landing.ts finishLanding`, `src/systems/save-write.ts
+  writeEndingChosen`, `src/systems/save-codec.ts`, `src/systems/meta.ts` (META 4, `recordRunEnd`), `src/systems/meta-parse.ts`,
+  `src/systems/run.ts continueAfterReport`, `src/systems/run-end.ts`, `src/components/run/RunEnd.ts`,
+  `src/systems/story-log.ts rootKeyDue`, `src/systems/say.ts` (the arbiter), `src/data/hollow-text.ts HOLLOW_FINALE`,
+  `src/data/souls.ts LINE_POOL`, `src/types/landing.ts FeaturedColonist`.
+- **7b:** `src/systems/landing-controller.ts`, `src/systems/autodrop.ts autodropController` (`AutodropOverride`),
+  `src/systems/landing.ts launchDriver` / `requestLaunch`, `src/systems/landing-rules.ts launchRefusal` / `driverFor`,
+  `src/systems/landing-solve.ts dropHalfWidthKm`, `src/systems/landing-report.ts:150`, `src/systems/clock.ts advance`.
+- **7c:** `src/systems/meta.ts hollowUnitsAfter`, `src/systems/lineage.ts`, `src/systems/threat-plan.ts rootBlocksFor` /
+  `planThreat`, `src/systems/beam-seeds.ts`, `src/systems/carry.ts arrivalCharge`, `src/systems/hollow.ts chooseVerb` /
+  `seedSpot`, `src/state/log-selectors.ts`, `src/data/log-text.ts`, `src/systems/boot.ts`, `src/systems/map-boot.ts`,
+  `src/data/script.ts bootLinePlan`, `src/systems/desk.ts cardModel` / `chartModel`.
+- **7d:** `src/systems/map-generator.ts topUpReservations` (read only: the `?` slots and fragments), `src/systems/resident-left.ts`
+  (the signal pattern), `src/systems/resident-hud.ts signalGlyph`, `src/types/resident.ts SignalRecord`.
