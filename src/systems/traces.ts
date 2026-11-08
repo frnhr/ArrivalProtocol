@@ -71,18 +71,19 @@ function isFinalShip(ship: Readonly<ArmShip>): boolean {
 
 // R31's exclusions: never an authored ship, a `?` ship, a TIGHT ship (the gift's charge would land in a receiver with no
 // room: decision 9's squeeze would turn a gift into a loss), the first ship or a final ship, except where a kind's rule
-// names one as its fallback (SUNSET: the first ship; STAY: the final ship).
+// names one as its fallback: SUNSET's first ship (its world was always the last unit's first) and STAY's final ship, each
+// allowed for its kind whatever it is (run 1's arm has them authored: ARES-VII, LAST LIGHT).
 export function placeExcluded(ship: Readonly<ArmShip>, kind: PlacedTraceKind): string | null {
+  if (kind === 'sunset' && isFirstShip(ship)) return null;
+  if (kind === 'stay' && isFinalShip(ship)) return null;
+  if (isFirstShip(ship)) return 'the first ship';
+  if (isFinalShip(ship)) return 'a final ship';
   if (ship.authored !== null) return 'an authored ship';
   if (ship.reserved.unknownEvent !== null) return 'a `?` ship';
   if (ship.memoryClass === 'TIGHT') return 'a TIGHT ship';
-  if (isFirstShip(ship) && kind !== 'sunset') return 'the first ship';
-  if (isFinalShip(ship) && kind !== 'stay') return 'a final ship';
   return null;
 }
 
-// The ships a kind's place may be on by the exclusions alone, by slot (the fallbacks are their rule's: only SUNSET's first
-// ship and STAY's final ship pass placeExcluded, and only through their fallback below).
 function armShips(map: Readonly<RunMapState>): ArmShip[] {
   return map.arm.filter((ship): ship is ArmShip => ship !== undefined && ship !== null);
 }
@@ -92,6 +93,8 @@ function inLayers(ship: Readonly<ArmShip>, [from, to]: readonly [number, number]
   return layer >= from && layer <= to;
 }
 
+// The ships a kind's rule may pick from, by slot: not taken, not excluded, and never the first or a final ship (those come
+// only through their kind's fallback below).
 function open(map: Readonly<RunMapState>, kind: PlacedTraceKind, taken: readonly number[]): ArmShip[] {
   return armShips(map).filter((ship) => !taken.includes(ship.slot) && placeExcluded(ship, kind) === null
     && !isFirstShip(ship) && !isFinalShip(ship));
@@ -147,8 +150,8 @@ function placeKind(
       const stops = trail?.stops ?? [];
       const candidates = open(map, kind, taken).filter((ship) => stops.some((stop) => stop.slot === ship.slot && ship.approachYear > stop.year));
       const first = firstShipOf(map);
-      const pick = pickOne(candidates, rng) ?? (placeExcluded(first, kind) === null && !taken.includes(first.slot) ? first : null);
-      if (pick === null) throw new Error(`placeTraces: no ship for SUNSET's cache (the first ship, slot ${first.slot}, is ${placeExcluded(first, kind) ?? 'taken'})`);
+      const pick = pickOne(candidates, rng) ?? (taken.includes(first.slot) ? null : first);
+      if (pick === null) throw new Error(`placeTraces: no ship for SUNSET's cache (the first ship, slot ${first.slot}, is taken)`);
       return [pick.slot];
     }
     case 'stay': {
@@ -157,8 +160,8 @@ function placeKind(
         .filter((ship) => inLayers(ship, TRACE_LAYERS.stay) && ship.approachYear >= stay.year + distLy(stay.slot, ship.slot))
         .sort((a, b) => a.approachYear - b.approachYear || a.slot - b.slot);
       const final = finalShipOf(map);
-      const pick = candidates[0] ?? (placeExcluded(final, kind) === null && !taken.includes(final.slot) ? final : null);
-      if (pick === null) throw new Error(`placeTraces: no ship for STAY's supply packet (the final ship is ${placeExcluded(final, kind) ?? 'taken'})`);
+      const pick = candidates[0] ?? (taken.includes(final.slot) ? null : final);
+      if (pick === null) throw new Error(`placeTraces: no ship for STAY's supply packet (the final ship, slot ${final.slot}, is taken)`);
       return [pick.slot];
     }
     case 'contact': {
