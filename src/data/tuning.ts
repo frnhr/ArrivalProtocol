@@ -2546,9 +2546,13 @@ export const TRACE_SPARE_FALLBACK_LAYERS: readonly [number, number] = [2, 6];
 // The face line's wait (R35; 05 §3.5 `i've been at this dish 3 years`): this final ship's year minus the last one's, at
 // least this many years (02 §3.4: the next final ship approaches at least a gap's worth of years later).
 export const TRACE_ROOT_WAIT_MIN_YEARS = 1;
-// REASSIGNMENT's allowance at the final boot (R32; slice-8 plan §2.8, OPEN-DECISIONS 70 and 105): its own number since slice
-// 8, apart from the caches' TRACE_GIFT_CHARGE. Through the arrival path, as every gift.
-export const TRACE_ALLOWANCE_CHARGE = 15;
+// REASSIGNMENT's allowance at the final boot (R32; slice-8 plan §2.8, OPEN-DECISIONS 70 and 105, [FRAN] confirm): its own
+// number since slice 8, apart from the caches' TRACE_GIFT_CHARGE, through the arrival path as every gift. WHY 8, not round 3
+// item 4's +15: the kid blocks every hunt RM with a SCAN, so the hunt costs nothing and the charge is the whole gain. On
+// traces-sweep's 20 seeds REASSIGNMENT read +1.5 pods at 15 and +1.0 at 8 (+1.0 at 5, +1.1 at 3, 0.0 at 0): the first few
+// charge buy the REPAIR that saves a cluster, so below 8 the gain hardly shrinks until the gift is gone. 8 is one CONTACT
+// stop. To reverse: 15 (or TRACE_GIFT_CHARGE in trace-gifts.ts and trace-hud.ts again).
+export const TRACE_ALLOWANCE_CHARGE = 8;
 
 // --- end of 7c lead --------------------------------------------------------------------------------------------------
 
