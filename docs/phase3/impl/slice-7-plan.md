@@ -1501,3 +1501,82 @@ follow-up and replaces the ones above.
 - **The lead:** the merge probe was not re-run here (this worktree's isolation refuses a scratch clone's commits and
   merges). `scratchpad/probe7.py <FINALE|CARD|NIGHT>` tags each track's lines at this follow-up's numbers, for the review's
   probe to re-run before the tracks branch.
+
+## Deviations (Track NIGHT)
+
+Recorded by Track NIGHT (branch `night-7a`, from 2625aa4, the head of `found-7a`). R19–R23 are built and
+`ENDINGS_BUILT.night` is raised: after CONTINUE the RUN TALLY's `EPILOGUE ▸ [ENTER]` opens the typed EPILOGUE, whose second
+click (or ENTER / SPACE) opens the FINAL CARD with NEW RUN. The unit tier is green: 208 passed, 0 failed, 11 balance-only
+skipped; the run took 442 s on 4 workers under a load average of 15–19 (the other 7a tracks building beside it), over the
+300 s budget for that reason only (the foundation measured 223 s quieter). `ending/epilogue` is new (42 checks, about 2 s of
+CPU; R42's +4 s for 7a holds). No e2e was run (the lead's, §6.4).
+
+**What is built.**
+- `systems/epilogue.ts`: `epilogueOf(state, meta, record)` and `finalCardOf(state, meta, record)` (review m11: the record
+  injected; `epilogueModel` and `finalCardModel` pass `endingRecordOf(state)`), `roundSig`, `colonyPeople`, `endingTitle`.
+  Both models are null off the run end (`ending/foundation`'s night block now says so).
+- `data/epilogue-text.ts`: `PAYOFF_OF` with its two-way load check, `WALKED_IN`, the pieces (each step 1 × each step 2, MERGE
+  + SUNSET's own), the next unit, CONTROL's three last lines, the final card's words; `ENDING_TITLE` as seeded (the four
+  UNRESOLVED drafts and CONTACT's three still `TODO(05)`).
+- `Epilogue.ts`, `FinalCard.ts`, `night.css` (the phone layout included), `RunEnd.ts` (no endings line or bridge with the
+  night up; the tally steps aside, `.night-on`, while the night screens are up), `TitleCard.ts` (`ENDINGS n/6` over
+  `builtPieces()`).
+- Words: `support/words.test.ts`'s NIGHT block renders `EPILOGUE_TEXT`, `ENDING_TITLE`, `SPARE_RUN_END`, `PAYOFF_OF` and
+  `WALKED_IN` at their worst case (106 lines) and pins `PAYOFF_OF`'s cover.
+
+**Deviations.**
+1. **41 payoffs, not 78.** `souls.ts LINE_POOL` holds 40 bios at this HEAD (R21's 76 and Imani Osei are 05's future pool), so
+   `PAYOFF_OF` has 40 + Ada's. The load check fails loudly both ways (a bio without a payoff, a payoff without a bio), so the
+   day LINE_POOL grows, the page refuses to load until its payoffs are written. Growing LINE_POOL is not NIGHT's (it would
+   also move every roster roll).
+2. **`PAYOFF_OF` is `Record<string, (first, colony) => string>`**, not `Record<string, string>`: a payoff names its person
+   (`Ada named the first tree.`) and sometimes the colony (`LANTERN plays chess the way Kofi taught it.`).
+3. **The payoff fallbacks** (R20, R21): the first featured colonist of a pod landed in an LZ whose bio has a payoff; else a
+   mislanded pod's walked-in line (`WALKED_IN`, picked by the pod's number); else the off-site boat; else a plain line
+   (`The OKAFOR family lit the first fire.`, for a migrated result whose bios are null). A woken sleeper (`run.residents.met`,
+   `'sleeping'` + `'woken'`) adds `MOTH still sings to the RIVERSIDE nursery.` to its colony.
+4. **Line counting.** A colony is one line when its head and payoff fit in 70, else two (the payoff on its own); the fold
+   counts rendered lines, takes the oldest colonies first and stands first (`+ 3 OLDER COLONIES`, `+ 1 OLDER COLONY`). A run
+   that brought nobody down says `No colony on this route yet. The next unit is on its way.` in the colonies' place.
+5. **The pieces' words** are drafts against 05 §3.12's samples (05 writes only two epilogues): every step-1 piece is 2 lines,
+   every step-2 piece 2 (3 for UNRESOLVED + STAY or REASSIGNMENT: the two minds), MERGE + SUNSET's own piece 3 (the restored
+   driver line, `two caretakers`, the lowercase `us` line). PURGE's second line is the fleet count (`5 of 6 ships made it
+   home, …`), the matter WP11's `purgeEnding` carried (R13; FINALE's `purge-fleet` churn can point at
+   `EPILOGUE_TEXT.step1.purgeFleet`). The MERGE line is `UNIT-046 gave back the NOVAK pod's driver. It came down too.` (05's
+   `It came down on its own.` passes 70 at `UNIT-046·047` and a 10-letter family) and counts only restored pods that came down.
+   The names are `hollowUnitName(record.rootUnits)` (`UNIT-046`), not 05's bare `046`.
+6. **CONTROL's last line** by step 2: REASSIGNMENT thanks (`Your next post is RELAY 20`, as FINALE's verdict), every other
+   step 2 is non-compliant, and a lost run gets `Thank you, Unit 47. Another unit is on its way. :)`. The next-unit line
+   counts the time valve's years with the gap (the bridging line's number), `1 year` singular, `the same year` at 0, and is
+   absent on the classic world (no `run.next`).
+7. **The header** is `header(year, years)`: `FORTY` from `EPILOGUE_YEARS` (tens up to NINETY in words, digits otherwise).
+   A lost run's year is its last route stop's approach year + 40.
+8. **Model widenings** (NIGHT's to widen): `EpilogueLineKind` gains `'us'`; `EpilogueModel` gains `colonies` (before the
+   fold) and `folded`; `FinalCardModel` gains `kicker`, and `ending` is typed `{ hollow: HollowFate; you: YouChoice }`;
+   `FinalCardPiece` gains `now` (this run's piece, drawn gold). Without an archive behind the page the rows hold this run's
+   pieces only.
+9. **`EPILOGUE_ARM_SEC` 0.6** (NIGHT's tuning block, new): one keydown reaches every `'end'`-layer binding in order, so the
+   tally's ENTER would also have finished the epilogue's typing the moment it opened. The final card already had
+   `FINAL_CARD_ARM_SEC`. `EPILOGUE_HOLD_SEC` holds the `GO ON ▸` button until 3 s after the last line types itself (a click
+   that finishes the typing shows it at once).
+10. **Colours** (the final card's title): PURGE cold white and MERGE pink into blue as RUN END's; SPARE the good green into
+    amber, UNRESOLVED HOLLOW's pink dimmed, a lost run the warning red on the sombre night. The final card plays `stampHit`
+    (heavy on a lost run) as it lands, directly as RunEnd plays its cues.
+11. **`SPARE_RUN_END`** reworded: `IT HAS A SHIP NOW` / `You gave it the empty ship, and it left.` (TODO(05)).
+12. **`TitleCard.ts`** gains two import lines besides its ENDINGS line (`ENDINGS_BUILT`, `builtPieces`, `EndingPiece`), at
+    `:6–7`. The gate-down branches (`meta.ts ENDINGS`, `script.ts endingsLine`, RunEnd's old endings block and bridge) stay
+    for the gate; the fix pass may delete them with the gate.
+
+**Patches requested (lead).**
+- **e2e (§6.4):** with `night` raised, ENTER on the RUN TALLY opens the epilogue: `playthrough.mjs`, `run-flow.mjs` and
+  `resume.mjs` need ENTER (epilogue; wait ≥ `EPILOGUE_ARM_SEC`), ENTER (finish the typing), ENTER (final card; wait ≥
+  `FINAL_CARD_ARM_SEC` 1.2 s) and ENTER (NEW RUN). A returning title reads `ENDINGS n/6` (any e2e check of `ENDINGS 1/2`
+  moves). `__ap.night()` gives the stage and both models.
+- **`ending/foundation.test.ts`:** NIGHT changed only its lines `:58` (the gate) and `:139` (the stubs' check, now "no models
+  off the run end").
+- None to `debug.ts`: `__ap.night()` works as built; `__ap.ending` is FINALE's.
+
+**Screens checked** (Playwright, 1440×900 and 390×844, crafted run ends on seed 7's arm; `tests/.out/night-7a/`): the tally,
+the epilogue typing and whole (8 colonies with 3 folded; the worked route's MERGE + SUNSET; a lost run), the final card
+(STAND BY, WE TOOK THE SHIP, UNIT-047 OVERWRITTEN), NEW RUN to the title, and the title's `ENDINGS 2/6`. No sideways scroll on
+the phone.
