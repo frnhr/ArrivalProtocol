@@ -13,7 +13,7 @@ import { fixtureShip } from '../../support/arm-ship';
 import { createHarness7 } from '../harness7';
 import { plantHalcyonRoot } from '../../support/hollow-world';
 import { lossPlan } from '@systems/run';
-import { continueAfterLoss } from '../../support/classic-flow';
+import { continueAfterLoss } from '../../support/desk';
 import { runEndModel } from '@systems/run-end';
 import { transmitModel } from '@systems/transmit';
 import { skipBoot } from '@systems/boot';
@@ -21,7 +21,7 @@ import { biteClock } from '@systems/hollow-hud';
 import { setIntegrity } from '@state/actions';
 import { scriptedDamageLine, bootLinePlan, TRANSMIT_TEXT, BEAM_OUT_TEXT } from '@data/script';
 import { HOLLOW_HUD_TEXT } from '@data/hollow-text';
-import { CLASSIC_FIVE } from '@data/classic-five';
+import { AUTHORED_SLOTS } from '@systems/arm-fixture';
 import {
   BOOT_SKIP_GRACE_SEC, BOOT_LINE_AT_SEC, ARRIVAL_HIT_STAGGER_SEC, ARRIVAL_HIT_SEEN_SEC, EMERGENCY_EXTRA_HITS,
 } from '@data/tuning';
@@ -39,7 +39,7 @@ function crash(): void {
 // WP9: the last ship was KESTREL (ship 3); WP10: it is VESPER (ship 4). Read off the fleet, so the next ship changes nothing.
 // WP11: the last ship is LAST LIGHT, the flagship: its loss is §4.3's FLAGSHIP LOST, worded FINAL SHIP LOST since slice 3a (WP7's interim 'last-ship-lost' and
 // its `… LOST · END OF THE FLEET` title are gone with the fleet that ended early), and RUN END's tone is sombre.
-const LAST = CLASSIC_FIVE.length - 1;
+const LAST = AUTHORED_SLOTS.length - 1;
 const LAST_NAME = fixtureShip(LAST).name;
 {
   h.shipAlone(LAST, 9);

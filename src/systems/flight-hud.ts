@@ -267,8 +267,8 @@ export function decayChip(
 
 // The header crumbs (§7.1): UNIT-047 · WAVE 1 / ARES-VII / what is happening right now, in the words the
 // rest of the HUD uses: IMPACT COURSE, FLYBY, GET READY, CAPTURED, IN RING, then the outcome. The wave is
-// the run (§4.5, WP8: UNIT-048 · WAVE 2 on the next one). Phase 3 slice 3a (02-map §4): on the arm the ship crumb gains
-// the galaxy year (`UNIT-047 / KESTREL · 2467 / FLYBY`: `year`, null on the classic world, whose years are fixtures),
+// the run (§4.5, WP8: UNIT-048 · WAVE 2 on the next one). Phase 3 slice 3a (02-map §4): the ship crumb gains
+// the galaxy year (`UNIT-047 / KESTREL · 2467 / FLYBY`: `year`),
 // and the desk and the PACKET name themselves.
 export interface HeaderCrumbs {
   unit: string;
@@ -297,7 +297,7 @@ export function headerCrumbs(state: Readonly<GameState>, pred: Prediction): Head
   const unit = state.mission.unitId;
   const wave = `WAVE ${state.mission.wave}`;
   const ship = state.level.shipName;
-  const year = state.run.map.world === 'arm' ? state.run.map.galaxyYear : null;
+  const year = state.run.map.galaxyYear;
   const crumbs = (phase: Label): HeaderCrumbs => ({ unit, wave, ship, year, phase });
   if (state.run.phase === 'title') return crumbs({ text: 'STANDBY', tone: 'plain' });
   if (state.run.phase === 'desk') return crumbs({ text: MAP_TEXT.desk.title, tone: 'plain' });

@@ -31,7 +31,7 @@ import {
 const PLACED: readonly PlacedTraceKind[] = ['spare', 'sunset', 'stay', 'contact'];
 const isPlaced = (kind: TraceKind): kind is PlacedTraceKind => (PLACED as readonly string[]).includes(kind);
 
-// No traces this run (run 1, a last unit lost or abandoned on the way, a v7 run resumed under v8, the classic world).
+// No traces this run (run 1, a last unit lost or abandoned on the way, a v7 run resumed under v8).
 export function noTraces(): RunTraces {
   return { from: null, kinds: [], places: [], extraSeed: false };
 }
@@ -128,9 +128,9 @@ function firstShipOf(map: Readonly<RunMapState>): ArmShip {
 // Each placed kind's rule (R31), with its fallback. `taken`: the slots already holding a place (one gift a ship).
 // • SPARE: a ship in layers 3–6; for 046 a ship at a world of its written trail past the first; none: any layers 2–6 ship.
 // • SUNSET: a ship at a world of the last route whose approach is after the last unit's landing there; none (or no trail
-//   kept: a classic record): the first ship (its world was always the last unit's first).
+//   kept: a migrated record): the first ship (its world was always the last unit's first).
 // • STAY: the first ship in layers 3–6, by approach, whose approach ≥ the colony's founding year + the distance from its
-//   world (its supply packet travels by light); none (or a classic record, whose STAY slot is no arm world): the final ship.
+//   world (its supply packet travels by light); none (or a migrated record, whose STAY slot is no arm world): the final ship.
 // • CONTACT (7d): two ships in layers 5–7, while ENDINGS_BUILT.contact's CONTACT exists (a CONTACT ending can't be chosen
 //   before it); fewer when the arm has fewer.
 function placeKind(
@@ -177,9 +177,9 @@ function placeKind(
 
 // Where the traces' gifts wait on this arm (R31): one place per placed kind (CONTACT's two), each on its own ship, in a
 // fixed order (STAY first: it draws nothing; then SUNSET, SPARE, CONTACT), on `rng` (tracesRng: the run's own stream). The
-// classic world holds no places (it has no arm). Pure: `traces` untouched.
+// Pure: `traces` untouched.
 export function placeTraces(map: Readonly<RunMapState>, traces: Readonly<RunTraces>, trail: Readonly<UnitTrail> | null, rng: Rng): TracePlace[] {
-  if (traces.from === null || map.world !== 'arm') return [];
+  if (traces.from === null) return [];
   const ending = traces.from.ending;
   const places: TracePlace[] = [];
   for (const kind of ['stay', 'sunset', 'spare', 'contact'] as const) {
@@ -190,9 +190,7 @@ export function placeTraces(map: Readonly<RunMapState>, traces: Readonly<RunTrac
 }
 
 // The run's traces at RUN START (R30): the last unit's ending, placed on the arm the run starts on, on the run's own stream.
-// The classic world (a frozen fixture: no arm, never archived as a lineage) has none.
 export function runTracesOf(lastUnit: Readonly<LastUnit> | null, map: Readonly<RunMapState>, runSeed: number): RunTraces {
-  if (map.world !== 'arm') return noTraces();
   const traces = tracesOf(lastUnit);
   return { ...traces, places: placeTraces(map, traces, lastUnit?.trail ?? null, tracesRng(runSeed)) };
 }
@@ -205,7 +203,7 @@ export function traceAt(run: Readonly<Pick<RunState, 'traces'>>, slot: number): 
   return run.traces.places.find((place) => place.slot === slot) ?? null;
 }
 
-// Is the unit on a final ship now (the classic world's LAST LIGHT, an end slot's ship on the arm)?
+// Is the unit on a final ship now (an end slot's ship)?
 export function onFinalShip(run: Readonly<Pick<RunState, 'map' | 'shipIndex'>>): boolean {
   return isEndSlot(run.map, currentSlot(run));
 }
@@ -300,13 +298,11 @@ export function logBookOf(wave: number, lastUnit: Readonly<Pick<LastUnit, 'numbe
 // • every placed kind held has its place (CONTACT at most two), and every place is a ship of the arm that its kind's rule
 //   allows (R31's exclusions; SUNSET's first ship and STAY's final ship as fallbacks), of a kind the traces hold, one place
 //   a ship;
-// • the classic world holds none.
 export function traceRefusal(run: Readonly<Pick<RunState, 'traces' | 'lastUnit' | 'map'>>): string | null {
   const traces = run.traces;
   if (traces.from === null) {
     return traces.kinds.length === 0 && traces.places.length === 0 && !traces.extraSeed ? null : 'traces with no ending they came from';
   }
-  if (run.map.world !== 'arm') return 'traces on the classic world';
   const last = run.lastUnit;
   if (last === null || last.number !== traces.from.unit || JSON.stringify(last.ending) !== JSON.stringify(traces.from.ending)) {
     return `traces from UNIT-${traces.from.unit}'s ending, not the last unit's`;

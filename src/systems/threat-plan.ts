@@ -1,6 +1,5 @@
 import type { ThreatInput, ShipThreat, HollowStage, RunThreatState, BeamSeedSource, FinalTraceInput } from '@/types/threat';
 import { HOLLOW_STAGES, SEEDS_ONLY_DEF, CALM_DEF, foldArrivalWalls } from '@data/threats';
-import { CLASSIC_FIVE, CLASSIC_FACTS, classicShip } from '@data/classic-five';
 import {
   BOARD_MIN_DEPTH, TRACE_BOARD_AT, SEEDS_MIN_DEPTH, PRE_FINAL_ROOT_CAP, FINAL_ROOT_MAX_BLOCKS, TRACE_MERGE_ROOT_EXTRA,
   TRACE_PURGE_BITE_MULT,
@@ -14,7 +13,7 @@ if (HOLLOW_STAGES.finale.rootBlocks + TRACE_MERGE_ROOT_EXTRA !== FINAL_ROOT_MAX_
   throw new Error(`threat-plan: the FINALE's root ${HOLLOW_STAGES.finale.rootBlocks} + MERGE's ${TRACE_MERGE_ROOT_EXTRA} is not FINAL_ROOT_MAX_BLOCKS ${FINAL_ROOT_MAX_BLOCKS}`);
 }
 
-// No trace plays (every ship before the final one, the classic world, the nominal runs, and every run until TRACE's gates).
+// No trace plays (every ship before the final one, the nominal runs, and every run until TRACE's gates).
 export const NO_FINAL_TRACES: Readonly<FinalTraceInput> = { purge: false, merge: false, hunt: false };
 
 // The threat ladder (docs/phase3/04-threats.md §3.1, §3.8, §3.9; slice-2-plan §2.4), pure and DOM-free: planThreat is the
@@ -28,7 +27,6 @@ export const NO_FINAL_TRACES: Readonly<FinalTraceInput> = { purge: false, merge:
 //
 // Slice 3 extension points: oneHopFromFinal ← the map's M3 query; the beam's seeds ← { kind: 'noise', noise: hop.noise };
 // depth ← the route; run.threat ← the save; TRACE ← the map card; `HOLLOW WILL FIND YOU ON THIS BEAM` ← boardsOnBeam.
-// nominalRunThreat is retired by the generator (a generated run always has a real history).
 // Track THREAT owns this file after the slice 2 foundation.
 
 // Does HOLLOW board on the beam into this ship (04 §3.8)? Never below BOARD_MIN_DEPTH, never on the beam into a final ship
@@ -120,10 +118,8 @@ export function createRunThreat(): RunThreatState {
   };
 }
 
-// What the map knows about a ship of the classic five (data/classic-five.ts): its depth is its index + 1, LAST LIGHT is
-// the final ship, and CLASSIC_FACTS says whether a final ship is one hop away and what the beam into it carries. The
-// arm's facts come from systems/map-facts.ts mapFacts (the route's depth, the M3 query, the hop's noise) in the same
-// shape; nothing downstream reads where they came from.
+// What the map knows about a ship (systems/map-facts.ts mapFacts: the route's depth, whether it is a final ship, the M3
+// query, the hop's noise). Phase 2's fixed facts for the classic five went with them (Track RETIRE).
 export interface ShipThreatFacts {
   depth: number;
   isFinal: boolean;
@@ -131,13 +127,10 @@ export interface ShipThreatFacts {
   beamSeeds: BeamSeedSource;
 }
 
-export function fixedShipFacts(index: number): ShipThreatFacts {
-  const ship = classicShip(index);
-  const facts = CLASSIC_FACTS[index]!;
-  return {
-    depth: index + 1, isFinal: ship.final, oneHopFromFinal: facts.oneHopFromFinal,
-    beamSeeds: structuredClone(facts.beamSeeds) as BeamSeedSource,
-  };
+// The first ship's facts on any route: depth 1, never final, no final ship one hop away, nothing on a beam (nothing
+// transmits to it).
+export function firstShipFacts(): ShipThreatFacts {
+  return { depth: 1, isFinal: false, oneHopFromFinal: false, beamSeeds: { kind: 'none' } };
 }
 
 // The ladder's input for the next ship, from the run's threat during the ship before it (its tally done) and whether THE
@@ -154,7 +147,7 @@ export function threatInputFor(
 }
 
 // The run's threat once a ship's verdict applies (the ship starts: run.ts startShip, and every fixture and the simulation
-// retry that builds a ship through createRunState or nominalRunThreat): HOLLOW aboard from the ship it boards (or the
+// retry that builds a ship through createRunState or firstShipRunThreat): HOLLOW aboard from the ship it boards (or the
 // final ship, which always has it), its age counting this ship, the stages it plays, and the verdict's facts the world
 // reads during the ship (`current`). TRACE, what it was fed and the story flags carry on; the tally that changes them is
 // the ship's end's (Track THREAT). The depth is the verdict's own. THE DEAL's HUNT folded into a final ship is recorded
@@ -174,21 +167,13 @@ export function applyThreat(prev: Readonly<RunThreatState>, plan: Readonly<ShipT
   return next;
 }
 
-// The run's threat during ship `shipIndex` of the classic five as if every ship before it had been flown with TRACE 0 and
-// no DEAL (slice-2-plan risk 14): what createInitialState({ shipIndex }), the debug warp and the headless harnesses
-// start a later ship with. Throws on an index the fleet does not have.
-export function nominalRunThreat(shipIndex: number): RunThreatState {
-  if (!(Number.isInteger(shipIndex) && shipIndex >= 0 && shipIndex < CLASSIC_FIVE.length)) throw new Error(`nominalRunThreat: no ship ${shipIndex}`);
-  let threat = createRunThreat();
-  for (let index = 0; index <= shipIndex; index++) {
-    const facts = fixedShipFacts(index);
-    threat = applyThreat(threat, planThreat(threatInputFor(threat, facts, false, NO_FINAL_TRACES)));
-  }
-  return threat;
+// The first ship's verdict on every run (calm: nothing reported, HOLLOW not aboard), and the run's threat once it applies:
+// what RUN START, the simulation retry and a run's first save build ship 1 with. A later ship's nominal verdict is its
+// route's (systems/arm-fixture.ts nominalAlong; map-facts nominalRouteThreat).
+export function firstShipThreat(): ShipThreat {
+  return planThreat(threatInputFor(createRunThreat(), firstShipFacts(), false, NO_FINAL_TRACES));
 }
 
-// The verdict for ship `shipIndex` on that nominal run (the plan nominalRunThreat(shipIndex) applied last).
-export function nominalShipThreat(shipIndex: number): ShipThreat {
-  const before = shipIndex === 0 ? createRunThreat() : nominalRunThreat(shipIndex - 1);
-  return planThreat(threatInputFor(before, fixedShipFacts(shipIndex), false, NO_FINAL_TRACES));
+export function firstShipRunThreat(): RunThreatState {
+  return applyThreat(createRunThreat(), firstShipThreat());
 }

@@ -3,7 +3,7 @@
 // take seconds. (The follower with the pip → SWAP defender is tests/unit/wp10/vesper-flow.test.ts: it needs every system.)
 // • Thrust Ctrl at 31%, unfixed through the coast with RETRO pointed (VESPER's start preset), lowers ▼ by 300–900 km,
 //   mean over 200 seeds, measured at the original capture's START BURN; the bursts are 1 tac s at 15% each. (WP12: the
-//   window and the burst now scale with GHOST_BY_BAND.failing; see below.)
+//   window and the burst now scale with the failing spec; see below.)
 // • A SWAP at boot + 20 AI s (the SWAP tool, 2.0 s, a thread held): 0 bursts start after it completes, on 50 seeds; a
 //   burst running at the swap's end is silenced at once.
 // • SWAP's rules: Thrust.alt takes the role and the name, the primary is `Thrust.old` and inactive, both are scanned;
@@ -33,11 +33,11 @@ import { SWAP_SEC, ARM_GHOST_BY_BAND } from '@data/tuning';
 import { byDepth } from '../depth';
 
 // WP12 part 1 (the 200-seed playthrough) retuned the failing controller from §3.3's 15% every 25 tac s to
-// GHOST_BY_BAND.failing (30% every 10 tac s), so the checks below read the spec from the data. The drift window
+// 30% every 10 tac s (phase 2's table), so the checks below read the spec from the data. The drift window
 // scales with the bursts' Δv per tactical second (amp ÷ mean interval) from the one measured at §3.3's numbers
 // (300–900 km at 0.15 ÷ 25).
 // Track RETIRE: run 1's arm VESPER's controller fires the arm's spec (ARM_GHOST_BY_BAND: the limping engine, slice 3b);
-// GHOST_BY_BAND was the classic five's.
+// phase 2's table went with the classic five.
 const FAILING = ARM_GHOST_BY_BAND.failing;
 if (!FAILING) throw new Error('vesper-sim: no failing ghost spec');
 const DRIFT_SCALE = (FAILING.amp / FAILING.meanIntervalTac) / (0.15 / 25);

@@ -297,7 +297,7 @@ console.log(`INFO  AIM on CORMORANT LZ-A: trained ${aim.trained!.n} pods, mean o
 {
   setLandingMode('manual');
   h.newRun(ARM_SEED);
-  startRun(h.store, ARM_SEED, FIRST_RUN_LINEAGE, 'arm');
+  startRun(h.store, ARM_SEED, FIRST_RUN_LINEAGE);
   receiveTransmission(h.store);
   stepUntil(() => st().run.phase === 'flight', 30);
   h.store.update((draft) => { draft.hollow.phase = 'dormant'; for (const seg of draft.memory) if (seg.type === 'driver') seg.integrity = 100; });

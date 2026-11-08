@@ -248,17 +248,16 @@ export function isRepairable(seg: Segment): seg is RepairableSegment {
     || seg.type === 'resident' || seg.type === 'leftover';
 }
 
-// Slice 3b (Fran's decision, the limping engine): on the arm REPAIR also heals Thrust Ctrl, the one ship file it may touch
-// (SWAP to Thrust.alt, or a request for Swap, may be ships away). Every other ship file, and Thrust Ctrl on the classic
-// world, keeps phase 2's rule: SWAP or DELETE it.
-export function repairableShipFile(state: Readonly<Pick<GameState, 'run'>>, seg: Segment): seg is ShipSegment {
-  return state.run.map.world === 'arm' && seg.type === 'ship' && seg.role === 'thrust-ctrl';
+// Slice 3b (Fran's decision, the limping engine): REPAIR also heals Thrust Ctrl, the one ship file it may touch (SWAP to
+// Thrust.alt, or a request for Swap, may be ships away). Every other ship file keeps phase 2's rule: SWAP or DELETE it.
+export function repairableShipFile(seg: Segment): seg is ShipSegment {
+  return seg.type === 'ship' && seg.role === 'thrust-ctrl';
 }
 
-// How far REPAIR heals `seg`: to 100, except the arm's Thrust Ctrl, healed only to THRUST_CTRL_REPAIR_MAX unless HOLLOW is
+// How far REPAIR heals `seg`: to 100, except Thrust Ctrl, healed only to THRUST_CTRL_REPAIR_MAX unless HOLLOW is
 // eating it (then the repair must reach 100 to win).
-export function repairCeiling(state: Readonly<Pick<GameState, 'run'>>, seg: Segment): number {
-  return repairableShipFile(state, seg) && seg.infected === undefined ? THRUST_CTRL_REPAIR_MAX : INTEGRITY_MAX;
+export function repairCeiling(seg: Segment): number {
+  return repairableShipFile(seg) && seg.infected === undefined ? THRUST_CTRL_REPAIR_MAX : INTEGRITY_MAX;
 }
 
 // --- Pods and their drivers (01-landing §3.8) ----------------------------------------------------

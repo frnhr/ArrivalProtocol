@@ -45,10 +45,10 @@ export interface DraftContext {
   hasRepair: boolean;                                  // a Repair copy is packed (what REPAIR v2 upgrades)
   linkRoom: number;                                    // link blocks the unit's files leave free
   hollowLabel: string;                                 // what the strip calls HOLLOW now (say.ts hollowLabel)
-  // Phase 3 slice 3b: deal only the salvage pool's cards (UpgradeDef.salvage), on the arm. Left out (the classic world,
-  // phase 2's suites): every card, as before.
+  // Phase 3 slice 3b: deal only the salvage pool's cards (UpgradeDef.salvage), on the arm. Left out (phase 2's pure
+  // draft suites): every card.
   salvageOnly?: boolean;
-  // Slice 4: the unit has a skill tree (the arm; left out: none, the classic world) and the hop goes into a final ship
+  // Slice 4: the unit has a skill tree (the arm; left out: none, phase 2's pure draft suites) and the hop goes into a final ship
   // (left out: not), where no desk follows: the +2 CYCLES card is dealt only with a tree and never into a final ship.
   tree?: boolean;
   toFinal?: boolean;
@@ -71,7 +71,7 @@ export interface UpgradeDef {
   blocks: number;     // the file a 'file' card adds to the packet (link room), else 0
   maxOwned: number;   // Infinity: stackable without limit
   // In the arm's salvage pool (02 §3.10): REPAIR v2 moved to the repository (its patch, data/repository.ts), so the arm
-  // never deals it; the classic world deals every card but the tree's `+2 CYCLES` (usable only with a tree).
+  // never deals it; a context with no salvage flag (phase 2's pure draft suites) deals every card but the tree's `+2 CYCLES`.
   salvage: boolean;
   // Whether the card can do anything for this unit now (REPAIR v2 needs a Repair to upgrade); a card that
   // could not is never offered. Every card also needs link room for its file (draftEntries).
@@ -207,7 +207,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
     },
   },
   // Slice 4 (02 §3.10; plan §2.6): cycles for the next desk's TRAINING. Last in the pool, and filtered before the draws
-  // where it can't be used (no tree, a hop into a final ship), so the classic world's deals stay byte-identical.
+  // where it can't be used (no tree, a hop into a final ship), so a context with no tree deals as before.
   {
     id: 'cycles',
     title: PACKET_SKILL_TEXT.cyclesCard(CYCLES_CARD_CYCLES),

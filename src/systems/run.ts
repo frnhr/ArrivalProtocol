@@ -17,7 +17,7 @@ import type { CarriedRacks } from '@data/memory';
 import type { ArrivalDelivery, DeliveryChip } from '@/types/repo';
 import type { Packet } from '@systems/carry';
 import type { ShipThreat, BeamSeedSource } from '@/types/threat';
-import type { Hop, PendingExtra, RunMapState } from '@/types/map';
+import type { Hop, PendingExtra } from '@/types/map';
 import { onGameTick, onPostTick } from '@systems/clock';
 import { onWorldReset, resetWorld } from '@systems/reset';
 import { on, emit, NO_PAYLOAD } from '@systems/events';
@@ -45,12 +45,12 @@ import { writeRunSave, clearRunSave } from '@systems/save-write';
 import { finaleRunCause } from '@systems/ending-rules';
 import { newSegId } from '@systems/memory-ops';
 import { createRunState, createShipSlices, createUiState, createRunStats, withRunMap } from '@state/initial';
-import { planThreat, threatInputFor, applyThreat, nominalShipThreat, nominalRunThreat } from '@systems/threat-plan';
+import { planThreat, threatInputFor, applyThreat, firstShipThreat, firstShipRunThreat } from '@systems/threat-plan';
 import { finalTraceInput } from '@systems/traces';
 import { traceSeedMods, traceGiftCharge, arrivalTraceLines } from '@systems/trace-gifts';
 import { inOrbitOutcome, landingResult } from '@systems/landing-rules';
 import {
-  currentShip, currentSlot, shipDefAt, mapAtShip, mapAtFirstShip, hopRng, createRunMap, classicRunMap,
+  currentShip, currentSlot, shipDefAt, mapAtShip, mapAtFirstShip, hopRng, createRunMap,
 } from '@systems/map-run';
 import { hopBetween, reachable, reachableFrom, hitsLanding } from '@systems/map-hop';
 import { unitArrival } from '@systems/arrival-preview';
@@ -110,7 +110,7 @@ export function shipOutcomeOf(state: Readonly<GameState>): ShipOutcome {
 
 // The ship's result (01-landing §5 "To 02"): who it was, how it ended, and its landing folded from the pods
 // (landing-rules landingResult: pods still aboard are parked when the ship ends in orbit, NOT LAUNCHED when it left).
-// Slot and depth are the map's (the route's position is depth − 1; on the classic world the slot is the index too).
+// Slot and depth are the map's (the route's position is depth − 1).
 export function shipResultOf(state: Readonly<GameState>, outcome: ShipOutcome, stars: number): ShipResult {
   return {
     shipId: state.level.shipId,
@@ -231,19 +231,17 @@ function doneForNextShip(state: Readonly<GameState>): string[] {
 // unit is (systems/meta.ts: the page's archive after the run that just ended, archiveLineage; a headless
 // suite passes FIRST_RUN_LINEAGE or a built one). Always explicit: a NEW RUN that quietly forgot the archive
 // would be run 1 again with nobody noticing.
-// The NEW RUN plays the world the last run played (`world`, default: the store's): the page's runs are on the arm (its
-// first state is, state/instance.ts), so every NEW RUN rolls the next run's arm (systems/map-run.ts createRunMap); the
-// suites' worlds start classic (createInitialState), so their NEW RUN flies the classic five again, as it always did.
-export function startRun(store: Store<GameState>, seed: number, lineage: Readonly<RunLineage>, world: RunMapState['world'] = store.getState().run.map.world): void {
-  const map = world === 'arm' ? createRunMap(lineage, seed) : classicRunMap(seed, 0, lineage.wave);
+// Every NEW RUN rolls the next run's arm (systems/map-run.ts createRunMap).
+export function startRun(store: Store<GameState>, seed: number, lineage: Readonly<RunLineage>): void {
+  const map = createRunMap(lineage, seed);
   resetWorldForShip(store, {
     phase: 'title', run: withRunMap(createRunState(seed, 'title', 0, lineage, undefined, map), map), carried: null,
-    threat: nominalShipThreat(0), freshLog: true, done: [],
+    threat: firstShipThreat(), freshLog: true, done: [],
   });
 }
 
-// The unit arrives on the ship in `slot` (its boot plays, then the flight), by `hop` (null on a first ship, and on the
-// classic world's jumps, whose route is fixed: systems/map-run.ts mapAtShip). `threat` is the ladder's verdict for it (the
+// The unit arrives on the ship in `slot` (its boot plays, then the flight), by `hop` (the beam that reaches it; null only on
+// a first ship, which startShip never builds: RUN START does). `threat` is the ladder's verdict for it (the
 // TRANSMIT's plan, TransitPlan.threat): the run's threat memory takes it in here, as the ship starts.
 export function startShip(
   store: Store<GameState>, slot: number, carried: CarriedRacks | null, arrival: ArrivalReport | null, threat: ShipThreat,
@@ -271,7 +269,7 @@ export function startShip(
   // The archive's run in progress says where the unit is now (a run left on this ship is 'abandoned' here).
   archiveShipStarted(store);
   // BEAM (02 §3.11): the packet has crossed (hits rolled, ECC applied, the layout done); a reload replays this boot. Not on
-  // a first ship or a classic jump (no hop): RUN START covers ship 1.
+  // a first ship (no hop): RUN START covers ship 1.
   if (hop !== null) writeRunSave(store, 'beam', { carried, threat });
 }
 
@@ -317,7 +315,6 @@ export function endShip(store: Store<GameState>, outcome: ShipOutcome, stars = 0
 //   report ─CONTINUE→ endShip → [final? endRun : openDesk]        lost card → endShip → [end | openDesk with its extras]
 //   desk ─SET COURSE(slot)→ goTransmit(slot) → transmit (PACKET) ─◀ CHART→ desk
 //                                               └ TRANSMIT ▸ → transmitNext → startShip(slot) → boot
-// On the classic world the desk offers the single next ship (reachableFrom: index + 1), so the five play end to end.
 
 // The ship is over and not the final one: every op stops, the tool is put down, both clocks stop, and the STAR CHART
 // opens. `extra` is the way the ship ended's toll on the next hop (BEAM OUT +2, EMERGENCY +3 and Core −25; null after a
@@ -338,7 +335,7 @@ export function openDesk(store: Store<GameState>, extra: PendingExtra | null): v
   const ui = deskUiOnOpen(store.getState());
   const opened = store.getState();
   const visit = visitNow(opened.run);
-  const latch = opened.run.map.world === 'arm' ? branchToLatch(opened, visit) : null;
+  const latch = branchToLatch(opened, visit);
   const topUp = firstPickTopUp(opened);
   store.update((draft) => {
     if (latch !== null) draft.run.skills.opened.push({ skill: latch, visit });
@@ -373,7 +370,7 @@ export function deskUiOnOpen(state: Readonly<GameState>): Pick<UiState, 'activeT
     activeTool: null,
     pickedSourceId: null,
     pendingPlacement: null,
-    // One ship in reach (the classic world) is already the selection: SET COURSE is the desk's only step.
+    // One ship in reach is already the selection: SET COURSE is the desk's only step.
     deskSelected: offered.length === 1 ? offered[0]! : null,
     // The tab it opens on (phase 3 slice 3b: the SHIP CARD, or the REPOSITORY for the last-rm prompt; repository.ts; slice
     // 4: TRAINING at the run's first desk until the first pick is made).
@@ -515,8 +512,7 @@ export function transmitNext(store: Store<GameState>): void {
     const toll = emergencyCoreToll(files, plan.coreHit, plan.coreReset);
     if (toll) hits.push(toll);
   }
-  // ECC repairs hits while the unit sleeps (02 §3.3), counted after the extra ones (BEAM OUT, EMERGENCY): none on the classic
-  // world (no slack).
+  // ECC repairs hits while the unit sleeps (02 §3.3), counted after the extra ones (BEAM OUT, EMERGENCY).
   const landing = hitsLanding(plan.hop, plan.extraHits);
   hits.push(...rollTransitHits(files, landing, hopRng(state.run, fromSlot, plan.toSlot, 'transit')));
   const cardCharge = pickCharge(plan.pick);
@@ -685,12 +681,12 @@ export function continueAfterLoss(store: Store<GameState>): LossPlan {
       arrival: null,
       transit: null,
       // Ship 1 again, as the run began it (nothing can have reported home on a calm ship).
-      threat: nominalRunThreat(0),
+      threat: firstShipRunThreat(),
     };
-    resetWorldForShip(store, { phase: 'boot', run, carried: null, threat: nominalShipThreat(0), freshLog: false, done: doneForNextShip(state) });
+    resetWorldForShip(store, { phase: 'boot', run, carried: null, threat: firstShipThreat(), freshLog: false, done: doneForNextShip(state) });
     say('control', LINES.simulation(), { critical: true });
     // RUN START again (02 §3.11): ship 1 again, as the run began it.
-    writeRunSave(store, 'run-start', { carried: null, threat: nominalShipThreat(0) });
+    writeRunSave(store, 'run-start', { carried: null, threat: firstShipThreat() });
     return plan;
   }
   endShip(store, plan.outcome);

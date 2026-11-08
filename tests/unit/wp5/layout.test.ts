@@ -1,6 +1,6 @@
 // WP5 acceptance 2, slice 1a: the ship's memory is built from ship data (§4.2, 01-landing §3.16, slice-1a-plan §2) and
 // validated.
-// • buildShipMemory(CLASSIC_FIVE[0]) totals 384, each rack holds exactly 64 blocks with no file straddling a rack, roles are
+// • buildShipMemory(ARES-VII laid out FULL, as phase 2 had it) totals 384, each rack holds exactly 64 blocks with no file straddling a rack, roles are
 //   unique (Bay Ctrl's `bay` in Printer Uplink's place), and ARES-VII's pod rack is `P P P _40` (slice 2: a calm ship,
 //   no root slot): POD 01 OKAFOR, POD 02 BRANDT at 44 and POD 03 AL-SAYED;
 // • a rack sum of 63, an unknown token, a duplicate role and a hurt pod the ship does not have each throw;
@@ -20,9 +20,12 @@ import { UNNAMED_HOLLOW } from '@data/hollow-text';
 import { segmentStarts, assertMemoryInvariants } from '@systems/memory-ops';
 import type { Segment, DriverSegment } from '@/types/segment';
 import { RACK_BLOCKS, DRIVER_BLOCKS, COLONISTS_PER_POD, FEATURED_PER_POD, MAX_LINE_CHARS } from '@data/tuning';
-import { CLASSIC_FIVE } from '@data/classic-five';
+import { fixtureShip } from '../support/arm-ship';
 
-const ship = CLASSIC_FIVE[0]!;
+// Track RETIRE: phase 2's ARES-VII is run 1's arm ARES-VII (the authored blocks, data/authored-ships.ts) laid out FULL (rack
+// D empty), as the classic five had it; the arm's own is COMPACT (checked at the end).
+const arm = fixtureShip(0);
+const ship: ShipDef = { ...arm, memoryClass: 'FULL', memory: { ...arm.memory, podRacks: { ...arm.memory.podRacks, D: '_64' } } };
 const build = (def: ShipDef = ship, firstRun = true, seed = 1): Segment[] => buildShipMemory(def, null, childRng(seed, 0, 'families'), firstRun, UNNAMED_HOLLOW, null);
 const drivers = (memory: readonly Segment[]): DriverSegment[] => memory.filter((seg): seg is DriverSegment => seg.type === 'driver');
 

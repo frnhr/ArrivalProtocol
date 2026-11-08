@@ -2,7 +2,7 @@
 // about two seconds. Nothing here is the survey machine's behaviour (Track SWATH's suites own it) or a view's (Track SITES's);
 // it checks the contract they build on:
 // • what this build plays: one `built` check per gate, each on its own line (Track SWATH edits both);
-// • ShipDef.site from the map's reservation (run 1, seed 7: plan §1.2's table), GOOD on the classic five; siteDataOf's gate;
+// • ShipDef.site from the map's reservation (run 1, seed 7: plan §1.2's table); siteDataOf's gate;
 // • the site roll (R2–R4, R9): 2,000 rolls over layers 5–7 and pods 4–16 on the landing roller's own landings, and every POOR
 //   ship of run 1's arms on seeds 1–10, pass validateSurveySites; exactly one bad guess, ROCKY or WET about evenly, WET at
 //   2/3 of its class, a wreck about 1 in 3; the same ShipKey gives the same sites; the roll draws its own stream;
@@ -31,7 +31,6 @@ import { rollSurveySites, validateSurveySites, guessSiteId } from '@data/survey-
 import { SURVEY_TEXT, siteLabel } from '@data/survey-text';
 import { SWATH_TEXT } from '@data/swath-text';
 import { SITES_TEXT } from '@data/sites-text';
-import { CLASSIC_FIVE } from '@data/classic-five';
 import { FLIGHT_TEMPLATES } from '@data/flight-templates';
 import { shipDefAt } from '@systems/map-run';
 import { rollLanding } from '@systems/landing-roller';
@@ -78,7 +77,6 @@ const CORMORANT = 15;
   check('ShipDef.site is the map\'s reservation (run 1, seed 7: plan §1.2, SHEARWATER, CORMORANT and GOOD HOPE)',
     isDeepStrictEqual(poor, ['13 SHEARWATER', '15 CORMORANT', '17 GOOD HOPE'])
     && map7.arm.every((ship) => shipDefAt(map7, ship.slot).site === ship.reserved.site), poor.join(' | '));
-  check('…GOOD on the classic five', CLASSIC_FIVE.every((ship) => ship.site === 'good'));
   const cormorant = shipDefAt(map7, CORMORANT);
   check('siteDataOf: GOOD while POOR is not built, the map\'s roll once it is', withSurvey(NO_SURVEY, () => siteDataOf(cormorant)) === 'good'
     && withSurvey({ poor: true }, () => siteDataOf(cormorant)) === 'poor' && withSurvey({ poor: true }, () => siteDataOf(shipDefAt(map7, 11))) === 'good');

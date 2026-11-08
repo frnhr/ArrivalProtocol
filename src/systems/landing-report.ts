@@ -70,7 +70,7 @@ export interface LandingReportModel {
   // ship (ending-rules reportEndingLine, Track FINALE's; null until it is built).
   endingLine: string | null;
   // Slice 3c (05 §3.5, §3.8): ship 1's beacon row, `LZ-A · A BEACON WAS ALREADY THERE · SET BY UNIT-046 · 1 YEAR AGO` (the
-  // last unit's from run 2, by the launch gap; `THIS YEAR` for 0), null past ship 1, on the classic world, and when the last
+  // last unit's from run 2, by the launch gap; `THIS YEAR` for 0), null past ship 1 and when the last
   // unit's first ship never reached orbit (systems/lineage.ts beaconOnFirstShip).
   beaconLine: string | null;
   nearMisses: string[];       // `POD 04 landed 23 km outside LZ-B`, closest first (the screen shows two)

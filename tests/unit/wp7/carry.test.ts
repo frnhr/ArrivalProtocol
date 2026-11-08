@@ -15,7 +15,7 @@ import type { ShipDef } from '@data/ships';
 import { assertMemoryInvariants, segmentStarts } from '@systems/memory-ops';
 import { hasIntegrity } from '@state/selectors';
 import { UNNAMED_HOLLOW } from '@data/hollow-text';
-import { classicShip, CLASSIC_HOPS } from '@data/classic-five';
+import { phase2HalcyonDef } from '../support/hollow-world';
 import {
   TRANSIT_LAST_COPY_FLOOR, TRANSIT_CORE_MAX_HIT, CORE_RESET_INTEGRITY, CHARGE_ARRIVAL_FLOOR, TRANSIT_HIT_MIN, TRANSIT_HIT_MAX,
   LANDING_NONE_LEFT_SEC, UNIT_TAIL_BLOCKS,
@@ -24,11 +24,13 @@ import { setLandingMode } from '../support/landing-instant';
 import { recordDriverLost } from '@state/actions';
 import { driversInMemory } from '@state/selectors';
 import { freeSegment, mergeAdjacentFree } from '@systems/memory-ops';
-import { nominalShipThreat } from '@systems/threat-plan';
+import { fixtureVerdict, fixtureHop } from '../support/arm-ship';
 
 
-const halcyon = classicShip(1);
-const link = CLASSIC_HOPS[halcyon.slot]!.linkBlocks;
+// Track RETIRE: HALCYON as phase 2 had it (FULL, its rack D the spill under test: support/hollow-world), on the worked
+// route's link into it (123; the classic five's was 120).
+const halcyon = phase2HalcyonDef();
+const link = fixtureHop(1).linkBlocks;
 
 // A ship-1 unit with REPAIR licensed, as it leaves ARES-VII.
 const h = createHarness7(1, { soulsFound: true });
@@ -136,7 +138,7 @@ const memory = h.store.getState().memory;
   const rackEBlocks = packet.rackE.reduce((sum, seg) => sum + seg.size, 0);
   const filesBlocks = rackEBlocks + packet.rackF.reduce((sum, seg) => sum + seg.size, 0);
   const receiver = MEMORY_LAYOUTS.FULL.totalBlocks - MEMORY_LAYOUTS.FULL.unitStart;
-  const layout = layoutCarried(packet, 36 + 12, halcyon, nominalShipThreat(1));
+  const layout = layoutCarried(packet, 36 + 12, halcyon, fixtureVerdict(1));
   const built = buildShipMemory(halcyon, layout.racks, createRng(1), false, UNNAMED_HOLLOW, null);
   assertMemoryInvariants(built, MEMORY_LAYOUTS.FULL.totalBlocks);
   const starts = segmentStarts(built);
@@ -148,7 +150,7 @@ const memory = h.store.getState().memory;
     && built[chargeIndex + 1]?.type === 'free' && chargeIndex + 2 === built.length,
     `Core ${addr('AI Core')}, Scan ${addr('Scan')}, charge at ${starts[chargeIndex]}`);
   // A block one longer than the receiver starts a block early, right-aligned to the end of memory.
-  const snug = layoutCarried(packet, receiver - filesBlocks + 1, halcyon, nominalShipThreat(1));
+  const snug = layoutCarried(packet, receiver - filesBlocks + 1, halcyon, fixtureVerdict(1));
   const snugMemory = buildShipMemory(halcyon, snug.racks, createRng(1), false, UNNAMED_HOLLOW, null);
   assertMemoryInvariants(snugMemory, MEMORY_LAYOUTS.FULL.totalBlocks);
   const snugStarts = segmentStarts(snugMemory);
@@ -156,7 +158,7 @@ const memory = h.store.getState().memory;
     snug.racks.startAddr === MEMORY_LAYOUTS.FULL.unitStart - 1 && snugStarts[snugMemory.findIndex((seg) => seg.name === 'AI Core')] === MEMORY_LAYOUTS.FULL.unitStart - 1
     && snugMemory[snugMemory.length - 1]?.type === 'redundancy' && snug.overflowLost === 0, `start ${snug.racks.startAddr}`);
   // An overfull packet: the tail into rack D (free to its end on HALCYON) is capped at UNIT_TAIL_BLOCKS; the rest is lost.
-  const big = layoutCarried(packet, 120, halcyon, nominalShipThreat(1));
+  const big = layoutCarried(packet, 120, halcyon, fixtureVerdict(1));
   const spilled = buildShipMemory(halcyon, big.racks, createRng(1), false, UNNAMED_HOLLOW, null);
   assertMemoryInvariants(spilled, MEMORY_LAYOUTS.FULL.totalBlocks);
   const room = receiver + UNIT_TAIL_BLOCKS;
@@ -168,10 +170,10 @@ const memory = h.store.getState().memory;
   // promised (the slice-3a review's M1: one room, data/memory.ts roomForUnitOn).
   const fullD: ShipDef = { ...halcyon, id: 'full-d-test', memory: { ...halcyon.memory, podRacks: { ...halcyon.memory.podRacks, D: '_56 P' } } };
   let refused = '';
-  try { layoutCarried(packet, 80, fullD, nominalShipThreat(1)); } catch (error) { refused = (error as Error).message; }
+  try { layoutCarried(packet, 80, fullD, fixtureVerdict(1)); } catch (error) { refused = (error as Error).message; }
   check('…a ship with no tail at the end of its last pod rack is refused, loudly (one room for the unit)', /roomForUnitOn full-d-test/.test(refused), refused);
   let threw = '';
-  try { layoutCarried({ ...packet, rackE: [...packet.rackE, ...packet.rackE.map((seg) => ({ ...seg, size: 30 }))] }, 0, halcyon, nominalShipThreat(1)); } catch (error) { threw = (error as Error).message; }
+  try { layoutCarried({ ...packet, rackE: [...packet.rackE, ...packet.rackE.map((seg) => ({ ...seg, size: 30 }))] }, 0, halcyon, fixtureVerdict(1)); } catch (error) { threw = (error as Error).message; }
   check('…files that do not fit throw', /do not fit/.test(threw), threw);
 }
 

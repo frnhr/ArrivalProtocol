@@ -13,7 +13,7 @@ export type ResidentKind = 'corrupted' | 'left' | 'sleeping';
 // or the late surprise, 04 §3.12).
 export type ResidentShown = 'faulty' | 'unknown';
 
-// ShipDef.resident (data/ships.ts shipDefOf, from ArmShip.reserved.resident and .fragments; null on the classic five and on
+// ShipDef.resident (data/ships.ts shipDefOf, from ArmShip.reserved.resident and .fragments; null on
 // a ship with no resident). `fragments`: the signal fragments its note carries (02 §3.5: 1 on two departed residents' notes
 // and on the gone-resident `?` ship; 0 otherwise). Only a 'left' resident's note can carry one (plan R18).
 export interface ShipResidentDef {

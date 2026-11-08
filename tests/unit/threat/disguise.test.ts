@@ -14,7 +14,7 @@
 import { check, finish } from '../wp1/harness';
 import { createHarness7 } from '../wp7/harness7';
 import { lockOn } from '../landing/harness-landing';
-import { continueAfterReport } from '../support/classic-flow';
+import { continueAfterReport } from '../support/desk';
 import { armRun, send } from '../map/repo-fixture';
 import { WORKED_ROUTE } from '../map/run1-fixture';
 import { rollBeamSeeds, rollDisguises, disguiseChanceAt, plantBeamSeed } from '@systems/beam-seeds';
@@ -42,12 +42,12 @@ import { TOOL_REFUSAL, echoName } from '@data/tool-text';
 import { FRESH_UNIT_RACK_E, FRESH_UNIT_RACK_F, rackOf, layoutOf } from '@data/memory';
 import { createInitialState as fixtureState } from '@state/initial';
 import { currentShip } from '@systems/map-run';
-import { nominalShipThreat } from '@systems/threat-plan';
 import { DISGUISE_CHANCE_BY_DEPTH, SEED_BLOCKS } from '@data/tuning';
 import type { BeamSeedPlan } from '@/types/threat';
 import type { Segment, HollowSegment } from '@/types/segment';
 import type { GameState } from '@state/schema';
 import type { FsToolKind } from '@/types/fs-tool';
+import { fixtureVerdict } from '../support/arm-ship';
 
 const KESTREL = 2;
 // Track RETIRE: run 1's arm KESTREL (COMPACT: the unit's racks E–F from block 192), its link the worked route's hop from
@@ -121,7 +121,7 @@ function counting(seed: number): { rng: Rng; draws: () => number } {
   // The layout: the decoy rides onto the segment, and the arrival names it.
   packet.seeds = rollDisguises(rollBeamSeeds(packet, source, false, createRng(3)), 7, createRng(1));
   for (let s = 4; s < 60 && !packet.seeds.some((p) => p.disguise !== null); s++) packet.seeds = rollDisguises(rollBeamSeeds(packet, source, false, createRng(3)), 7, createRng(s));
-  const layout = layoutCarried(packet, packet.chargeCarried, kestrel, nominalShipThreat(KESTREL), '???');
+  const layout = layoutCarried(packet, packet.chargeCarried, kestrel, fixtureVerdict(KESTREL), '???');
   const decoyPlan = packet.seeds.find((p) => p.disguise !== null)!;
   const arrived = layout.seeds.find((seed) => seed.disguise !== null);
   const segment = [...layout.racks.segs, ...(layout.racks.strays ?? [])].find((seg) => seg.id === arrived?.segId) as HollowSegment | undefined;

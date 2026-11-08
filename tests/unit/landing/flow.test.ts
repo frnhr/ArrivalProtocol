@@ -8,7 +8,7 @@
 // report (the duel's L0 on the strip). Last, the pooled receiver (§3.16) that lays out the unit at the next ship.
 import { phase2Ship } from '../support/hollow-world';
 import { check, finish } from './checks';
-import { fixtureShip } from '../support/arm-ship';
+import { fixtureShip, fixtureVerdict, fixtureFreshRacks } from '../support/arm-ship';
 import { byDepth } from '../depth';
 import { followLanding, landInstantly, lockOn } from './harness-landing';
 import { createHarness7 } from '../wp7/harness7';
@@ -20,17 +20,15 @@ import { countdownChip } from '@systems/flight-hud';
 import { groundTrackModel, miniHudLanding } from '@systems/landing-hud';
 import { landingResult, onTargetTally, canEverLaunch } from '@systems/landing-rules';
 import { shipLost, shipOutcomeOf, shipResultOf } from '@systems/run';
-import { packUnit, layoutCarried, freshUnitRacks } from '@systems/carry';
+import { packUnit, layoutCarried } from '@systems/carry';
 import { replaceRange, requireAddr, newSegId } from '@systems/memory-ops';
 import { recordDriverLost } from '@state/actions';
 import { driversInMemory } from '@state/selectors';
 import { DRIVER_RULES } from '@data/script';
-import { FRESH_UNIT_RACK_E, FRESH_UNIT_RACK_F, lastPodRackTrailingFree, MEMORY_LAYOUTS } from '@data/memory';
+import { FRESH_UNIT_RACK_E, FRESH_UNIT_RACK_F, lastPodRackTrailingFree, MEMORY_LAYOUTS, layoutFor } from '@data/memory';
 import { UNIT_TAIL_BLOCKS, BAND_DEGRADED_MIN } from '@data/tuning';
-import { CLASSIC_FIVE, CLASSIC_HOPS } from '@data/classic-five';
 import type { GameState, ShipOutcome } from '@state/schema';
 import type { HollowSegment, Segment } from '@/types/segment';
-import { nominalShipThreat } from '@systems/threat-plan';
 import { decideFinale } from '../support/finale';
 
 const h = createHarness7(1);
@@ -67,7 +65,7 @@ function fates(): string {
 // --- Every ship, by the strip --------------------------------------------------------------------------------------------
 // Quick depth lands two of them (slice 3b review, the unit tier's budget): ARES-VII (its failing POD 02 lands hard) and
 // VESPER (the ark, 16 pods); all five at full depth (npm run balance).
-for (const index of byDepth([0, 3], CLASSIC_FIVE.map((_, i) => i))) {
+for (const index of byDepth([0, 3], [0, 1, 2, 3, 4])) {
   boardShip(index);
   // The drivers that arrive failing (ARES-VII's POD 02 at 44 on run 1; from layer 4 one rolled at 30–45) land hard if
   // left unrepaired; the degraded ones (55–79) land soft.
@@ -238,13 +236,17 @@ function eat(pod: number): void {
     const firstTool = segs.findIndex((seg) => seg.type === 'fs-tool');
     return segs.filter((seg, index) => !(index === firstTool - 1 && seg.type === 'free'));
   };
-  for (const ship of CLASSIC_FIVE.filter((candidate) => CLASSIC_HOPS[candidate.slot] !== null)) {
-    const racks = freshUnitRacks(ship);
-    const hunts = nominalShipThreat(CLASSIC_FIVE.indexOf(ship)).hollow.seed?.target === 'near-tools';
+  // Track RETIRE: run 1's authored ships after ARES-VII, each over the worked route's hop into it and laid out on its own
+  // class (HALCYON and KESTREL COMPACT, VESPER and LAST LIGHT FULL).
+  for (const index of [1, 2, 3, 4]) {
+    const ship = fixtureShip(index);
+    const layout = layoutFor(ship.memoryClass);
+    const racks = fixtureFreshRacks(index, ship);
+    const hunts = fixtureVerdict(index).hollow.seed?.target === 'near-tools';
     check(`${ship.name}: the unit lands as one block from rack E's start, files then charge, then free${hunts ? ' (a hunting ground before the tools)' : ''}`,
-      racks.startAddr === MEMORY_LAYOUTS.FULL.unitStart && contiguous(hunts ? withoutHuntingGround(racks.segs) : racks.segs)
+      racks.startAddr === layout.unitStart && contiguous(hunts ? withoutHuntingGround(racks.segs) : racks.segs)
       && hunts === (racks.segs.length !== withoutHuntingGround(racks.segs).length) && racks.segs.some((seg) => seg.type === 'redundancy')
-      && racks.segs.reduce((sum, seg) => sum + seg.size, 0) === MEMORY_LAYOUTS.FULL.totalBlocks - MEMORY_LAYOUTS.FULL.unitStart,
+      && racks.segs.reduce((sum, seg) => sum + seg.size, 0) === layout.totalBlocks - layout.unitStart,
       racks.segs.map((seg) => `${seg.type}:${seg.size}`).join(' '));
   }
   const ship = fixtureShip(4);
@@ -252,14 +254,14 @@ function eat(pod: number): void {
   const receiver = MEMORY_LAYOUTS.FULL.totalBlocks - MEMORY_LAYOUTS.FULL.unitStart;
   const tail = Math.min(UNIT_TAIL_BLOCKS, lastPodRackTrailingFree(ship));
   const files = packet.filesBlocks;
-  const fits = layoutCarried(packet, receiver - files + 10, ship, nominalShipThreat(4));
+  const fits = layoutCarried(packet, receiver - files + 10, ship, fixtureVerdict(4));
   check(`a block 10 longer than the receiver starts 10 blocks into the last pod rack's tail`, fits.racks.startAddr === MEMORY_LAYOUTS.FULL.unitStart - 10
     && fits.overflowLost === 0, `start ${fits.racks.startAddr}`);
-  const over = layoutCarried(packet, receiver - files + tail + 7, ship, nominalShipThreat(4));
+  const over = layoutCarried(packet, receiver - files + tail + 7, ship, fixtureVerdict(4));
   check(`...never more than the tail (${tail}): the rest of the charge is lost, loudly`, over.racks.startAddr === MEMORY_LAYOUTS.FULL.unitStart - tail
     && over.overflowLost === 7 && over.chargeBlocks === receiver + tail - files, `start ${over.racks.startAddr}, lost ${over.overflowLost}`);
   let threw = false;
-  try { layoutCarried({ ...packet, rackF: [...packet.rackF, { id: 'x', name: 'Huge', type: 'skill', size: receiver + tail } as unknown as Segment] }, 0, ship, nominalShipThreat(4)); } catch { threw = true; }
+  try { layoutCarried({ ...packet, rackF: [...packet.rackF, { id: 'x', name: 'Huge', type: 'skill', size: receiver + tail } as unknown as Segment] }, 0, ship, fixtureVerdict(4)); } catch { threw = true; }
   check('files that do not fit the room throw', threw);
 }
 

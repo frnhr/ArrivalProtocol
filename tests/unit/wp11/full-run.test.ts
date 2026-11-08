@@ -323,7 +323,7 @@ const results: SeedResult[] = [];
 const started = Date.now();
 for (const seed of SEED_LIST) {
   h.newRun(seed);
-  startRun(h.store, seed, FIRST_RUN_LINEAGE, 'arm');
+  startRun(h.store, seed, FIRST_RUN_LINEAGE);
   thrustRepairedOn.length = 0;
   seedNow = seed;
   eventsAtBoot = h.events.length;

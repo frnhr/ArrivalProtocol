@@ -3,11 +3,11 @@
 // HOLLOW mid-run (slice 7c R34: a relay stranger from run 2, whatever the cause; 7d retired §4.5's hollowName with
 // LINEAGE_BUILT, OPEN-DECISIONS 74). Plus the HOLLOW lines that take units (`> i was 047.`), the run-2 line after the POD 01 fight, the
 // title's lineage line, and unit / wave numbering through createRunState and the mission line. And where the ghost
-// speaks (ghostShipIndex, ghostLineDue: the ship where the last unit's run ended, never ship 1, once a run; slice-2-plan's
-// follow-up, Fran's playtest).
+// speaks (ghostLineDue: in or past the layer of the last unit's grey cross, never ship 1, once a run; slice-2-plan's
+// follow-up, Fran's playtest; on run 1's worked route since Track RETIRE retired the classic five's index rule).
 import { check, finish } from '../wp1/harness';
 import {
-  ghostLine, ghostShipIndex, ghostLineDue, lineageOf, freshMeta, recordRunStart, recordRunEnd, LAST_CAUSES,
+  ghostLine, ghostLineDue, lineageOf, freshMeta, recordRunStart, recordRunEnd, LAST_CAUSES,
   FIRST_RUN_LINEAGE,
   type LastUnit, type LastCause,
 } from '@systems/meta';
@@ -18,7 +18,9 @@ import { HOLLOW_STORY, GHOST_LINE, hollowUnitName } from '@data/hollow-text';
 import { lineageLine, LINES, WORST_CASE_VARS, type LineVars } from '@data/script';
 import type { GameState } from '@state/schema';
 import { MAX_LINE_CHARS, NAME_MAX_CHARS } from '@data/tuning';
-import { CLASSIC_FIVE } from '@data/classic-five';
+import { createRunMap } from '@systems/map-run';
+import { mapAlong, WORKED_ROUTE } from '@systems/arm-fixture';
+import { RUN1_TRAIL } from '../world/run2-fixture';
 import { solLy } from '@systems/map-geometry';
 import { END_SLOTS } from '@data/arm';
 
@@ -64,36 +66,20 @@ check('a flagship lost on LAST LIGHT is "the flagship"; a record from before it 
   ghostLine(48, last('flagship-lost')) === "> hi 048. it's 047. i lost the flagship. then i got hungry."
   && ghostLine(48, last('flagship-lost', { shipName: 'HALCYON' })) === "> hi 048. it's 047. i lost halcyon. then i got hungry.");
 
-// --- Where the ghost speaks (05 §3.5: at the first boot in or past where it was lost, never at ship 1) ---------------
+// --- Where the ghost speaks (05 §3.5: at the first boot in or past the layer where it was lost, never at ship 1) ---------
+// Track RETIRE: the classic five's rule (the lost ship's index, ghostShipIndex) went with them; these are its ghostLineDue
+// checks on run 1's worked route, the last unit lost at VESPER (Cinder, slot 11: layer 5). world/lineage has the cross's
+// rule itself (ghostPlaceReached).
 {
-  const names = CLASSIC_FIVE.map((ship) => ship.name);
-  const finalShip = names.length - 1;
-  const wrong: string[] = [];
-  for (const cause of LAST_CAUSES) {
-    names.forEach((shipName, index) => {
-      const at = ghostShipIndex(last(cause, { shipName }));
-      if (at !== Math.max(1, index)) wrong.push(`${cause} on ${shipName} → ${at}`);
-    });
-    const unknown = ghostShipIndex(last(cause, { shipName: 'NOSTROMO' }));
-    if (unknown !== finalShip) wrong.push(`${cause} on an unknown ship → ${unknown}`);
-  }
-  check('every cause on every ship: the ghost speaks at that ship\'s index, ship 1 (ARES-VII) moved to HALCYON, an unknown ship at the final one',
-    wrong.length === 0 && names[0] === 'ARES-VII' && names[1] === 'HALCYON', wrong.join(' | '));
-  check('…never at ship 1 (index 0), for any ship name', LAST_CAUSES.every((cause) => [...names, 'NOSTROMO'].every((shipName) => ghostShipIndex(last(cause, { shipName })) >= 1)));
-  check('…VESPER → VESPER, LAST LIGHT (won or lost there) → LAST LIGHT, abandoned on ARES-VII or HALCYON → HALCYON',
-    ghostShipIndex(last('abandoned', { shipName: 'VESPER' })) === names.indexOf('VESPER')
-    && ghostShipIndex(last('won-purge')) === names.indexOf('LAST LIGHT') && ghostShipIndex(last('flagship-lost')) === names.indexOf('LAST LIGHT')
-    && ghostShipIndex(last('abandoned', { shipName: 'ARES-VII' })) === 1 && ghostShipIndex(last('abandoned', { shipName: 'HALCYON' })) === 1);
-  let threw = false;
-  try { ghostShipIndex(last('overwritten'), ['ARES-VII']); } catch { threw = true; }
-  check('…a one-ship fleet has nowhere past ship 1 for it: loud', threw);
-
-  // ghostLineDue: at or past its ship, once a run, and only when there is a ghost.
+  const arm = createRunMap({ wave: 1 }, 1);
+  const names = ['ARES-VII', 'HALCYON', 'KESTREL', 'VESPER', 'CORMORANT', 'LAST LIGHT'];
   const vesper = names.indexOf('VESPER');
-  const run = (shipIndex: number, lastUnit: LastUnit | null, ghostSpoken = false) => ({ unitNumber: 48, lastUnit, shipIndex, ghostSpoken });
-  const lostOnVesper = last('overwritten', { shipName: 'VESPER' });
+  const run = (shipIndex: number, lastUnit: LastUnit | null, ghostSpoken = false) => ({
+    unitNumber: 48, lastUnit, shipIndex, ghostSpoken, map: mapAlong(arm, WORKED_ROUTE.slice(0, shipIndex + 1)),
+  });
+  const lostOnVesper = last('overwritten', { shipName: 'VESPER', trail: { ...RUN1_TRAIL, lost: { slot: 11, year: 2625, pastLy: 0, cause: 'overwritten' } } });
   const line = ghostLine(48, lostOnVesper);
-  check('ghostLineDue: lost on VESPER → nothing before VESPER, the line at VESPER and past it (a skipped VESPER still hears it)',
+  check('ghostLineDue: lost at VESPER → nothing before VESPER, the line at VESPER and past it (a skipped VESPER still hears it)',
     names.every((_, index) => (ghostLineDue(run(index, lostOnVesper)) === (index >= vesper ? line : null))));
   check('…nothing once it has spoken this run, on any ship', names.every((_, index) => ghostLineDue(run(index, lostOnVesper, true)) === null));
   check('…nothing on a first run, nor after a unit that STAYED (it left no ghost)',

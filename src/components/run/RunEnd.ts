@@ -77,7 +77,7 @@ interface TallyParts {
 }
 
 // Slice 3c: the world update's summary under the route (who launches next and when, the arm's turnover, the valve, the
-// ships that moved on), or nothing on the classic world.
+// ships that moved on), or nothing (no update to show).
 function paintNext(host: HTMLElement, next: Readonly<RunEndNext> | null): void {
   host.hidden = next === null;
   if (next === null) { host.replaceChildren(); return; }
@@ -232,7 +232,7 @@ export function mountRunEnd(store: Store<GameState>): () => void {
     tally.undelivered.hidden = report.undeliveredLine === null;
     tally.undelivered.textContent = report.undeliveredLine ?? '';
     // Slice 4: the cycles left unspent (decision 18: only shown) under the rank, and the tally's TRAINED line; the arm only.
-    // (run-end.ts RunEndModel.skills, Track TREE's; null on the classic world.)
+    // (run-end.ts RunEndModel.skills, Track TREE's.)
     const skillLines = report.skills;
     tally.skills.hidden = skillLines === null;
     tally.skills.textContent = skillLines?.tallyLine ?? '';

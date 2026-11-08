@@ -55,8 +55,7 @@ import type { DeliveryChip } from '@/types/repo';
 // • the TRACE line: the meter, `1 MORE AND IT FINDS YOU`, or `HOLLOW WILL FIND YOU ON THIS BEAM` on a boarding beam.
 // Phase 3 slice 3a (02-map §4; 01-landing §3.16): the PACKET between the DESK and the beam.
 // • the years headline on the arm (`NEXT: KESTREL · 1,200 COLONISTS · 26 LY · 89 YRS EARLY`) and the ECC line in place of
-//   the hits line (`ON THE WAY: 4 HITS · ECC FIXES 3 WHILE YOU SLEEP (89 YRS) → 1 LANDS`); the classic world keeps
-//   phase 2's (its hops have no years);
+//   the hits line (`ON THE WAY: 4 HITS · ECC FIXES 3 WHILE YOU SLEEP (89 YRS) → 1 LANDS`);
 // • the room bar beside the link bar (systems/map-hop.ts roomFit on the packet as it would cross: `ROOM 152 · FILES 65 +
 //   FLOOR 12`), with the charge it costs named before it happens (`CHARGE 38 → 12 ON ARRIVAL · 26 WON'T FIT`); on a
 //   TIGHT ship whose room leaves no charge, `→ 0 ON ARRIVAL` in red, and TRANSMIT ▸ asks first (the screen's inline
@@ -174,16 +173,14 @@ export interface TransmitModel {
   uninvited: UninvitedChip | null;
   noRm: string | null;
   trace: PacketTraceLine | null;
-  // Slice 3a: the destination's room (every hop has one: the classic world's FULL ships never squeeze) and the years.
-  arm: boolean;
+  // Slice 3a: the destination's room and the years.
   room: PacketRoom;
-  onTheWay: string | null;     // the ECC line on the arm (null on the classic world: hitsLine says it)
-  // Slice 3b (02 §3.9, §4; plan §1.1 item 14): the DELIVERIES chip row (the plan's chips, oldest first; empty on the
-  // classic world), the IN TRANSIT line (requests still behind the unit after this hop: null when none) and the draft's
-  // heading (SALVAGE on the arm, null on the classic world: PICK ONE TO CARRY as before).
+  onTheWay: string;            // the ECC line
+  // Slice 3b (02 §3.9, §4; plan §1.1 item 14): the DELIVERIES chip row (the plan's chips, oldest first), the IN TRANSIT
+  // line (requests still behind the unit after this hop: null when none) and the draft's heading (SALVAGE).
   deliveries: DeliveryChipView[];
   inTransit: string | null;
-  salvageTitle: string | null;
+  salvageTitle: string;
 }
 
 // One delivery chip on the PACKET: `Mv · 2 BLOCKS · ARRIVED 2337` and its SEND ON toggle. `lost`: sent on from a hop into a
@@ -420,17 +417,14 @@ export function transmitModel(state: Readonly<GameState>): TransmitModel {
   const charge = arrivalCharge(packet.chargeCarried, state.run.pendingStarCredit, pickCharge(plan.pick), plan.hop.chargeFloor, traceGiftCharge(state, plan.toSlot));
   if (charge.blocks !== fit.wanted) throw new Error(`transmitModel: arrival charge ${charge.blocks} but the room bar wants ${fit.wanted}`);
   const infectedCount = chips.filter((chip) => chip.infected && !chip.dropped).length;
-  const arm = state.run.map.world === 'arm';
   const room = packetRoom(preview, plan);
   const hits = plan.hop.transitHits + plan.extraHits;
   return {
     toShipIndex: plan.toShipIndex,
     shipName: ship.name,
     distanceLy: plan.hop.distanceLy,
-    headline: arm
-      // A `?` ship keeps its colonists to itself until its boot names them (slice 8 POLISH; its SHIP CARD's `??? COLONISTS`).
-      ? MAP_TEXT.packet.headline(ship.name, unknownShown(state.run, plan.toSlot) ? null : ship.colonists, plan.hop.distanceLy, plan.hop.slackYears)
-      : TRANSMIT_TEXT.next(ship.name, ship.colonists, plan.hop.distanceLy),
+    // A `?` ship keeps its colonists to itself until its boot names them (slice 8 POLISH; its SHIP CARD's `??? COLONISTS`).
+    headline: MAP_TEXT.packet.headline(ship.name, unknownShown(state.run, plan.toSlot) ? null : ship.colonists, plan.hop.distanceLy, plan.hop.slackYears),
     why: whyLine(outcome, fromShip, crashCoreToll(core.integrity, plan.coreHit)),
     emergency: outcome === 'crashed' || outcome === 'emergency',
     link: plan.linkBlocks,
@@ -456,12 +450,11 @@ export function transmitModel(state: Readonly<GameState>): TransmitModel {
     uninvited: uninvitedChip(state, plan),
     noRm: plan.threat.isFinal && noWorkingRm(state) ? THREAT_TEXT.noRmPacket : null,
     trace: packetTraceLine(state, plan),
-    arm,
     room,
-    onTheWay: arm ? MAP_TEXT.packet.onTheWay(hits, plan.hop.eccFixes, plan.hop.slackYears, hitsLanding(plan.hop, plan.extraHits)) : null,
+    onTheWay: MAP_TEXT.packet.onTheWay(hits, plan.hop.eccFixes, plan.hop.slackYears, hitsLanding(plan.hop, plan.extraHits)),
     deliveries: plan.deliveries.map((chip) => deliveryChipView(chip, ship.name, ship.final)),
-    inTransit: arm ? inTransitLine(state, plan) : null,
-    salvageTitle: arm ? REPO_TEXT.packet.salvage : null,
+    inTransit: inTransitLine(state, plan),
+    salvageTitle: REPO_TEXT.packet.salvage,
   };
 }
 

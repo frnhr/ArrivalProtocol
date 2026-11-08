@@ -118,5 +118,5 @@ export function lightArrival(
 // A route stop's approach year (the galaxy year while the unit is there).
 function stopApproachYear(map: Readonly<RunMapState>, stop: Readonly<RouteStop>): number {
   if (stop.hop !== null) return stop.hop.approachYear;
-  return map.world === 'arm' ? armShipAt(map, stop.slot).approachYear : map.startYear;
+  return armShipAt(map, stop.slot).approachYear;
 }

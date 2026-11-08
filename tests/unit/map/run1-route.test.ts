@@ -82,7 +82,7 @@ function flyShip(): void {
 // `requests[i]`: what the kid requests at desk i (null: nothing; 'tag': whatever ARRIVAL CONTROL recommends there).
 function flyRoute(route: readonly number[], record: (event: string, at: Readonly<GameState>) => void, requests: readonly (RepoFileId | null | 'tag')[] = []): Flown {
   h.newRun(SEED);
-  startRun(h.store, SEED, FIRST_RUN_LINEAGE, 'arm');
+  startRun(h.store, SEED, FIRST_RUN_LINEAGE);
   const failures: string[] = [];
   let charge: number | null = null;
   receiveTransmission(h.store);

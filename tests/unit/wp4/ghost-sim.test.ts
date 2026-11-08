@@ -88,7 +88,7 @@ function stats(warp: number, integrity: number, seeds = SEEDS): Stats {
   const dvDiff = Math.abs(slow.dvPerEvent - fast.dvPerEvent) / slow.dvPerEvent;
   check('ghost: mean bursts per 120 tac s at ×25 and ×200 agree within 5%', eventsDiff <= 0.05,
     `×25 ${slow.meanEvents.toFixed(3)}, ×200 ${fast.meanEvents.toFixed(3)} (${(eventsDiff * 100).toFixed(2)}%)`);
-  // WP12 part 1 retuned the failing controller (GHOST_BY_BAND.failing: 10 tac s, 0.3; §3.3 had 25 tac s, 0.15): the
+  // WP12 part 1 retuned the failing controller (phase 2's failing controller: 10 tac s, 0.3; §3.3 had 25 tac s, 0.15): the
   // expected count is 120 ÷ (mean interval + a burst, which blocks the next), within the old check's −10% / +6%.
   const perRun = 120 / (FAILING_GHOST.meanIntervalTac + FAILING_GHOST.durTac);
   check(`ghost: …about ${perRun.toFixed(1)} a run (120 / ${FAILING_GHOST.meanIntervalTac}, minus the time a burst blocks the next)`,

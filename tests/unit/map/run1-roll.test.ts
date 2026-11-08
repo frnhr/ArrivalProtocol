@@ -12,7 +12,7 @@ import { shipDefAt } from '@systems/map-run';
 import { solLy, layerOf } from '@systems/map-geometry';
 import { validateShipDef } from '@data/ships';
 import { rootSlotRack, maxRootFor } from '@data/memory';
-import { classicShip } from '@data/classic-five';
+import { ARES_VII_LANDING, LAST_LIGHT_LANDING, LAST_LIGHT_POD_RACKS } from '@data/authored-ships';
 import { TEMPLATE_RULES } from '@data/flight-templates';
 import { EXTRA_MODIFIERS_MAX_BY_LAYER, META_STORAGE_KEY } from '@data/tuning';
 import { run1Map, WORKED_ROUTE } from './run1-fixture';
@@ -74,7 +74,7 @@ check('POOR site data only from layer 5', arm.every((ship) => ship.reserved.site
 const ares = shipDefAt(map, 0);
 check('ARES-VII: COMPACT, `P P P _40` / `_64`, the written layer-1 row (one WIDE site, GENTLE, RIVERSIDE), a fresh unit',
   ares.memoryClass === 'COMPACT' && ares.memory.podRacks.B === 'P P P _40' && ares.memory.podRacks.C === '_64' && ares.memory.podRacks.D === undefined
-  && JSON.stringify(ares.landing) === JSON.stringify(classicShip(0).landing) && ares.memory.aiFiles !== null && ares.memory.drivers.hurt[0]?.pod === 2);
+  && JSON.stringify(ares.landing) === JSON.stringify(ARES_VII_LANDING) && ares.memory.aiFiles !== null && ares.memory.drivers.hurt[0]?.pod === 2);
 const halcyon = shipDefAt(map, 2);
 check('HALCYON: 5 pods COMPACT, Sensor 62 without the label, GENTLE GRASSLAND', halcyon.pods === 5 && halcyon.memoryClass === 'COMPACT'
   && halcyon.arrivalDamage[0]?.maxIntegrity === 62 && !halcyon.modifiers.includes('sensor-damage') && halcyon.landing.terrain === 'GRASSLAND'
@@ -92,8 +92,8 @@ check('VESPER: a 16-pod ark, FULL, a slot, ENGINE FAULT (Thrust 31), ROUGH with 
   && by('VESPER').reserved.resident === null);
 const lastLight = shipDefAt(map, 19);
 check('LAST LIGHT: 16 pods FULL, the belt, New Haven\'s written landing and layout', lastLight.final && lastLight.pods === 16
-  && JSON.stringify(lastLight.landing) === JSON.stringify(classicShip(4).landing)
-  && JSON.stringify(lastLight.memory.podRacks) === JSON.stringify(classicShip(4).memory.podRacks) && lastLight.zones.some((zone) => zone.kind === 'belt'));
+  && JSON.stringify(lastLight.landing) === JSON.stringify(LAST_LIGHT_LANDING)
+  && JSON.stringify(lastLight.memory.podRacks) === JSON.stringify(LAST_LIGHT_POD_RACKS) && lastLight.zones.some((zone) => zone.kind === 'belt'));
 
 // The generated ships.
 const generated = arm.filter((ship) => ship.authored === null);

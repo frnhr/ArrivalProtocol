@@ -89,7 +89,7 @@ const names = (): string[] => memory().map((seg) => seg.name);
   // A strip line that points at the REPAIR chip from amber is the other trigger (§9 item 9).
   const amber = createInitialState({ seed: 1 });
   // WP7: the schedule is built per ship (licenceSchedule); REPAIR's rule is the same on every ship.
-  const rule = licenceSchedule(0).find((candidate) => candidate.kind === 'repair')!;
+  const rule = licenceSchedule().find((candidate) => candidate.kind === 'repair')!;
   const dueInAmber = rule.due(amber);
   amber.director.shown = { id: 'test', text: 'PICK UP REPAIR', keys: [], urgency: 'soon', layer: 'mind', highlight: 'chip-repair', source: 'tutorial' };
   check('licence: in amber it is not due, until a line highlights the REPAIR chip', !dueInAmber && rule.due(amber));

@@ -23,7 +23,7 @@ const T = RESIDENT_UI_TEXT;
 // --- The SHIP CARD and the STAR CHART (02 §8 slice 5, plan R18) ------------------------------------------------------------
 
 // The SHIP CARD's RESIDENT row for `slot` (02 §8 slice 5: `none`, `reported faulty`, `unknown`; after the ship, the record's
-// words: `was faulty`, `left · LOOKOUT`, `friendly · MOTH`). null: no row (the classic world). A kind this build does not
+// words: `was faulty`, `left · LOOKOUT`, `friendly · MOTH`). null: no row. A kind this build does not
 // play reads `none` (data/residents.ts builtResident: the ship will hold no files of it). A sleeper nobody woke stays
 // `unknown` after its ship: the kid never met it, and it may still sleep there next run (04 §3.11).
 export interface ResidentCardRow {
@@ -34,7 +34,6 @@ export interface ResidentCardRow {
 
 export function residentCardRow(state: Readonly<GameState>, slot: number): ResidentCardRow | null {
   const map = state.run.map;
-  if (map.world !== 'arm') return null;
   const row = (value: string, tone: ResidentCardRow['tone'] = 'plain'): ResidentCardRow => ({ label: T.card.label, value, tone });
   const met = state.run.residents.met.find((record) => record.slot === slot);
   if (met !== undefined) {
@@ -62,7 +61,7 @@ export function residentCardRow(state: Readonly<GameState>, slot: number): Resid
 // `▓▓░▓` file still waits (02 §3.5: "every other fragment ship"; its card's TRACE row names it already).
 export function signalGlyph(state: Readonly<GameState>, slot: number): boolean {
   const map = state.run.map;
-  if (map.world !== 'arm' || state.run.residents.signals.length === 0) return false;
+  if (state.run.residents.signals.length === 0) return false;
   if (map.route.some((stop) => stop.slot === slot)) return false;
   const ahead = shipSummaryAt(map, slot).reserved;
   if (UNKNOWN_EVENTS_BUILT && ahead !== null && ahead.unknownEvent !== null && ahead.fragments > 0) {
@@ -206,7 +205,7 @@ export function residentInspect(state: Readonly<GameState>, seg: Readonly<Segmen
   if (!isResidentFile(seg)) return null;
   switch (seg.type) {
     case 'resident': {
-      if (!seg.scanned || state.run.map.world !== 'arm') return null;
+      if (!seg.scanned) return null;
       const year = shipLaunchYear(state.run.map, currentSlot(state.run));
       const cured = state.resident.corrupted?.phase === 'cured';
       const who = cured ? T.inspectCured(seg.owner, year) : T.inspect(seg.owner, year);

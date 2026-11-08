@@ -33,7 +33,7 @@ function lossButtonText(plan: LossPlan): string {
   if (plan.kind === 'end') return LOSS_BUTTON.end;
   const emergency = plan.outcome === 'crashed' || plan.outcome === 'emergency';
   if (emergency) return LOSS_BUTTON.emergency;
-  // Every world goes through the desk now (the classic one offers its one next ship there): the kid picks it on the chart.
+  // Every ship's end goes through the desk: the kid picks the next ship on the chart.
   return MAP_TEXT.lossToChart;
 }
 
@@ -77,13 +77,13 @@ export function mountBurnResult(store: Store<GameState>): () => void {
   // Slice 4 (the review's designer Q4): a lost ship still pays its training cycles (ARRIVED +1, and whatever landed before
   // it was lost), and BEAM OUT and EMERGENCY ships have no LANDING REPORT to say so: the card says it in the report's words,
   // from the same earning endShip records at the button (run-score.ts shipCycles; training-model.ts cyclesReport), with the
-  // first pick's top-up under it on a run's first ship. Not on the classic world (no tree), nor before the simulation's
+  // first pick's top-up under it on a run's first ship. Not before the simulation's
   // retry (the ship is flown again, nothing is earned).
   function showCycles(): void {
     const state = store.getState();
     cyclesEl.hidden = true;
     const plan = lossPlan(state);
-    if (state.run.map.world !== 'arm' || plan.kind === 'simulation') return;
+    if (plan.kind === 'simulation') return;
     // Slice 5 review m2: the sleeper's gift is paid landed or lost (R12, review m10), so the LOST card says it too, under the
     // cycles in the LANDING REPORT's words (resident-hud residentReportRows).
     const gifts = residentReportRows(state).filter((row) => row.kind === 'gift').map((row) => make('div', 'burn-result-gift', row.text));

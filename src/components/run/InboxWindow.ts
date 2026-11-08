@@ -25,8 +25,6 @@ export function mountInboxWindow(store: Store<GameState>): () => void {
 
   function paint(): void {
     const state = store.getState();
-    // The classic world has no mail: no dock item (the review's nit).
-    dockItem.hidden = state.run.map.world !== 'arm';
     const unread = inboxUnread(state).length;
     label.textContent = unread > 0 ? INBOX_TEXT.window.badge(unread) : DOCK_WORD;
     dockItem.classList.toggle('has-mail', unread > 0);

@@ -2,13 +2,13 @@
 // • every point is written by the game itself (systems/save-write.ts through the stub): RUN START, SHIP DONE at each of the
 //   five desks, BEAM into each of the five later ships, ENDING CHOSEN on LAST LIGHT's report; each decodes, re-encodes to
 //   the very same JSON, and a world point deep-equals a save built again from the state it was written from;
-// • the sticky ghost burst's Infinity is tagged and comes back; any other non-finite number and a classic map throw on
-//   encode; a point written from the wrong moment throws;
+// • the sticky ghost burst's Infinity is tagged and comes back; any other non-finite number throws on encode; a point
+//   written from the wrong moment throws;
 // • the decoder refuses, in order: not JSON, another save version (and migrateRunSave steps a known older one in place),
 //   each content version, a missing or unknown key, the saved run field by field (a type, an Infinity in the wrong place,
-//   the envelope's copies against the run), a classic map, a route that doesn't match its point, a ship that doesn't build;
+//   the envelope's copies against the run), a hand-edited classic map (OPEN-DECISIONS 87: 'shape', the arm is the only
+//   world), a route that doesn't match its point, a ship that doesn't build;
 // • saveRefusal finds a stale save; the size at each point is printed (INFO, risk 8).
-import { withClassicWorld } from '../support/classic-fixture';
 import { isDeepStrictEqual } from 'node:util';
 import { check, finish } from '../landing/checks';
 import type { GameState } from '@state/schema';
@@ -17,7 +17,7 @@ import { createStore } from '@state/store';
 import { createInitialState } from '@state/initial';
 import { createRunMap } from '@systems/map-run';
 import { freshMeta, recordRunStart, archiveMeta, FIRST_RUN_LINEAGE } from '@systems/meta';
-import { nominalShipThreat } from '@systems/threat-plan';
+import { firstShipThreat } from '@systems/threat-plan';
 import {
   buildRunSave, encodeRunSave, decodeRunSave, saveRefusal, contentVersions, savePayloadAt, RUN_SAVE_MIGRATIONS, migrateRunSave,
 } from '@systems/save-codec';
@@ -88,14 +88,11 @@ const at = (phase: GameState['run']['phase'], touch: (state: GameState) => void 
   touch(state);
   return state;
 };
-const BOOT = { carried: null, threat: nominalShipThreat(0) };
+const BOOT = { carried: null, threat: firstShipThreat() };
 const throws = (fn: () => unknown): boolean => { try { fn(); return false; } catch { return true; } };
 check('encode throws on any other non-finite number (NaN fuel, an Infinity off a burst\'s end)',
   throws(() => encodeRunSave(buildRunSave(at('report', (state) => { state.burn.fuelPct = Number.NaN; }), 'ending-chosen', 1, null, 0)))
   && throws(() => encodeRunSave(buildRunSave(at('report', (state) => { state.burn.fuelPct = Infinity; }), 'ending-chosen', 1, null, 0))));
-const classic = withClassicWorld(() => createInitialState({ seed: SEED, phase: 'boot' }));
-check('a classic-world map is never saved (encode throws)', classic.run.map.world === 'classic'
-  && throws(() => encodeRunSave(buildRunSave(classic, 'run-start', 1, BOOT, 0))));
 check('a point written from the wrong moment throws (SHIP DONE off the desk; a boot point without its parts)',
   throws(() => savePayloadAt(at('report'), 'ship-done', null)) && throws(() => savePayloadAt(at('boot'), 'run-start', null))
   && throws(() => savePayloadAt(at('boot'), 'beam', BOOT)));
@@ -205,9 +202,15 @@ check('…a disguised arrival seed and a recorded first seed on the route pass t
   save.payload.run.arrival.seeds[0].disguise = 'cache.tmp';
   save.payload.run.threat.seedsMetAtDepth = save.payload.run.map.route.length;
 })) !== 'shape');
-check('a classic map → classic', kind(edit(desk, (save) => {
-  save.payload.run.map.world = 'classic';
-})) === 'classic');
+// OPEN-DECISIONS 87: the classic five are retired and no save ever held them; the codec keeps `world` as the literal 'arm'
+// (no save bump), so a hand-edited classic payload is refused cleanly by its shape, never thrown.
+{
+  let threw = false;
+  let refused = '';
+  try { refused = refusal(edit(desk, (save) => { save.payload.run.map.world = 'classic'; })); } catch { threw = true; }
+  check('a hand-edited `world: \'classic\'` payload → shape, refused cleanly (not thrown), at the map\'s world', !threw
+    && refused.startsWith('shape:') && refused.includes('world'), refused);
+}
 check('a route that does not match the point → route (the point, the depth, the ships ended)',
   kind(edit(desk, (save) => { save.point = 'ending-chosen'; save.resume.point = 'ending-chosen'; save.payload.phase = 'report'; save.payload.run.phase = 'report'; })) === 'route'
   && kind(edit(desk, (save) => { save.payload.run.shipIndex = 3; save.resume.depth = 4; })) === 'route'

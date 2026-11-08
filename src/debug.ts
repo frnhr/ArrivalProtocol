@@ -26,7 +26,7 @@ import {
   startShip, boardedBy, continueAfterLoss, continueAfterReport, transmitNext, startBeamOut, cancelBeamOut, setCourse,
   type LossPlan,
 } from '@systems/run';
-import { packUnit, layoutCarried } from '@systems/carry';
+import { layoutCarried } from '@systems/carry';
 import { movePreview, type MovePreview } from '@systems/move-preview';
 import { newRunSeed } from '@systems/rng';
 import { requestSkip, mainCountdown, setDebugWarp, skipBlockReason, type SkipResult, type Countdown } from '@systems/pace';
@@ -55,9 +55,8 @@ import { beamOutView, type BeamOutView } from '@systems/beam-out';
 import { buildShipMemory } from '@data/memory';
 import { podCode } from '@data/landing-text';
 import type { ShipDef, HollowDef } from '@data/ships';
-import { classicShip, CLASSIC_HOPS } from '@data/classic-five';
-import { nominalShipThreat, nominalRunThreat, planThreat, threatInputFor, fixedShipFacts, NO_FINAL_TRACES } from '@systems/threat-plan';
-import { finalTraceInput, finalTraces, noTraces, rootUnitsOf, runTracesOf, traceAt, type FinalTraces } from '@systems/traces';
+import { firstShipThreat, planThreat, threatInputFor, NO_FINAL_TRACES } from '@systems/threat-plan';
+import { finalTraceInput, finalTraces, rootUnitsOf, runTracesOf, traceAt, type FinalTraces } from '@systems/traces';
 import { cardModel } from '@systems/desk';
 import { TRACES_BUILT } from '@data/traces';
 import { bookShape, type BookShape } from '@state/log-selectors';
@@ -133,7 +132,7 @@ import type { SkillId, SkillVersion, LockLevel, DemoSkill, CellRow, RunSkillStat
 import { grantCycles, bankOf, treeCells, visitNow, type TrainRefusal, type TreeCell } from '@systems/skill-tree';
 import { skillPacketPlan } from '@systems/skill-files';
 import { shipCycles } from '@systems/run-score';
-import { skippedResult } from '@systems/arm-fixture';
+import { skippedResult, workedRouteTo, authoredSlot } from '@systems/arm-fixture';
 import type { SkillFileSegment } from '@/types/segment';
 import { seedSpotFor, seedsInMemory, threateningSeeds } from '@systems/hollow';
 import { knownHitRacks } from '@systems/zones';
@@ -141,7 +140,7 @@ import { nextZoneEntry, zoneInside } from '@systems/pace';
 import type { Zone, ZoneHit } from '@/types/zone';
 import { offerDealNow, dealEffectNow } from '@systems/hollow-deal';
 import { lastSkipPlanChange } from '@systems/ghost-thrust';
-import { visitRng, currentShip, classicRunMap, shipDefAt, currentSlot, hopRng, createRunMap } from '@systems/map-run';
+import { visitRng, currentShip, shipDefAt, currentSlot, hopRng, createRunMap } from '@systems/map-run';
 import { hopBetween, reachable, roomFit } from '@systems/map-hop';
 import { mapFacts, nominalRouteThreat } from '@systems/map-facts';
 import { layerOf } from '@systems/map-geometry';
@@ -242,14 +241,14 @@ interface DebugHooks {
   hollowHud: () => Record<string, unknown>;
   // WP6 part 2: a ship-2 look at HOLLOW on ship 1 (kept for WP6's browser suite; the real ship is ship(1)).
   hollowDemo: () => void;
-  // WP7: the run. ship(i) jumps to ship i (debugJump below); run is the run slice; resetReport lists the
+  // WP7: the run. ship(i) jumps to run 1's authored ship i on the worked route (debugJump below); run is the run slice; resetReport lists the
   // modules not in their initial state (empty right after a reset); continueLoss / continueReport press
   // the LOST card's and the WAKE REPORT's buttons; transmit sends the packet ('transmit');
   // beamOut / cancelBeamOut drive BEAM OUT (refusal or null); newRun starts a NEW RUN;
   // movePreview judges MOVE of the named file into the free region holding `addr`.
   ship: (index: number) => void;
   // Phase 3 slice 2 (THREAT): a beam seed behind this file now (returns its id); HOLLOW boards on the beam into this ship
-  // (its boot replayed with the 108% unpack; VESPER on the fixed five).
+  // (its boot replayed with the 108% unpack; CORMORANT on run 1's worked route, where the ladder forces it).
   // Slice 4d: `{ disguise: 'cache.tmp' }` lands it as that decoy (a name from threat-text.ts DISGUISE_POOL).
   seed: (target: string, opts?: { disguise?: string }) => string;
   board: () => ShipThreat;
@@ -284,7 +283,7 @@ interface DebugHooks {
   // WP8: the archive and the draft. archive is the page's status and its session record; archiveAs writes
   // an archive as if UNIT-047's run had just ended with `cause` on HALCYON (reload, then meet its ghost at HALCYON's boot:
   // __ap.ship(1)), archiveCorrupt writes JSON that does not read (reload: ARCHIVE CORRUPT), archiveClear forgets everything
-  // (a first run); ghost is this run's ghost line, wherever it speaks (systems/meta.ts ghostShipIndex); draft is the TRANSMIT's offer, pick and what weighted it; pick takes a
+  // (a first run); ghost is this run's ghost line, wherever it speaks (systems/meta.ts ghostPlaceReached); draft is the TRANSMIT's offer, pick and what weighted it; pick takes a
   // card (refusal or null).
   archive: () => { status: string; meta: Readonly<Meta> };
   // Slice 3c (archive v2, plan §5.0 item 9): UNIT-047's run 1 on the worked route (ARES-VII, HALCYON, KESTREL, VESPER,
@@ -525,7 +524,7 @@ function debugArchiveAs(store: Store<GameState>, cause: LastCause, landed: numbe
   if (!(LAST_CAUSES as readonly unknown[]).includes(cause)) throw new Error(`__ap.archiveAs: '${String(cause)}' is not a cause (${LAST_CAUSES.join(', ')})`);
   if (landed !== undefined && !(Number.isInteger(landed) && landed >= 0)) throw new Error(`__ap.archiveAs: landed ${landed} is not a whole number`);
   const page = store.getState().run.map;
-  const armSeed = page.world === 'arm' ? page.armSeed : newRunSeed();
+  const armSeed = page.armSeed;
   const first = lineageOf(freshMeta(armSeed));
   const map = createRunMap(first, armSeed);
   map.route = DEBUG_WORKED_ROUTE.map((slot, i) => ({ slot, depth: i + 1, hop: i === 0 ? null : hopBetween(map, DEBUG_WORKED_ROUTE[i - 1]!, slot) }));
@@ -662,50 +661,24 @@ function giveRepoFile(store: Store<GameState>, file: RepoFileId): Segment[] {
   return files;
 }
 
-// __ap.ship(index): jumps to ship `index` now, the way a transmission would bring the unit there (its own
-// files packed for that ship's link, the charge that fits, the ship's own arrival damage), but with no transit
-// hits and no stars: a quick way to reach HALCYON or KESTREL for a look (WP7 replaces WP6's hollowDemo). The
-// run's licences stay. The threat is the nominal run's (systems/threat-plan.ts, slice-2-plan risk 14): the ships before
-// it flown with TRACE 0, so VESPER gets HOLLOW's forced boarding and its 10-block root, LAST LIGHT the FINALE.
-// The beam's seeds are rolled as transmitNext rolls them (KESTREL's next to Telemetry on the tutorial run), so the RM
-// lesson can be reached in one call. `threat` replaces the nominal verdict (__ap.board).
-// The jump always lands on the classic world (data/classic-five.ts: the fixture five, slice-3a-plan §2.3), whatever world
-// the run was on: the map becomes the classic route to that ship.
-function debugJump(store: Store<GameState>, index: number, threat: ShipThreat = nominalShipThreat(index)): void {
-  const ship = classicShip(index);
-  const hop = CLASSIC_HOPS[index];
-  if (!hop) throw new Error(`__ap.ship(${index}): ${ship.name} meets a fresh unit; use __ap.newRun()`);
-  abortAll();
-  const state = store.getState();
-  const packet = packUnit(state.memory, hop.linkBlocks, []);
-  packet.seeds = rollBeamSeeds(packet, beamSourceOf(threat), playsTutorial(state.run), childRng(state.run.seed, index, 'beam-seeds'));
-  const layout = layoutCarried(packet, packet.chargeCarried, ship, threat, hollowLabel(state.run));
-  // The ship's own arrival damage still applies (WP9: KESTREL's Sensor Interp at 45%, PATH UNCERTAIN).
-  const scripted = arrivalDamage(layout.racks.segs, ship.arrivalDamage);
-  // The run's threat memory as the nominal run had it before this ship (startShip applies the ship's verdict on top), on
-  // the classic world.
-  store.update((draft) => {
-    draft.run.threat = nominalRunThreat(index - 1);
-    // The classic world has no repository: requests made on the arm name its receivers (the review's nit: a waiting one
-    // threw at the next send).
-    draft.run.repo = { pick: null, requests: [], nextId: draft.run.repo.nextId };
-    if (draft.run.map.world !== 'classic') {
-      draft.run.map = classicRunMap(draft.run.seed, index - 1, draft.run.wave);
-      draft.run.shipIndex = index - 1;
-      // Slice 7c (the review): the classic world holds no traces (systems/traces.ts runTracesOf); an arm run's would play on
-      // its final ship and refuse the save ('traces on the classic world').
-      draft.run.traces = noTraces();
-    }
-  });
-  startShip(store, index, layout.racks, {
-    hits: [], chargeCarried: packet.chargeCarried, starCredit: 0, stars: 0, card: null, cardCharge: 0, chargeFloorAdded: 0,
-    chargeOverflowLost: 0, scripted, eccCorrected: 0, seeds: layout.seeds, boarded: boardedBy(threat), deliveries: [], skills: [], traceLines: [], giftCharge: 0,
-  }, threat);
+// __ap.ship(index): run 1's authored ship `index` (0 ARES-VII … 4 LAST LIGHT) now, along 02 §3.14's worked route
+// (systems/arm-fixture.ts WORKED_ROUTE: LAST LIGHT is depth 6, through CORMORANT), the way __ap.route flies it: every stop
+// before it skipped (in orbit, nobody landed), the threat the nominal route's (TRACE 0, no DEAL), and the current unit
+// beamed into the ship by its real hop (its files packed for that link, the deliveries that ride it, the beam's seeds, the
+// ship's own arrival damage; no transit hits, no stars). The page's createInitialState fixture is the same ship (Track
+// RETIRE retired the classic five this used to jump to). `threat` replaces the nominal verdict (__ap.board). Run 1's arm
+// only: a later run's arm is a fresh roll, with no worked route.
+function debugJump(store: Store<GameState>, index: number, threat?: ShipThreat): void {
+  const slots = workedRouteTo(authoredSlot(index));
+  if (slots.length < 2) throw new Error(`__ap.ship(${index}): ARES-VII meets a fresh unit; use __ap.newRun()`);
+  const map = store.getState().run.map;
+  if (map.run !== 1) throw new Error(`__ap.ship(${index}): run 1's arm only (this is run ${map.run}'s); __ap.runNumber(1) first`);
+  debugRoute(store, slots, threat);
 }
 
 // --- The galaxy map's helpers (slice 3a, Track GEN) ----------------------------------------------------------------------
 
-// The unit packed for `hop` and laid out on the ship it reaches, as debugJump does for a classic ship: the current unit's
+// The unit packed for `hop` and laid out on the ship it reaches: the current unit's
 // files with the charge the link lets cross (no transit hits, no stars, no card), the deliveries that ride the hop (phase 3
 // slice 3b: every chip, none sent on; the requests move on and first-of-kind tools are licensed, as transmitNext does), the
 // beam's and the deliveries' seeds as transmitNext rolls them, and the ship's own arrival damage. Files over the link or
@@ -758,17 +731,11 @@ function debugArrive(store: Store<GameState>, hop: Hop, threat: ShipThreat): voi
   }, threat, hop);
 }
 
-function armMapOf(store: Store<GameState>, what: string): RunMapState {
-  const map = store.getState().run.map;
-  if (map.world !== 'arm') throw new Error(`__ap.${what}: the run is on the classic world (__ap.ship's); start an arm run with __ap.newRun()`);
-  return map;
-}
-
 // __ap.slot(s): the ship in slot `s`, as a beam from the current ship would bring the unit there (the hop's link and
 // room, the ladder's verdict from the map's facts and the run's threat, no transit hits), reachable or not (a quick look
 // at any ship further out). The route gains the stop.
 function debugSlot(store: Store<GameState>, slot: number): Hop {
-  const map = armMapOf(store, 'slot');
+  const map = store.getState().run.map;
   const state = store.getState();
   const from = currentSlot(state.run);
   if (layerOf(slot) <= layerOf(from)) throw new Error(`__ap.slot(${slot}): not further out than slot ${from}`);
@@ -792,9 +759,9 @@ function debugSkippedResult(map: Readonly<RunMapState>, slot: number, depth: num
 // hop. The route starts at the first ship and every hop must be reachable; the unit is the current one (from ship 1: the
 // fresh unit). `__ap.route([0, 2, 5, 11, 15])` is CORMORANT with HOLLOW's forced boarding on run 1. Every stop before the
 // last has a result (the run's own where it already ended that ship there, else debugSkippedResult), so the route, the
-// results, the trail, RUN END's update and the saves agree.
-function debugRoute(store: Store<GameState>, slots: readonly number[]): Hop {
-  const map = armMapOf(store, 'route');
+// results, the trail, RUN END's update and the saves agree. `threat` replaces the last ship's nominal verdict (__ap.board).
+function debugRoute(store: Store<GameState>, slots: readonly number[], threat?: ShipThreat): Hop {
+  const map = store.getState().run.map;
   if (slots.length < 2 || slots[0] !== FIRST_SLOT) throw new Error(`__ap.route: a route from slot ${FIRST_SLOT} with at least two ships (got [${slots.join(', ')}])`);
   slots.forEach((slot, index) => {
     if (index > 0 && !reachable(map, slots[index - 1]!, slot)) throw new Error(`__ap.route: slot ${slot} is not reachable from slot ${slots[index - 1]}`);
@@ -826,7 +793,7 @@ function debugRoute(store: Store<GameState>, slots: readonly number[]): Hop {
   });
   const hop = hopBetween(store.getState().run.map, prev, last);
   const facts = mapFacts(map, prev, last, slots.length);
-  debugArrive(store, hop, planThreat(threatInputFor(prior, facts, false, NO_FINAL_TRACES)));
+  debugArrive(store, hop, threat ?? planThreat(threatInputFor(prior, facts, false, NO_FINAL_TRACES)));
   return hop;
 }
 
@@ -835,7 +802,7 @@ function debugRoute(store: Store<GameState>, slots: readonly number[]): Hop {
 // files as they are now, the nominal route's threat). Not on the first ship (it meets a fresh unit) or a final ship (02: never
 // a resident there). A name is 1–7 capitals (the words' worst case, 05 §3.11's pools); fragments only on a departed one.
 function debugPlaceResident(store: Store<GameState>, kind: ResidentKind, opts: { shown?: ResidentShown; name?: string; fragments?: number }): void {
-  const map = armMapOf(store, 'resident.place');
+  const map = store.getState().run.map;
   const state = store.getState();
   const slot = currentSlot(state.run);
   const route = map.route.map((stop) => stop.slot);
@@ -861,7 +828,7 @@ function debugPlaceResident(store: Store<GameState>, kind: ResidentKind, opts: {
 // restarts from its boot as __ap.resident.place does. Not on the first ship (it meets a fresh unit) or a final ship (02: its
 // site data is authored GOOD).
 function debugSurveyPoor(store: Store<GameState>): void {
-  const map = armMapOf(store, 'survey.poor');
+  const map = store.getState().run.map;
   const slot = currentSlot(store.getState().run);
   const route = map.route.map((stop) => stop.slot);
   if (route.length < 2) throw new Error('__ap.survey.poor: not on the first ship (it meets a fresh unit); go further out with __ap.slot');
@@ -876,7 +843,6 @@ function debugSurveyPoor(store: Store<GameState>): void {
 // them, so the save's check holds. Returns the run's count. Throws when the route holds fewer than n.
 function debugGiveSignals(store: Store<GameState>, n: number): number {
   const run = store.getState().run;
-  if (run.map.world !== 'arm') throw new Error('__ap.signals.give: the arm only');
   const found = (slot: number, source: SignalSource): boolean => run.residents.signals.some((record) => record.slot === slot && record.source === source);
   const records: SignalRecord[] = [];
   let left = n;
@@ -902,7 +868,7 @@ function debugGiveSignals(store: Store<GameState>, n: number): number {
 // __ap.unknown(slot?) (slice 7d, §2.12): a `?` ship's event as the build plays it.
 function debugUnknown(state: Readonly<GameState>, at?: number): UnknownDebug {
   const slot = at ?? state.ui.deskSelected ?? currentSlot(state.run);
-  const ship = state.run.map.world === 'arm' ? state.run.map.arm[slot] ?? null : null;
+  const ship = state.run.map.arm[slot] ?? null;
   const event = ship?.reserved.unknownEvent ?? null;
   return {
     slot, event, shown: unknownShown(state.run, slot),
@@ -919,7 +885,6 @@ function debugUnknown(state: Readonly<GameState>, at?: number): UnknownDebug {
 // the last trail's first colony (or the first ship's world), the kit Scan, Repair and Rm, SUNSET's and SPARE's FUEL 25%.
 function debugTracesAs(store: Store<GameState>, kind: TraceKind): RunTraces {
   const run = store.getState().run;
-  if (run.map.world !== 'arm') throw new Error('__ap.traces.as: the arm only (the classic world holds no traces)');
   const final = run.map.arm.find((ship) => ship !== undefined && ship !== null && ship.kind === 'final');
   if (final === undefined) throw new Error('__ap.traces.as: the arm has no final ship');
   const step1 = kind === 'purge' || kind === 'merge' || kind === 'spare';
@@ -958,20 +923,24 @@ function debugRunNumber(store: Store<GameState>, run: number): void {
   const map = createRunMap({ wave: run }, seed);
   resetWorldForShip(store, {
     phase: 'title', run: withRunMap(createRunState(seed, 'title', 0, lineage, undefined, map), map), carried: null,
-    threat: nominalShipThreat(0), freshLog: true, done: [],
+    threat: firstShipThreat(), freshLog: true, done: [],
   });
 }
 
 // __ap.board(): HOLLOW boards on the beam into the ship being flown, now: the ship is entered again through its boot (the
-// 108% unpack, 'hollow-boarded': the shake, the tear, the cue), with the verdict of a forced boarding (04 §3.8) on the
-// nominal run's history. Only where the ladder lets it board (depth ≥ 4, not a final ship: VESPER on the fixed five).
+// 108% unpack, 'hollow-boarded': the shake, the tear, the cue), along the route as it stands (__ap.route), with the verdict
+// of a forced boarding (04 §3.8: the ship treated as one hop from a final ship, M3) on the nominal route's history. Only
+// where the ladder lets it board (depth ≥ 4, not a final ship: VESPER or CORMORANT on run 1's worked route).
 function debugBoard(store: Store<GameState>): ShipThreat {
-  const index = store.getState().run.shipIndex;
-  const facts = { ...fixedShipFacts(index), oneHopFromFinal: true };
-  const before = { ...nominalRunThreat(index - 1), aboard: false, age: 0 };
-  const threat = planThreat(threatInputFor(before, facts, store.getState().run.stats.deal !== null, finalTraceInput(store.getState().run)));
-  if (threat.boards === null) throw new Error(`__ap.board: HOLLOW never boards on the beam into ${classicShip(index).name} (depth ${facts.depth})`);
-  debugJump(store, index, threat);
+  const state = store.getState();
+  const map = state.run.map;
+  const slots = map.route.map((stop) => stop.slot);
+  if (slots.length < 2) throw new Error('__ap.board: HOLLOW never boards ship 1 (nothing transmits to it)');
+  const facts = { ...mapFacts(map, slots[slots.length - 2]!, slots[slots.length - 1]!, slots.length), oneHopFromFinal: true };
+  const before = { ...nominalRouteThreat(map, slots.slice(0, -1)), aboard: false, age: 0 };
+  const threat = planThreat(threatInputFor(before, facts, state.run.stats.deal !== null, finalTraceInput(state.run)));
+  if (threat.boards === null) throw new Error(`__ap.board: HOLLOW never boards on the beam into ${currentShip(state).name} (depth ${facts.depth})`);
+  debugRoute(store, slots, threat);
   return threat;
 }
 
@@ -1217,7 +1186,7 @@ export function mountDebug(store: Store<GameState>): void {
       return {
         state: structuredClone(state.run.repo), recommendation: recommendation(state), model: repoModel(state, state.ui.deskSelected),
         // The outlook toward the selected ship on the DESK (or the PACKET's destination).
-        outlook: state.run.map.world !== 'arm' || state.ui.deskSelected === null || !['desk', 'transmit'].includes(state.run.phase) ? null
+        outlook: state.ui.deskSelected === null || !['desk', 'transmit'].includes(state.run.phase) ? null
           : hopOutlook(state, currentSlot(state.run), state.ui.deskSelected),
         deliveries: state.run.transit === null ? null : structuredClone(state.run.transit.deliveries), undelivered: undeliveredFiles(state.run),
       };
@@ -1347,7 +1316,7 @@ export function mountDebug(store: Store<GameState>): void {
     }, {
       as: (kind: TraceKind) => debugTracesAs(store, kind),
       route: (via: readonly number[] = []) => {
-        const all = routes(armMapOf(store, 'traces.route')).filter((route) => via.every((slot) => route.includes(slot)));
+        const all = routes(store.getState().run.map).filter((route) => via.every((slot) => route.includes(slot)));
         if (all.length === 0) return null;
         return [...all.reduce((best, route) => (route.length < best.length || (route.length === best.length && route.join() < best.join()) ? route : best))];
       },

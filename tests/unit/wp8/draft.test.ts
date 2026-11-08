@@ -16,12 +16,12 @@
 //   budget and gives none on the next arrival);
 // • a FIREWALL can be MOVEd next to HOLLOW's root and holds that side when HOLLOW wakes; it can't be copied.
 import { check, finish } from '../wp1/harness';
-import { fixtureShip } from '../support/arm-ship';
+import { fixtureShip, fixtureHop } from '../support/arm-ship';
 import { createHarness7 } from './../wp7/harness7';
 import { draftCards, draftEntries, UPGRADES, BASE_WHY, type DraftContext, type UpgradeId, type DraftCardId } from '@data/upgrades';
 import { dealDraft, draftContext, pickCard, ownedUpgrades, PREVIEW_ID } from '@systems/draft';
 import { transmitNext } from '@systems/run';
-import { continueAfterLoss } from '../support/classic-flow';
+import { continueAfterLoss } from '../support/desk';
 import { installTool } from '@systems/licences';
 import { createRng } from '@systems/rng';
 import { capabilitiesNow, flightModsOf, liveUpgrades } from '@systems/capabilities';
@@ -32,7 +32,6 @@ import { chargeLeft, getAiCore, coreThreads, effectiveToolVersion, upgradeFiles,
 import { repairRatePerSec } from '@data/fs-tools';
 import { assertMemoryInvariants, segmentStarts } from '@systems/memory-ops';
 import { TOOL_REFUSAL } from '@data/tool-text';
-import { CLASSIC_HOPS } from '@data/classic-five';
 import {
   MAX_LINE_CHARS, DRAFT_CARDS, FUEL_TRIM_DV_BONUS_FRAC, CHARGE_CARD_BLOCKS, FIREWALL_BLOCKS, REPAIR_V2_VERSION, CHARGE_ARRIVAL_FLOOR,
 } from '@data/tuning';
@@ -159,9 +158,9 @@ function pick(id: UpgradeId): void {
   toTransmit(5);
   const offer = state().run.transit!.offer;
   check('TRANSMIT deals 3 cards, seeded by the ship being left (the same state deals the same)', offer.length === DRAFT_CARDS
-    && ids(dealDraft(state(), CLASSIC_HOPS[halcyon.slot]!.linkBlocks)) === ids(offer), ids(offer));
+    && ids(dealDraft(state(), fixtureHop(1).linkBlocks)) === ids(offer), ids(offer));
   check('…with no REPAIR licensed yet (a crash before the first look inside), REPAIR v2 is not among them',
-    !offer.some((card) => card.id === 'repair-v2') && !draftContext(state(), CLASSIC_HOPS[halcyon.slot]!.linkBlocks).hasRepair);
+    !offer.some((card) => card.id === 'repair-v2') && !draftContext(state(), fixtureHop(1).linkBlocks).hasRepair);
   let threw = '';
   try { transmitNext(h.store); } catch (error) { threw = (error as Error).message; }
   check('the pick is mandatory: TRANSMIT ▸ with no card picked throws, and the unit stays', /no card picked/.test(threw) && state().run.phase === 'transmit', threw);
@@ -227,7 +226,7 @@ function pick(id: UpgradeId): void {
 // REPAIR v2: every Repair copy bumped; the held tool heals twice as fast.
 {
   toTransmit(5, () => { installTool(h.store, 'repair'); });
-  check('with REPAIR licensed, REPAIR v2 can be offered (the draft sees a Repair to bump)', draftContext(state(), CLASSIC_HOPS[halcyon.slot]!.linkBlocks).hasRepair);
+  check('with REPAIR licensed, REPAIR v2 can be offered (the draft sees a Repair to bump)', draftContext(state(), fixtureHop(1).linkBlocks).hasRepair);
   pick('repair-v2');
   h.transmit();
   const repairs = state().memory.filter((seg) => seg.type === 'fs-tool' && seg.fsTool === 'repair');

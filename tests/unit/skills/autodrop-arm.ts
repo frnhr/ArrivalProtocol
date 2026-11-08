@@ -39,7 +39,7 @@ export interface ArmLandingOpts {
 export function armLanding(h: Harness7, route: readonly number[], opts: ArmLandingOpts = {}): void {
   setLandingMode('manual');
   h.newRun(ARM_SEED);
-  startRun(h.store, ARM_SEED, FIRST_RUN_LINEAGE, 'arm');
+  startRun(h.store, ARM_SEED, FIRST_RUN_LINEAGE);
   if (!receiveTransmission(h.store)) throw new Error('armLanding: not on the title');
   h.stepUntil(() => h.store.getState().run.phase === 'flight', 30);
   for (const slot of route.slice(1)) {

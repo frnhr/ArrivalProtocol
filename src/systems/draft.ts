@@ -54,21 +54,19 @@ export function ownedUpgrades(state: Readonly<GameState>): Record<UpgradeId, num
 // owns, whether it has a Repair, the room its files leave (`linkRoom`: the next ship's link, and on a hop with a room
 // that room less the floor, whichever is less, never below 0), and what the strip calls HOLLOW (the reasons name it the
 // way the kid saw it). A unit whose files are over the link is dealt no file card (the review's B1: a FIREWALL picked
-// there would only add to what must be left behind); on the classic world the link always binds first, so its deals
-// are phase 2's.
+// there would only add to what must be left behind).
 // Phase 3 slice 3b: the files count the hop's deliveries as first packed (`deliveries`: the plan's chips, none sent on yet;
 // slice-3b-plan risk 17's reading: the deal stays keyed by the slot left, and a SEND ON later does not re-deal), and the arm
 // deals salvage only (UpgradeDef.salvage: REPAIR v2 moved to the repository, 02 §3.10).
 // Slice 4: the files count this desk's training (the pending purchases' files: skill-files.ts skillPacketPlan, nothing packed
 // lower yet), and the context says whether the unit has a tree (the arm) and whether the hop goes into a final ship
-// (`room.to`: the +2 CYCLES card is never dealt there, plan §7 R12; a bare link, the classic suites', goes nowhere final).
+// (`room.to`: the +2 CYCLES card is never dealt there, plan §7 R12; a bare link, phase 2's suites', goes nowhere final).
 export function draftContext(
   state: Readonly<GameState>, linkBlocks: number, room?: Readonly<Pick<Hop, 'room' | 'chargeFloor'> & Partial<Pick<Hop, 'to'>>>,
   deliveries: readonly DeliveryChip[] = [],
 ): DraftContext {
   const last = state.run.ships[state.run.ships.length - 1] ?? null;
   const files = planPacket(state.memory, { linkBlocks, dropped: [], pick: null, deliveries, skills: skillPacketPlan(state, {}) }).filesBlocks;
-  const tree = state.run.map.world === 'arm';
   const roomLeft = room === undefined ? Infinity : room.room - room.chargeFloor - files;
   return {
     stats: state.run.stats,
@@ -78,8 +76,8 @@ export function draftContext(
     hasRepair: state.memory.some((seg) => seg.type === 'fs-tool' && seg.fsTool === 'repair'),
     linkRoom: Math.max(0, Math.min(linkBlocks - files, roomLeft)),
     hollowLabel: hollowLabel(state.run),
-    salvageOnly: state.run.map.world === 'arm',
-    tree,
+    salvageOnly: true,
+    tree: true,
     toFinal: room?.to !== undefined && shipSummaryAt(state.run.map, room.to).final,
     // Slice 4d: SENTRY v3 working as the PACKET opens takes the FIREWALL card out of the deal (it compiles its own).
     ...(skillLive(state.memory, 'sentry').version >= SENTRY_FIREWALL_VERSION ? { firewallCompiler: true } : {}),
@@ -87,7 +85,7 @@ export function draftContext(
 }
 
 // The cards for the TRANSMIT now being prepared (goTransmit), seeded by the ship being left: a hop (its link and room),
-// or a bare link (the classic suites), with the hop's delivery chips as first packed.
+// or a bare link (phase 2's suites), with the hop's delivery chips as first packed.
 export function dealDraft(
   state: Readonly<GameState>, hop: number | Readonly<Pick<Hop, 'linkBlocks' | 'room' | 'chargeFloor'> & Partial<Pick<Hop, 'to'>>>,
   deliveries: readonly DeliveryChip[] = [],

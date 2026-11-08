@@ -56,7 +56,7 @@ on('leftover-read', ({ segId }) => readHeard.push(segId));
 
 setLandingMode('manual');
 h.newRun(SEED);
-startRun(h.store, SEED, FIRST_RUN_LINEAGE, 'arm');
+startRun(h.store, SEED, FIRST_RUN_LINEAGE);
 if (!receiveTransmission(h.store)) throw new Error('left: not on the title');
 h.stepUntil(() => st().run.phase === 'flight', 30);
 for (const slot of [2, HERON]) {

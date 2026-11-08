@@ -21,7 +21,6 @@ import { writeEndingChosen } from '@systems/save-write';
 import { receiveTransmission, mountBoot } from '@systems/boot';
 import { mountInput } from '@systems/input';
 import { continueAfterReport, startRun, endRun } from '@systems/run';
-import { classicRunMap } from '@systems/map-run';
 import { reachableFrom } from '@systems/map-hop';
 import { currentSlot, isEndSlot } from '@systems/map-streams';
 import { chartTrail } from '@systems/desk';
@@ -120,7 +119,7 @@ function run2AtDesk(): StubStorage {
   storage.fail.setKey = null;
   check('M2 (probe p2): a write that fails on run 3 goes OFFLINE once and empties the slot (no stale save left)',
     saveIs('offline') && lost === 1 && !storage.data.has(RUN_SAVE_KEY));
-  startRun(store, 123, archiveLineage(), 'arm');
+  startRun(store, 123, archiveLineage());
   quiet(() => receiveToReport(store));
   let threw = '';
   try { quiet(() => pageOpen(store, storage, SEED)); } catch (error) { threw = (error as Error).message; }
@@ -141,14 +140,17 @@ function run2AtDesk(): StubStorage {
     threw === '' && saveIs('cant-resume', 'superseded') && state().run.unitNumber === 49 && state().run.phase === 'title', threw);
 }
 {
-  // repro-phone2: run 2 on the arm, the classic jump (__ap.ship: activeRun keeps no trail), the save cleared, a reload.
+  // repro-phone2: run 2's run in progress kept no trail (the retired classic jump's, __ap.ship; Track RETIRE writes the
+  // archive's activeRun with its trail taken out, the shape that jump left), the save cleared, a reload.
   const storage = run2AtDesk();
-  store.update((draft) => { draft.run.map = classicRunMap(draft.run.seed, 1, draft.run.wave); draft.run.shipIndex = 1; draft.run.phase = 'boot'; });
   archiveShipStarted(store);
+  const noTrail = structuredClone(archiveMeta()) as Meta;
+  noTrail.activeRun!.trail = null;
+  saveMeta(storage.provider, noTrail);
   storage.data.delete(RUN_SAVE_KEY);
   let threw = '';
   try { quiet(() => pageOpen(store, storage, SEED)); } catch (error) { threw = (error as Error).message; }
-  check('B1 (repro-phone2): run 2 jumped to the classic world, no save, a reload: the page opens on UNIT-049\'s title',
+  check('B1 (repro-phone2): run 2 in progress with no trail, no save, a reload: the page opens on UNIT-049\'s title',
     threw === '' && state().run.unitNumber === 49 && state().run.map.run === 3 && archiveMeta().arm?.run === 3 && archiveMeta().notes.armReset, threw);
 }
 {

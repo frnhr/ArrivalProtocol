@@ -3,12 +3,11 @@ import type { ArmShip, RouteStop, RunMapState, ShipKey } from '@/types/map';
 import type { Rng } from '@systems/rng';
 import { childRng, createRng, hashSeed } from '@systems/rng';
 import { END_SLOTS } from '@data/arm';
-import { CLASSIC_WORLD_SLOTS, CLASSIC_FINAL_INDEX } from '@data/classic-slots';
 
 // Where the unit is on its map, which arm world a slot is, and which random stream a roll draws from (phase 3 slice 3a,
 // slice-3a-plan §2.2, §2.5, risk 9). A leaf module (no ship data imported), so the systems that roll per visit (zones,
 // HOLLOW, the landing, the ghost thrust, the draft) can use it from anywhere in the import graph; systems/map-run.ts
-// re-exports it with the ShipDef lookups. Each function switches on run.map.world once; the classic world keeps today's `(seed, index, stream)`.
+// re-exports it with the ShipDef lookups.
 // Track GEN owns this file after the foundation.
 
 export function currentStop(run: Readonly<Pick<RunState, 'map' | 'shipIndex'>>): RouteStop {
@@ -19,31 +18,27 @@ export function currentStop(run: Readonly<Pick<RunState, 'map' | 'shipIndex'>>):
   return stop;
 }
 
-// On the classic world the slot IS the index (a suite that sets run.shipIndex by hand moves the ship with it, as before);
-// on the arm it is the route's last stop. Code that may run on either world switches on `world` before currentStop.
+// The slot of the ship being flown: the route's last stop.
 export function currentSlot(run: Readonly<Pick<RunState, 'map' | 'shipIndex'>>): number {
-  return run.map.world === 'classic' ? run.shipIndex : currentStop(run).slot;
+  return currentStop(run).slot;
 }
 
-// The arm world a slot sits on (review follow-up B2): the slot itself on the arm; on the classic world the five's own
-// worlds (CLASSIC_WORLD_SLOTS: w0, w2, w5, w11, w19), since a classic slot is the ship's index, not a world id. Every
-// geometry call (distances, layers, SOL distances, rings) takes a world slot: convert first.
-export function worldSlotOf(map: Readonly<Pick<RunMapState, 'world'>>, slot: number): number {
-  if (map.world === 'arm') return slot;
-  const world = CLASSIC_WORLD_SLOTS[slot];
-  if (world === undefined) throw new Error(`worldSlotOf: no classic ship ${slot}`);
-  return world;
+// The arm world a slot sits on (review follow-up B2): every geometry call (distances, layers, SOL distances, rings) takes a
+// world slot. On the arm a slot is its world (the classic five's own mapping went with them, Track RETIRE); the call stays
+// so the geometry keeps one way in.
+export function worldSlotOf(_map: Readonly<Pick<RunMapState, 'world'>>, slot: number): number {
+  return slot;
 }
 
-// Is `slot` a final ship's (review follow-up M4)? An end slot on the arm; the classic world's LAST LIGHT.
-export function isEndSlot(map: Readonly<Pick<RunMapState, 'world'>>, slot: number): boolean {
-  return map.world === 'classic' ? slot === CLASSIC_FINAL_INDEX : END_SLOTS.includes(slot);
+// Is `slot` a final ship's (review follow-up M4)? An end slot of the arm.
+export function isEndSlot(_map: Readonly<Pick<RunMapState, 'world'>>, slot: number): boolean {
+  return END_SLOTS.includes(slot);
 }
 
-// The arm ship in `slot` (fail loudly: a slot the arm does not have is a bug, never a quiet classic ship).
+// The arm ship in `slot` (fail loudly: a slot the arm does not have is a bug).
 export function armShipAt(map: Readonly<RunMapState>, slot: number): ArmShip {
   const ship = map.arm[slot];
-  if (map.world !== 'arm' || !ship || ship.slot !== slot) throw new Error(`armShipAt: no arm ship in slot ${slot} (world ${map.world})`);
+  if (!ship || ship.slot !== slot) throw new Error(`armShipAt: no arm ship in slot ${slot}`);
   return ship;
 }
 
@@ -67,9 +62,8 @@ export function keyRng(key: Readonly<ShipKey>, stream: string): Rng {
   return createRng(hashSeed(`ship:${key.armSeed >>> 0}:${key.reportedRun}:${key.slot}:${key.attempt}:${stream}`));
 }
 
-// A roll OF the ship in `slot`: its ShipKey's stream on the arm; the classic world keeps `(seed, index, stream)`.
+// A roll OF the ship in `slot`: its ShipKey's stream.
 export function shipRng(run: Readonly<Pick<RunState, 'seed' | 'map'>>, slot: number, stream: string): Rng {
-  if (run.map.world === 'classic') return childRng(run.seed, slot, stream);
   return keyRng(shipKeyOf(run.map, slot), stream);
 }
 
@@ -86,8 +80,7 @@ export function noiseRng(runSeed: number): Rng {
 }
 
 // A roll of one beam (the transit hits, the beam's seeds): keyed by both ends on the arm (`childRng(seed, to, stream:from)`,
-// 02 §3.4), so two hops into one ship roll differently; the classic world keeps `(seed, index, stream)`.
+// 02 §3.4), so two hops into one ship roll differently.
 export function hopRng(run: Readonly<Pick<RunState, 'seed' | 'map'>>, from: number, to: number, stream: string): Rng {
-  if (run.map.world === 'classic') return childRng(run.seed, to, stream);
   return childRng(run.seed, to, `${stream}:${from}`);
 }

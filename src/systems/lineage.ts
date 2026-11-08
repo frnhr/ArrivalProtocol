@@ -5,7 +5,6 @@ import type {
   LastCause, LastUnit, UnitTrail, TrailStop, ColonyRecord, RouteRecord, NotableEvent, NotableEventKind, LineageHistory, Visit,
   LetterSource, NextLaunch,
 } from '@/types/lineage';
-import { CLASSIC_FIVE } from '@data/classic-five';
 import { UNIT_046_TRAIL } from '@data/ship-names';
 import { currentStop, armShipAt, isEndSlot, worldSlotOf } from '@systems/map-streams';
 import { layerOf } from '@systems/map-geometry';
@@ -43,7 +42,7 @@ export function trail046(): UnitTrail {
 }
 
 // The last unit's trail as this run reads it: the archive's (run.lastUnit.trail), else 046's written one on run 1, else
-// none (a classic-world record, a run 2 whose last unit kept no trail).
+// none (a run 2 whose last unit kept no trail: a migrated record).
 export function unitTrailOf(run: Readonly<Pick<RunState, 'lastUnit' | 'map'>>): UnitTrail | null {
   return run.lastUnit?.trail ?? (run.map.run === 1 ? trail046() : null);
 }
@@ -67,10 +66,8 @@ function writerOf(result: Readonly<ShipResult>): TrailStop['writer'] {
 // cause (flagship-lost, stayed, overwritten, abandoned) puts the grey cross at the last stop, on its world (pastLy 0: the
 // unit ended aboard that ship; only 046's written cross lies past a world, on the relay where its beam stopped). The
 // archive's activeRun records each ship start with cause 'abandoned', so a run abandoned there has its cross already.
-// null on the classic world, which keeps no trail.
-export function trailOf(run: Readonly<Pick<RunState, 'unitNumber' | 'map' | 'ships'>>, cause: LastCause): UnitTrail | null {
+export function trailOf(run: Readonly<Pick<RunState, 'unitNumber' | 'map' | 'ships'>>, cause: LastCause): UnitTrail {
   const map = run.map;
-  if (map.world === 'classic') return null;
   const stops = map.route.map((stop, index): TrailStop => {
     const ship = armShipAt(map, stop.slot);
     const result = run.ships[index];
@@ -96,11 +93,9 @@ export function visitsOfTrail(trail: Readonly<UnitTrail>): Visit[] {
 }
 
 // A run's visits (RUN END's update, systems/map-update.ts updateAfterRun): its trail's. The cause only places the grey cross,
-// which the visits never read. The classic world keeps no trail and is never updated (throws).
+// which the visits never read.
 export function visitsOf(run: Readonly<Pick<RunState, 'unitNumber' | 'map' | 'ships'>>): Visit[] {
-  const trail = trailOf(run, 'abandoned');
-  if (trail === null) throw new Error('visitsOf: the classic world keeps no trail and is never updated');
-  return visitsOfTrail(trail);
+  return visitsOfTrail(trailOf(run, 'abandoned'));
 }
 
 // What a run's map remembers of the runs before it, from the archive's parts (systems/meta.ts lineageOf): the last unit's
@@ -131,10 +126,9 @@ const RESIDENT_EVENT_OF: Readonly<Record<ResidentFate, NotableEventKind | null>>
 // The run's notable events (05 §3.8: at most NOTABLE_EVENTS_MAX, in its rank order): a DEAL accepted (value: the pod given
 // up), the best colony (the ship that landed the most in an LZ; value: colonists), then each ship lost, in route order
 // (value: its depth). A ship is lost when it never reached orbit or the landing lost it (any outcome but locked or partial).
-// None on the classic world. Slice 5 (plan R27; 05 §3.8: "a DEAL accepted, a resident deleted or woken, the best colony, a
+// Slice 5 (plan R27; 05 §3.8: "a DEAL accepted, a resident deleted or woken, the best colony, a
 // ship lost"): after the DEAL, each resident deleted, cured or woken, in route order (value: its depth).
 export function notableEvents(run: Readonly<Pick<RunState, 'map' | 'ships' | 'stats' | 'residents'>>): NotableEvent[] {
-  if (run.map.world !== 'arm') return [];
   const events: NotableEvent[] = [];
   const deal = run.stats.deal;
   if (deal !== null && deal.outcome === 'accepted') {
@@ -159,26 +153,16 @@ export function notableEvents(run: Readonly<Pick<RunState, 'map' | 'ships' | 'st
 
 // --- The ghost (05 §3.5) -------------------------------------------------------------------------------------------------
 
-// On the fixed five: the index of the ship where the last unit's run ended (its shipName), or the final ship when the name
-// is not one of `shipNames` (a record from an older fleet), and never ship 1 (index 0: a run abandoned on ARES-VII speaks
-// at HALCYON). The boot plays it at the first ship this run whose index is at or past this one, once (run.ghostSpoken).
-export function ghostShipIndex(lastUnit: Readonly<Pick<LastUnit, 'shipName'>>, shipNames: readonly string[] = CLASSIC_FIVE.map((ship) => ship.name)): number {
-  if (shipNames.length < 2) throw new Error(`ghostShipIndex: a fleet of ${shipNames.length} ship(s) has no ship past ship 1 for the ghost`);
-  const at = shipNames.indexOf(lastUnit.shipName);
-  return Math.max(1, at < 0 ? shipNames.length - 1 : at);
-}
-
 // Is this ship at or past where the ghost speaks (05 §3.5: "at the first boot in or past the layer where it was lost … the
-// moment the new unit passes the grey cross on the chart … never at ship 1: the new unit can't know yet")? On the classic
-// world (or a run with no map: the archive suites), the fixed five's index (ghostShipIndex). On the arm, never ship 1; by
+// moment the new unit passes the grey cross on the chart … never at ship 1: the new unit can't know yet")? Never ship 1; by
 // the trail's grey cross (a ship in or past the layer of the world it was lost at); a last unit that was not lost (no
-// cross), or kept no trail, speaks at the final ship.
+// cross), or kept no trail, speaks at the final ship. (The classic five's rule, by ship index, went with them.) The boot
+// plays it at the first such ship, once a run (run.ghostSpoken).
 export function ghostPlaceReached(
-  run: Readonly<Pick<RunState, 'lastUnit' | 'shipIndex'> & Partial<Pick<RunState, 'map'>>>,
+  run: Readonly<Pick<RunState, 'lastUnit' | 'shipIndex' | 'map'>>,
   lastUnit: Readonly<Pick<LastUnit, 'shipName' | 'trail'>>,
 ): boolean {
   const map = run.map;
-  if (map === undefined || map.world === 'classic') return run.shipIndex >= ghostShipIndex(lastUnit);
   if (run.shipIndex === 0) return false;
   const slot = currentStop({ map, shipIndex: run.shipIndex }).slot;
   const cross = lastUnit.trail?.lost ?? null;
@@ -195,11 +179,11 @@ export interface Beacon {
   yearsAgo: number;
 }
 
-// Run 1 reads 046's (`SET BY UNIT-046 · 1 YEAR AGO`). None on the classic world, past ship 1, or when the last unit's first
+// Run 1 reads 046's (`SET BY UNIT-046 · 1 YEAR AGO`). None past ship 1, or when the last unit's first
 // ship never reached orbit. A stop dated after the run's start is a bug (the unit ahead set out first) and throws.
 export function beaconOnFirstShip(state: Readonly<Pick<GameState, 'run'>>): Beacon | null {
   const run = state.run;
-  if (run.map.world !== 'arm' || run.shipIndex !== 0) return null;
+  if (run.shipIndex !== 0) return null;
   const trail = unitTrailOf(run);
   const stop = trail?.stops.find((candidate) => candidate.slot === FIRST_SLOT);
   if (trail === null || stop === undefined || (stop.outcome !== 'locked' && stop.outcome !== 'partial')) return null;
@@ -214,7 +198,7 @@ export function beaconOnFirstShip(state: Readonly<Pick<GameState, 'run'>>): Beac
 // letterSources to it; the light rule (when each is read) is inbox.ts's.
 export function letterSourcesFromTrail(run: Readonly<Pick<RunState, 'lastUnit' | 'map'>>): LetterSource[] {
   const trail = run.lastUnit?.trail ?? null;
-  if (run.map.world !== 'arm' || trail === null) return [];
+  if (trail === null) return [];
   return trail.stops.flatMap((stop): LetterSource[] => (stop.colony === null || stop.landed <= 0 ? [] : [{
     id: `letter:${trail.run}:${stop.slot}`, colony: stop.colony, worldSlot: stop.slot, landedYear: stop.year, toUnit: trail.unit,
     writer: stop.writer === null ? null : { ...stop.writer },
@@ -223,11 +207,11 @@ export function letterSourcesFromTrail(run: Readonly<Pick<RunState, 'lastUnit' |
 
 // The title's launch line from run 2 on (02 §4, 05 §3.12: `UNIT-048 · YEAR 2303 · LAUNCHED 3 YEARS AFTER UNIT-047`), as
 // RUN END's run.next said it: this unit, its run and start year, and the years since the last unit set out (gap plus the
-// valve's years), from the map's history (the arm the update made). null on run 1, the classic world, and a run with no
+// valve's years), from the map's history (the arm the update made). null on run 1 and a run with no
 // last unit on record (a fresh roll); the last unit's number is history.lastUnitNumber.
 export function launchOf(run: Readonly<Pick<RunState, 'unitNumber' | 'map'>>): NextLaunch | null {
   const map = run.map;
-  if (map.world !== 'arm' || map.run === 1 || map.history.lastUnitNumber === null) return null;
+  if (map.run === 1 || map.history.lastUnitNumber === null) return null;
   return { unit: run.unitNumber, run: map.run, startYear: map.startYear, gap: map.history.gap, valveYears: map.history.valveYears };
 }
 

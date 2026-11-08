@@ -1,8 +1,7 @@
 // Slice 3a DESK: the RUN TALLY's model (systems/run-end.ts runEndModel; 02-map §4), on run 1's arm with a crafted end
 // (the worked route ARES-VII → HALCYON → KESTREL → VESPER → CORMORANT → LAST LIGHT): one row per visited ship
 // (`3 · KESTREL · 2467 · LANDED 1,000 / 1,200`) and no NOT REACHED row, the route for the mini chart, `n COLONIES
-// FOUNDED`, the fleet's colonists from the visited ships, and ranks absolute on the arm (rankBasis) while the classic
-// world keeps phase 2's scaling.
+// FOUNDED`, the fleet's colonists from the visited ships, and ranks absolute (rankBasis).
 import { check, finish } from '../landing/checks';
 import { createStore } from '@state/store';
 import type { GameState, ShipResult, ShipOutcome } from '@state/schema';
@@ -10,7 +9,6 @@ import type { RouteStop } from '@/types/map';
 import { createInitialState } from '@state/initial';
 import { runEndModel, rankBasis, fleetColonists, rankSteps } from '@systems/run-end';
 import { hopBetween } from '@systems/map-hop';
-import { classicRunMap } from '@systems/map-run';
 import { MAP_TEXT } from '@data/map-text';
 import { RANK_FLEET_COLONISTS } from '@data/tuning';
 import { run1Map, WORKED_ROUTE } from './run1-fixture';
@@ -49,10 +47,9 @@ check('…5 COLONIES FOUNDED (CORMORANT crashed: none there)', model.colonies ==
 check('…the fleet is the visited ships: 600 + 1,000 + 1,200 + 3,200 + 1,800 + 3,200 = 11,000',
   model.fleetColonists === 11000 && fleetColonists(store.getState().run.map) === 11000, String(model.fleetColonists));
 check('…ranks absolute on the arm: SHEPHERD 3,000, CARETAKER 6,800, ARK ANGEL 10,700 (score 13,910 is ARK ANGEL)',
-  rankBasis(store.getState().run.map) === RANK_FLEET_COLONISTS && rankSteps(RANK_FLEET_COLONISTS).map((step) => step.minScore).join() === '0,3000,6800,10700'
+  rankBasis() === RANK_FLEET_COLONISTS && rankSteps(RANK_FLEET_COLONISTS).map((step) => step.minScore).join() === '0,3000,6800,10700'
   && model.score === 13910 && model.rank === 'ARK ANGEL', `${model.score} ${model.rank}`);
 check('…PURGE counts the visited ships: 5 OF 6 HOME', /5 OF 6/.test(model.title), model.title);
-check('the classic world keeps phase 2\'s scaling by its five ships (9,600 colonists)', rankBasis(classicRunMap(0, 0, 1)) === 9600 && fleetColonists() === 9600);
 // Slice 3b: the tally's one line for the repository's files that never arrived (02 §3.9): none requested here.
 check('3b: no NEVER ARRIVED line on a run that requested nothing (review m8: `NEVER ARRIVED: —` said nothing)', model.undeliveredLine === null, model.undeliveredLine ?? 'null');
 store.update((draft) => {

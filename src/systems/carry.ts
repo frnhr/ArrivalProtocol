@@ -12,8 +12,6 @@ import { SKILL_IDS } from '@data/skills';
 import type { SkillId } from '@/types/skill';
 import { setIntegrity } from '@state/actions';
 import { FS_TOOL_KINDS } from '@data/fs-tools';
-import { CLASSIC_FIVE, CLASSIC_HOPS } from '@data/classic-five';
-import { nominalShipThreat } from '@systems/threat-plan';
 import {
   FRESH_UNIT_RACK_E, FRESH_UNIT_RACK_F, isUnitFileType, freshChargeFile, layoutFor, fillRoom, roomForUnitOn,
   BEAM_SEED_LAYOUT_BLOCKS, type CarriedRacks,
@@ -264,7 +262,7 @@ export interface ArrivalCharge {
 
 // `cardCharge`: what the picked card brings (+12 REPAIR CHARGE; none for every other card). `floor` is the destination's
 // (its memory layout's chargeFloor, slice 3a step 2: 12 on FULL and COMPACT ships, none on a TIGHT one, 01 §3.16 round 2
-// Q8: there the charge may arrive at 0); left out, the 12 every classic ship has.
+// Q8: there the charge may arrive at 0); left out, the 12 a FULL or COMPACT ship has.
 // Slice 7c (R32): `giftCharge`, a trace's gift on arrival (systems/trace-gifts.ts traceGiftCharge: TRACE_GIFT_CHARGE at a gift
 // ship, REASSIGNMENT's allowance at the final ship; 0 until Track TRACE builds it), laid out with the rest, so a squeezed
 // receiver loses it as loudly as any charge.
@@ -417,20 +415,13 @@ export function arrivalDamage(segs: readonly Segment[], damage: readonly Arrival
 // transit hits and no stars: what the headless suites fly a later ship with on its own (tests/unit/wp1's
 // AP_SHIP harness and tests/unit/wp7's pass it to createInitialState explicitly; the game itself only ever
 // carries a real unit). It lives here because it is packUnit and layoutCarried run on the written racks. Packed for
-// `linkBlocks` and laid out for `threat`: left out, a classic ship's (data/classic-five.ts: its link, and the nominal
-// run's verdict on it, systems/threat-plan.ts nominalShipThreat), with no beam seeds (risk 14: the flight sims stay
-// seed-free). Throws for a first ship (nothing transmits to it) and, without both, for a ship that is not classic.
-export function freshUnitRacks(ship: ShipDef, linkBlocks?: number, threat?: Readonly<ShipThreat>): CarriedRacks {
+// `linkBlocks` (the hop's) and laid out for `threat` (the ship's verdict), with no beam seeds (risk 14: the flight sims stay
+// seed-free). Throws for a first ship (nothing transmits to it).
+export function freshUnitRacks(ship: ShipDef, linkBlocks: number, threat: Readonly<ShipThreat>): CarriedRacks {
   if (ship.kind === 'first') throw new Error(`freshUnitRacks: ${ship.name} meets a fresh unit by itself (no link)`);
-  // By id and world (an arm ship may share an id, the arm's KESTREL is 'kestrel' too, but never a classic slot's world).
-  const twin = CLASSIC_FIVE[ship.slot];
-  const classic = twin?.id === ship.id && twin.world === ship.world;
-  if (!classic && (linkBlocks === undefined || threat === undefined)) {
-    throw new Error(`freshUnitRacks: ${ship.name} is not a classic ship: pass its link and verdict`);
-  }
   const files = [...FRESH_UNIT_RACK_E, ...FRESH_UNIT_RACK_F]
     .filter((item): item is Exclude<typeof item, { free: number }> => !('free' in item))
     .map((item) => structuredClone(item) as Segment);
-  const packet = packUnit(files, linkBlocks ?? CLASSIC_HOPS[ship.slot]!.linkBlocks, []);
-  return layoutCarried(packet, packet.chargeCarried, ship, threat ?? nominalShipThreat(ship.slot)).racks;
+  const packet = packUnit(files, linkBlocks, []);
+  return layoutCarried(packet, packet.chargeCarried, ship, threat).racks;
 }

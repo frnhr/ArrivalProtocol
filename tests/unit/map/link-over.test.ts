@@ -25,11 +25,10 @@ import { unitFilesIn, packUnit, layoutCarried, BEAM_SEED_LAYOUT_BLOCKS } from '@
 import { arrivalPreview } from '@systems/arrival-preview';
 import { createToolFiles } from '@data/fs-tools';
 import { getUpgrade } from '@data/upgrades';
-import { classicShip } from '@data/classic-five';
-import { nominalShipThreat } from '@systems/threat-plan';
 import { FIRST_RUN_LINEAGE } from '@systems/meta';
 import { MAP_TEXT } from '@data/map-text';
 import { createRng } from '@systems/rng';
+import { fixtureVerdict, fixtureShip } from '../support/arm-ship';
 
 const VESPER = 11;
 const WAYFARER = 18;
@@ -115,7 +114,7 @@ const filesOf = (state: Readonly<GameState>): number =>
 
 // --- M1: the preview is the layout (one room, one fill rule) -------------------------------------------------------------
 {
-  const full = classicShip(4);
+  const full = fixtureShip(4);
   const tight = shipDefAt(createRunMap({ wave: 1 }, 3), WAYFARER);
   const fresh = createInitialState({ seed: 3, map: createRunMap({ wave: 1 }, 3), lineage: FIRST_RUN_LINEAGE }).memory;
   const rng = createRng(11);
@@ -133,7 +132,7 @@ const filesOf = (state: Readonly<GameState>): number =>
       const seeds = Math.floor(rng() * 4);
       packet.seeds = packet.rackE.slice(0, seeds).map((seg) => ({ targetId: seg.id, targetName: seg.name, words: 'x', disguise: null }));
       const wanted = floor + Math.floor(rng() * 60);
-      const layout = layoutCarried(packet, wanted, ship, nominalShipThreat(4), '???');
+      const layout = layoutCarried(packet, wanted, ship, fixtureVerdict(4), '???');
       const fit = roomFit({
         files: [...packet.rackE, ...packet.rackF], charge: 0, bonus: { starCredit: wanted, card: 0 },
         seedBlocksMin: seeds * BEAM_SEED_LAYOUT_BLOCKS, seedBlocksMax: seeds * BEAM_SEED_LAYOUT_BLOCKS,

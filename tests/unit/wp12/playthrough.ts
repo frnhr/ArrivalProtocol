@@ -903,7 +903,7 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
   // --- the run ------------------------------------------------------------------------------------------------------
   harness.newRun(seed);
   if (PT_LANDING === 'strip') { setLandingMode('manual'); ensureLandingKeys(harness); }
-  startRun(harness.store, seed, FIRST_RUN_LINEAGE, 'arm');
+  startRun(harness.store, seed, FIRST_RUN_LINEAGE);
   stepFor(player.titleSec);
   receiveTransmission(harness.store);
   // Each ship's wall time, from its boot to the moment its result is recorded (after its LOST card or WAKE REPORT).

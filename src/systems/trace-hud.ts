@@ -35,14 +35,14 @@ export type TraceBuiltRule = (kind: TraceKind) => boolean;
 
 const T = TRACE_HUD_TEXT;
 
-// The SHIP CARD's trace row for the ship in `slot`, or null (no row): none on the classic world, with no ending behind the
+// The SHIP CARD's trace row for the ship in `slot`, or null (no row): none with no ending behind the
 // run, or for a trace the build does not play.
 export function traceCardRow(
   state: Readonly<GameState>, slot: number, built: TraceBuiltRule = traceBuilt,
 ): Pick<CardRow, 'label' | 'value' | 'tone'> | null {
   const run = state.run;
   const from = run.traces.from;
-  if (from === null || run.map.world !== 'arm') return null;
+  if (from === null) return null;
   if (isEndSlot(run.map, slot)) {
     const pieces = run.traces.kinds.filter(built);
     if (pieces.length === 0) return null;
@@ -69,7 +69,7 @@ export function traceCardRow(
 // Does the ship in `slot` wear the chart's `◆`: a built trace's gift waits there, not yet given?
 export function traceOnChart(state: Readonly<GameState>, slot: number, built: TraceBuiltRule = traceBuilt): boolean {
   const run = state.run;
-  if (run.traces.from === null || run.map.world !== 'arm') return false;
+  if (run.traces.from === null) return false;
   const place = traceAt(run, slot);
   return place !== null && !place.given && built(place.kind);
 }

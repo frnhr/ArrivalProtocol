@@ -211,5 +211,5 @@ export function abandonRun(store: Store<GameState>, seed: number = newRunSeed())
   store.update((draft) => {
     if (status !== 'none') draft.save = { status, resume: null, refusal: null };
   });
-  startRun(store, seed, archiveLineage(), 'arm');
+  startRun(store, seed, archiveLineage());
 }

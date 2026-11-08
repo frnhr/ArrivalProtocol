@@ -5,12 +5,16 @@
 //   into a final ship, never twice;
 // • the folds: ARRIVAL takes WALLS along one hop from a final ship; THE DEAL folds into the FINALE when the run has not had
 //   it; stage → def; root sizes, what HOLLOW was fed, and the cap;
-// • nominalRunThreat(0..4) and nominalShipThreat on the fixed five.
+// • the nominal route's threat on run 1's worked route (systems/arm-fixture.ts nominalAlong, map-facts nominalRouteThreat):
+//   Track RETIRE's twin of the fixed five's nominalRunThreat / nominalShipThreat, retired with them.
 import { check, finish } from '../landing/checks';
 import {
-  planThreat, boardsOnBeam, stageForAge, rootBlocksFor, createRunThreat, applyThreat, threatInputFor, nominalRunThreat,
-  nominalShipThreat, fixedShipFacts, NO_FINAL_TRACES, type ShipThreatFacts,
+  planThreat, boardsOnBeam, stageForAge, rootBlocksFor, createRunThreat, applyThreat, threatInputFor, firstShipThreat,
+  firstShipRunThreat, firstShipFacts, NO_FINAL_TRACES, type ShipThreatFacts,
 } from '@systems/threat-plan';
+import { mapAlong, nominalAlong, WORKED_ROUTE, workedRouteTo } from '@systems/arm-fixture';
+import { mapFacts, nominalRouteThreat } from '@systems/map-facts';
+import { createRunMap } from '@systems/map-run';
 import { HOLLOW_STAGES, SEEDS_ONLY_DEF, CALM_DEF, foldArrivalWalls } from '@data/threats';
 import { PRE_FINAL_ROOT_CAP, TRACE_BOARD_AT, BOARD_MIN_DEPTH } from '@data/tuning';
 import type { RunThreatState, ShipThreat, ThreatInput, BeamSeedSource } from '@/types/threat';
@@ -122,27 +126,29 @@ const shape = (plan: ShipThreat): string => `${plan.act}${plan.stage ? `:${plan.
   check('a run that had THE DEAL gets a plain FINALE', dealt.folded.length === 0 && !dealt.hollow.deal && dealt.hollow.verbs !== null);
 }
 
-// --- The fixed five ----------------------------------------------------------------------------------------------------
+// --- The worked route (run 1's arm, nominal: TRACE 0, no DEAL) ---------------------------------------------------------
+// Track RETIRE: in place of the fixed five's nominal run. ARES-VII, HALCYON, KESTREL, VESPER, CORMORANT, LAST LIGHT.
 {
-  const got = [0, 1, 2, 3, 4].map((index) => shape(nominalShipThreat(index))).join(' ');
-  check('the fixed five (nominal, TRACE 0): calm, calm, seeds, VESPER boards forced with WALLS (10), LAST LIGHT FINALE + DEAL (16)',
-    got === 'calm calm seeds hollow:arrival+walls!forced/10 finale:finale+hunt/16', got);
-  const facts = [0, 1, 2, 3, 4].map(fixedShipFacts);
-  check('the facts: depth = index + 1, the flagship is final, VESPER is one hop from it, KESTREL\'s beam is scripted',
-    facts.map((fact) => fact.depth).join() === '1,2,3,4,5' && facts[4]!.isFinal && facts[3]!.oneHopFromFinal
+  const map = mapAlong(createRunMap({ wave: 1 }, 1), WORKED_ROUTE);
+  const verdicts = WORKED_ROUTE.map((_, i) => nominalAlong(map, WORKED_ROUTE.slice(0, i + 1)).verdict);
+  const got = verdicts.map(shape).join(' ');
+  check('the worked route (nominal, TRACE 0): calm, calm, seeds, seeds, CORMORANT boards forced with WALLS (10), LAST LIGHT FINALE + DEAL (16)',
+    got === 'calm calm seeds seeds hollow:arrival+walls!forced/10 finale:finale+hunt/16', got);
+  const facts = WORKED_ROUTE.map((slot, i) => (i === 0 ? firstShipFacts() : mapFacts(map, WORKED_ROUTE[i - 1]!, slot, i + 1)));
+  check('the facts: depth = stop, LAST LIGHT is final, CORMORANT is one hop from it, KESTREL\'s beam is scripted, VESPER\'s the hop\'s noise',
+    facts.map((fact) => fact.depth).join() === '1,2,3,4,5,6' && facts[5]!.isFinal && facts[4]!.oneHopFromFinal && !facts[3]!.oneHopFromFinal
     && facts[2]!.beamSeeds.kind === 'scripted' && facts[3]!.beamSeeds.kind === 'noise');
-  const runs = [0, 1, 2, 3, 4].map(nominalRunThreat);
-  check('nominalRunThreat: aboard from VESPER (age 1, forced, depth 4), age 2 on LAST LIGHT, nothing reported home',
-    !runs[2]!.aboard && runs[3]!.aboard && runs[3]!.age === 1 && runs[3]!.boardCause === 'forced' && runs[3]!.boardedAtDepth === 4
-    && runs[4]!.age === 2 && runs.every((run) => run.trace === 0 && run.fed === 0));
-  check('the verdict echoes the facts it was planned from (the beam\'s seeds included)', [0, 1, 2, 3, 4].every((index) => {
-    const plan = nominalShipThreat(index);
-    return plan.depth === facts[index]!.depth && plan.isFinal === facts[index]!.isFinal
-      && JSON.stringify(plan.beamSeeds) === JSON.stringify(facts[index]!.beamSeeds);
-  }));
+  const runs = WORKED_ROUTE.map((_, i) => nominalRouteThreat(map, WORKED_ROUTE.slice(0, i + 1)));
+  check('the route\'s threat: aboard from CORMORANT (age 1, forced, depth 5), age 2 on LAST LIGHT, nothing reported home',
+    !runs[3]!.aboard && runs[4]!.aboard && runs[4]!.age === 1 && runs[4]!.boardCause === 'forced' && runs[4]!.boardedAtDepth === 5
+    && runs[5]!.age === 2 && runs.every((run) => run.trace === 0 && run.fed === 0));
+  check('the verdict echoes the facts it was planned from (the beam\'s seeds included)', verdicts.every((plan, index) => plan.depth === facts[index]!.depth
+    && plan.isFinal === facts[index]!.isFinal && JSON.stringify(plan.beamSeeds) === JSON.stringify(facts[index]!.beamSeeds)));
+  check('ship 1 on any route: firstShipThreat, and the run\'s threat once it applies', JSON.stringify(verdicts[0]) === JSON.stringify(firstShipThreat())
+    && JSON.stringify(runs[0]) === JSON.stringify(firstShipRunThreat()));
   let threw = false;
-  try { nominalRunThreat(5); } catch { threw = true; }
-  check('nominalRunThreat throws on a ship the fleet does not have', threw);
+  try { workedRouteTo(1); } catch { threw = true; }
+  check('a slot the worked route does not visit throws', threw);
 }
 
 finish();

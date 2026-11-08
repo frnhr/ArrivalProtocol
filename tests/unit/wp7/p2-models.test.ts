@@ -18,7 +18,7 @@
 import { check, finish } from '../wp1/harness';
 import { createHarness7 } from './harness7';
 import { startBeamOut, cancelBeamOut, shipResultOf, ringMissOf } from '@systems/run';
-import { continueAfterReport, continueAfterLoss } from '../support/classic-flow';
+import { continueAfterReport, continueAfterLoss } from '../support/desk';
 import { pushModal, activeLayer } from '@systems/input';
 import { transmitModel, toggleDrop } from '@systems/transmit';
 import { runEndModel, rankSteps, rankOf, nearMisses, fleetColonists } from '@systems/run-end';
@@ -36,6 +36,7 @@ import {
   TRANSMIT_TEXT, RUN_END_TITLE, RUN_END_WHY, LINES, BEAM_OUT_TEXT, SHIP_OUTCOME_WORD,
 } from '@data/script';
 import { RUN_END_TEXT } from '@data/landing-text';
+import { MAP_TEXT } from '@data/map-text';
 import { PACKET_SKILL_TEXT } from '@data/training-text';
 import { mapAlong, WORKED_ROUTE } from '@systems/arm-fixture';
 import { formatCount } from '@data/format';
@@ -317,7 +318,7 @@ check('CONTINUE → TRANSMIT', state().run.phase === 'transmit');
 {
   const ship = 'W'.repeat(NAME_MAX_CHARS);
   const lines = [
-    TRANSMIT_TEXT.next(ship, 99_999, 999), TRANSMIT_TEXT.packet(999, 999, 999, 99), TRANSMIT_TEXT.why.crashed(99), TRANSMIT_TEXT.why.crashed(0), TRANSMIT_TEXT.why.emergency,
+    MAP_TEXT.packet.headline(ship, 99_999, 999, 999), TRANSMIT_TEXT.packet(999, 999, 999, 99), TRANSMIT_TEXT.why.crashed(99), TRANSMIT_TEXT.why.crashed(0), TRANSMIT_TEXT.why.emergency,
     TRANSMIT_TEXT.why.abandoned(ship), TRANSMIT_TEXT.why.escaped(ship), TRANSMIT_TEXT.why.stranded(ship), TRANSMIT_TEXT.hits(99),
     TRANSMIT_TEXT.arrival(999, 99, 3, 99, 999), TRANSMIT_TEXT.infected(99), TRANSMIT_TEXT.fits, TRANSMIT_TEXT.tight,
     TRANSMIT_TEXT.sending('UNIT-999', ship), TRANSMIT_TEXT.go, ...Object.values(TRANSMIT_TEXT.without), ...Object.values(TRANSMIT_TEXT.locked).map((value) => (typeof value === 'string' ? value : value('DELETE'))),

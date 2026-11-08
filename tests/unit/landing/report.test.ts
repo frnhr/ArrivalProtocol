@@ -114,7 +114,7 @@ function lzRad(state: GameState, label: string): number {
   check('points: 600 + 150', model.points === 750);
   check('breakdown: each colonist once (review: the mislanded pod was in soft too)',
     model.breakdown === '600 soft · 0 hard · 200 mislanded · 0 off-site', model.breakdown);
-  check('the report reads the state (ship name, destination, final ship), not CLASSIC_FIVE', model.route.startsWith(`${state.level.shipName} → ${state.mission.destination}`)
+  check('the report reads the state (ship name, destination, final ship), not a fixed fleet', model.route.startsWith(`${state.level.shipName} → ${state.mission.destination}`)
     && !model.lastShip);
 
   // POD 04 comes down 40 km past LZ-B's far edge instead: off-site, half points on a GENTLE world, a near miss.

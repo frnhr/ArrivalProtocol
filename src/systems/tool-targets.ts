@@ -94,13 +94,13 @@ function repairRefusal(seg: Segment, state: Readonly<GameState>): ToolRefusal | 
     if (effectiveToolVersion(state, 'repair') < REPAIR_V2_VERSION) return TOOL_REFUSAL.needsV2;
     return chargeInUse() ? TOOL_REFUSAL.chargeBusy : null;
   }
-  const shipRepair = repairableShipFile(state, seg);
+  const shipRepair = repairableShipFile(seg);
   if ((seg.type === 'ship' && !shipRepair) || seg.type === 'ship-backup') return TOOL_REFUSAL.shipFile;
   if (seg.type === 'firewall') return TOOL_REFUSAL.firewallHealth;
   if (seg.type === 'log') return TOOL_REFUSAL.logRepair;
   // The arm's Thrust Ctrl heals only so far (selectors repairCeiling): past it, SWAP's.
   if (shipRepair) {
-    if (seg.integrity >= repairCeiling(state, seg) && !isInfected(seg)) return TOOL_REFUSAL.fieldRepairMax;
+    if (seg.integrity >= repairCeiling(seg) && !isInfected(seg)) return TOOL_REFUSAL.fieldRepairMax;
   } else if (!isRepairable(seg)) return notAFile(seg);
   // No scan gate: the AI's own files are always visible (§3.2), so a hurt Engine I/O is one
   // click from a repair. Only ship files hide their health, and those can't be healed (but the arm's Thrust Ctrl).

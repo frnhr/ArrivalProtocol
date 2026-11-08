@@ -10,7 +10,7 @@
 import { check, finish } from '../wp1/harness';
 import { createHarness7 } from './harness7';
 import { lossPlan, startBeamOut, cancelBeamOut } from '@systems/run';
-import { continueAfterLoss, throughDesk } from '../support/classic-flow';
+import { continueAfterLoss, throughDesk } from '../support/desk';
 // WP7 fix round 1: run.ts no longer re-exports BEAM OUT's readers.
 import { beamOutRefusal, beamOutProgress, shipDoomed } from '@systems/beam-out';
 import { infectNow } from '@systems/hollow';

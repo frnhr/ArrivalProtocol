@@ -77,7 +77,7 @@ export interface SkillPacketPlan {
   packAs: Readonly<Record<string, SkillLevel>>;
 }
 
-// No training, nothing packed lower: the plan of every classic packet, and of an arm one with nothing pending.
+// No training, nothing packed lower: the plan of every packet with nothing pending.
 export const NO_SKILL_PLAN: Readonly<SkillPacketPlan> = { fresh: [], packAs: {} };
 
 // The plan from the run's pending purchases and the PACKET's PACK AS choices. Pure. Each skill with a purchase pending
@@ -207,8 +207,8 @@ function trainedText(state: Readonly<GameState>, id: SkillId, level: Readonly<Sk
 //   installed as it is said;
 // • a file trained or restored at the last desk (ArrivalReport.skills): `> SKILL TRAINED: …`;
 // • a file carried or packed lower whose skill was announced before and has learned from new demos since
-//   (RunSkillState.announced): `> SKILL RETRAINED: …` (03 §3.3). A file never announced (the suites' giveSkillFile, the
-//   classic world) is never retrained aloud, so the classic boots keep their lines.
+//   (RunSkillState.announced): `> SKILL RETRAINED: …` (03 §3.3). A file never announced (the suites' giveSkillFile) is
+//   never retrained aloud.
 // Pure: the boot plans them at its first tick and says each through applySkillBootLine.
 export function skillBootLines(state: Readonly<GameState>): SkillBootLine[] {
   const lines: SkillBootLine[] = [];

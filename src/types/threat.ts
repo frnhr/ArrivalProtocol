@@ -90,8 +90,8 @@ export type LinkNoise = 0 | 1 | 2 | 3;
 // A scripted beam seed's target: the packed file with this role, or this filesystem tool.
 export type SeedTargetPick = { role: SegmentRole } | { fsTool: FsToolKind };
 
-// What the beam INTO a ship carries. Slice 3 replaces every source with { kind: 'noise', noise: hopNoise }: the fixed
-// five ships write theirs in data/classic-five.ts CLASSIC_FACTS; the arm's come from the hop's noise (systems/map-facts.ts).
+// What the beam INTO a ship carries: the hop's noise (systems/map-facts.ts), or the scripted RM lesson's seed at
+// SEEDS_MIN_DEPTH.
 export type BeamSeedSource =
   | { kind: 'none' }
   // KESTREL: the RM lesson's seed. firstRun: the seeds the tutorial run always meets (risk 4: next to Telemetry, which
@@ -99,20 +99,14 @@ export type BeamSeedSource =
   | { kind: 'scripted'; firstRun: readonly SeedTargetPick[]; later: LinkNoise }
   | { kind: 'noise'; noise: LinkNoise };
 
-// A classic ship's threat facts (data/classic-five.ts CLASSIC_FACTS; phase 2's ShipDef.threat).
-export interface ShipThreatDef {
-  beamSeeds: BeamSeedSource;
-  oneHopFromFinal: boolean;     // the stand-in for 02-map M3 (VESPER: true)
-}
-
 // Everything planThreat reads (systems/threat-plan.ts). Flat and JSON-safe, so a test can run 04 §3.16's routes as
 // plain sequences and slice 3 can feed it from the map without touching the rule. The ship's own facts (depth, final,
-// M3, the beam's seeds) come from threat-plan.ts fixedShipFacts on the fixed five; slice 3 replaces only that function.
+// M3, the beam's seeds) come from systems/map-facts.ts mapFacts.
 export interface ThreatInput {
-  depth: number;              // the ship's depth on the route (the ship index + 1 on the fixed five)
+  depth: number;              // the ship's depth on the route (run.shipIndex + 1)
   isFinal: boolean;           // a final ship (ShipDef.final)
   oneHopFromFinal: boolean;   // 02-map M3: a final ship is one hop from this destination
-  beamSeeds: BeamSeedSource;  // what the beam into this ship carries (CLASSIC_FACTS on the classic world; the arm: the hop's noise)
+  beamSeeds: BeamSeedSource;  // what the beam into this ship carries (the hop's noise)
   trace: number;              // TRACE before this ship (RunThreatState.trace)
   aboard: boolean;            // HOLLOW was aboard the ship before this one
   age: number;                // ships HOLLOW has been aboard BEFORE this one

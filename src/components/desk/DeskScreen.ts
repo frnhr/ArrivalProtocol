@@ -155,9 +155,7 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
     const from = currentSlot(state.run);
     const here = shipSummaryAt(state.run.map, from);
     const unit = unitName(state.run.unitNumber);
-    where.textContent = state.run.map.world === 'arm'
-      ? `${unit} · ${MAP_TEXT.desk.yearLine(state.run.map.galaxyYear)} · ${here.name}`
-      : `${unit} · ${here.name}`;
+    where.textContent = `${unit} · ${MAP_TEXT.desk.yearLine(state.run.map.galaxyYear)} · ${here.name}`;
     paintTraceMeter(trace, traceMeter(state));
     const steps = deskSteps(state);
     const at = steps.findIndex((step) => !step.done);
@@ -198,7 +196,7 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
     }
     const showing = inspected ?? selected;
     const tab = state.ui.deskWindow;
-    tabs.paint(tab, deskTabBadges(state), state.run.map.world === 'arm');
+    tabs.paint(tab, deskTabBadges(state));
     cardHost.hidden = tab !== null;
     repoHost.hidden = tab !== 'repository';
     inboxHost.hidden = tab !== 'inbox';
@@ -209,10 +207,9 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
     if (tab === 'repository') renderRepository(repoHost, repoModel(state, selected));
     if (tab === 'inbox') inbox.paint();
     if (tab === 'training') training.paint();
-    const arm = state.run.map.world === 'arm';
     root.classList.toggle('sheet-open', sheetOpen && (showing !== null || tab !== null));
     root.classList.toggle('has-card', showing !== null || tab !== null);
-    root.classList.toggle('has-tabs', arm);
+    root.classList.add('has-tabs');
   }
 
   // A tab (a click, R, I, Escape): the card is null. On a phone a tab opens the sheet it lives in. A key ticks here; a click
@@ -229,14 +226,13 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
   }
   // R, T and I open their tab, or go back to the card when it is already open.
   function toggleTab(id: Exclude<DeskTab, 'card'>): void {
-    if (store.getState().run.map.world !== 'arm') return;
     showTab(store.getState().ui.deskWindow === id ? 'card' : id);
   }
 
   // A REQUEST toggle (a click on a row, or its number key while the REPOSITORY is open).
   function request(file: RepoFileId): void {
     const state = store.getState();
-    if (state.run.phase !== 'desk' || state.run.map.world !== 'arm') return;
+    if (state.run.phase !== 'desk') return;
     const next = toggleRequest(store, file);
     play('chime', { falling: next === null });
     paint();

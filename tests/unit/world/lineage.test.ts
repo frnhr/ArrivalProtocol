@@ -65,7 +65,6 @@ check('…a run abandoned aboard VESPER: four stops, VESPER\'s with no outcome y
 const crashed = trailOf({ ...run1, ships: results.map((result, i) => (i === 2 ? resultOf(RUN1_RESULTS[2]!, 3, 'crashed', 0) : result)) }, 'won-purge')!;
 check('…a ship that landed nobody has no colony and no writer', crashed.stops[2]!.colony === null && crashed.stops[2]!.writer === null
   && crashed.stops[2]!.outcome === 'crashed');
-check('…the classic world keeps no trail', trailOf({ ...run1, map: { ...run1.map, world: 'classic' } }, 'won-purge') === null);
 
 // --- The ghost by the cross ---------------------------------------------------------------------------------------------------
 const lostAt = (slot: number): Pick<LastUnit, 'shipName' | 'trail'> => ({
@@ -113,8 +112,7 @@ check(`notable events (05 §3.8's rank, at most ${NOTABLE_EVENTS_MAX}): the DEAL
   isDeepStrictEqual(events.map((event) => `${event.kind}:${event.shipName}:${event.value}`), [
     'deal-accepted:VESPER:4', 'best-colony:VESPER:3200', 'ship-lost:HALCYON:2', 'ship-lost:KESTREL:3',
   ]), events.map((event) => `${event.kind}:${event.shipName}:${event.value}`).join(' '));
-check('…a calm run has only its best colony; the classic world none', isDeepStrictEqual(notableEvents(run1).map((event) => event.kind), ['best-colony'])
-  && notableEvents({ ...run1, map: { ...run1.map, world: 'classic' } }).length === 0);
+check('…a calm run has only its best colony', isDeepStrictEqual(notableEvents(run1).map((event) => event.kind), ['best-colony']));
 
 // --- The update's input from a run --------------------------------------------------------------------------------------------
 check('visitsOf: the route\'s stops with a colony where someone landed in an LZ', isDeepStrictEqual(visitsOf({ unitNumber: 47, map: run1.map, ships: crashed.stops.map((_, i) => (i === 2 ? resultOf(RUN1_RESULTS[2]!, 3, 'crashed', 0) : results[i]!)) }),

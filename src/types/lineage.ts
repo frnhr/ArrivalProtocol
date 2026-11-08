@@ -35,7 +35,7 @@ export interface LastUnit {
   cause: LastCause;
   stats: UnitStats;
   hollowUnits: number[];
-  // Its route with the year and outcome per ship, and where it was lost (null: the classic world, which keeps no trail).
+  // Its route with the year and outcome per ship, and where it was lost (null: a migrated record that kept none).
   trail: UnitTrail | null;
   // The skills it ended with (03 §3.11, slice 4; systems/meta.ts recordRunEnd from RunEnd.skills): REASSIGNMENT's root hunts
   // the highest version first (slice 7), and the next run's TRAINING says `LAST UNIT TRAINED: …`. null for an abandoned run
@@ -114,7 +114,7 @@ export interface ArmState {
   content: Omit<ContentVersions, 'catalogue'>;
 }
 
-// What the run's map remembers of the runs before it (RunMapState.history; empty on run 1 and the classic world).
+// What the run's map remembers of the runs before it (RunMapState.history; empty on run 1).
 export interface MapHistory {
   gap: number;
   valveYears: number;

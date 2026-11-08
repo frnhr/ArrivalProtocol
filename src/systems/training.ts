@@ -56,11 +56,10 @@ export function undoPurchase(store: Store<GameState>, index: number): void {
 }
 
 // RESTORE (decision 16): one purchase that brings the skill back at its paid level, fresh, for restorePrice(lost). Refused
-// away from the desk, on the classic world (no tree), with nothing lost ('owned'), or when the bank can't pay.
+// away from the desk, with nothing lost ('owned'), or when the bank can't pay.
 export function restoreSkill(store: Store<GameState>, skill: SkillId): TrainRefusal | null {
   const state = store.getState();
   if (state.run.phase !== 'desk') return 'not-desk';
-  if (state.run.map.world !== 'arm') return 'closed';
   const paidFor = paid(state.run.skills, skill);
   const cost = restoreCostOf(state, skill);
   if (paidFor === null || cost === 0) return 'owned';

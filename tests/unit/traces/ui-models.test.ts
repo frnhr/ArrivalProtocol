@@ -9,7 +9,6 @@
 // • the seams read them under the build's own gates: desk.ts cardModel's 'trace' row, chartModel's node.trace and
 //   chartLegend's TRACE, epilogue.ts finalCardOf's `next` (whatever TRACES_BUILT says, the screens follow it);
 // • `built` defaults to the gates, and CONTACT (7d's words) throws rather than paint nothing if its gate rises first.
-import { withClassicWorld } from '../support/classic-fixture';
 import { check, finish } from '../landing/checks';
 import type { GameState } from '@state/schema';
 import type { RunMapState } from '@/types/map';
@@ -146,13 +145,11 @@ const armSlots = (state: Readonly<GameState>): number[] => state.run.map.arm.fla
     && traceCardRow(state, finalSlotOf(state), ALL)?.value === 'THE LAST UNIT ENDED HERE · SPARE · STAY');
 }
 
-// --- No ending, the classic world -------------------------------------------------------------------------------------------
+// --- No ending ----------------------------------------------------------------------------------------------------------
 {
   const none = deskWith(5, null);
-  const classic = withClassicWorld(() => createInitialState({ seed: 5, phase: 'desk' }));
-  check('no ending behind the run (run 1, a lost last unit), or the classic world: no row, no ◆ anywhere',
-    none.run.traces.from === null && armSlots(none).every((slot) => traceCardRow(none, slot, ALL) === null && !traceOnChart(none, slot, ALL))
-    && classic.run.map.world === 'classic' && [0, 1, 2, 3, 4].every((slot) => traceCardRow(classic, slot, ALL) === null && !traceOnChart(classic, slot, ALL)));
+  check('no ending behind the run (run 1, a lost last unit): no row, no ◆ anywhere',
+    none.run.traces.from === null && armSlots(none).every((slot) => traceCardRow(none, slot, ALL) === null && !traceOnChart(none, slot, ALL)));
 }
 
 // --- The final card's NEXT RUN: lines (R12; 05 §3.12) ---------------------------------------------------------------------------

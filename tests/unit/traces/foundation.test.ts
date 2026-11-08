@@ -10,7 +10,6 @@
 //   the book, the strangers), while planThreat's final rule, fed by hand, plays R33's numbers;
 // • RUN START: a run 2 from the fixture's archive holds its last unit's traces;
 // • the stubs: the neutral ones' answers, the throwing ones'.
-import { withClassicWorld } from '../support/classic-fixture';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -30,7 +29,7 @@ import {
   noTraces, tracesOf, traceKindsOf, runTracesOf, tracesRng, placeExcluded, traceAt, finalTraces, finalTraceInput,
   rootUnitsOf, lastUnitRoot, rootWaitYears, midRunHollowUnits, logBookOf, traceRefusal,
 } from '@systems/traces';
-import { planThreat, threatInputFor, createRunThreat, fixedShipFacts, NO_FINAL_TRACES, rootBlocksFor } from '@systems/threat-plan';
+import { planThreat, threatInputFor, createRunThreat, NO_FINAL_TRACES, rootBlocksFor, type ShipThreatFacts } from '@systems/threat-plan';
 import { HOLLOW_STAGES } from '@data/threats';
 import { bookShape, logEntriesAtBoot, BOOK_046, BOOK_STRANGER, BOOK_LAST } from '@state/log-selectors';
 import { bookName, bookEntryLines } from '@data/log-books';
@@ -42,7 +41,6 @@ import { traceSeedMods, traceSeedAllowance, traceGiftCharge, arrivalTraceLines, 
 import { huntTarget, nearSkillSeedSpot } from '@systems/trace-hunt';
 import { seedSpot } from '@systems/hollow';
 import { faceBootLines, lineageControlLine, strangerBootLine, lineageBootLineSaid } from '@systems/lineage-boot';
-import { traceCardRow, traceOnChart, traceNextLines } from '@systems/trace-hud';
 import { createRng } from '@systems/rng';
 import { stubStorage, pageOpen } from '../save/save-fixture';
 import {
@@ -186,9 +184,8 @@ const asRun = (map: RunMapState, traces: RunTraces, lastUnit: LastUnit): Pick<Ru
     && placeExcluded(shipAt(run1, 19), 'sunset') !== null && placeExcluded(shipAt(run1, 19), 'stay') === null
     && placeExcluded({ ...shipAt(run1, 7), authored: null, memoryClass: 'TIGHT' }, 'stay') === 'a TIGHT ship'
     && placeExcluded({ ...shipAt(run1, 7), authored: null, reserved: { ...shipAt(run1, 7).reserved, unknownEvent: 'signal' } }, 'spare') === 'a `?` ship');
-  check('…the classic world holds none, and PURGE / MERGE / REASSIGNMENT place nothing',
-    runTracesOf(lastUnitWith(ending('spare', 'stay', { stay: { slot: 2, colony: 'X', year: 2300 } }), null), withClassicWorld(() => createInitialState({ seed: 1 })).run.map, 1).from === null
-    && runTracesOf(lastUnitWith(ending('merge', 'reassignment'), null), run1, 1).places.length === 0
+  check('…PURGE / MERGE / REASSIGNMENT place nothing',
+    runTracesOf(lastUnitWith(ending('merge', 'reassignment'), null), run1, 1).places.length === 0
     && tracesRng(1)() !== tracesRng(2)());
 }
 
@@ -221,7 +218,9 @@ const asRun = (map: RunMapState, traces: RunTraces, lastUnit: LastUnit): Pick<Ru
 
 // --- planThreat's final rule, fed by hand (R33) --------------------------------------------------------------------------------
 {
-  const facts = fixedShipFacts(4);
+  // LAST LIGHT's facts on the worked route (depth 6), and a calm ship 2's.
+  const facts: ShipThreatFacts = { depth: 6, isFinal: true, oneHopFromFinal: false, beamSeeds: { kind: 'none' } };
+  const calm: ShipThreatFacts = { depth: 2, isFinal: false, oneHopFromFinal: false, beamSeeds: { kind: 'none' } };
   const prior = createRunThreat();
   const plain = planThreat(threatInputFor(prior, facts, true, NO_FINAL_TRACES));
   const traced = planThreat(threatInputFor(prior, facts, true, { purge: true, merge: true, hunt: true }));
@@ -233,8 +232,8 @@ const asRun = (map: RunMapState, traces: RunTraces, lastUnit: LastUnit): Pick<Ru
     && 16 + TRACE_MERGE_ROOT_EXTRA === FINAL_ROOT_MAX_BLOCKS && rootBlocksFor('finale', [], 9, true) === FINAL_ROOT_MAX_BLOCKS,
     `${traced.hollow.spreadEverySec} ${traced.rootBlocks}`);
   check('…off a final ship the input carries none (threatInputFor), and a hand-built one throws',
-    JSON.stringify(threatInputFor(prior, fixedShipFacts(1), false, { purge: true, merge: true, hunt: true }).traces) === JSON.stringify(NO_FINAL_TRACES)
-    && /not a final ship/.test(threw(() => planThreat({ ...threatInputFor(prior, fixedShipFacts(1), false, NO_FINAL_TRACES), traces: { purge: true, merge: false, hunt: false } }))));
+    JSON.stringify(threatInputFor(prior, calm, false, { purge: true, merge: true, hunt: true }).traces) === JSON.stringify(NO_FINAL_TRACES)
+    && /not a final ship/.test(threw(() => planThreat({ ...threatInputFor(prior, calm, false, NO_FINAL_TRACES), traces: { purge: true, merge: false, hunt: false } }))));
 }
 
 // --- The books' shapes (R37) ----------------------------------------------------------------------------------------------------
@@ -357,14 +356,4 @@ for (const [what, file, raw] of [['run 2\'s first desk', 'run-save-v7-ship-done-
     faceBootLines(state).length === 0 && lineageControlLine(state) === null && strangerBootLine(state) === null
     && /not due/.test(threw(() => lineageBootLineSaid(createStore(state), 'face', 0))));
 }
-// (Track CHART's stubs:)
-{
-  // Built by Track CHART (traces/ui-models has the rest): the classic world holds no traces, so no row and no ◆; the final
-  // card's lines follow the gates (one a built kind, none while both are down).
-  const state = withClassicWorld(() => createInitialState({ seed: 7 }));
-  const want = (['purge', 'reassignment'] as const).filter((kind) => TRACES_BUILT[kind]).length;
-  check('CHART\'s models: no card row or ◆ on the classic world; a NEXT RUN: line per built trace', traceCardRow(state, 0) === null && !traceOnChart(state, 0)
-    && traceNextLines(ending('purge', 'reassignment')).length === want);
-}
-
 finish();

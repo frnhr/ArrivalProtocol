@@ -137,22 +137,23 @@ export interface PendingExtra {
   coreReset: boolean;
 }
 
-// The run's map (run.map). 'classic' is the frozen five (data/classic-five.ts: the suites' and __ap.ship's fixture world,
-// slot = index, one route); 'arm' is a real arm. Every function that reads the map switches on `world` once.
+// The run's map (run.map): an arm (02-map). Track RETIRE retired the classic five (the frozen fixture world, slot = index);
+// `world` stays as a literal field so the map's shape, and the save, did not change (OPEN-DECISIONS 87: the codec refuses
+// any other value).
 export interface RunMapState {
   // The shape's version (data/map-state.ts MAP_STATE_VERSION, slice 3c): the run save refuses a map of another shape.
   version: number;
-  world: 'arm' | 'classic';
-  run: number;                  // the run number: 1 is run 1's arm (the classic world keeps the wave)
+  world: 'arm';
+  run: number;                  // the run number: 1 is run 1's arm
   armSeed: number;              // 3a: the run seed (interim); 3c: the archive's
   startYear: number;
-  arm: ArmShip[];               // index = slot; [] on the classic world
+  arm: ArmShip[];               // index = slot
   noise: NoiseCloud[];
   route: RouteStop[];           // last = the current ship; route.length === run.shipIndex + 1
   galaxyYear: number;           // the current ship's approach year
   pendingExtra: PendingExtra | null;
   // What the runs before this one left (slice 3c: the launch gap, the departures, the colonies and routes; types/lineage.ts).
-  // Empty (data/map-state.ts EMPTY_HISTORY) on run 1 and the classic world.
+  // Empty (data/map-state.ts EMPTY_HISTORY) on run 1.
   history: MapHistory;
 }
 
@@ -186,7 +187,7 @@ export interface RoomFit {
 export type DeskWindowId = 'repository' | 'training' | 'inbox';
 
 // What the desk, the PACKET and the strip may read of a ship before it is built (review follow-up B1;
-// systems/map-run.ts shipSummaryAt): the classic ShipDef's, or an ArmShip's plus its world. JSON-safe.
+// systems/map-run.ts shipSummaryAt): an ArmShip's plus its world. JSON-safe.
 export interface ShipSummary {
   slot: number;
   worldSlot: number;            // the arm world it sits on (geometry: systems/map-geometry.ts)
@@ -200,7 +201,7 @@ export interface ShipSummary {
   colonists: number;
   memoryClass: MemoryClass;
   final: boolean;
-  approachYear: number;         // the classic world's fixture year, or the arm ship's approach
+  approachYear: number;         // the arm ship's approach
   late: boolean;
   lzCount: number;
   forgiveness: ForgivenessClass;
@@ -208,5 +209,5 @@ export interface ShipSummary {
   noGoWords: readonly string[];
   debrisRack: PodRackName | null;
   authored: ArmShip['authored'];
-  reserved: Reservations | null;  // null on the classic world (it has no reservations)
+  reserved: Reservations | null;  // the arm ship's reservations (null: none)
 }

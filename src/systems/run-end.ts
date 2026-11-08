@@ -5,7 +5,7 @@ import { runScore, runLanded } from '@systems/run';
 import { fleetHome } from '@systems/run-score';
 import { unitName } from '@systems/say';
 import { shownFuelPct } from '@systems/flight-hud';
-import { classicRunMap, shipSummaryAt } from '@systems/map-run';
+import { shipSummaryAt } from '@systems/map-run';
 import type { RunMapState } from '@/types/map';
 import type { ArmState, NextLaunch } from '@/types/lineage';
 import { departuresBlock, type DeskDepartures } from '@systems/desk';
@@ -29,15 +29,14 @@ import {
 // LANDED 1,000 / 1,200`, with its outcome, stars and points); a ship the route never took has no row (phase 2's NOT
 // REACHED rows are gone, on both worlds). The route for the mini chart, `n COLONIES FOUNDED` (the ships where colonists
 // came down alive). Ranks are absolute on the arm (rankBasis: RANK_FLEET_COLONISTS, so SHEPHERD 3,000, CARETAKER 6,800,
-// ARK ANGEL 10,700 whatever the route's length); the classic world keeps phase 2's scaling by its five ships, so its
-// suites keep their numbers.
+// ARK ANGEL 10,700 whatever the route's length).
 
 export interface RunEndShipRow {
   index: number;                // depth − 1: the N-th ship of the run, from 0
   depth: number;
   slot: number;
   shipName: string;
-  year: number;                 // the ship's approach year (the classic world's fixture year)
+  year: number;                 // the ship's approach year
   colonists: number;
   result: ShipResult;
   outcomeWord: string;          // ORBIT LOCKED / CRASHED …
@@ -78,11 +77,10 @@ export interface RunEndModel {
   colonies: number;
   coloniesLine: string;
   // Slice 3b (02 §3.9, §4): the files the repository sent that never reached the unit (`NEVER ARRIVED: Swap, Cp` or `—`);
-  // null on the classic world, which has no repository.
   undeliveredLine: string | null;
-  // Slice 3c (02 §3.12, §4; 05 §3.12): what the world update made of the run's end (run.next), null on the classic world.
+  // Slice 3c (02 §3.12, §4; 05 §3.12): what the world update made of the run's end (run.next), null when none.
   next: RunEndNext | null;
-  // Slice 4 (03 §3.1, 02 §4): the tree's totals, null on the classic world (no tree).
+  // Slice 4 (03 §3.1, 02 §4): the tree's totals.
   skills: RunEndSkills | null;
 }
 
@@ -96,8 +94,7 @@ export interface RunEndSkills {
   tallyLine: string;
 }
 
-function runEndSkills(run: Readonly<GameState['run']>): RunEndSkills | null {
-  if (run.map.world !== 'arm') return null;
+function runEndSkills(run: Readonly<GameState['run']>): RunEndSkills {
   const trained = trainedCycles(run.skills);
   const total = treeTotalCycles();
   const unspent = bankOf(run.skills);
@@ -148,23 +145,21 @@ export function runEndTone(cause: RunEndCause, flagshipDown: number | null): Run
   return won && flagshipDown !== null && flagshipDown > 0 ? 'victory' : 'sombre';
 }
 
-const CLASSIC_MAP: RunMapState = classicRunMap(0, 0, 1);
-
-// The ships the run counts as its fleet: the classic world's five (phase 2's fleet), or on the arm the ships visited
-// (02 §4). Read through shipSummaryAt, so the tally never builds a ship.
+// The ships the run counts as its fleet: the ships visited (02 §4). Read through shipSummaryAt, so the tally never builds a
+// ship.
 export function fleetSlots(map: Readonly<RunMapState>): number[] {
-  return map.world === 'classic' ? [0, 1, 2, 3, 4] : map.route.map((stop) => stop.slot);
+  return map.route.map((stop) => stop.slot);
 }
 
-// Every ship's colonists together: what the run could have landed. Left out, the classic world's.
-export function fleetColonists(map: Readonly<RunMapState> = CLASSIC_MAP): number {
+// Every ship's colonists together: what the run could have landed.
+export function fleetColonists(map: Readonly<RunMapState>): number {
   return fleetSlots(map).reduce((sum, slot) => sum + shipSummaryAt(map, slot).colonists, 0);
 }
 
-// What the rank thresholds are scaled by (02 §4): on the arm the reference fleet itself (ranks absolute: a run's best
-// route is worth 13,400–13,800 whatever its length), on the classic world its five ships' colonists (phase 2's scaling).
-export function rankBasis(map: Readonly<RunMapState> = CLASSIC_MAP): number {
-  return map.world === 'arm' ? RANK_FLEET_COLONISTS : fleetColonists(map);
+// What the rank thresholds are scaled by (02 §4): the reference fleet itself (ranks absolute: a run's best route is worth
+// 13,400–13,800 whatever its length). Phase 2's scaling by the classic five's colonists went with them (Track RETIRE).
+export function rankBasis(): number {
+  return RANK_FLEET_COLONISTS;
 }
 
 // Did colonists come down alive on this ship (a colony founded)? Any pod down with points, in an LZ or not.
@@ -214,7 +209,7 @@ export function runEndModel(state: Readonly<GameState>, nextArm: Readonly<ArmSta
   if (run.phase !== 'end' || run.endCause === null) throw new Error(`runEndModel: the run is not over (phase ${run.phase})`);
   const cause = run.endCause;
   const colonists = fleetColonists(run.map);
-  const basis = rankBasis(run.map);
+  const basis = rankBasis();
   const landed = runLanded(run.ships);
   const score = runScore(run.ships);
   const { rank } = rankOf(score, basis);
@@ -277,9 +272,9 @@ export function runEndModel(state: Readonly<GameState>, nextArm: Readonly<ArmSta
     coloniesLine: MAP_TEXT.tally.colonies(colonies),
     // The arm's NEVER ARRIVED line, only for a run that asked the repository for something (review m8: `NEVER ARRIVED: —`
     // on a run with no request said nothing).
-    undeliveredLine: run.map.world === 'arm' && run.repo.requests.length > 0
+    undeliveredLine: run.repo.requests.length > 0
       ? REPO_TEXT.tally.neverArrived(undeliveredFiles(run).map((request) => REPO_FILES[request.file].name)) : null,
-    next: run.map.world === 'arm' ? runEndNext(run.next, nextArm) : null,
+    next: runEndNext(run.next, nextArm),
     skills: runEndSkills(run),
   };
 }

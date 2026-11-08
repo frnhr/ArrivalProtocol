@@ -11,7 +11,7 @@ import { isEndSlot, shipSummaryAt } from '@systems/map-run';
 export type Route = readonly number[];
 
 // Every route from `from` (the first ship by default) to a final ship: a depth-first walk over reachable hops. Every
-// chain ends at a final ship on a valid arm (checks 1 and 4), so none is dropped. The classic world has one.
+// chain ends at a final ship on a valid arm (checks 1 and 4), so none is dropped.
 export function routes(map: Readonly<RunMapState>, from: number = FIRST_SLOT): Route[] {
   const next = new Map<number, number[]>();
   const out: Route[] = [];

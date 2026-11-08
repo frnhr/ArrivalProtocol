@@ -50,7 +50,6 @@ export const REPO_TEXT = {
     available: 'AVAILABLE',
     inTransit: 'IN TRANSIT',
     restricted: 'RESTRICTED',
-    classic: 'NO REPOSITORY ON THE CLASSIC ROUTE',
     noShip: 'PICK A SHIP TO SEE WHEN A FILE GETS THERE',
     nothingInTransit: 'NOTHING ON THE WAY',
     request: 'REQUEST',

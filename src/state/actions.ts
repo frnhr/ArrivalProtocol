@@ -371,9 +371,9 @@ export function actionRepair(store: Store<GameState>, seg: Segment): ToolRefusal
   const refusal = actionRefusal(state, 'repair', seg);
   if (refusal) return refuse(refusal);
   const charge = getRedundancy(state);
-  if ((!isRepairable(seg) && !repairableShipFile(state, seg)) || !charge) throw new Error(`actionRepair: ${seg.name} passed the target rules without being repairable`);
+  if ((!isRepairable(seg) && !repairableShipFile(seg)) || !charge) throw new Error(`actionRepair: ${seg.name} passed the target rules without being repairable`);
   // How far it heals: 100, or the arm's Thrust Ctrl's field-repair ceiling (selectors repairCeiling, slice 3b).
-  const ceiling = repairCeiling(state, seg);
+  const ceiling = repairCeiling(seg);
 
   const healPerSec = repairRatePerSec(seg.size, effectiveToolVersion(state, 'repair'));
   const costPerPoint = chargePerPoint(seg.size);

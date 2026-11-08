@@ -8,7 +8,7 @@ import {
 
 // The five flight templates (02-map §3.5; slice-3a-plan §2.3): the hand-flown ships' flight blocks, moved here unchanged
 // so every ship the map generates flies one of them. A generated ship takes its template's block with omega0 re-rolled
-// (data/ships.ts shipDefOf); the classic five (data/classic-five.ts) take theirs as written. The template names what it
+// (data/ships.ts shipDefOf). The template names what it
 // asks of the kid, not the ship it was tuned on (the comments say which). Units: km, km/s, km/s², μ in km³/s².
 // The shrink numbers stay per template: where the ring's inner edge falls along a shrink depends on the template's ring,
 // gravity and warp (ShrinkTuning's WHY in data/ships.ts), which a re-rolled omega0 does not change.

@@ -24,7 +24,7 @@ import { pickStep1, pickStep2, continueFollowed, skipFinaleEnding } from '@syste
 import { finaleRunCause, optionState } from '@systems/ending-rules';
 import { FINALE_TEXT } from '@data/finale-text';
 import { startRun, lossPlan } from '@systems/run';
-import { continueAfterReport } from '../support/classic-flow';
+import { continueAfterReport } from '../support/desk';
 import { runEndModel } from '@systems/run-end';
 import { actionDelete, recordDriverLost } from '@state/actions';
 import { podRecord, landingView, launchRefusal, onTargetTally, landingStuck } from '@systems/landing-rules';
@@ -45,7 +45,7 @@ import { LAST_LANDING_TEXT } from '@data/last-landing-text';
 import { landingReportModel } from '@systems/landing-report';
 import { setMode } from '@systems/mode';
 import { activeLayer } from '@systems/input';
-import { classicShip } from '@data/classic-five';
+import { fixtureShip } from '../support/arm-ship';
 import type { GameState } from '@state/schema';
 import type { HollowSegment, DriverSegment } from '@/types/segment';
 import { MEMORY_LAYOUTS } from '@data/memory';
@@ -366,7 +366,7 @@ check('…then PURGE: won-purge, but the flagship landed nobody: the sombre tone
   && runEndModel(state()).why === RUN_END_NOBODY_LANDED.why['won-purge'],
   `${state().run.endCause} ${runEndModel(state()).tone} ${runEndModel(state()).title} | ${runEndModel(state()).why}`);
 
-check('LAST LIGHT is the flagship and the last ship', classicShip(4).final);
+check('LAST LIGHT is the flagship and the last ship', fixtureShip(4).final);
 
 // --- §9 WP11's edge cases -----------------------------------------------------------------------------------------------
 // The Core worn below its low mark mid-duel: fewer threads, but the running DELETE keeps its own (ops-core never takes a

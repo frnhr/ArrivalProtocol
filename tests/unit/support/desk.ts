@@ -5,7 +5,10 @@
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import type { RunMapState } from '@/types/map';
-import { setCourse } from '@systems/run';
+import {
+  setCourse, continueAfterReport as runContinueAfterReport, continueAfterLoss as runContinueAfterLoss, type LossPlan,
+} from '@systems/run';
+import { WORKED_ROUTE } from '@systems/arm-fixture';
 import { deskBlocker } from '@systems/skill-tree';
 import { pickFirstSkill } from './skills';
 import { reachableFrom } from '@systems/map-hop';
@@ -29,4 +32,29 @@ export function climbingRoutes(map: Readonly<RunMapState>): number[][] {
   };
   walk([FIRST_SLOT]);
   return found.sort((a, b) => a.length - b.length);
+}
+
+// The run through the DESK for the suites written before it (slice 3a foundation F2; Track RETIRE moved it here from
+// retired support/classic-flow). A ship's end opens the DESK (systems/run.ts openDesk) before TRANSMIT; these set course
+// to the worked route's next stop (systems/arm-fixture.ts WORKED_ROUTE: run 1's arm, the fixture world) when the call left
+// the run on the desk (and do nothing when it ended the run or restarted ship 1), with the first desk's required pick made
+// (setCourseFromDesk). Nothing is requested: the suites' tools are their own. A suite on a later run's arm (a fresh roll)
+// sets its own course (climbingRoutes).
+export function throughDesk(store: Store<GameState>): void {
+  const state = store.getState();
+  if (state.run.phase !== 'desk') return;
+  const next = WORKED_ROUTE[state.run.map.route.length];
+  if (next === undefined) throw new Error(`throughDesk: the worked route has no stop after depth ${state.run.map.route.length}`);
+  setCourseFromDesk(store, next);
+}
+
+export function continueAfterReport(store: Store<GameState>): void {
+  runContinueAfterReport(store);
+  throughDesk(store);
+}
+
+export function continueAfterLoss(store: Store<GameState>): LossPlan {
+  const plan = runContinueAfterLoss(store);
+  throughDesk(store);
+  return plan;
 }

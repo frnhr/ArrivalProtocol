@@ -111,7 +111,7 @@ export function computeActions(seg: Segment, state: Readonly<GameState>, actual:
   }
   if (seg.type === 'driver' && state.run.phase === 'landing') out.primary.push(loadNextOption(state, seg));
 
-  if ((isRepairable(seg) || repairableShipFile(state, seg)) && seg.integrity < INTEGRITY_MAX) {
+  if ((isRepairable(seg) || repairableShipFile(seg)) && seg.integrity < INTEGRITY_MAX) {
     const repair = getFsTool(state, 'repair');
     const refusal = actionRefusal(state, 'repair', actual);
     const estimate = repairChargeEstimate(seg.integrity, seg.size);

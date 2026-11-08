@@ -261,7 +261,7 @@ function lockTick(store: Store<GameState>, dtAi: number, held: boolean): void {
 
 // The fair tier's file (04 §3.3, hollow.ts rmTargets: plan R8), never one being moved or deleted; null: none, so no deal.
 // Imported since the review fix pass (M4): data/zone-check.ts took data/ships.ts off the stateful systems, so the import no
-// longer closes the classic-five load cycle (support/import-guard pins that).
+// longer closes the load cycle slice 5 met (support/import-guard pins that).
 function dealFile(state: Readonly<GameState>): Segment | null {
   return rmTargets(state.memory, state.hollow.untriedTools)
     .find((seg) => !getOpsBySeg(seg.id).some((operation) => operation.kind === 'move' || operation.kind === 'delete')) ?? null;
