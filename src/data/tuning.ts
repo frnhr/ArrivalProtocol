@@ -2386,8 +2386,8 @@ export const SURVEY_KEEP_FREE_THREADS = 1;
 // --- 6 SITES (owned by Track SITES; it edits values only in this block): SURVEY's look and sound (01 §4) ---------------
 
 // The find's sonar ping (audio.ts surveyPing: its sine's peak, its echo at 0.3 of it), under the op chirps, so seven finds
-// never read as alarms. Tuned by ear and by __ap.audio.measure: 0.12 rang a sine louder than the 0.05 square op chirp; at
-// 0.04 the ping sits just under it.
+// never read as alarms. Measured with __ap.audio.measure: at 0.04 its peak is the op chirp's (−39 dB against −40) and it
+// sits 14 dB under the op-done ding (−25), which marks the planet mapped; the plan's 0.12 rang within 5 dB of that ding.
 export const SURVEY_PING_GAIN = 0.04;
 // The SITES window opens itself at the first find, and once per ship at the boot of a POOR planet without SURVEY (showing
 // the guesses as UNSURVEYED).
