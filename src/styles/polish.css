@@ -1,6 +1,28 @@
 /* Slice 8 POLISH (docs/phase3/impl/slice-8-plan.md §2.11, §2.12; OPEN-DECISIONS 20, 66): imported from main.ts after
-   resident.css.
+   resident.css, whose amber RECEIVER CLOSED line it animates.
+   • the receiver bypass (04 §3.15): the line's rolling letters in the resident's dim amber, the locked ones in its full
+     amber and glow (resident.css .tone-resident), a short lock flash once the last letter is in; reduced motion draws the
+     line resolved and still (MindTerminal paints no roll then, and no flash here);
    • [ENTER]'s skip over frames: the header's hint `SKIPPING… n LEFT` pulsing in the accent, the page's pointer a wait. */
+
+/* ── The receiver bypass ──────────────────────────────────────────────────────────────────────────────────────────────── */
+.term-line.bypass .bp-roll {
+  color: var(--resident-dim);
+  text-shadow: none;
+}
+/* The breaker's churn: the line flickers faintly while letters still roll. */
+.term-line.bypass.bypass-rolling .term-text { animation: bypass-churn 0.12s steps(2) infinite; }
+@keyframes bypass-churn {
+  0% { opacity: 1; }
+  100% { opacity: 0.86; }
+}
+/* The last letter locked: one bright pulse of the resident's glow, then the line's own. */
+.term-line.bypass.bypass-locked .term-text { animation: bypass-locked 0.45s ease-out both; }
+@keyframes bypass-locked {
+  0% { color: var(--resident); text-shadow: 0 0 16px var(--resident-glow), 0 0 4px var(--resident); }
+  100% { color: var(--resident); text-shadow: 0 0 8px var(--resident-glow); }
+}
+body.reduced-motion .term-line.bypass .term-text { animation: none; }
 
 /* ── [ENTER]'s skip over frames ───────────────────────────────────────────────────────────────────────────────────────── */
 body.ll-skipping, body.ll-skipping * { cursor: progress !important; }
