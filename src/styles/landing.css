@@ -633,6 +633,9 @@ body.ll-on .pb-bay-row { opacity: 0.35; }
   .ll-middle { flex: 1 1 auto; }
   .ll-flier { display: none; }
   .ll-skip { margin-left: auto; padding: 6px 8px; font-size: 9px; letter-spacing: 0.1em; }
+  /* The view tabs (the phone's dock) are shut, and the strip covers only their lower half: hidden rather than dimmed, so
+     no half-row of tab labels peeks out over it. They keep their room, so nothing above them moves. */
+  body.ll-on .dock { visibility: hidden; }
 }
 
 /* The POD BAY's RESTORED row (R29): `RESTORED 4`, a pip per pod (◉ riding the orbit, ▾ falling, ▮ down), the radio note. */
