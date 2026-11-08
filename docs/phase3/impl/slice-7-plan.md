@@ -2122,3 +2122,178 @@ MERGE's verdict, or reads an interim word.
 - **The lead:**
   - the contract review is next;
   - §6.4's 7b e2e additions are the lead's at the batch end.
+
+## Deviations (Track DROP 7b)
+
+Recorded by Track DROP (branch `drop-7b`, worktree `agent-a40f79421ed850d0c`, from 4cc8feb). `systems/last-landing.ts` is
+built and `LAST_LANDING_BUILT` is raised: after MERGE, the drivers HOLLOW ate come back by radio and their pods land on their
+own. **No save bump.** `landing.lastLanding` is still null at every save point, because the end clears it in the same update
+that sets `'done'`, before ENDING CHOSEN.
+
+### What is built
+
+- **`startLastLanding(store, pods)`** does the banner's duties in one update:
+  - the phase goes `'verdict'` → `'last-landing'`;
+  - `lastLanding` is set, with drivers from `ending-rules.ts restoredDriver`;
+  - the pods are released (`'aboard'`);
+  - the landing is reopened (`ended`, `lingerAiSec`, `fuelAtEndPct`, `goLow`, `declined` and `noDriverAiSec` cleared);
+  - `ui.mode` is set to `'tools'`, after any MIND tool in hand is cancelled.
+
+  Then the TERMINAL lists each pod (`LAST_LANDING_TEXT.radio`), the `'last-landing'` layer goes up and
+  `'last-landing-start' { pods, flier }` is emitted. It throws outside `'verdict'`, when it is already running, outside the
+  landing, with no pods, and on a pod not in orbit.
+- **The flier (R27)** is decided once, at the start:
+  - `'blind'` with no drop solution: no solution, a `block`, no dot, or no in-band window in the next pass. Also with
+    AUTODROP below v1.
+  - Otherwise the effective version (`skillLive`).
+  - AUTODROP's deadline is `autodropUntilTSec = start + LAST_LANDING_AUTODROP_ORBITS × period` (the start's solution).
+- **`lastLandingController`** (the `'merge'` resolver) answers whenever THE LAST LANDING flies, so no other source and no
+  hands fly a restored pod.
+  - **v2 / v3**, before the deadline: `autodropController(state, { version, queue, source: 'merge', armed: 'pass' | 'plan',
+    skipBetween: true })`. It decides on `lastLandingView`: no bay, a full bay of `BAY_SLOTS`, the merge cadence, and Bay
+    Ctrl not read.
+  - **v1, blind, and v2/v3 past their deadline:** a fixed `turnController` that holds TACTICAL, names `nextLaunchAtTSec`
+    and `waitsFor` (n 1), and asks for the SKIP between windows.
+- **v1 and blind** take one pod per window, in the order the ship passes the windows (by centre), whatever the counts. A
+  full LZ means a mislanded pod.
+  - The turn is `LastLandingState.target`. The machine's AI tick chooses it, launches it, or gives it up once its last
+    moment has passed. Either way that window's turn is used.
+  - **v1**'s moment is the window's centre plus AUTODROP's learned offset (`autodropOffsetTac`), clamped into the pod's own
+    sure part, an edge margin in. A window with no sure part for the pod is no window for v1.
+  - **Blind**'s moment is uniform within ±(W/2 + `BLIND_MARGIN_KM`) of the centre, on `visitRng(run,
+    'last-landing:<turn>')`, and its spread is ×`BLIND_DROP_MULT` (the foundation's `LaunchIntent.blind`).
+  - A pod that AUTODROP (any version) has not placed by the deadline drops blind in the next window after it.
+- **v2's re-arm:** each period, the machine re-arms the pass with the counts [G] would prefill (`passRows` on the last
+  landing's view).
+- **The cadence (R26)** is 2.0 s between launches (Deviation 1). `landing.ts launchDriver` sets it, and the game tick counts
+  it down.
+- **[ENTER] (R28):** `skipLastLanding` loops `clock.advance(store, TICK_MS / 1000)` until `lastLanding` is null, capped at
+  `LAST_LANDING_SKIP_MAX_STEPS`, and throws past the cap. A paused clock is let go first. `skipped` is set.
+  - The same streams and the same drop-cache refresh run, because the cache refreshes on the game tick's `dtWall`.
+  - The suite checks that a skipped landing equals the watched one, fate for fate.
+- **The end:** every restored pod is down or parked, and none is falling. In one update, `lastLanding` is cleared, the
+  phase becomes `'done'`, and AUTODROP's `armedAtTSec` / `sent` are cleared (Deviation 4). Then the layer goes down and
+  `'last-landing-end' { landed }` is emitted, `landed` being the restored pods down in an LZ with room.
+- **Mount:** `mountLastLanding` adds, beside the foundation's resolver:
+  - the AI tick (turns, v2's pass, the end);
+  - the game tick (the cadence);
+  - the layer's keys: ENTER and NumpadEnter skip, P pauses, M mutes;
+  - a world reset that lets the layer go.
+
+### Deviations
+
+1. **The cadence is 2.0 tactical s of world time, not 2.0 game s.**
+   - `cadenceLeftSec` counts down by `dtWorld / tacticalWarp`, as the bay's `cadenceTac` does, so two launches sit at least
+     40 game s apart at ×20.
+   - **Why:** 01 says `TACTICAL ×20 … 2.0 s between launches … so the rhythm reads`. That is a felt rhythm at TACTICAL.
+     2.0 game s at ×20 would be a tenth of a wall second, and a v3 volley would fire a whole window at once.
+   - A SKIP crosses the cadence at once, as it refills the bay.
+   - The field keeps its name, and its comment in `types/ending.ts` says the unit.
+2. **`LastLandingState` gains fields** (no save effect, because it is never saved): `startTSec`, `autodropUntilTSec`,
+   `passedTSec`, `turns`, `target: LastLandingTarget | null` (a new type in the same file: `lz`, `centreTSec`, `atTSec`,
+   `untilTSec`, `blind`) and `stuckAiSec`.
+   - `orbitsFlown` stays as information: whole periods since the start, capped at 2. The rule is the deadline.
+   - **The edit was made in `types/ending.ts` directly** (the lead's file; WIP e27babb). Lead: please accept it or move it.
+3. **v1 and blind launch from the machine's AI tick, not from the controller's `decide`.** The tick calls
+   `requestLaunch(store, { source: 'merge', blind? })`.
+   - **Why:** `landing.ts controllerTick` tells `autodrop.ts autodropLaunched` of every controller launch, and that throws
+     on an off-site aim, which a blind pod may have.
+   - The turn controller still holds TACTICAL, names its launch to pace and the strip, and asks for the SKIP. The tick
+     asserts that the active controller is `'merge'` before each launch.
+4. **v2's pass is written on the kid's AUTODROP machine** (`landing.autodrop.pass`, `sent`, `armedAtTSec`, with `armed`
+   left null).
+   - **Why:** the override's `'pass'` reads them there (`autodrop.ts inPassOf` / `passWant`), and `AutodropOverride` has no
+     field for them. AUTODROP's own counting skips `'merge'` launches, so the machine recounts `sent` from the `'merge'`
+     launches since `armedAtTSec`.
+   - `autodropTick` stands aside while `'merge'` flies (`shadowed`).
+   - The end clears `armedAtTSec` and `sent` (the codec's at-rest rule). `pass` may stand.
+5. **Between windows the controller always asks for the SKIP**, for v2/v3 even when AUTODROP plans nothing (a pod with no
+   sure window).
+   - Without this, its orbits would pass at CRUISE with no kid to press SKIP. Pace still stops the SKIP before every window
+     and every planned launch, and refuses it inside an open one.
+6. **Blind's reach in time** is half the window's length × (W/2 + 150) / (W/2): linear in arc on the near-circular orbit.
+   - The suite checks the dot's centre at launch against ±(W/2 + 150 km) + 2 km, and that the draws reach over half of it.
+   - A moment drawn in the past (the first window may already be open) launches at once.
+   - A turn refused to its last moment (the band) gives up that window.
+7. **Nothing to fly ends the landing.** If no drop dot and no in-band window stays for `LANDING_NONE_LEFT_SEC` AI s,
+   THE LAST LANDING calls `endLanding('no-drop')`. The pods still aboard are parked, then the end follows.
+   - That is the landing's own give-up rule. It also covers an orbit decaying out of the band, since the engine is shut
+     in `'last-landing'` (OPEN-DECISIONS 57).
+8. **The suite's timing:** `ending/last-landing` keeps all of `wp11/merge-test`'s checks and adds the arm's. To keep the
+   tier fast:
+   - the classic MERGE's blind landing is flown by `[ENTER]`, and the arm's v3, v1 and blind landings are watched;
+   - the "[ENTER] equals the watched landing" check uses v2's 2-pod landing, not v3's 6 pods;
+   - the blind worth over 20 draws is full depth only.
+   - The arm's setup moved to `ending/last-landing-arm.ts`, which the sweep shares.
+
+9. **The kid's launch is refused while MERGE flies** (the coordinator's addition, asked by Track VIEW; the edits in the
+   lead's files were granted).
+   - `launchRefusal` answers a `'player'` launch with the new `LaunchRefusal` member `'MERGE FLYING'` while
+     `landing.lastLanding` is set, right after LANDING OVER.
+   - Its word, `MERGE IS FLYING THEM — [ENTER] SKIPS TO THE END` (47 characters), is in `data/landing-text.ts
+     LAUNCH_REFUSAL_TEXT`, so its strip line comes for free (`LAUNCH_REFUSAL_LINES`) and `landing/table`'s ≤ 70 check covers
+     it. It is not in VIEW's `last-landing-text.ts`, to keep clear of `view-7b`.
+   - `requestLaunch`, `playerLaunch` (the [L], the POD BAY, the phone bar) and `__ap.launch` all meet it. `forceLandAll`
+     (the suites' instant landing) calls `launchDriver` directly and does not.
+   - `landing-hud.ts OUTRANKS_BAY_OFFLINE` gains it, so the POD BAY says it over NO BAY CTRL (no bay applies then).
+   - The comment on `launchRefusal` now gives the cadence's unit (Deviation 1).
+
+### The sweep (`ending/last-landing-sweep.test.ts`, BALANCE_ONLY)
+
+It flies the arm's LAST LIGHT (GENTLE: LZ-A–C 400 km, LZ-D 250 km) on a healthy orbit, 8 draw seeds × eaten 1–6 per flier
+(168 restored pods each), by [ENTER]: 384 landings in 371 s on one core. Worth is the points per restored pod against a full
+one (soft, in an LZ with room). ROUGH and HARSH re-score the same touchdowns, since forgiveness moves only the off-site value.
+TIGHT leaves room only in LZ-B, as many as the restored pods: "the kid's own landings filled the rest".
+
+| Room | Flier | In an LZ with room | Mislanded | Off-site | Dropped blind | Worth GENTLE | ROUGH | HARSH |
+|---|---|---|---|---|---|---|---|---|
+| open | blind | 56% | 0% | 44% | 100% | 0.78 | 0.67 | 0.56 |
+| open | v1 | 100% | 0% | 0% | 0% | 1.00 | 1.00 | 1.00 |
+| open | v2 | 100% | 0% | 0% | 0% | 1.00 | 1.00 | 1.00 |
+| open | v3 | 100% | 0% | 0% | 0% | 1.00 | 1.00 | 1.00 |
+| tight | blind | 5% | 51% | 44% | 100% | 0.65 | 0.54 | 0.43 |
+| tight | v1 | 14% | 86% | 0% | 0% | 0.79 | 0.79 | 0.79 |
+| tight | v2 | 100% | 0% | 0% | 0% | 1.00 | 1.00 | 1.00 |
+| tight | v3 | 100% | 0% | 0% | 0% | 1.00 | 1.00 | 1.00 |
+
+- No pod was parked and none hit a no-go arc. AUTODROP never needed its blind fallback on a healthy orbit (the two-orbit
+  limit is checked in `ending/last-landing` with the instruments failing).
+- **The blind drop matches 01:** 0.78 on GENTLE (01: about 0.75) and 0.56 on HARSH (01: about 0.5). About half land in the
+  bracket, as 01's worked example says.
+- **v1 equals v2/v3 with room everywhere,** and loses only when the split matters (TIGHT 0.79: one pod per window in pass
+  order mislands). With 1–3 pods it never reaches LZ-B, which comes late in the pass order from where the ship stands at the
+  start.
+- **For slice 8:** v1's edge over blind is 0.22 open and 0.14 tight. On a healthy orbit, v2 and v3 do not differ here.
+
+### Tests
+
+- **Suites (quick, warm `flyOnce`, alone on 4 workers):**
+  - `ending/last-landing` 14.8 s: about 76 checks; `wp11/merge-test` was 4.9 s;
+  - `ending/finale-flow` 9.1 s;
+  - `landing/hollow-landing` 2.3 s;
+  - `ending/last-landing-foundation` 0.8 s;
+  - `ending/rules` 0.7 s;
+  - `wp11/p2/views` 9.0 s (unchanged, green);
+  - `ending/last-landing-sweep` is BALANCE_ONLY: 6 min 12 s at 8 seeds.
+- **`wp11/full-run`** (BALANCE_ONLY, `--full`): green, 310 s, with the gate up.
+- **The unit tier** (`npm test`) is green: 213 passed, 0 failed, 11 balance-only skipped, in **180 s** on 4 workers. The
+  1-minute load average went from 0.6 to 7.7 during the run (sampled every 15 s; nothing else running).
+  `npm run typecheck` is clean. The e2e was not run.
+
+### Patches requested (lead)
+
+- **`tests/unit/support/finale.ts`:** its banner says `chooseEnding` skips THE LAST LANDING from 7b on, but the code does not
+  (a MERGE with eaten pods returns at `'last-landing'`). The suites rely on that, since they check the machine right after
+  the choice. Please fix the banner. The alternative, skipping in `chooseEnding`, moves `ending/last-landing`,
+  `landing/hollow-landing` and `ending/finale-flow` again.
+- **`types/ending.ts`:** accept Deviation 2's fields (already in the file).
+- **`tuning.ts` (7b lead block):** `LAST_LANDING_CADENCE_SEC`'s comment says "game seconds". Please make it "tactical s of
+  world time" (Deviation 1). The value stays 2.0.
+- **OPEN-DECISIONS 43:** mark it BUILT, with Deviation 1's cadence unit and the sweep's figures.
+- **Optional cleanups**, after which v1 and blind could launch through `decide` and v2 would stop writing the kid's machine:
+  - `AutodropOverride` gains the pass's own `pass` / `armedAtTSec` / `sent`;
+  - `autodropLaunched` accepts an off-site aim from a non-AUTODROP source.
+- **The instant landing** (`support/landing-instant.ts`, on in `wp11/full-run`, `wp12/playthrough` and `wp11/p2/views`)
+  `forceLandAll`s THE LAST LANDING's radio pods on its first tick: soft, in an LZ with room. Those harnesses therefore do not
+  play R27's rules after a MERGE. `wp11/full-run` passes at full depth (310 s). `wp12/playthrough` was not run.
+- **§6.4's 7b e2e additions** are the lead's.
