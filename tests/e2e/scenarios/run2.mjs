@@ -3,6 +3,7 @@
 // update (__ap.archiveAs('won-purge')), then a reload:
 // • the title: `UNIT-048 · YEAR <y> · LAUNCHED <gap> YEARS AFTER UNIT-047`, rolled up before its stamp (`+<gap> YEARS`)
 //   lands, the lineage line, `runs save between ships`, and on the faint chart 047's dashed trail and its marks;
+// • run 2's HOLLOW is the relay stranger UNIT-031 (slice 7c, R34), and the won run 1 leaves no ghost line at the boot (R36);
 // • ARES-VIII's boot says the INBOX's new messages; its LANDING REPORT `LZ-A · A BEACON WAS ALREADY THERE · SET BY UNIT-047 ·
 //   <gap> YEARS AGO`;
 // • the first DESK: 047's trail (RIVERSIDE's colony dot with its age, the TAKEN squares `HALCYON · TAKEN · UNIT-047 GETS THERE
@@ -144,6 +145,12 @@ const first = await firstShip(tab);
 const inboxLine = first.boot.find((line) => /NEW MESSAGES? · INBOX$/.test(line)) ?? null;
 check('ARES-VIII\'s boot types the INBOX\'s new messages (the welcome and the letters)', /^> \d+ NEW MESSAGES · INBOX$/.test(inboxLine ?? '') && Number(/\d+/.exec(inboxLine)[0]) >= 2,
   JSON.stringify(first.boot));
+// Slice 7c (R34, R36; the 7c review): run 2's HOLLOW is the relay stranger UNIT-031, never the last unit, and a won last
+// unit (PURGE) leaves no ghost: ship 1's boot says no `> hi 048. it's 047.`.
+const lineage2 = await st(() => ({ hollow: window.__ap.store.getState().run.hollowUnits, ghostSpoken: window.__ap.store.getState().run.ghostSpoken, ghost: window.__ap.ghost() }));
+check('run 2: HOLLOW is UNIT-031 (the relay stranger, R34); a won last run leaves no ghost line at the boot (R36)',
+  JSON.stringify(lineage2.hollow) === '[31]' && lineage2.ghost === null && !lineage2.ghostSpoken && !first.boot.some((line) => /^> hi 048\./.test(line)),
+  JSON.stringify(lineage2));
 const beaconWords = `A BEACON WAS ALREADY THERE · SET BY UNIT-047 · ${gap === 0 ? 'THIS YEAR' : `${years(gap)} AGO`}`;
 check(`ship 1's LANDING REPORT: \`LZ-? · ${beaconWords}\``, first.ok && first.report.ship === 'ARES-VIII' && new RegExp(`^LZ-[A-Z] · ${beaconWords}$`).test(first.report.beacon ?? ''),
   JSON.stringify(first.report));
