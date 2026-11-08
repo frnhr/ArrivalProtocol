@@ -9,7 +9,6 @@
 // • The two TODOs part 3 dropped (spec 5): the run-2 hurt-cluster hint shows once; AUTOBURN's READY lesson takes GET
 //   READY's place when the coast was SKIPped. (Slice 1a: the hurt-cluster hint is the hurt-driver one.)
 // • The phone header's next hazard (experience 2): KESTREL's debris cloud by its rack and countdown.
-import '../../support/classic-world';
 import { check, finish } from '../../wp1/harness';
 import { createHarness7 } from '../../wp7/harness7';
 import { buildDirectorCtx, composeObjective, type DirectorCtx } from '@systems/director';
@@ -49,7 +48,9 @@ h.store.update((d) => {
   if (!freeSeg) throw new Error('fixes.test: the free run went');
   d.hollow.seedTelegraph = { startAddr: requireAddr(d.memory, freeSeg), size: 2, leftSec: 5, preempted: false };
 });
-const soul = state().memory.find((seg) => seg.type === 'driver');
+// The healthiest driver (Track RETIRE: run 1's arm VESPER's drivers arrive hurt by its layer's roll, one failing, and an
+// infected failing driver is eaten within EATEN_ALARM_CLEAR_SEC: `alarm-eaten` would lead every lesson then).
+const soul = state().memory.filter((seg) => seg.type === 'driver').sort((a, b) => ('integrity' in b ? b.integrity : 0) - ('integrity' in a ? a.integrity : 0))[0];
 if (!soul) throw new Error('fixes.test: no driver on VESPER');
 infectNow(h.store, soul);
 

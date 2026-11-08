@@ -6,8 +6,9 @@
 // soft fails: END LANDING parks; an eaten driver can't launch and ends parked, eaten; a ship that left orbit takes its
 // pods (NOT LAUNCHED); a Core lost while landing parks every pod; HOLLOW's story beat and LAST LIGHT's duel hold the
 // report (the duel's L0 on the strip). Last, the pooled receiver (§3.16) that lays out the unit at the next ship.
-import '../support/classic-world';
+import { phase2Ship } from '../support/hollow-world';
 import { check, finish } from './checks';
+import { fixtureShip } from '../support/arm-ship';
 import { byDepth } from '../depth';
 import { followLanding, landInstantly, lockOn } from './harness-landing';
 import { createHarness7 } from '../wp7/harness7';
@@ -26,7 +27,7 @@ import { driversInMemory } from '@state/selectors';
 import { DRIVER_RULES } from '@data/script';
 import { FRESH_UNIT_RACK_E, FRESH_UNIT_RACK_F, lastPodRackTrailingFree, MEMORY_LAYOUTS } from '@data/memory';
 import { UNIT_TAIL_BLOCKS, BAND_DEGRADED_MIN } from '@data/tuning';
-import { classicShip, CLASSIC_FIVE, CLASSIC_HOPS } from '@data/classic-five';
+import { CLASSIC_FIVE, CLASSIC_HOPS } from '@data/classic-five';
 import type { GameState, ShipOutcome } from '@state/schema';
 import type { HollowSegment, Segment } from '@/types/segment';
 import { nominalShipThreat } from '@systems/threat-plan';
@@ -39,7 +40,11 @@ const state = (): GameState => h.store.getState();
 // is settled first (the finale's hold has its own check below).
 function boardShip(index: number, seed = 1): void {
   if (index === 0) h.resetTo('flight', seed);
-  else h.shipAlone(index, seed);
+  // Track RETIRE: run 1's arm ship with the worked route's tools (LAST LIGHT's root needs its DELETE), and HALCYON with
+  // phase 2's racks and landing (LZ-A 3 at 40°, LZ-B 2 at 190°: the out-of-band LZ-B the PARTIAL scenario is written on;
+  // run 1's own HALCYON rolls its sites).
+  else h.shipAlone(index, seed, { kit: true });
+  if (index === 1) phase2Ship(h.store, 1);
   h.store.update((draft) => {
     draft.hollow.phase = 'dormant';
     draft.director.done.push(...DRIVER_RULES.map((rule) => rule.id), 'engine-io-fault');
@@ -244,7 +249,7 @@ function eat(pod: number): void {
       && racks.segs.reduce((sum, seg) => sum + seg.size, 0) === MEMORY_LAYOUTS.FULL.totalBlocks - MEMORY_LAYOUTS.FULL.unitStart,
       racks.segs.map((seg) => `${seg.type}:${seg.size}`).join(' '));
   }
-  const ship = classicShip(4);
+  const ship = fixtureShip(4);
   const packet = packUnit(freshFiles, 200, []);
   const receiver = MEMORY_LAYOUTS.FULL.totalBlocks - MEMORY_LAYOUTS.FULL.unitStart;
   const tail = Math.min(UNIT_TAIL_BLOCKS, lastPodRackTrailingFree(ship));

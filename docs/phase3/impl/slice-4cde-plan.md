@@ -1917,18 +1917,35 @@ Track RETIRE, on branch `retire` from baffe52. OPEN-DECISIONS items 85–88 hold
   - ENGINE FIRING's refusal of [L] is still checked by the suite's SPACE scenario.
 - **Checks re-expressed as the arm's twin:** `wp9/seed-test`, `threat/beam-seeds` and `skills/sentry` each checked that
   "DELETE is licensed at KESTREL's start". Each now checks DELETE arriving at KESTREL's boot, requested at HALCYON's desk.
-- **9 suites are left**, each needing its own re-measurement:
-  - `wp12/fix1/fixes`: an `alarm-eaten` line leads the COPY lesson's lead-in on the arm VESPER. The cause is not found.
-  - `wp7/fix1/run-end-and-boot`: the arm's boot sends the arrival's flashes twice, and its ECC line is the arm's.
-  - `wp7/p2-models` and `wp8/fix1/fixes`: their models' numbers are the classic route's (22 LY, link 120). `wp8/fix1` also
-    plays runs 2+, whose arm is a fresh roll.
-  - `opening/calm-ships`: classic-only data, the licence table and the layer table of the classic five.
-  - `opening/ghost-placement`, `landing/flow`, `landing/review-1b`: the HALCYON and KESTREL landings.
-  - `landing/pace-landing`: on the arm, the late launch at the window's end does not fill LZ-B.
+- **Fourth pass** (after the merge at c1dc6a3): five more moved. None of the three issues the lead named was an arm bug.
+  - `wp7/fix1/run-end-and-boot`: the "flashes sent twice" are two lines, each sending its flashes once. An ECC-corrected
+    hop says its own ECC line, and HALCYON's arrival damage says its own line after it. The classic five folded both into
+    one line.
+  - `wp12/fix1/fixes`: the `alarm-eaten` line came from the driver the suite infected. Run 1's arm VESPER's first driver
+    arrives failing, by its layer's roll, so it is eaten within EATEN_ALARM_CLEAR_SEC. The suite now infects the
+    healthiest driver.
+  - `landing/pace-landing`: the last pod is launched in the in-band window's last 2 tac s, which makes it an unsure launch.
+    On the arm HALCYON's orbit its spread put it 24–64 km off-site, even with every file healthy. That is the window's
+    unsure edge, not a bug. The full-LZ section writes the late pod down in its LZ, and `phase2Ship` gives the 3 / 2 split.
+  - `opening/calm-ships`: the classic licence table's check is deleted, per decision 89. The rest checks run 1's authored
+    ships: VESPER's root is flanked by POD 11 and POD 12, and the split lesson is checked once GET READY lets it through.
+  - `landing/flow`: the ships carry the kit, and HALCYON has phase 2's landing (`phase2Ship`).
+- **4 suites are left.** Each needs its own re-measurement:
+  - `landing/review-1b`: five of its checks (M2) test the engine firing in the landing.
+    - These are a SKIP stopping on the landing's first burst, the burst at TACTICAL and LANDING_BURN_POWER, and L7b's
+      SWAP row.
+    - Run 1's arm fires nothing once the orbit is locked (slice 3b), so these checks test classic-only behaviour.
+    - Recommendation: delete them, with `landing/engine-landing`'s re-pin as the arm's rule. The L7b row may then be
+      unreachable on the arm, which phase 3 should confirm.
+    - Its two "lift" checks still need re-measuring.
+  - `opening/ghost-placement`: run 2's arm is a fresh roll, so the classic VESPER-boards-the-ghost route does not exist
+    there. It needs a run-2 route through the boarding ship.
+  - `wp7/p2-models`, `wp8/fix1/fixes`: their models' numbers are the classic route's (22 LY, link 120). `wp8/fix1` also
+    plays runs 2 and later, whose second ship is a TIGHT roll.
 
 ### Phase 3, not started
 
-- Gate: the 9 above are gone.
+- Gate: the 4 above are gone.
 - Then delete:
   - `classic-five.ts` and `classic-slots.ts`;
   - `useClassicFixture` / `inFixtureWorld` (state/initial.ts), `support/classic-world`, `support/classic-fixture` and the 17

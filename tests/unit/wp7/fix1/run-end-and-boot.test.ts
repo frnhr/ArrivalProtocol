@@ -8,8 +8,8 @@
 // • NEXT BITE on a sleeping root whose wake the coast can bring forward shows no time until the coast fixes the wake (no
 //   0:22 → 0:05 jump). Slice 2: HALCYON is calm, so phase 2's HALCYON root and HOLLOW (the WALLS stage's coast-tied wake)
 //   are planted there (support/hollow-world.ts plantHalcyonRoot).
-import '../../support/classic-world';
 import { check, finish } from '../../wp1/harness';
+import { fixtureShip } from '../../support/arm-ship';
 import { createHarness7 } from '../harness7';
 import { plantHalcyonRoot } from '../../support/hollow-world';
 import { lossPlan } from '@systems/run';
@@ -19,9 +19,9 @@ import { transmitModel } from '@systems/transmit';
 import { skipBoot } from '@systems/boot';
 import { biteClock } from '@systems/hollow-hud';
 import { setIntegrity } from '@state/actions';
-import { transitEccLine, TRANSMIT_TEXT, BEAM_OUT_TEXT } from '@data/script';
+import { scriptedDamageLine, bootLinePlan, TRANSMIT_TEXT, BEAM_OUT_TEXT } from '@data/script';
 import { HOLLOW_HUD_TEXT } from '@data/hollow-text';
-import { classicShip, CLASSIC_FIVE } from '@data/classic-five';
+import { CLASSIC_FIVE } from '@data/classic-five';
 import {
   BOOT_SKIP_GRACE_SEC, BOOT_LINE_AT_SEC, ARRIVAL_HIT_STAGGER_SEC, ARRIVAL_HIT_SEEN_SEC, EMERGENCY_EXTRA_HITS,
 } from '@data/tuning';
@@ -40,13 +40,13 @@ function crash(): void {
 // WP11: the last ship is LAST LIGHT, the flagship: its loss is §4.3's FLAGSHIP LOST, worded FINAL SHIP LOST since slice 3a (WP7's interim 'last-ship-lost' and
 // its `… LOST · END OF THE FLEET` title are gone with the fleet that ended early), and RUN END's tone is sombre.
 const LAST = CLASSIC_FIVE.length - 1;
-const LAST_NAME = classicShip(LAST).name;
+const LAST_NAME = fixtureShip(LAST).name;
 {
   h.shipAlone(LAST, 9);
   crash();
   const plan = lossPlan(state());
   check(`a crash on ${LAST_NAME} (the last ship, the flagship, comms up): the run ends as flagship-lost`, plan.kind === 'end'
-    && plan.cause === 'flagship-lost' && classicShip(LAST).final, JSON.stringify(plan));
+    && plan.cause === 'flagship-lost' && fixtureShip(LAST).final, JSON.stringify(plan));
   continueAfterLoss(h.store);
   const model = runEndModel(state());
   check('…RUN END is sombre: FINAL SHIP LOST', model.title === 'FINAL SHIP LOST' && model.tone === 'sombre' && model.cause === 'flagship-lost',
@@ -90,8 +90,15 @@ check('the crash\'s why line keeps the extra hits either way', TRANSMIT_TEXT.why
   h.stepFor(BOOT_SKIP_GRACE_SEC + 0.05);
   check('…a skip after the grace jumps to the ECC line instead of cutting to amber', skipBoot(h.store) && state().run.phase === 'boot'
     && state().ui.mode === 'memory', `${state().run.phase} ${state().ui.mode}`);
-  const eccSaid = state().log.entries.some((entry) => entry.text === transitEccLine([...arrival.hits, ...arrival.scripted]));
-  check('…the ECC line is said and the red flashes are sent at once', eccSaid && hitEvents() === eventsBefore + 1, `${eccSaid} ${hitEvents() - eventsBefore}`);
+  // Track RETIRE: on run 1's arm a hop that ECC corrected says its own ECC line (the hits that landed), and the ship's own
+  // arrival damage (HALCYON's Sensor Interp) its own line after it, each with its flashes (the classic five folded both
+  // into one line); the skip says both at once.
+  const plan = bootLinePlan(state(), 0);
+  const flashLines = (plan.includes('ecc') && arrival.hits.length > 0 ? 1 : 0) + (plan.includes('scripted') ? 1 : 0);
+  const eccSaid = state().log.entries.some((entry) => entry.text.startsWith('> ECC:'))
+    && (!plan.includes('scripted') || state().log.entries.some((entry) => entry.text === scriptedDamageLine(arrival.scripted)));
+  check('…the ECC line (and the ship\'s own damage line) are said and the red flashes are sent at once', eccSaid && flashLines >= 1
+    && hitEvents() === eventsBefore + flashLines, `${eccSaid} ${hitEvents() - eventsBefore} of ${flashLines} · ${plan.join(',')}`);
   check('…a second skip right after is ignored (the flashes are still being seen)', !skipBoot(h.store) && state().run.phase === 'boot');
   const seenAfterSec = (flashes - 1) * ARRIVAL_HIT_STAGGER_SEC + ARRIVAL_HIT_SEEN_SEC;
   h.stepFor(seenAfterSec + 0.1);
@@ -99,7 +106,7 @@ check('the crash\'s why line keeps the extra hits either way', TRANSMIT_TEXT.why
   check('…once the last flash has been seen, a skip cuts to amber (before the boot would have ended)',
     skipBoot(h.store) && state().run.phase === 'flight' && BOOT_LINE_AT_SEC[2]! + seenAfterSec < endsBefore,
     `${state().run.phase} (seen ${seenAfterSec.toFixed(2)} s after the ECC line)`);
-  check('…the arrival\'s flashes were sent once', hitEvents() === eventsBefore + 1);
+  check('…the arrival\'s flashes were sent once (one event per line that flashes)', hitEvents() === eventsBefore + flashLines);
 }
 
 // --- NEXT BITE before HALCYON's coast --------------------------------------------------------------------

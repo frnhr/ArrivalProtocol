@@ -5,11 +5,11 @@
 // 5…1 beeps, ending on LAUNCH NOW) as one exact conic jump; WINDOW OPEN and PODS IN
 // FLIGHT refuse it; a full LZ's window neither holds TACTICAL nor stops a SKIP; a controller that drops inside a SKIP
 // (holdsTactical false) lifts the window rule, and AUTODROP's armed controller keeps it (4c, R7); OVERCLOCK covers the landing.
-import '../support/classic-world';
 import { check, finish } from './checks';
 import { lockOn } from './harness-landing';
 import { createHarness5 } from '../wp5/harness5';
 import { createInitialState } from '@state/initial';
+import { phase2Ship } from '../support/hollow-world';
 import { resetWorld } from '@systems/reset';
 import { requestLaunch } from '@systems/landing';
 import { activeLandingController, registerLandingController, windowRuleHolds } from '@systems/landing-controller';
@@ -38,6 +38,10 @@ h.store.update((draft) => {
   draft.director.done.push(...DRIVER_RULES.map((rule) => rule.id), 'engine-io-fault');
 });
 resetWorld();
+// Track RETIRE: run 1's arm HALCYON with phase 2's racks and landing (LZ-A 3 / LZ-B 2: a full LZ before the other,
+// support/hollow-world phase2Ship); run 1's own splits 4 / 1. HOLLOW stays asleep.
+phase2Ship(h.store, 1);
+h.store.update((draft) => { draft.hollow.phase = 'dormant'; });
 const state = (): GameState => h.store.getState();
 const warp = (): number => state().level.tacticalWarp;
 const toWindowTac = (): number | null => { const sec = windowLaunchInSec(state()); return sec === null ? null : sec / warp(); };
@@ -132,7 +136,14 @@ const other = state().landing.lzs.find((lz) => lz.label !== first)?.label ?? '?'
     `${target?.toFixed(0)} vs ${other} ${toOther?.toFixed(0)} game s`);
   // The full LZ's window as if it were open now: it holds neither TACTICAL nor the SKIP, and the strip says to hold the pods.
   const pred = getPrediction();
-  const open: GameState = { ...state(), landing: { ...state().landing, window: { lz: first, sure: true } } };
+  // Track RETIRE: on run 1's arm HALCYON the late pod above (launched in the in-band window's last 2 tac s, its spread past
+  // the bracket) can come down off-site, and then the first LZ is not full: the full LZ is written here, the late pod down
+  // in it, as the classic HALCYON's seed landed it.
+  const landing = structuredClone(state().landing);
+  for (const record of landing.pods) {
+    if (record.fate.kind === 'down' && record.fate.touchdown.place !== 'lz') record.fate.touchdown = { ...record.fate.touchdown, place: 'lz', lz: first, missKm: null };
+  }
+  const open: GameState = { ...state(), landing: { ...landing, window: { lz: first, sure: true } } };
   check('a full LZ\'s open window passes at CRUISE', choosePace(open, pred, false, 0.05) === 'cruise', choosePace(open, pred, false, 0.05));
   check('...does not refuse a SKIP', skipBlockReason(open, pred) !== LANDING_SKIP_REFUSAL.windowOpen, String(skipBlockReason(open, pred)));
   const line = landingObjective(buildLandingContext(open, getDropSolution(), skipBlockReason(open, pred) === null, landingFlightOf(open, pred)));
