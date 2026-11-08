@@ -243,9 +243,9 @@ check('…their keys by ring: a stranger\'s rings 2, 4, 5; 047.log\'s rings 1, 2
   logEntriesAtBoot(180, true, BOOK_STRANGER).join() === '2,3,4,5' && logEntriesAtBoot(30, false, BOOK_STRANGER).join() === ''
   && logEntriesAtBoot(50, false, BOOK_STRANGER).join() === '2' && logEntriesAtBoot(180, true, BOOK_LAST).join() === '2,3,4,5,6'
   && logEntriesAtBoot(180, true).join() === '2,3,4,5,6,7,8,9,10,11' && logEntriesAtBoot(180, true, BOOK_046).join() === logEntriesAtBoot(180, true).join());
-check('…046.log\'s words through the book table (data/log-books.ts); the other books are LINEAGE\'s (throw until built)',
+check('…046.log\'s words through the book table (data/log-books.ts); the other books are LINEAGE\'s (built: traces/logs; a unit with no log throws)',
   bookName({ kind: '046' }) === '046.log' && bookEntryLines({ kind: '046' }, 12, { charge: 36 }) !== null
-  && /LINEAGE/.test(threw(() => bookName({ kind: 'stranger', unit: 31 }))));
+  && bookName({ kind: 'stranger', unit: 31 }) === '031.log' && /not a relay stranger/.test(threw(() => bookName({ kind: 'stranger', unit: 32 }))));
 
 // --- The save: v7 → v8 ---------------------------------------------------------------------------------------------------------
 function resumeFixture(file: string): ReturnType<typeof createStore<GameState>> {
@@ -349,9 +349,9 @@ for (const [what, file, raw] of [['run 2\'s first desk', 'run-save-v7-ship-done-
 // (Track LINEAGE's stubs:)
 {
   const state = createInitialState({ seed: 7 });
-  check('LINEAGE\'s stubs, neutral: no face line, no CONTROL line, no stranger\'s line; a said line throws',
+  check('LINEAGE\'s lines (built: traces/lineage), none at run 1\'s first boot: no face line, no CONTROL line, no stranger\'s line; a said line not due throws',
     faceBootLines(state).length === 0 && lineageControlLine(state) === null && strangerBootLine(state) === null
-    && /not built/.test(threw(() => lineageBootLineSaid(createStore(state), 'face', 0))));
+    && /not due/.test(threw(() => lineageBootLineSaid(createStore(state), 'face', 0))));
 }
 // (Track CHART's stubs:)
 {

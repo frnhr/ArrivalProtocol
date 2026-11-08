@@ -1,47 +1,94 @@
 // =====================================================================================================================
-// Slice 7c: Track LINEAGE owns this file (docs/phase3/impl/slice-7-plan.md §2.4, §4.3, §5.3; R34–R36). The FOUNDATION wrote
-// the stubs below with their final signatures; data/script.ts bootLinePlan calls them on every boot, so each is neutral (no
-// line) until LINEAGE builds it and raises data/traces.ts LINEAGE_BUILT. Pure; module state: none.
+// Slice 7c: Track LINEAGE owns this file (docs/phase3/impl/slice-7-plan.md §2.4, §4.3, §5.3; R34–R36). data/script.ts
+// bootLinePlan calls the three line rules on every boot (the plan is made once, at the boot's first tick, and each line is
+// rendered from the live state as it is typed), so each rule reads only what the boot does not change. Pure but for
+// lineageBootLineSaid; module state: none. Every line waits for data/traces.ts LINEAGE_BUILT, and plays on the arm only (the
+// classic world's boots are frozen, and it holds no traces).
 // =====================================================================================================================
-// The lineage's boot lines (05 §3.5): the relay stranger's `> another one. they keep sending you.` closing the boot of the
-// ship it boards on (R34), and on the final ship after a REASSIGNMENT trace the last unit's face taking the root over
-// (`> hi 048. it's 047. i've been at this dish 3 years.`, its charge line; R35) and CONTROL's lineage line (`UNIT-047 was
-// reassigned successfully. Please ignore it. :)`). The plan (bootLinePlan, the lead's) puts the face lines, then CONTROL's,
-// then the stranger's, after the INBOX line and before HOLLOW's own line, as 02 §4's order says.
-// The rules LINEAGE reads (the lead's, systems/traces.ts): rootUnitsOf / lastUnitRoot (who the root is), rootWaitYears (the
-// face line's wait), finalTraces(run).reassignment (the trace built), midRunHollowUnits (the stranger), run.traces.from
-// (the ending, its step 1 for the face line by 05 §3.12). The words are data/lineage-text.ts's.
+// The lineage's boot lines (05 §3.5): the relay stranger's `> another one. they keep sending you.` on the boot of the ship
+// it boards on (R34), and on the final ship after a REASSIGNMENT trace the last unit's face taking the root over (its
+// step-1 line, then its wait and charge; R35) and CONTROL's lineage line (`UNIT-047 was reassigned successfully. Please
+// ignore it. :)`; at a wild dish, `Your predecessor is non-compliant. Please be compliant. :)`). The plan puts the face
+// lines, then CONTROL's, then the stranger's, after the INBOX line and before HOLLOW's own line, as 02 §4's order says.
+// The rules read (the lead's, systems/traces.ts): lastUnitRoot (the root it is), rootWaitYears (the face line's wait),
+// finalTraces(run) (REASSIGNMENT and the wild dish, each held and built), onFinalShip; run.traces.from (its step 1 for the
+// face line by 05 §3.12). The words are data/lineage-text.ts's.
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
-import { notBuilt } from '@systems/not-built';
+import { emit } from '@systems/events';
+import { finalTraces, lastUnitRoot, onFinalShip, rootWaitYears } from '@systems/traces';
+import { LINEAGE_BUILT } from '@data/traces';
+import { LINEAGE_TEXT, strangerOf } from '@data/lineage-text';
+import { FRESH_UNIT_CHARGE } from '@data/memory';
 
 // The boot lines LINEAGE adds, by kind (data/script.ts BootLineKind): 'face' (HOLLOW's voice, one line each, in order),
 // 'lineage-control' (CONTROL's, at most one), 'stranger' (HOLLOW's, at most one).
 export type LineageBootLineKind = 'face' | 'lineage-control' | 'stranger';
 
-// The face lines this boot types (R35: on the final ship after REASSIGNMENT, the last unit at its dish), in order. Neutral:
-// none.
+function lineagePlays(state: Readonly<GameState>): boolean {
+  return LINEAGE_BUILT && state.run.map.world === 'arm';
+}
+
+// The last unit's face is due at this boot (R35): the final ship, after a REASSIGNMENT trace (held and built: the root is the
+// last unit there, systems/traces.ts rootUnitsOf). Its ending, or null.
+function faceFrom(state: Readonly<GameState>): NonNullable<GameState['run']['traces']['from']> | null {
+  const run = state.run;
+  const from = run.traces.from;
+  if (!lineagePlays(state) || from === null || !onFinalShip(run) || !finalTraces(run).reassignment) return null;
+  return from;
+}
+
+// The face lines this boot types, in order: its step 1's line (05 §3.12), then the wait and the charge (05 §3.5). None
+// off the final ship, or with no REASSIGNMENT trace.
 export function faceBootLines(state: Readonly<GameState>): string[] {
-  void state;
-  return [];
+  const from = faceFrom(state);
+  if (from === null) return [];
+  const next = state.run.unitNumber;
+  const rooted = from.ending.rootUnits;
+  const years = rootWaitYears(state.run);
+  if (years === null) throw new Error('faceBootLines: a face with no ending to wait from');
+  const step1 = from.ending.hollow;
+  const first = step1 === 'merge'
+    ? LINEAGE_TEXT.faceByStep1.merge(next, lastUnitRoot(from))
+    : step1 === 'followed'
+      ? LINEAGE_TEXT.faceByStep1.followed(next, from.unit)
+      : LINEAGE_TEXT.faceByStep1[step1](next, from.unit, rooted);
+  return [first, LINEAGE_TEXT.faceWait(years, FRESH_UNIT_CHARGE, lastUnitRoot(from).length > 1)];
 }
 
-// CONTROL's lineage line at this boot (after the face: `UNIT-047 was reassigned successfully. Please ignore it. :)`), or
-// null. Neutral: null.
+// CONTROL's lineage line at this boot, or null: after the face, the last unit reassigned (R35); else on a final ship whose
+// dish runs wild (a non-compliant trace held and built, R33: its wild seed comes in at this boot), the predecessor.
 export function lineageControlLine(state: Readonly<GameState>): string | null {
-  void state;
-  return null;
+  const from = faceFrom(state);
+  if (from !== null) return LINEAGE_TEXT.reassigned(from.unit);
+  if (!lineagePlays(state) || !onFinalShip(state.run) || !finalTraces(state.run).wild) return null;
+  return LINEAGE_TEXT.nonCompliant;
 }
 
-// The stranger's line closing the boot of the ship it boarded on (R34: `> another one. they keep sending you.`), or null.
-// Neutral: null.
+// The stranger's line on the boot of the ship it boarded on (R34; arrival.boarded: the 108% unpack), or null. Only a relay
+// stranger says it (data/lineage-text.ts strangerOf: never run 1's 046, nor a last unit a v7 run kept), and never at a boot
+// whose root the last unit's face takes over (its line would answer the face).
 export function strangerBootLine(state: Readonly<GameState>): string | null {
-  void state;
-  return null;
+  const arrival = state.run.arrival;
+  if (!lineagePlays(state) || arrival === null || arrival.boarded === null) return null;
+  if (strangerOf(state.run.hollowUnits) === null || faceFrom(state) !== null) return null;
+  return LINEAGE_TEXT.stranger;
 }
 
-// A lineage line is said (systems/boot.ts sayNextLine; a skip says every line): the face's first line takes the root over
-// ('root-face' { unit }, nameGlitch) and names it as the last unit. Unreachable while the three above are empty.
+// A lineage line is said (systems/boot.ts sayNextLine; a skip says every line). The face's first line takes the root over:
+// 'root-face' { unit } (its nameGlitch cue). The root's blocks are the last unit's already (they were laid out with
+// say.ts hollowLabel, which reads rootUnitsOf on the final ship), so nothing in the store changes. CONTROL's and the
+// stranger's lines only speak.
 export function lineageBootLineSaid(store: Store<GameState>, kind: LineageBootLineKind, ordinal: number): void {
-  notBuilt('lineageBootLineSaid', 'LINEAGE', store, kind, ordinal);
+  if (!(Number.isInteger(ordinal) && ordinal >= 0)) throw new Error(`lineageBootLineSaid: ordinal ${ordinal}`);
+  const state = store.getState();
+  if (kind === 'face') {
+    const from = faceFrom(state);
+    if (from === null || ordinal >= faceBootLines(state).length) throw new Error(`lineageBootLineSaid: face line ${ordinal} is not due at this boot`);
+    if (ordinal === 0) emit('root-face', { unit: from.unit });
+    return;
+  }
+  if (kind === 'lineage-control' ? lineageControlLine(state) === null : strangerBootLine(state) === null) {
+    throw new Error(`lineageBootLineSaid: a '${kind}' line that is not due at this boot`);
+  }
 }

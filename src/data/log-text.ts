@@ -163,18 +163,21 @@ export const LOG_ENTRIES: readonly LogEntryDef[] = [
 const pad2 = (n: number): string => String(n).padStart(2, '0');
 
 export const LOG_TEXT = {
-  // SCAN on the file (05 §3.2's interim header): it reads `046.log` from then on.
-  scan: (found: number): string => `046.log · origin UNIT-046 · ${LOG_ENTRY_COUNT} entries · ${found} found`,
+  // SCAN on the file (05 §3.2's interim header): it reads `046.log` from then on. Slice 7c (R37): another book's name, unit
+  // and entry count (data/log-books.ts bookScanLine); left out, 046.log's.
+  scan: (found: number, name: string = LOG_NAME.known, unit = 46, count = LOG_ENTRY_COUNT): string =>
+    `${name} · origin UNIT-${String(unit).padStart(3, '0')} · ${count} entries · ${found} found`,
   // CONTROL's answer to the first SCAN or click on the `???` (05 §3.5).
   control: 'That file is not part of your installation. Please ignore it. :)',
   // The boot line when a key opens an entry (slice-2-plan §1.1 item 15: the interim keys, `entry n at ship n`).
-  // Two at once (the final ship's 10 and 11) read `ENTRIES 10–11`.
-  keyFound: (entries: readonly number[]): string => {
+  // Two at once (the final ship's 10 and 11) read `ENTRIES 10–11`. Slice 7c (R37): `name`, the book's (data/log-books.ts
+  // bookKeyFound); left out, 046.log.
+  keyFound: (entries: readonly number[], name: string = LOG_NAME.known): string => {
     if (entries.length === 0) throw new Error('LOG_TEXT.keyFound: no entry');
     const sorted = [...entries].sort((a, b) => a - b);
     return sorted.length === 1
-      ? `> 046.log · KEY FOUND · ENTRY ${pad2(sorted[0]!)}`
-      : `> 046.log · KEY FOUND · ENTRIES ${pad2(sorted[0]!)}–${pad2(sorted[sorted.length - 1]!)}`;
+      ? `> ${name} · KEY FOUND · ENTRY ${pad2(sorted[0]!)}`
+      : `> ${name} · KEY FOUND · ENTRIES ${pad2(sorted[0]!)}–${pad2(sorted[sorted.length - 1]!)}`;
   },
   // The PACKET chip's lock (05 §3.2): the log can't be left behind.
   packetLock: 'LOCKED · 046 ASKED YOU TO CARRY IT',
