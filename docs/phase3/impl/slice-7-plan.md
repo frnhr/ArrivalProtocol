@@ -1174,3 +1174,200 @@ the stubs, the tuning blocks, the gate `LAST_LANDING_BUILT` (down), and the dry 
   `src/data/script.ts bootLinePlan`, `src/systems/desk.ts cardModel` / `chartModel`.
 - **7d:** `src/systems/map-generator.ts topUpReservations` (read only: the `?` slots and fragments), `src/systems/resident-left.ts`
   (the signal pattern), `src/systems/resident-hud.ts signalGlyph`, `src/types/resident.ts SignalRecord`.
+
+---
+
+## Deviations (7a foundation)
+
+Recorded by the 7a FOUNDATION agent (branch `found-7a`, from a0fd347, the head of `claude/modest-hawking-209t0f` after slice 6
+Track SITES's merge). Steps 0–9 of §5.1 are built; step 10 (the independent contract review) is next. Every gate is down, and
+nothing a player can reach changes: the FINALE plays WP11's one step, the run end is the RUN TALLY with NEW RUN.
+The unit tier is green with no behaviour change: 207 passed (the new `ending/foundation` among them), 0 failed, 11
+balance-only skipped, 223 s on 4 workers while slice 6's fix agent worked in the main checkout (a first, cold run took 279 s
+under the same load), with `npm run typecheck` and the tests' tsc clean. The e2e was not run; its two reads of WP11's phases
+(`playthrough.mjs:774`, `run-flow.mjs:416`) now read `'done'`.
+
+**Step 0, checked at HEAD:** `RUN_SAVE_VERSION` was 6 and `META_VERSION` 3, as §0 says (slice 6's fix pass had not bumped
+the save). Every name §2.4, §4.4 and the critical-files list cite exists, with the corrections below.
+
+### What the tracks stand on
+
+**Built (lead-owned from here):**
+- `types/ending.ts`: `HollowChoice`, `HollowFate`, `YouChoice` (with 7d's `'contact'`), `EndingPiece`, `FinalePhase` (the
+  eight phases), `EndingRecord`, `LastLandingState` (7b's), `RunEndStage`.
+- `state/schema.ts`: FinaleState v7 (`rootFell`, `hollow`, `you`, `stay`, `restored`, `cardAtAi`, `ending`,
+  `unresolvedUntilAi`), `FinaleEnding.choice: { hollow; you }`, `'won-spare'` in `RunEndCause` (and `LastCause`),
+  `ui.runEndStage`. `types/landing.ts`: `LandingState.lastLanding` (always null), `FeaturedColonist.line` (filled from
+  `Colonist.line` in `landingResult`). `types/lineage.ts`: `LastUnit.ending`. `state/initial.ts createFinaleState`.
+- Save v7: `RUN_SAVE_MIGRATIONS[6]`, the codec's finale checks (`checkHollow`, `finaleRefusal`), the shape pin at v7. Archive
+  v4: `META_MIGRATIONS[3]`, `meta-parse.ts parseEnding` and `endingOfV3LastUnit` (shared by both migrations), `recordRunEnd`'s
+  ending and pieces, `archiveRunEnded` passing `endingRecordOf(state)`.
+- `data/endings.ts`: `ENDINGS_BUILT` (`twoStep`, `night`, `contact`), `ENDING_PIECES`, `HOLLOW_PIECES`, `YOU_PIECES`,
+  `pieceBuilt`, `builtPieces`, `PriceKind`, `EndingOption`, `STEP1_OPTIONS`, `STEP2_OPTIONS`, `step2Options`,
+  `EndingTitleKey`, `endingTitleKey`.
+- Tuning: the 7a lead, FINALE, CARD and NIGHT blocks at the end of `tuning.ts`; events and cues (the `7 ENDING` blocks);
+  the seams of §2.4; the debug hooks of §2.12.
+- `tests/unit/support/finale.ts`; `tests/unit/ending/foundation.test.ts` (54 checks, about 1.5 s); the fixtures
+  `run-save-v6-ending-chosen-lastlight.json`, `run-save-v6-ship-done-run2.json` and `meta-v3-won-merge.json`, dumped by the
+  game's own save path before any change (fdda53f).
+
+**How the FINALE runs with `twoStep` down (WP11's one step on the v7 machine):** the root's DELETE completes → `'asleep'`
+(rootFell, `'finale-asleep'`) → `'step1'` in the same tick (cardAtAi = now + FINALE_OPEN_DELAY_SEC) → the old card's PURGE or
+MERGE (`chooseFinale`) confirms with REASSIGNMENT → `'done'` with WP11's typed ending. UNRESOLVED is `'done'` at once
+(`'followed'`, REASSIGNMENT, the root standing). **With `twoStep` up** (the FOUNDATION's skeleton, FINALE's to finish):
+`'asleep'` holds until the landing settles (ended, no pod falling, HOLLOW's line typed), then `'step1'`; `pickStep1` → `'step2'`;
+`pickStep2` confirms; UNRESOLVED is a `'step1'` with `rootFell` false whose way on (`continueFollowed`) throws. The confirm
+still goes straight to `'done'` (FINALE adds `'verdict'` and `'last-landing'`).
+
+**The contract, per track.** "Neutral" stubs return the value shown and are safe on every tick and paint. "Throws" stubs throw
+through `not-built.ts notBuilt(what, track)` until built (its `Track` is now `'FINALE' | 'CARD' | 'NIGHT'`). Each file opens
+with its track's banner.
+
+| Track | Function (file) | Signature | Now |
+|---|---|---|---|
+| FINALE | `pickStep1` (systems/finale.ts) | `(store, hollow: HollowChoice) => string \| null` | built: step 1 → step 2 (refusal: phase, pause, `optionState`'s need) |
+| FINALE | `backToStep1` | `(store) => string \| null` | built: step 2 → step 1, the pick kept |
+| FINALE | `pickStep2` | `(store, you: YouChoice) => string \| null` | built for PURGE/MERGE + REASSIGNMENT; SPARE's apply, a `'followed'` step 2 and STAY with ≠ 1 ship throw |
+| FINALE | `pickStay` | `(store, stay: number) => string \| null` | throws |
+| FINALE | `continueFollowed` | `(store) => string \| null` | throws |
+| FINALE | `chooseFinale` | `(store, choice: 'purge' \| 'merge') => string \| null` | built: WP11's one step (the old card, ?debug); retire it with the old card |
+| FINALE | `emptyShip` (systems/ending-rules.ts) | `(state) => { ok: boolean; fuelPct: number \| null }` | neutral: `{ ok: false, fuelPct: null }` |
+| FINALE | `stayCandidates` | `(state) => { slot; shipName; colony; year }[]` | neutral: [] |
+| FINALE | `optionState` | `(state, piece: EndingPiece, seen: readonly EndingPiece[]) => OptionState` (`open` \| `needs { need; named }` \| `hidden`) | neutral: PURGE, REASSIGNMENT open; MERGE open or `needs` by its charge (WP11's words); every other piece hidden |
+| FINALE | `finaleRunCause` | `(state) => RunEndCause` | built (R17; throws unless `'done'`) |
+| FINALE | `endingRecordOf` | `(state) => EndingRecord \| null` | built (null unless a final ship at `'done'`; STAY reads `stayCandidates`) |
+| FINALE | `reportEndingLine` | `(state) => string \| null` | neutral: null (landing-report.ts's `endingLine` calls it on a final ship; LandingReport.ts draws `.lr-ending` under the colony) |
+| FINALE | `FINALE_TEXT` (data/finale-text.ts) | headers, `controlQuote`, `followedLine`, `asleep(us)`, `strip`, `word`, `command`, `meaning`, `price`, `needs`, `now`, `verdict`, `reportLine` | seeded with §2.9's and 05 §3.12's words |
+| FINALE | `__ap.ending` (debug.ts) | `(hollow, you, opts?: { stay? }) => void` | throws |
+| CARD | `mountFinaleChoice` (components/run/FinaleChoice.ts) | `(store) => () => void` | built: WP11's card on the v7 phases (shown at `'step1'` with `rootFell`, ends on `'done'` + PURGE/MERGE), reading the renamed tuning |
+| CARD | `styles/ending.css` | | empty (imported by main.ts) |
+| NIGHT | `epilogueModel` (systems/epilogue.ts) | `(state, meta: Meta \| null) => EpilogueModel \| null` | neutral: null |
+| NIGHT | `finalCardModel` | `(state, meta: Meta \| null) => FinalCardModel \| null` | neutral: null |
+| NIGHT | `mountEpilogue` (components/run/Epilogue.ts) | `(store) => () => void` | built: at stage `'epilogue'` with no model, goes on to `'final'` (deferred out of the fan-out) |
+| NIGHT | `mountFinalCard` (components/run/FinalCard.ts) | `(store) => () => void` | built: at stage `'final'` with no model, starts the next run |
+| NIGHT | `EPILOGUE_TEXT` (data/epilogue-text.ts) | `tallyOn`, `header(year)`, `colony(colony, age, people)`, `older(count)`, `offSite`, `next(unit, gap)`, `nextSameYear(unit)`, `endings(found, total)`, rows, `newRun` | seeded |
+| NIGHT | `styles/night.css` | | empty (imported by main.ts) |
+| lead | `setRunEndStage` (systems/run.ts) | `(store, stage: RunEndStage) => void` | built: tally → epilogue → final only, at `'end'` |
+| lead | `finalePending`, `finaleCardUp` (state/selectors.ts) | `(state) => boolean` | built |
+| lead | `choiceMayOpen`, `withdrawUntimedChoices` (systems/say.ts) | `(state, timed) => boolean`, `() => number` | built |
+
+The model types in `epilogue.ts` (`EpilogueModel`, `EpilogueLine`, `FinalCardModel`, `FinalCardPiece`) are NIGHT's to widen;
+`OptionState`, `EmptyShip` and `StayCandidate` are FINALE's (CARD asks for a change).
+
+**Files each track owns (beyond §4.1's table):**
+- FINALE: `finale.ts`, `ending-rules.ts`, `finale-text.ts`, `story-log.ts:66` (`rootKeyDue`), `hollow-text.ts` HOLLOW_FINALE's block
+  (`:187–285`), the debug bodies of `__ap.finale.pick/.back/.cont` and `__ap.ending`, `support/finale.ts` (may extend), the
+  movers below for churn only.
+- CARD: `FinaleChoice.ts`, `ending.css`, `audio.ts`'s two new cues, `game.css`'s `.finale-choice` block (`:3140–3290`, delete
+  it), index.html's `#finaleChoice` skeleton (the card's own markup).
+- NIGHT: `epilogue.ts`, `epilogue-text.ts`, `Epilogue.ts`, `FinalCard.ts`, `night.css`, `RunEnd.ts`, `TitleCard.ts`'s ENDINGS
+  line, index.html's `#epilogue` and `#finalCard` (empty divs today: their markup).
+
+**The lines each track edits in the lead's files** (nothing else):
+- FINALE:
+  - the gate: `data/endings.ts:15` (`twoStep`);
+  - tuning's 7a FINALE block (`tuning.ts:2435–2446`);
+  - `support/words.test.ts`'s 7a FINALE block (`:430–441`, with `FINALE_WORST`);
+  - `ending/foundation.test.ts:50` (`built: the two steps not yet` → `ENDINGS_BUILT.twoStep`), `:70–73` (the neutral stubs: as
+    built), `:75–76` (the throwing stubs: as built);
+  - the dry run's movers (below).
+- CARD:
+  - tuning's 7a CARD block (`tuning.ts:2448–2453`);
+  - `audio-cues.ts`'s 7 ENDING block (`:383–393`: `finale-open`, the SPARE `finale-chosen` line, `finale-step2`); CARD's new cues
+    `spareNotes` and `sunsetRumble` go in `audio.ts`.
+- NIGHT:
+  - the gate: `data/endings.ts:17` (`night`);
+  - tuning's 7a NIGHT block (`tuning.ts:2455–2465`);
+  - `support/words.test.ts`'s 7a NIGHT block (`:445–456`, with `NIGHT_WORST`; PAYOFF_OF's cover of LINE_POOL joins it);
+  - `ending/foundation.test.ts:51` (`built: the night not yet`) and `:74` (the night's models: as built);
+  - `audio-cues.ts`'s `epilogue-line` line (`:392`).
+
+### R5: the dry run (`ENDINGS_BUILT.twoStep` raised alone, the quick tier, then dropped)
+
+201 of 207 suites pass, 215 s; 20 checks fail in 6 suites, plus `ending/foundation`'s own gate line. The FOUNDATION already moved every suite whose *types* moved (17 files: every `chooseFinale` caller to
+`support/finale.ts chooseEnding`, and every reader or writer of WP11's `'choice'`, `'purged'`, `'merged'`, `'unresolved'` to
+`finaleAtStep1`, `decidedAs`, `decideFinale`, `openFinaleStep1`), so the dry run's movers are the ones whose *behaviour* moves
+with the two steps. All six are FINALE's churn:
+- `ending/foundation.test.ts:50`: the gate line itself.
+- `wp11/merge-test.test.ts` (10): `:147` (PURGE still open), `:155`, `:157`, `:159`, `:161`, `:166`, `:171` (MERGE at step 1),
+  `:182`, `:185` (the landing after MERGE, CONTROL's verdict). The suite chooses right after the root falls, mid-landing: with
+  the two steps that is `'asleep'` (refused `NOT NOW`). Plan §4.4 already has this suite becoming 7b's `ending/last-landing`;
+  7a's interim checks need `settleFinale` (or `chooseEnding(…, { step })`) and R15's reopened landing.
+- `wp11/fix1/fix1.test.ts` (4): `:154` (MERGE's listener sees the ending), `:182` and `:186` (UNRESOLVED is now a step-1 card:
+  `continueFollowed`), `:208` (the 1-thread Core ends the duel `'asleep'`, not at step 1). `:130` (PURGE's listener) passed.
+- `wp11/p2/views.test.ts` (3): `:173` (the root's end is the biggest tear: a spike now follows, the landing running on),
+  `:188` (every pod down while the choice stood), `:201` (PURGE writes its ending: `NOT NOW` while asleep).
+- `wp11/p2/purge-fleet.test.ts` (3): `:95`, `:98`, `:101` (PURGE taken right after the DELETE; the fleet line, R13's retired
+  narration, then moves to the epilogue's model, §4.4).
+- `threat/arrival-story.test.ts:260` (the duel runs to the card: `'asleep'` until the landing settles).
+
+Not measured (outside the quick tier): the BALANCE_ONLY `wp11/full-run` and `wp12/playthrough` (both already through
+`chooseEnding`; their pick waits for `finaleAtStep1`, which now comes after the landing), and the e2e (plan §6.4's edits).
+Plan §4.4's other listed suites (`landing/flow`, `landing/hollow-landing`, `map/run1-route`, `opening/calm-ships`,
+`save/*`, `skills/autodrop-arm`, `wp11/boss-sim`, `wp11/harness11`, `wp12/p3/minors`) did not move with the gate.
+
+### Deviations
+
+1. **A third gate, `ENDINGS_BUILT.night`** (Track NIGHT's line). R19's three screens change what ENTER does on the RUN TALLY
+   (the e2e presses it for NEW RUN), so they are gated like the FINALE: while `night` is down RunEnd's button is NEW RUN; up,
+   it reads `EPILOGUE ▸ [ENTER]` and sets `ui.runEndStage 'epilogue'`, and RunEnd's keys answer only on the tally. CARD has no
+   gate: its card is built against `twoStep`, and between FINALE's merge and CARD's the old card still works on the two-step
+   machine (it shows on step 1 and `chooseFinale` confirms from there).
+2. **The FOUNDATION moved the type-driven churn itself** (R5 gave all the movers to FINALE). FinaleState v7 removes WP11's
+   phases, so 17 suites stopped compiling; they were moved mechanically through `support/finale.ts`, and the dry run lists only
+   behavioural movers. `chooseFinale` stays in `finale.ts` as WP11's one step (the old card and `?debug` call it); FINALE (or
+   CARD) deletes it with the old card.
+3. **`settleFinale(store, step)` takes the suite's clock** (`step`), and `chooseEnding(store, hollow, you, { stay?, step? })`
+   settles first when given one: the suites own their tick loops. `chooseEnding` skips the verdict only with `twoStep` up (WP11's
+   typed ending held the report in every suite before, and still does). Extra helpers: `finaleAtStep1`, `decidedAs`,
+   `decideFinale`, `openFinaleStep1`, `withEndings`.
+4. **`EndingRecord.finalSlot` and `.finalYear` are `number | null`**, null on the classic world and on a migrated record that
+   kept no trail, not §2.2's slot -1 and year 0: no sentinel values (AGENTS.md), and the archive's `wholeNumber` refuses -1.
+   `stay.year` is 0 on the classic world as §2.2 says.
+5. **The codec's MERGE check reads the pod records' `restored`**, not `driverLost === 'eaten'`: 7a's interim (R15, today's
+   `merge()`) clears `driverLost` as it restores a driver in place. 7b's radio drivers may keep `'eaten'`; DROP asks the lead to
+   widen the check. **STAY's ★ ON TARGET is not checked yet**: the codec checks that `stay` names a ship of `run.ships` or the
+   final one, and that it is set exactly for STAY; the ★ rule is FINALE's (`stayCandidates`), and FINALE asks the lead for the
+   one codec line once it exists. The point check is at SHIP DONE (`finale.phase === 'none'`): a boot point holds no slices.
+6. **v6 migration of a `'choice'` phase** (never at a save point) reads as `'step1'` after the fall; `unresolvedUntilAi` is
+   kept. The META 3 → 4 rule lives in `meta-parse.ts endingOfV3LastUnit`, shared with the save's `run.lastUnit`.
+7. **`recordRunEnd` takes the pieces from the ending record, never the cause** (`RunEnd.ending?`, left out: none). A suite that
+   ended a run with a won cause and no record now finds nothing seen (`wp8/meta` passes a record). `meta.ts ENDINGS` (WP11's
+   two) stays for the title's and RUN END's endings line until NIGHT moves them to `builtPieces()`; since `endingsSeen` now holds
+   REASSIGNMENT too, `TitleCard` counts only those two (`ENDINGS 1/2` as before). `script.ts endingsLine` takes `EndingPiece`s.
+8. **`'won-spare'`'s words** are placeholders NIGHT may reword: `RUN_END_TITLE` `A SHIP FOR IT`, `RUN_END_WHY`, the title's
+   `LINEAGE_END` `gave UNIT-046 a ship`. `GHOST_LINE['won-spare']` is null (R36 applied early: a SPARE was not lost).
+   `hollowUnitsAfter` reads it as any other cause (the last unit) until 7c's R34.
+9. **Two events are emitted only on the two-step path**, `'finale-open'` and `'finale-step2'`, so WP11's card keeps its own
+   `finaleHold` and no new stamp plays while the gate is down. `'finale-asleep'` has no cue (`'root-deleted'` already tears);
+   SPARE's `'finale-chosen'` plays `purgeTone` until CARD's `spareNotes`; `'epilogue-line'` plays `typeTick` (sys).
+10. **Tuning renames:** `FINALE_CHOICE_DELAY_SEC` and `FINALE_CHOICE_ARM_SEC` moved into FINALE's block as
+    `FINALE_OPEN_DELAY_SEC` and `FINALE_STEP_ARM_SEC` (one number, one name), and FinaleChoice's `CLOSE_FADE_MS` is CARD's
+    `FINALE_CARD_FADE_MS`; the old card reads them.
+11. **`finishLanding` throws** on a final ship whose FINALE is not `'done'` (fail loudly; `finalePending` holds the report until
+    then). `finalePending` is false at `'none'`, true at every other phase but `'done'`, and at `'done'` until the typed ending
+    and UNRESOLVED's line are over.
+12. **`optionState`'s neutral answer reuses WP11's MERGE need words** (`HOLLOW_FINALE.mergeNeeds`), so `pickStep1`'s refusal
+    equals today's; FINALE's `needs.charge` (`NEEDS 20 CHARGE · you have 14`) replaces it.
+13. **The report's ending line** is a model field (`LandingReportModel.endingLine`, null off the final ship) from
+    `ending-rules.ts reportEndingLine`, FINALE's: landing-report.ts only calls it, and LandingReport.ts draws it (`.lr-ending`).
+14. **The night stubs defer their store update** (`queueMicrotask`): they react to a store subscription, and an update inside
+    the fan-out is the tick discipline's one rule.
+15. **`__ap.finale`** is callable as before (its fields kept for the e2e) and gains `options` and `.pick/.back/.cont`;
+    `__ap.archiveAs(cause, landed?, ending?)` builds a won or unresolved cause's record as META 4's migration reads an old one
+    (step 1 by the cause, REASSIGNMENT, the worked route's LAST LIGHT; SPARE with FUEL 30) and checks it with `parseEnding`.
+16. **`not-built.ts` is reused** with the new tracks. Slice 6's fix pass, running beside this, may delete it (no slice 6 stub was
+    left): on the merge keep this version.
+17. **`docs/phase3/OPEN-DECISIONS.md`** is not touched (its "Slice 7" heading is the lead's).
+
+### Notes for the tracks
+
+- **FINALE:** raise `twoStep` first and run the tier; finish the phases (`'verdict'`, `'last-landing'` for R15), SPARE's apply,
+  UNRESOLVED's step 2, STAY's pick and the prices; R6's asleep line is `FINALE_TEXT.asleep` (the FOUNDATION still says WP11's
+  `> 047. wait.`). `endingRecordOf` reads `stayCandidates` for STAY's colony.
+- **CARD:** call `pickStep1`, `pickStep2`, `pickStay`, `backToStep1`, `continueFollowed`; read `optionState` with the archive's
+  `endingsSeen`, `cardAtAi` for the open delay, `rootFell` for IT FOLLOWED YOU. The card's open already withdraws untimed
+  choices (finale.ts), and the arbiter keeps the TERMINAL shut while `finaleCardUp`.
+- **NIGHT:** `setRunEndStage` moves the stages; `endingRecordOf(state)` is this run's ending while `run.phase === 'end'`;
+  `archiveMeta().endingsSeen` already holds this run's pieces; `MAP_TEXT.runEnd.bridge` moves to the final card.
+- **The lead:** the independent contract review (§5.1 item 10) is next.

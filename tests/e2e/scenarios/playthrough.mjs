@@ -771,7 +771,7 @@ for (const [index, name] of SHIPS.entries()) {
     const finaleAtReport = await st(() => ({ phase: window.__ap.store.getState().hollow.finale.phase, showing: window.__ap.finale().endingShowing }));
     if (index === SHIPS.length - 1) {
       check(`${tag}: the LANDING REPORT follows the finale (${finaleAtReport.phase}, its typed ending over)`,
-        ['purged', 'merged', 'unresolved'].includes(finaleAtReport.phase) && !finaleAtReport.showing && (choiceAt === null || choiceAt < reportAt),
+        finaleAtReport.phase === 'done' && !finaleAtReport.showing && (choiceAt === null || choiceAt < reportAt),
         JSON.stringify({ ...finaleAtReport, choiceAt, reportAt }));
     }
     await page.waitForTimeout(1500);

@@ -46,7 +46,10 @@ const threw = (fn: () => unknown): string => {
 };
 
 // --- The gates, the tables ------------------------------------------------------------------------------------------------
-check('every 7a gate is down (twoStep, night, contact)', !ENDINGS_BUILT.twoStep && !ENDINGS_BUILT.night && !ENDINGS_BUILT.contact);
+// One gate a line (each track edits its own: FINALE `twoStep`, NIGHT `night`, 7d's CONTACT `contact`).
+check('built: the two steps not yet (Track FINALE)', !ENDINGS_BUILT.twoStep);
+check('built: the night not yet (Track NIGHT)', !ENDINGS_BUILT.night);
+check('built: CONTACT not yet (7d)', !ENDINGS_BUILT.contact);
 check(`RUN_SAVE_VERSION 7, META_VERSION 4, EMPTY_SHIP_FUEL_PCT = STAR_FUEL_PCT (${STAR_FUEL_PCT}: one ★ notch, R8)`,
   RUN_SAVE_VERSION === 7 && META_VERSION === 4 && EMPTY_SHIP_FUEL_PCT === STAR_FUEL_PCT);
 check('the pieces: seven, and six built while CONTACT is down (ENDINGS n/6, R22)',

@@ -407,13 +407,13 @@ if ((await st(() => window.__ap.store.getState().ui.mode)) !== 'memory') await p
 await page.waitForTimeout(800);
 await page.locator('#chip-delete').click({ force: true });
 await page.locator('.seg.hollow-root').first().click({ force: true });
-// WP11 part 2: the card's buttons take clicks once it is armed (FINALE_CHOICE_ARM_SEC after it comes up).
+// WP11 part 2: the card's buttons take clicks once it is armed (FINALE_STEP_ARM_SEC after it comes up).
 const choiceUp = await waitFor(() => !document.getElementById('finaleChoice').hidden && document.getElementById('finaleChoice').classList.contains('armed'), 25000);
 check('LAST LIGHT: the root\'s DELETE leaves the choice card', choiceUp);
 await page.locator('#fcPurge').click();
 const report5 = await kit.landToReport();
 check('LAST LIGHT lands and reaches its LANDING REPORT after the finale', report5
-  && await st(() => ['purged', 'merged', 'unresolved'].includes(window.__ap.store.getState().hollow.finale.phase)));
+  && await st(() => window.__ap.store.getState().hollow.finale.phase === 'done'));
 await page.waitForTimeout(1200);
 for (let i = 0; i < 8 && (await phase()) === 'report'; i++) {
   await page.keyboard.press('Space');
