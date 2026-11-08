@@ -414,11 +414,11 @@ export function finalePending(state: Readonly<GameState>): boolean {
   return (ending !== null && aiSec < ending.untilAi) || (unresolvedUntilAi !== null && aiSec < unresolvedUntilAi);
 }
 
-// The FINALE's card is up (slice 7a, R18): step 1 or step 2. say.ts's arbiter keeps every TERMINAL choice shut while it is
+// The FINALE's card is up (slice 7a, R18): step 1, step 2, or the verdict typing on it (R13; review m1). say.ts's arbiter keeps every TERMINAL choice shut while it is
 // (the card is a modal on the choice layer, not a TERMINAL choice).
 export function finaleCardUp(state: Readonly<GameState>): boolean {
   const phase = state.hollow.finale.phase;
-  return phase === 'step1' || phase === 'step2';
+  return phase === 'step1' || phase === 'step2' || phase === 'verdict';
 }
 
 // A corruption level (0..1) in CORRUPTION_STEP steps: the Core's, a glitch burst's (WP11), the MERGE floor's.

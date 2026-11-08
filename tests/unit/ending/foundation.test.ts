@@ -22,7 +22,10 @@ import { pendingRunSave } from '@systems/save-write';
 import { parseMeta, recordRunEnd, freshMeta, META_MIGRATIONS, MetaCorrupt } from '@systems/meta';
 import { parseEnding } from '@systems/meta-parse';
 import { optionState, emptyShip, stayCandidates, endingRecordOf, finaleRunCause, reportEndingLine } from '@systems/ending-rules';
-import { pickStay, continueFollowed } from '@systems/finale';
+import { pickStay, continueFollowed, pickStep1, pickStep2 } from '@systems/finale';
+import { isDeepStrictEqual } from 'node:util';
+import { chargeLeft } from '@state/selectors';
+import { HOLLOW_FINALE } from '@data/hollow-text';
 import { epilogueModel, finalCardModel } from '@systems/epilogue';
 import { choiceMayOpen, sayChoice, withdrawUntimedChoices, mountSay, openChoiceEntry } from '@systems/say';
 import { finaleCardUp, finalePending } from '@state/selectors';
@@ -31,7 +34,9 @@ import {
 } from '@data/endings';
 import { stubStorage, pageOpen } from '../save/save-fixture';
 import { decideFinale, openFinaleStep1 } from '../support/finale';
-import { RUN_SAVE_KEY, RUN_SAVE_VERSION, META_STORAGE_KEY, META_VERSION, EMPTY_SHIP_FUEL_PCT, STAR_FUEL_PCT } from '@data/tuning';
+import {
+  RUN_SAVE_KEY, RUN_SAVE_VERSION, META_STORAGE_KEY, META_VERSION, EMPTY_SHIP_FUEL_PCT, STAR_FUEL_PCT, MERGE_COST_CHARGE,
+} from '@data/tuning';
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), '..', 'save', 'fixtures');
 type Raw = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -46,9 +51,12 @@ const threw = (fn: () => unknown): string => {
 };
 
 // --- The gates, the tables ------------------------------------------------------------------------------------------------
-// One gate a line (each track edits its own: FINALE `twoStep`, NIGHT `night`, 7d's CONTACT `contact`).
+// One gate a line (each track edits its own: FINALE `twoStep`, NIGHT `night`, 7d's CONTACT `contact`), a spacer between
+// them (review M1: the tracks' hunks never touch).
 check('built: the two steps not yet (Track FINALE)', !ENDINGS_BUILT.twoStep);
+// (Track NIGHT's gate line:)
 check('built: the night not yet (Track NIGHT)', !ENDINGS_BUILT.night);
+// (7d's gate line:)
 check('built: CONTACT not yet (7d)', !ENDINGS_BUILT.contact);
 check(`RUN_SAVE_VERSION 7, META_VERSION 4, EMPTY_SHIP_FUEL_PCT = STAR_FUEL_PCT (${STAR_FUEL_PCT}: one ★ notch, R8)`,
   RUN_SAVE_VERSION === 7 && META_VERSION === 4 && EMPTY_SHIP_FUEL_PCT === STAR_FUEL_PCT);
@@ -67,31 +75,33 @@ check('a title is keyed by step 2, then step 1; SPARE + SUNSET has none (R8, R23
 {
   const store = createStore<GameState>(createInitialState({ seed: 7 }));
   const state = store.getState();
-  check('the neutral stubs: PURGE and REASSIGNMENT open, MERGE by its charge, every other row hidden; no empty ship, no STAY ship, no report line',
-    optionState(state, 'purge', []).kind === 'open' && optionState(state, 'reassignment', []).kind === 'open'
+  check('the neutral stubs: PURGE and REASSIGNMENT open and free, MERGE by its charge meter, every other row hidden; no empty ship, no STAY ship, no report line',
+    isDeepStrictEqual(optionState(state, 'purge', []), { kind: 'open', price: null, now: null })
+    && isDeepStrictEqual(optionState(state, 'reassignment', []), { kind: 'open', price: null, now: null })
+    && isDeepStrictEqual(optionState(state, 'merge', []), { kind: 'open', price: { kind: 'charge', have: chargeLeft(state), need: MERGE_COST_CHARGE }, now: null })
     && ['spare', 'sunset', 'stay', 'contact'].every((piece) => optionState(state, piece as never, []).kind === 'hidden')
     && !emptyShip(state).ok && stayCandidates(state).length === 0 && reportEndingLine(state) === null);
-  check('…the night has no models yet (the screens skip)', epilogueModel(state, null) === null && finalCardModel(state, null) === null);
   check('the throwing stubs: pickStay and continueFollowed (Track FINALE)',
     /not built \(Track FINALE/.test(threw(() => pickStay(store, 0))) && /not built \(Track FINALE/.test(threw(() => continueFollowed(store))));
-  check('a fresh world: no ending, nothing pending, no card', endingRecordOf(state) === null && !finalePending(state) && !finaleCardUp(state)
+  check('a fresh world: no ending (no record), nothing pending, no card', state.hollow.finale.record === null && endingRecordOf(state) === null && !finalePending(state) && !finaleCardUp(state)
     && /not decided/.test(threw(() => finaleRunCause(state))));
   store.update((draft) => {
     draft.landing.finalShip = true;
-    decideFinale(draft.hollow.finale, 'merge');
+    decideFinale(draft, 'merge');
   });
   const record = endingRecordOf(store.getState());
-  // A headless world is the classic one: no arm slot, no year.
-  check('a decided FINALE on a final ship: its record (MERGE + REASSIGNMENT, the root, no slot or year on the classic world, the kit, no FUEL) and won-merge',
-    record !== null && record.hollow === 'merge' && record.you === 'reassignment' && JSON.stringify(record.rootUnits) === '[46]'
-    && store.getState().run.map.world === 'classic' && record.finalSlot === null && record.finalYear === null && record.kit.includes('scan')
+  // A headless world is the classic one: no arm slot, its real year (review m6).
+  check('a decided FINALE on a final ship: its frozen record (MERGE + REASSIGNMENT, the root, no slot on the classic world but its year, the kit, no FUEL) and won-merge',
+    record !== null && record === store.getState().hollow.finale.record && record.hollow === 'merge' && record.you === 'reassignment'
+    && JSON.stringify(record.rootUnits) === '[46]' && store.getState().run.map.world === 'classic' && record.finalSlot === null
+    && record.finalYear === store.getState().run.map.galaxyYear && record.kit.includes('scan')
     && record.fuelPct === null && finaleRunCause(store.getState()) === 'won-merge', JSON.stringify(record));
   for (const [fate, cause] of [['purge', 'won-purge'], ['spare', 'won-spare'], ['followed', 'unresolved']] as const) {
-    store.update((draft) => { decideFinale(draft.hollow.finale, fate); });
+    store.update((draft) => { decideFinale(draft, fate); });
     check(`…step 1 ${fate} is ${cause} (R17)`, finaleRunCause(store.getState()) === cause);
   }
   check('…a SPARE keeps the empty ship\'s FUEL as shown', endingRecordOf(store.getState())?.fuelPct === null
-    && (() => { store.update((draft) => { decideFinale(draft.hollow.finale, 'spare'); }); return endingRecordOf(store.getState())?.fuelPct !== null; })());
+    && (() => { store.update((draft) => { decideFinale(draft, 'spare'); }); return endingRecordOf(store.getState())?.fuelPct !== null; })());
   // The arbiter (R18): no TERMINAL choice opens while the card is up, and the card's open withdraws an untimed one.
   const unmount = mountSay(store);
   store.update((draft) => { draft.hollow.finale.phase = 'none'; });
@@ -102,7 +112,31 @@ check('a title is keyed by step 2, then step 1; SPARE + SUNSET has none (R8, R23
     && !choiceMayOpen(store.getState(), true) && !choiceMayOpen(store.getState(), false));
   check('…and withdrawUntimedChoices closes the untimed one standing', untimed !== null && withdrawUntimedChoices() === 1
     && openChoiceEntry(store.getState()) === null);
+  // Review M6: step 1's price is judged again at the confirm. MERGE picked at 25 charge, a REPAIR drains it to 19 under the
+  // card: the confirm goes back to step 1 with the reason, nothing applied, and never throws.
+  const setCharge = (used: number): void => store.update((draft) => {
+    const pool = draft.memory.find((seg) => seg.type === 'redundancy');
+    if (pool?.type !== 'redundancy') throw new Error('foundation: no REPAIR CHARGE pool');
+    pool.used = used;
+  });
+  store.update((draft) => { Object.assign(draft.hollow.finale, { phase: 'none', hollow: null, you: null, record: null }); openFinaleStep1(draft.hollow.finale); });
+  setCharge(25);
+  const picked = pickStep1(store, 'merge');
+  setCharge(19);
+  let confirmed: string | null = 'threw';
+  const thrown = threw(() => { confirmed = pickStep2(store, 'reassignment'); });
+  const after = store.getState().hollow.finale;
+  check('the confirm re-checks step 1\'s price: MERGE short at the confirm goes back to step 1 with its need, the pick kept, nothing applied',
+    picked === null && thrown === '' && confirmed === HOLLOW_FINALE.mergeNeeds(19) && after.phase === 'step1' && after.hollow === 'merge'
+    && after.you === null && after.record === null && chargeLeft(store.getState()) === 19,
+    `${picked} ${String(confirmed)} ${thrown} ${after.phase}`);
   unmount();
+}
+
+// The night's stubs (Track NIGHT's block, review M1: apart from FINALE's lines).
+{
+  const state = createInitialState({ seed: 7 });
+  check('the night has no models yet (the screens skip)', epilogueModel(state, null) === null && finalCardModel(state, null) === null);
 }
 
 // --- The save: v6 → v7 --------------------------------------------------------------------------------------------------------
@@ -127,6 +161,12 @@ const v6Ending = fixture('run-save-v6-ending-chosen-lastlight.json');
     finale.phase === 'done' && finale.hollow === 'purge' && finale.you === 'reassignment' && finale.rootFell === true
     && JSON.stringify(finale.restored) === '[]' && finale.stay === null && finale.cardAtAi === null && !('restoredHalf' in finale),
     JSON.stringify(finale));
+  const lastLight = v6Ending.save.payload.run.map.route.at(-1);
+  check('…and its ending record, as the confirm would have frozen it: PURGE + REASSIGNMENT at LAST LIGHT\'s slot and year, the kit and charge from its memory (review M4)',
+    finale.record?.hollow === 'purge' && finale.record.you === 'reassignment' && finale.record.finalShip === 'LAST LIGHT'
+    && finale.record.finalSlot === lastLight.slot && finale.record.finalYear === v6Ending.save.payload.run.map.galaxyYear
+    && finale.record.kit.includes('scan') && Number.isInteger(finale.record.charge) && finale.record.fuelPct === null && finale.record.stay === null,
+    JSON.stringify(finale.record));
   check('…THE LAST LANDING null, every featured colonist\'s line null (R2, R21)', migrated.payload.slices.landing.lastLanding === null
     && migrated.payload.run.ships.length > 0 && migrated.payload.run.ships.every((ship: Raw) => ship.pods.every((pod: Raw) => pod.featured.every((colonist: Raw) => colonist.line === null))));
   const store = resumeFixture('run-save-v6-ending-chosen-lastlight.json');
@@ -168,6 +208,9 @@ const v6Run2 = fixture('run-save-v6-ship-done-run2.json');
     ['STAY with no ship', base, (save) => { save.payload.slices.hollow.finale.you = 'stay'; }, /STAY's ship is missing/],
     ['THE LAST LANDING set', base, (save) => { save.payload.slices.landing.lastLanding = { pods: [] }; }, /lastLanding/],
     ['a pod MERGE never gave back', base, (save) => { save.payload.slices.hollow.finale.restored = [3]; }, /restored pod 3/],
+    ['a decided finale without its record', base, (save) => { save.payload.slices.hollow.finale.record = null; }, /without its ending record/],
+    ['a record that is not the finale\'s', base, (save) => { save.payload.slices.hollow.finale.record.hollow = 'merge'; }, /is not the finale's/],
+    ['a record that does not parse', base, (save) => { save.payload.slices.hollow.finale.record.kit = ['jam']; }, /not an ending record/],
     ['an unknown phase', base, (save) => { save.payload.slices.hollow.finale.phase = 'choice'; }, /finale\.phase/],
     ['ENDING CHOSEN at step 1', base, (save) => { save.payload.slices.hollow.finale.phase = 'step1'; }, /^route/],
     ['SHIP DONE with an open finale', desk, (save) => { save.payload.slices.hollow.finale.phase = 'duel'; }, /SHIP DONE with the finale 'duel'/],
@@ -200,6 +243,8 @@ const v6Run2 = fixture('run-save-v6-ship-done-run2.json');
     && ['flagship-lost', 'overwritten', 'stayed', 'abandoned', 'signal-lost'].every((cause) => migrated(cause) === null)
     && migrated('won-purge').finalSlot === null && migrated('won-purge').finalYear === null && migrated('won-purge').finalShip === 'LAST LIGHT');
   check('…an empty endingsSeen stays empty', JSON.stringify(step({ ...v3, endingsSeen: [] }).endingsSeen) === '[]');
+  check('…but an UNRESOLVED last unit stood by: its archive gains REASSIGNMENT (review m5, as recordRunEnd records it)',
+    JSON.stringify(step({ ...v3, endingsSeen: [], lastUnit: unitOf('unresolved') }).endingsSeen) === '["reassignment"]');
   check('…traces at version 4 is an unknown field', (() => {
     try { parseMeta(JSON.stringify({ ...meta, traces: [] })); return false; } catch (error) { return error instanceof MetaCorrupt && /traces/.test(error.message); }
   })());

@@ -1,4 +1,5 @@
 // Slice 4c–4e: Track ORBIT owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2). Others ask by message.
+// Slice 7a (review B2): the lead's one hook, the ★ notch's title from systems/finale-card.ts fuelStarTitle (Track CARD's).
 import type { Store } from '@state/store';
 import type { GameState, PresetMode, SasMode } from '@state/schema';
 import { onGameTick, onAiTick } from '@systems/clock';
@@ -22,6 +23,7 @@ import { cancelBeamOut } from '@systems/run';
 import { arrivalFuelTrimPct } from '@systems/skills';
 import { BEAM_OUT_TEXT, FUEL_TRIM_TAG } from '@data/script';
 import { requireById } from '@components/dom';
+import { fuelStarTitle } from '@systems/finale-card';
 import { ACCEPT_CONFIRM_SEC, STAR_FUEL_PCT, POWER_MIN_PCT } from '@data/tuning';
 
 // Engine window (§7.1), top to bottom:
@@ -242,7 +244,8 @@ export function mountEngineWindow(store: Store<GameState>): () => void {
 
   // --- FUEL ---
   fuelStar.style.left = `${STAR_FUEL_PCT}%`;
-  fuelStar.title = `★ Lock the orbit with at least ${STAR_FUEL_PCT}% FUEL left`;
+  const starTitle = `★ Lock the orbit with at least ${STAR_FUEL_PCT}% FUEL left`;
+  fuelStar.title = starTitle;
   fuelStarLabel.textContent = `★ ${STAR_FUEL_PCT}%`;
   let lastFuel = '';
   function paintFuel(): void {
@@ -252,9 +255,12 @@ export function mountEngineWindow(store: Store<GameState>): () => void {
     const state = store.getState();
     const pred = getSensedPrediction();
     const model = fuelModel(state, pred, state.run.phase === 'landing' ? landingBurnOffer(state, pred) : null);
-    const key = `${model.pct.toFixed(1)}|${model.neededPct?.toFixed(1)}|${model.short}`;
+    // Slice 7a (review B2): on the final ship the notch may also read SUNSET (Track CARD's hook; null: its own title).
+    const title = fuelStarTitle(state) ?? starTitle;
+    const key = `${model.pct.toFixed(1)}|${model.neededPct?.toFixed(1)}|${model.short}|${title}`;
     if (key === lastFuel) return;
     lastFuel = key;
+    fuelStar.title = title;
     fuelVal.textContent = model.text;
     fuelFill.style.width = `${model.pct}%`;
     fuelFill.classList.toggle('low', model.pct < STAR_FUEL_PCT);

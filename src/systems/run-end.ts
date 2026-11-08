@@ -143,7 +143,8 @@ export function runEndNext(next: Readonly<NextLaunch> | null, nextArm: Readonly<
 export type RunEndTone = 'victory' | 'sombre';
 
 export function runEndTone(cause: RunEndCause, flagshipDown: number | null): RunEndTone {
-  const won = cause === 'won-purge' || cause === 'won-merge';
+  // Slice 7a (review M7): a SPARE is a won run too.
+  const won = cause === 'won-purge' || cause === 'won-merge' || cause === 'won-spare';
   return won && flagshipDown !== null && flagshipDown > 0 ? 'victory' : 'sombre';
 }
 

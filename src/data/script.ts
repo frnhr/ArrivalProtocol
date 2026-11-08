@@ -17,6 +17,9 @@ import { unitName, hollowLabel } from '@systems/say';
 import { hollowUnitName, HOLLOW_STORY, HOLLOW_VERB, HOLLOW_FINALE } from '@data/hollow-text';
 import { playsTutorial, type LastCause, type LastUnit } from '@systems/meta';
 import type { EndingPiece } from '@/types/ending';
+import { SPARE_RUN_END } from '@data/epilogue-text';
+import { FINALE_TEXT } from '@data/finale-text';
+import { ENDINGS_BUILT } from '@data/endings';
 import type { UpgradeForm } from '@data/upgrades';
 import { currentShip } from '@systems/map-run';
 import { solLy } from '@systems/map-geometry';
@@ -425,8 +428,8 @@ const LINEAGE_END: Readonly<Record<LastCause, (last: Readonly<LastUnit>) => stri
   // unit did, which every PURGE did.
   'won-purge': (last) => `deleted it at ${last.shipName}`,
   'won-merge': (last) => `arrived together with ${hollowUnitName(last.hollowUnits)}`,
-  // Slice 7a (R17): PLACEHOLDER(05), Track NIGHT may reword.
-  'won-spare': (last) => `gave ${hollowUnitName(last.hollowUnits)} a ship`,
+  // Slice 7a (R17; review m4): NIGHT's words (epilogue-text.ts SPARE_RUN_END).
+  'won-spare': (last) => SPARE_RUN_END.lineage(hollowUnitName(last.hollowUnits)),
   unresolved: () => "couldn't delete it",
   'flagship-lost': (last) => `lost ${last.shipName}`,
   abandoned: (last) => `abandoned at ${last.shipName}`,
@@ -633,8 +636,8 @@ export const RUN_END_TITLE: Readonly<Record<RunEndCause, (unit: string, ship: st
   'won-purge': () => 'LAST LIGHT · THE FLEET IS HOME',
   'won-merge': () => 'WE ARRIVE TOGETHER',
   // Slice 7a (R17): the final card's title is the ending's (R23, epilogue-text.ts); the tally's is the cause's.
-  // PLACEHOLDER(05), Track NIGHT may reword.
-  'won-spare': () => 'A SHIP FOR IT',
+  // NIGHT's words (epilogue-text.ts SPARE_RUN_END; review m4).
+  'won-spare': () => SPARE_RUN_END.title,
   unresolved: () => 'IT FOLLOWED YOU',
   'flagship-lost': () => 'FINAL SHIP LOST',
   overwritten: (unit) => `${unit} OVERWRITTEN`,
@@ -666,8 +669,8 @@ export const RUN_END_NOBODY_LANDED = {
 export const RUN_END_WHY: Readonly<Record<RunEndCause, (ship: string) => string>> = {
   'won-purge': () => 'You deleted it. Every ship is home.',
   'won-merge': () => 'You let it in. Nobody is alone now.',
-  // Slice 7a (R17): PLACEHOLDER(05), Track NIGHT may reword.
-  'won-spare': () => 'You gave it the empty ship.',
+  // Slice 7a (R17; review m4): NIGHT's words (epilogue-text.ts SPARE_RUN_END).
+  'won-spare': () => SPARE_RUN_END.why,
   unresolved: () => 'Nothing was left to delete it with.',
   'flagship-lost': () => 'The final ship never made it.',
   overwritten: (ship) => `Your AI Core was eaten on ${ship}. Nobody was left to think.`,
@@ -2393,7 +2396,8 @@ const FINALE_RULES: readonly GuideRule[] = [
     priority: 'mind-urgent',
     outranksLeadIn: true,
     activeWhen: (ctx) => isLanding(ctx) && (ctx.state.hollow.finale.phase === 'step1' || ctx.state.hollow.finale.phase === 'step2'),
-    text: () => HOLLOW_FINALE.stripChoice,
+    // Slice 7a (review m2): the two steps' line (FINALE's words) once they are built; WP11's PURGE OR MERGE until then.
+    text: () => (ENDINGS_BUILT.twoStep ? FINALE_TEXT.strip : HOLLOW_FINALE.stripChoice),
   },
   {
     id: 'finale-no-delete',

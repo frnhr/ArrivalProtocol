@@ -1,3 +1,6 @@
 /* Slice 7a: Track CARD owns this file (docs/phase3/impl/slice-7-plan.md §2.10, §4.1): the FINALE's two-step card (game.css's
    .finale-choice block moves here, and CARD deletes it from game.css), its phone sheet and the FUEL notch's SUNSET tooltip.
-   Imported by main.ts after desk.css. The FOUNDATION's file is empty. */
+   Imported by main.ts after desk.css. The FOUNDATION's one rule (review m3): the final LANDING REPORT's ending line under
+   the colony (LandingReport.ts .lr-ending; FINALE's words), in the beacon's small caps. CARD owns the rule. */
+.lr-ending { margin-top: 4px; font-size: 11px; letter-spacing: 0.16em; color: var(--text); opacity: 0.85; }
+.lr-ending[hidden] { display: none; }

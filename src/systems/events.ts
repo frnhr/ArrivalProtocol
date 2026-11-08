@@ -292,7 +292,8 @@ export interface GameEvents {
   'finale-open': { step: 1 | 2 };
   // Step 2 was confirmed (with the two steps built; 'finale-chosen' follows the apply in the same moment).
   'finale-step2': { you: YouChoice };
-  // The epilogue typed its line `n` (0-based; Track NIGHT, components/run/Epilogue.ts).
+  // The EPILOGUE came up (Track NIGHT, components/run/Epilogue.ts: its choir, review m10), and typed its line `n` (0-based).
+  'epilogue-open': Record<string, never>;
   'epilogue-line': { n: number };
   // --- end of 7 ENDING ---
 }

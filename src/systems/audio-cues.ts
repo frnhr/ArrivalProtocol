@@ -383,13 +383,17 @@ export function mountAudioCues(store: Store<GameState>): () => void {
     // === Slice 7a (slice-7-plan §2.5): existing cues only; Track CARD may change the FINALE's cues on these lines (its
     // spareNotes and sunsetRumble, audio.ts), Track NIGHT the epilogue's.
 
-    // --- 7 ENDING: the card's hold as each step shows; SPARE's two notes moving apart (CARD's spareNotes; the cold tone
-    // until then); step 2's stamp (CARD's sunsetRumble on SUNSET); a tick per epilogue line. The root's sleep plays nothing
-    // of its own: 'root-deleted' already tears.
+    // --- 7 ENDING. The root's sleep plays nothing of its own: 'root-deleted' already tears. Each track's lines sit between
+    // spacer lines (review M1), so the tracks' hunks never touch.
+    // Track CARD's cues (the card): its hold as each step shows; SPARE's two notes moving apart (CARD's spareNotes; the cold
+    // tone until then); step 2's stamp (CARD's sunsetRumble on SUNSET).
     on('finale-open', () => play('finaleHold')),
     on('finale-chosen', ({ hollow }) => { if (hollow === 'spare') play('purgeTone'); }),
     on('finale-step2', () => play('stampHit', { heavy: false })),
+    // Track NIGHT's cues (the epilogue): the choir as it opens (§2.10; review m10), a tick per line typed.
+    on('epilogue-open', () => play('arrivalChoir')),
     on('epilogue-line', () => play('typeTick', { voice: 'sys' })),
+    // (end of NIGHT's cues)
     // --- end of 7 ENDING ---
   ];
   offs.push(onPostTick(() => playedThisTick.clear()));

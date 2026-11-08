@@ -240,7 +240,8 @@ function parseActiveRun(value: unknown): ActiveRun | null {
 //   MERGE ghost's `we saved you a seat`), so 'won-purge' → PURGE, 'won-merge' → MERGE, 'unresolved' → followed, each with
 //   REASSIGNMENT; who the root was is the HOLLOW it faced, the final ship its trail's last stop (none on a classic record
 //   with no trail: its name only), and nothing else was kept (no STAY, no kit, no FUEL, no charge). Every other cause: null.
-// • endingsSeen keeps its values and gains 'reassignment' when it holds any (the old endings stood the unit by).
+// • endingsSeen keeps its values and gains 'reassignment' when it holds any (the old endings stood the unit by), or when
+//   the last unit's run was UNRESOLVED (R16 reads it as stood by; review m5: as recordRunEnd records a 'followed' end).
 // • `traces` (always empty) is dropped.
 export const META_MIGRATIONS: Readonly<Record<number, (record: Record<string, unknown>) => Record<string, unknown>>> = {
   2: (record) => {
@@ -259,8 +260,9 @@ export const META_MIGRATIONS: Readonly<Record<number, (record: Record<string, un
     const { traces: _dropped, ...rest } = record;
     void _dropped;
     const seen = rest.endingsSeen;
-    const endingsSeen = Array.isArray(seen) && seen.length > 0 && !seen.includes('reassignment') ? [...seen, 'reassignment'] : seen;
     const lastUnit = rest.lastUnit;
+    const stoodBy = Array.isArray(seen) && (seen.length > 0 || (isRecord(lastUnit) && lastUnit.cause === 'unresolved'));
+    const endingsSeen = stoodBy && !(seen as unknown[]).includes('reassignment') ? [...(seen as unknown[]), 'reassignment'] : seen;
     return {
       ...rest,
       version: 4,
