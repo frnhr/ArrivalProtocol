@@ -4,7 +4,7 @@ import type { ShipThreatFacts } from '@systems/threat-plan';
 import { END_SLOTS } from '@data/arm';
 import { hopBetween, reachable } from '@systems/map-hop';
 import { isEndSlot } from '@systems/map-streams';
-import { fixedShipFacts, createRunThreat, applyThreat, planThreat, threatInputFor } from '@systems/threat-plan';
+import { fixedShipFacts, createRunThreat, applyThreat, planThreat, threatInputFor, NO_FINAL_TRACES } from '@systems/threat-plan';
 import { SEEDS_MIN_DEPTH } from '@data/tuning';
 
 // What the map tells the threat ladder about the beam into a ship (slice-3a-plan §2.6; 04 §3.4, §3.8; 02 §3.6): its
@@ -48,7 +48,7 @@ export function nominalRouteThreat(map: Readonly<RunMapState>, slots: readonly n
     const facts = index === 0
       ? { depth: 1, isFinal: false, oneHopFromFinal: false, beamSeeds: { kind: 'none' as const } }
       : mapFacts(map, slots[index - 1]!, slot, index + 1);
-    threat = applyThreat(threat, planThreat(threatInputFor(threat, facts, false)));
+    threat = applyThreat(threat, planThreat(threatInputFor(threat, facts, false, NO_FINAL_TRACES)));
   });
   return threat;
 }

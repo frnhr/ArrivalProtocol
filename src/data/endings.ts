@@ -69,3 +69,12 @@ export function endingTitleKey(you: YouChoice, hollow: HollowFate): EndingTitleK
   if (you === 'sunset' && hollow === 'spare') throw new Error('endingTitleKey: SPARE rules out SUNSET (R8)');
   return `${you}:${hollow}` as EndingTitleKey;
 }
+
+// CONTROL's one rule on an ending (7a review M2; 05 §3.8, R33): the unit is non-compliant exactly when it chose SPARE, SUNSET,
+// STAY or CONTACT (nobody stood by at the end, or the root was given a ship); everything else is compliant, so MERGE +
+// REASSIGNMENT and UNRESOLVED + REASSIGNMENT are. The FINALE's verdict, the epilogue's last line and 7c's wild seed
+// (systems/traces.ts traceKindsOf) read this, never their own copy (systems/ending-rules.ts re-exports it). Slice 7c moved it
+// here from ending-rules.ts: a rule on two choices, read by the pure trace rules.
+export function controlCompliant(hollow: HollowFate, you: YouChoice): boolean {
+  return hollow !== 'spare' && you !== 'sunset' && you !== 'stay' && you !== 'contact';
+}

@@ -26,6 +26,7 @@ import { skillRelief } from '@systems/skill-files';
 import { deliveriesForHop } from '@systems/repository';
 import { mapFacts } from '@systems/map-facts';
 import { planThreat, threatInputFor } from '@systems/threat-plan';
+import { finalTraceInput } from '@systems/traces';
 import { currentSlot, shipSummaryAt } from '@systems/map-run';
 import { hopBetween, reachableFrom } from '@systems/map-hop';
 import { unitName } from '@systems/say';
@@ -356,7 +357,7 @@ function previewFor(state: Readonly<GameState>, slot: number | null): TrainingPr
   const from = currentSlot(state.run);
   if (slot === null || !reachableFrom(map, from).includes(slot)) return null;
   const hop = hopBetween(map, from, slot);
-  const verdict = planThreat(threatInputFor(state.run.threat, mapFacts(map, from, slot, map.route.length + 1), state.run.stats.deal !== null));
+  const verdict = planThreat(threatInputFor(state.run.threat, mapFacts(map, from, slot, map.route.length + 1), state.run.stats.deal !== null, finalTraceInput(state.run)));
   const fit = unitArrival(state, { hop, threat: verdict, dropped: [], pick: null, deliveries: deliveriesForHop(state, from, slot, verdict) }).fit;
   const tight = shipSummaryAt(map, slot).memoryClass === 'TIGHT';
   return packetPreview(fit, heldSkillBlocks(state), tight, fit.word === 'leave' ? overHint(state, Math.max(fit.over, fit.overLink)) : null);

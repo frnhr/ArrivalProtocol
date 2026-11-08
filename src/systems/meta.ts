@@ -22,6 +22,8 @@ import { CLASSIC_FIVE } from '@data/classic-five';
 import { AUTHORED_SHIP_NAMES, FINAL_SHIP_NAMES } from '@data/ship-names';
 import { shipDefOf, validateShipDef } from '@data/ships';
 import { trailOf, ghostPlaceReached, mapHistoryOf, coloniesOf, notableEvents, visitsOfTrail } from '@systems/lineage';
+import { midRunHollowUnits } from '@systems/traces';
+import { LINEAGE_BUILT } from '@data/traces';
 import {
   updateArm, updateAfterRun, armStateOfMap, armContent, freshArmState, resetArmAfter, nextLaunchOf, type ArmUpdate,
 } from '@systems/map-update';
@@ -592,6 +594,9 @@ export interface RunLineage {
   armSeed: number | null;      // null: the run seed (createRunMap's `lineage.armSeed ?? seed`)
   arm: ArmState | null;
   history: LineageHistory;
+  // Slice 7c (R37): the last run's notable events (Meta.events, at most NOTABLE_EVENTS_MAX), for 047.log's templated entries
+  // (systems/traces.ts logBookOf keeps them in run.log.book; nothing else reads them from here).
+  events: NotableEvent[];
 }
 
 // HOLLOW's units after `lastUnit` (§4.5's table): on the first run the unit before 047 (UNIT-046); after a
@@ -630,11 +635,14 @@ function lineageAt(meta: Readonly<Meta>, unitNumber: number, wave: number): RunL
     unitNumber,
     wave,
     lastUnit: meta.lastUnit === null ? null : structuredClone(meta.lastUnit),
-    hollowUnits: hollowUnitsAfter(meta.lastUnit),
+    // Slice 7c (R34): from run 2 a stranger from the relays once LINEAGE_BUILT is raised (systems/traces.ts
+    // midRunHollowUnits); until then the last unit, as hollowUnitsAfter has it.
+    hollowUnits: LINEAGE_BUILT ? midRunHollowUnits(wave) : hollowUnitsAfter(meta.lastUnit),
     tutorialDone: meta.tutorialDone,
     armSeed: meta.armSeed,
     arm: armForWave(meta.arm, wave),
     history: mapHistoryOf(meta.lastUnit, meta.colonies, meta.routes),
+    events: structuredClone(meta.events) as NotableEvent[],
   };
 }
 

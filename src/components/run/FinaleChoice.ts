@@ -24,7 +24,8 @@ import { requireById, make, replayAnimation, guardPresses } from '@components/do
 import { renderKeyCaps } from '@components/hud/keycaps';
 import { unitsAt } from '@components/hud/typewriter';
 import { FINALE_TEXT } from '@data/finale-text';
-import { LOG_TEXT, logEntryLines } from '@data/log-text';
+import { LOG_TEXT } from '@data/log-text';
+import { rootEntryLines } from '@state/log-selectors';
 import { FRESH_UNIT_CHARGE } from '@data/memory';
 import { echoWord } from '@data/tool-text';
 import { FINALE_STEP_ARM_SEC, FINALE_ENDING_CPS, CONTROL_CHIME_LEAD_SEC, FINALE_CARD_FADE_MS } from '@data/tuning';
@@ -334,8 +335,8 @@ export function mountFinaleChoice(store: Store<GameState>): () => void {
     openModal();
     const state = store.getState();
     if (stage === 'step1') {
-      const lines = logEntryLines(12, { charge: FRESH_UNIT_CHARGE });
-      if (lines === null) throw new Error('FinaleChoice: entry 12 is not written');
+      // Slice 7c (R37): the root's entry of the run's book (046.log's 12 until LINEAGE_BUILT).
+      const lines = rootEntryLines(state.run.log, { charge: FRESH_UNIT_CHARGE });
       setWords(lines.map((line) => LOG_TEXT.rootLine(line)));
     } else if (stage === 'followed') {
       setWords([FINALE_TEXT.followedLine]);

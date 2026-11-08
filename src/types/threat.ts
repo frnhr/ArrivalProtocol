@@ -44,7 +44,10 @@ export type HollowWake =
   | 'loop-closed-once'
   | 'never'
   | { afterAiSec: number; coastLeadSec: number | null; calmOnly?: true };
-export type SeedTarget = 'walls' | 'near-tools';
+// Slice 7c (R33): 'near-skill', the final ship's seeds after a REASSIGNMENT trace, beside the highest-version skill ("it
+// knows what you value"; systems/trace-hunt.ts nearSkillSeedSpot, Track TRACE's). planThreat sets it on the FINALE's own
+// seeds only when the trace is built (ThreatInput.traces.hunt).
+export type SeedTarget = 'walls' | 'near-tools' | 'near-skill';
 export type HollowStoryKind = 'notices-you' | 'arrives' | 'names-itself' | 'wants-charge' | 'last-ship' | 'none';
 
 export interface VerbDef {
@@ -118,6 +121,17 @@ export interface ThreatInput {
   // stage's plus every block it was ever fed, capped (rootBlocksFor). Not "since the last ship": the PACKET's `+n` reads
   // the last ship's own share from RunThreatState.lastTally.left.
   fed: number;
+  // Slice 7c (R33; systems/traces.ts finalTraceInput): the last unit's traces the FINALE plays, each held and built
+  // (TRACES_BUILT), read by planThreat's final rule only: PURGE's hungrier bites (× TRACE_PURGE_BITE_MULT), MERGE's bigger
+  // root (FINAL_ROOT_MAX_BLOCKS), REASSIGNMENT's seeds beside your best skill. All false off a final ship's input and
+  // until Track TRACE raises the gates (NO_FINAL_TRACES).
+  traces: FinalTraceInput;
+}
+
+export interface FinalTraceInput {
+  purge: boolean;
+  merge: boolean;
+  hunt: boolean;
 }
 
 // The ladder's verdict for one ship. Copied into the world when the ship is built: hollow into HollowState.cfg, the root

@@ -12,6 +12,7 @@ import type { PodSummary } from '@/types/landing';
 import type { Meta } from '@systems/meta';
 import type { EndingPiece, EndingRecord, HollowFate, YouChoice } from '@/types/ending';
 import { endingRecordOf, controlCompliant, endingTitle } from '@systems/ending-rules';
+import { traceNextLines } from '@systems/trace-hud';
 import { runEndNext, fleetSlots } from '@systems/run-end';
 import { fleetHome } from '@systems/run-score';
 import { shipSummaryAt } from '@systems/map-run';
@@ -289,8 +290,9 @@ export function finalCardOf(state: Readonly<GameState>, meta: Readonly<Meta> | n
     ending: record === null ? null : { hollow: record.hollow, you: record.you },
     endingsLine: EPILOGUE_TEXT.endings(found, built.length),
     rows: { hollow: HOLLOW_PIECES.filter(pieceBuilt).map(piece), you: YOU_PIECES.filter(pieceBuilt).map(piece) },
-    // 7c's traceNextLines(record) fills these (R12: none until a trace is built; the card keeps their room).
-    next: [],
+    // Slice 7c (R12): the ending's NEXT RUN: lines, one per built trace (Track CHART's; none until built, the card keeps
+    // their room). A lost run leaves none (05 §3.7: forfeiting gains and loses nothing).
+    next: record === null ? [] : traceNextLines(record),
     bridge: next === null ? null : { line: next.bridge, tail: next.bridgeTail },
     newRun: EPILOGUE_TEXT.newRun,
   };

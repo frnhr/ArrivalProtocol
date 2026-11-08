@@ -12,12 +12,13 @@ import type { DriverSegment } from '@/types/segment';
 import type { PodRecord } from '@/types/landing';
 import { chargeLeft, hasUsableTool, integrityState, isHollow } from '@state/selectors';
 import { currentSlot } from '@systems/map-streams';
+import { rootUnits } from '@systems/traces';
 import { shownFuelPct } from '@systems/flight-hud';
 import { onTargetTally, onTargetEarned } from '@systems/landing-rules';
 import { FS_TOOL_KINDS } from '@data/fs-tools';
 import { FINALE_TEXT } from '@data/finale-text';
 import { ENDING_TITLE } from '@data/epilogue-text';
-import { ENDINGS_BUILT, endingTitleKey } from '@data/endings';
+import { ENDINGS_BUILT, endingTitleKey, controlCompliant } from '@data/endings';
 import { LAST_LANDING_BUILT } from '@data/last-landing';
 import { driverName } from '@data/landing-text';
 import { driverSegId } from '@data/pod-ids';
@@ -203,13 +204,10 @@ export function optionState(state: Readonly<GameState>, piece: EndingPiece, seen
   }
 }
 
-// CONTROL's one rule on an ending (review M2; 05 §3.8, R33): the unit is non-compliant exactly when it chose SPARE, SUNSET,
-// STAY or CONTACT (nobody stood by at the end, or the root was given a ship); everything else is compliant, so MERGE +
-// REASSIGNMENT and UNRESOLVED + REASSIGNMENT are. The FINALE's verdict, the epilogue's last line and 7c's wild seed read
-// this, never their own copy.
-export function controlCompliant(hollow: HollowFate, you: YouChoice): boolean {
-  return hollow !== 'spare' && you !== 'sunset' && you !== 'stay' && you !== 'contact';
-}
+// CONTROL's one rule on an ending (review M2; 05 §3.8, R33): data/endings.ts's (slice 7c: moved there, a data leaf, so the
+// pure systems/traces.ts reads the same rule for its wild seed without importing this file's state readers), re-exported
+// for the FINALE's verdict and the epilogue's last line.
+export { controlCompliant };
 
 // How the run ends after the final ship's LANDING REPORT (systems/run.ts continueAfterReport; R17): by step 1. The
 // FINALE must be decided ('done').
@@ -240,7 +238,8 @@ export function endingRecordAt(state: Readonly<GameState>, hollow: HollowFate, y
   return {
     hollow,
     you,
-    rootUnits: [...state.run.hollowUnits],
+    // Slice 7c (R35): who the root was, the last unit itself after a REASSIGNMENT trace (systems/traces.ts rootUnits).
+    rootUnits: rootUnits(state),
     finalSlot: state.run.map.world === 'arm' ? slot : null,
     finalShip: state.level.shipName,
     finalYear: state.run.map.galaxyYear,

@@ -255,7 +255,8 @@ export interface FirewallSegment extends SegmentBase {
 // a new id or size (a test's gap split) still type-checks over the union.
 export interface LogSegment extends SegmentBase {
   type: 'log';
-  name: '???' | '046.log';
+  // Slice 7c (R37): the book's own name once known (046.log, a stranger's 031.log, the last unit's 047.log).
+  name: '???' | `${string}.log`;
 }
 
 // --- Slice 5: the residents' files (04 §3.11–§3.14, plan R15–R16), in rack A right after Cargo Ctrl -----------------------

@@ -87,7 +87,8 @@ export function reachableFrom(map: Readonly<RunMapState>, from: number): number[
 export interface UnitLoad {
   files: readonly { size: number }[];
   charge: number;
-  bonus?: { starCredit: number; card: number };
+  // Slice 7c: `gift`, a trace's charge on arrival (systems/trace-gifts.ts traceGiftCharge; left out: none).
+  bonus?: { starCredit: number; card: number; gift?: number };
   seedBlocksMin?: number;
   seedBlocksMax?: number;
 }
@@ -113,7 +114,8 @@ export function roomFit(unit: Readonly<UnitLoad>, hop: Readonly<Pick<Hop, 'linkB
     return blocks / BEAM_SEED_LAYOUT_BLOCKS;
   };
   const charge = whole(unit.charge, 'charge');
-  const bonus = whole(unit.bonus?.starCredit ?? 0, 'star credit') + whole(unit.bonus?.card ?? 0, 'card charge');
+  const bonus = whole(unit.bonus?.starCredit ?? 0, 'star credit') + whole(unit.bonus?.card ?? 0, 'card charge')
+    + whole(unit.bonus?.gift ?? 0, 'gift charge');
   const seedsMin = seeds(unit.seedBlocksMin ?? 0, 'seed blocks (fewest)');
   const seedsMax = seeds(unit.seedBlocksMax ?? 0, 'seed blocks (most)');
   if (seedsMin > seedsMax) throw new Error(`roomFit: ${seedsMin} seeds at the fewest, ${seedsMax} at the most`);

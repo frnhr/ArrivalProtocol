@@ -14,7 +14,7 @@ import { transmitModel, toggleDrop, packetFit } from '@systems/transmit';
 import { hopBetween, hitsLanding } from '@systems/map-hop';
 import { packUnit } from '@systems/carry';
 import { mapFacts } from '@systems/map-facts';
-import { planThreat, threatInputFor } from '@systems/threat-plan';
+import { planThreat, threatInputFor, NO_FINAL_TRACES } from '@systems/threat-plan';
 import { MAP_TEXT } from '@data/map-text';
 import { REPO_TEXT } from '@data/repo-text';
 import type { DeliveryChip, RepoRequest } from '@/types/repo';
@@ -42,7 +42,7 @@ function packetTo(
   const real = hopBetween(state.run.map, from, to);
   const hop = opts.room === undefined ? real : { ...real, room: opts.room };
   const packet = packUnit(state.memory, hop.linkBlocks, []);
-  const threat = planThreat(threatInputFor(state.run.threat, mapFacts(state.run.map, from, to, route.length + 1), false));
+  const threat = planThreat(threatInputFor(state.run.threat, mapFacts(state.run.map, from, to, route.length + 1), false, NO_FINAL_TRACES));
   const plan: TransitPlan = {
     toShipIndex: route.length, toSlot: to, hop, linkBlocks: hop.linkBlocks, filesBlocks: packet.filesBlocks,
     chargeHeld: packet.chargeHeld, chargeCarried: packet.chargeCarried, extraHits: 0, coreHit: 0, coreReset: false,

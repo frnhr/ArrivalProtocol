@@ -56,7 +56,9 @@ import { buildShipMemory } from '@data/memory';
 import { podCode } from '@data/landing-text';
 import type { ShipDef, HollowDef } from '@data/ships';
 import { classicShip, CLASSIC_HOPS } from '@data/classic-five';
-import { nominalShipThreat, nominalRunThreat, planThreat, threatInputFor, fixedShipFacts } from '@systems/threat-plan';
+import { nominalShipThreat, nominalRunThreat, planThreat, threatInputFor, fixedShipFacts, NO_FINAL_TRACES } from '@systems/threat-plan';
+import { finalTraceInput } from '@systems/traces';
+import { huntTarget } from '@systems/trace-hunt';
 import { rollBeamSeeds, rollDeliverySeeds, plantBeamSeed, seedTargetsOf, disguiseChanceAt } from '@systems/beam-seeds';
 import { autodropDebug, setPassCount, setDropDemos, type AutodropDebug } from '@systems/autodrop';
 import { preemptSeed, type PreemptRefusal } from '@systems/sentry';
@@ -141,7 +143,7 @@ import { layerOf } from '@systems/map-geometry';
 import { FIRST_SLOT } from '@data/arm';
 import { packedFiles, arrivalCharge } from '@systems/carry';
 import { resetWorldForShip } from '@systems/run';
-import { createRunState } from '@state/initial';
+import { createRunState, withRunMap } from '@state/initial';
 import type { RunMapState, Hop } from '@/types/map';
 import type { RepoFileId, RunRepoState, DeliveryChip, RepoRequest } from '@/types/repo';
 import type { InboxMessage } from '@/types/inbox';
@@ -650,7 +652,7 @@ function debugJump(store: Store<GameState>, index: number, threat: ShipThreat = 
   });
   startShip(store, index, layout.racks, {
     hits: [], chargeCarried: packet.chargeCarried, starCredit: 0, stars: 0, card: null, cardCharge: 0, chargeFloorAdded: 0,
-    chargeOverflowLost: 0, scripted, eccCorrected: 0, seeds: layout.seeds, boarded: boardedBy(threat), deliveries: [], skills: [],
+    chargeOverflowLost: 0, scripted, eccCorrected: 0, seeds: layout.seeds, boarded: boardedBy(threat), deliveries: [], skills: [], traceLines: [], giftCharge: 0,
   }, threat);
 }
 
@@ -705,7 +707,7 @@ function debugArrive(store: Store<GameState>, hop: Hop, threat: ShipThreat): voi
     hits: [], chargeCarried: packet.chargeCarried, starCredit: 0, stars: 0, card: null, cardCharge: 0, chargeFloorAdded: charge.floorAdded,
     chargeOverflowLost: layout.overflowLost, scripted, eccCorrected: 0, seeds: layout.seeds, boarded: boardedBy(threat),
     deliveries: arrivalDeliveries(deliveries, packet.deliveries, deliverySeeds.map((seed) => seed.targetId)),
-    skills: arrivalSkills(state, packet, layout.racks.segs),
+    skills: arrivalSkills(state, packet, layout.racks.segs), traceLines: [], giftCharge: 0,
   }, threat, hop);
 }
 
@@ -725,7 +727,7 @@ function debugSlot(store: Store<GameState>, slot: number): Hop {
   if (layerOf(slot) <= layerOf(from)) throw new Error(`__ap.slot(${slot}): not further out than slot ${from}`);
   const hop = hopBetween(map, from, slot);
   const facts = mapFacts(map, from, slot, state.run.shipIndex + 2);
-  const threat = planThreat(threatInputFor(state.run.threat, facts, state.run.stats.deal !== null));
+  const threat = planThreat(threatInputFor(state.run.threat, facts, state.run.stats.deal !== null, finalTraceInput(state.run)));
   debugArrive(store, hop, threat);
   return hop;
 }
@@ -783,7 +785,7 @@ function debugRoute(store: Store<GameState>, slots: readonly number[]): Hop {
   });
   const hop = hopBetween(store.getState().run.map, prev, last);
   const facts = mapFacts(map, prev, last, slots.length);
-  debugArrive(store, hop, planThreat(threatInputFor(prior, facts, false)));
+  debugArrive(store, hop, planThreat(threatInputFor(prior, facts, false, NO_FINAL_TRACES)));
   return hop;
 }
 
@@ -836,7 +838,7 @@ function debugRunNumber(store: Store<GameState>, run: number): void {
   const lineage = { ...archiveLineage(), wave: run };
   const seed = newRunSeed();
   resetWorldForShip(store, {
-    phase: 'title', run: { ...createRunState(seed, 'title', 0, lineage), map: createRunMap({ wave: run }, seed) }, carried: null,
+    phase: 'title', run: withRunMap(createRunState(seed, 'title', 0, lineage), createRunMap({ wave: run }, seed)), carried: null,
     threat: nominalShipThreat(0), freshLog: true, done: [],
   });
 }
@@ -848,7 +850,7 @@ function debugBoard(store: Store<GameState>): ShipThreat {
   const index = store.getState().run.shipIndex;
   const facts = { ...fixedShipFacts(index), oneHopFromFinal: true };
   const before = { ...nominalRunThreat(index - 1), aboard: false, age: 0 };
-  const threat = planThreat(threatInputFor(before, facts, store.getState().run.stats.deal !== null));
+  const threat = planThreat(threatInputFor(before, facts, store.getState().run.stats.deal !== null, finalTraceInput(store.getState().run)));
   if (threat.boards === null) throw new Error(`__ap.board: HOLLOW never boards on the beam into ${classicShip(index).name} (depth ${facts.depth})`);
   debugJump(store, index, threat);
   return threat;
@@ -1168,7 +1170,7 @@ export function mountDebug(store: Store<GameState>): void {
       const weights = verbWeights(state.run.lastUnit);
       // A look with a throwaway stream: the game's own verb stream is not advanced by asking.
       const wouldPick = chooseVerb(
-        state.memory, visitRng(state.run, 'debug-verb-look'), weights, hollow.untriedTools,
+        state.memory, visitRng(state.run, 'debug-verb-look'), weights, hollow.untriedTools, huntTarget(state),
       );
       return {
         verb: hollow.verb, inSec: hollow.verbInSec, moments: hollow.verbMoments, telegraphs: hollow.verbTelegraphs,

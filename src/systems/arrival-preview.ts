@@ -15,6 +15,7 @@ import { FS_TOOL_KINDS, createToolFiles } from '@data/fs-tools';
 import { LOG_FILE } from '@data/log-text';
 import { BEAM_RANGE_LY } from '@data/tuning';
 import { seedAllowance } from '@systems/map-noise';
+import { traceSeedAllowance, traceGiftCharge } from '@systems/trace-gifts';
 import { playsTutorial } from '@systems/meta';
 import { MAP_TEXT } from '@data/map-text';
 import { TRANSMIT_TEXT, arrivalParts } from '@data/script';
@@ -34,6 +35,8 @@ export interface ArrivalCredit {
   starCredit: number;
   stars: number;
   card: number;
+  // Slice 7c: a trace's gift on arrival (systems/trace-gifts.ts traceGiftCharge); left out, none.
+  gift?: number;
 }
 
 export interface ArrivalPreview {
@@ -52,9 +55,10 @@ export function arrivalPreview(fit: Readonly<RoomFit>, credit: Readonly<ArrivalC
     const tooMany = fit.overLink >= fit.over ? MAP_TEXT.packet.overLink(fit.overLink) : MAP_TEXT.packet.overRoom(fit.over);
     return { fit: { ...fit }, sum: MAP_TEXT.packet.arrivalLeave, card, charge: null, tooMany, tone: 'over', confirm: null };
   }
-  const parts = arrivalParts(fit.carried, credit.starCredit, credit.stars, fit.floorAdded, credit.card);
-  if (fit.carried + credit.starCredit + credit.card + fit.floorAdded !== fit.wanted) {
-    throw new Error(`arrivalPreview: the parts sum to ${fit.carried + credit.starCredit + credit.card + fit.floorAdded}, the fit wants ${fit.wanted}`);
+  const gift = credit.gift ?? 0;
+  const parts = arrivalParts(fit.carried, credit.starCredit, credit.stars, fit.floorAdded, credit.card, gift);
+  if (fit.carried + credit.starCredit + credit.card + gift + fit.floorAdded !== fit.wanted) {
+    throw new Error(`arrivalPreview: the parts sum to ${fit.carried + credit.starCredit + credit.card + gift + fit.floorAdded}, the fit wants ${fit.wanted}`);
   }
   const sum = fit.roomLost > 0 || fit.chargeArrives < fit.wanted
     ? MAP_TEXT.packet.roomFor(parts, fit.wanted, fit.chargeArrives)
@@ -83,8 +87,9 @@ export function arrivalPreview(fit: Readonly<RoomFit>, credit: Readonly<ArrivalC
 // the state: skill-files.ts skillPacketPlan) and as the PACKET packs them (`packAs`, TransitPlan.packAs; left out: nothing
 // packed lower, as at the desk: the SHIP CARD and TRAINING's preview), so the card, the preview, the PACKET and the send
 // agree on the skills' blocks.
+// Slice 7c: the hop names its destination (`to`), whose trace gift and seed rules (systems/trace-gifts.ts) count here.
 export interface ArrivalPlan {
-  hop: Readonly<Pick<Hop, 'linkBlocks' | 'room' | 'chargeFloor'>>;
+  hop: Readonly<Pick<Hop, 'to' | 'linkBlocks' | 'room' | 'chargeFloor'>>;
   threat: Readonly<Pick<ShipThreat, 'act' | 'beamSeeds'>>;
   dropped: readonly string[];
   pick: DraftCardId | null;
@@ -101,7 +106,10 @@ export function unitArrival(state: Readonly<GameState>, plan: Readonly<ArrivalPl
     skills: skillPacketPlan(state, plan.packAs ?? {}),
   });
   const deliverySeedsMax = plan.deliveries.filter((chip) => !chip.sendOn && chip.seedChance > 0).length;
-  const beam = seedAllowance(plan.threat, playsTutorial(state.run)) ?? { min: 0, max: 0 };
+  // Slice 7c: the traces' seed rules (SPARE's seedless beam, PURGE's wipe, the wild seed) and their gift charge into this hop's
+  // ship (Track TRACE's, neutral until built), as transmitNext applies them.
+  const beam = traceSeedAllowance(state, plan.hop.to, seedAllowance(plan.threat, playsTutorial(state.run)) ?? { min: 0, max: 0 });
+  const gift = traceGiftCharge(state, plan.hop.to);
   const seeds = seedsExact !== undefined
     ? { min: seedsExact, max: seedsExact }
     : { min: beam.min, max: beam.max + deliverySeedsMax };
@@ -109,11 +117,11 @@ export function unitArrival(state: Readonly<GameState>, plan: Readonly<ArrivalPl
   const fit = roomFit({
     files: packedFiles(packet).map((seg) => ({ size: seg.size })),
     charge: packet.chargeHeld,
-    bonus: { starCredit: state.run.pendingStarCredit, card },
+    bonus: { starCredit: state.run.pendingStarCredit, card, gift },
     seedBlocksMin: seeds.min * BEAM_SEED_LAYOUT_BLOCKS,
     seedBlocksMax: seeds.max * BEAM_SEED_LAYOUT_BLOCKS,
   }, plan.hop);
-  return arrivalPreview(fit, { starCredit: state.run.pendingStarCredit, stars: state.run.pendingStars, card });
+  return arrivalPreview(fit, { starCredit: state.run.pendingStarCredit, stars: state.run.pendingStars, card, gift });
 }
 
 // At load (the review's B1): the files the PACKET can never leave behind (systems/carry.ts dropLock: the Core, Engine

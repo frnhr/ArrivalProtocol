@@ -7,7 +7,7 @@ import { check, finish } from '../landing/checks';
 import type { RunMapState } from '@/types/map';
 import type { RunThreatState, ShipThreat, LinkNoise } from '@/types/threat';
 import { mapFacts, oneHopFromFinal, nominalRouteThreat } from '@systems/map-facts';
-import { planThreat, threatInputFor, applyThreat, createRunThreat } from '@systems/threat-plan';
+import { planThreat, threatInputFor, applyThreat, createRunThreat, NO_FINAL_TRACES } from '@systems/threat-plan';
 import { routes, bestRoute, type Route } from '@systems/map-route';
 import { hopBetween } from '@systems/map-hop';
 import { rollNoiseClouds } from '@systems/map-noise';
@@ -29,7 +29,7 @@ function fly(m: RunMapState, route: Route, seedsLeft: (depth: number, plan: Ship
     const facts = index === 0
       ? { depth: 1, isFinal: false, oneHopFromFinal: false, beamSeeds: { kind: 'none' as const } }
       : mapFacts(m, route[index - 1]!, slot, index + 1);
-    const plan = planThreat(threatInputFor(threat, facts, false));
+    const plan = planThreat(threatInputFor(threat, facts, false, NO_FINAL_TRACES));
     threat = applyThreat(threat, plan);
     plans.push(plan);
     const left = plan.act === 'calm' || plan.act === 'finale' ? 0 : seedsLeft(index + 1, plan);

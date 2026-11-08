@@ -12,6 +12,7 @@ import { roleHealth } from '@systems/capabilities';
 import { garbleText } from '@systems/garble';
 import { emit } from '@systems/events';
 import { finaleCardUp } from '@state/selectors';
+import { rootUnitsOf } from '@systems/traces';
 import { UNNAMED_HOLLOW, unitName, hollowUnitName } from '@data/hollow-text';
 import { IS_DEV } from '@/env';
 import {
@@ -64,8 +65,10 @@ export { unitName };
 // finale.ts at the final ship's ORBIT LOCK: run.hollowNamed), then its units' name (run.hollowUnits:
 // `UNIT-046`, on a later run the last unit, systems/meta.ts hollowName). Its blocks, the TERMINAL's
 // `[user: …]` tags and the line vars all read it here.
-export function hollowLabel(run: Readonly<Pick<RunState, 'hollowUnits' | 'hollowNamed'>>): string {
-  return run.hollowNamed ? hollowUnitName(run.hollowUnits) : UNNAMED_HOLLOW;
+// Slice 7c (R35): on a final ship after a REASSIGNMENT trace (built) the root is the last unit (systems/traces.ts
+// rootUnitsOf), so its blocks, its tags and the FINALE's commands name it; run.hollowUnits everywhere else.
+export function hollowLabel(run: Readonly<Pick<RunState, 'hollowUnits' | 'hollowNamed' | 'traces' | 'map' | 'shipIndex'>>): string {
+  return run.hollowNamed ? hollowUnitName(rootUnitsOf(run)) : UNNAMED_HOLLOW;
 }
 
 // How a line types itself on its screen. The views type at these speeds (MindTerminal, CommsWindow):

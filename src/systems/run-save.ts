@@ -108,6 +108,8 @@ export function lineageOfRun(run: Readonly<RunState>): RunLineage {
     armSeed: run.map.armSeed,
     arm: null,
     history: structuredClone(run.map.history),
+    // Slice 7c: the events the run's book keeps (047.log's), the only ones a run holds of its lineage.
+    events: run.log.book.kind === 'last' ? structuredClone(run.log.book.events) : [],
   };
 }
 

@@ -1,7 +1,21 @@
-import type { ThreatInput, ShipThreat, HollowStage, RunThreatState, BeamSeedSource } from '@/types/threat';
+import type { ThreatInput, ShipThreat, HollowStage, RunThreatState, BeamSeedSource, FinalTraceInput } from '@/types/threat';
 import { HOLLOW_STAGES, SEEDS_ONLY_DEF, CALM_DEF, foldArrivalWalls } from '@data/threats';
 import { CLASSIC_FIVE, CLASSIC_FACTS, classicShip } from '@data/classic-five';
-import { BOARD_MIN_DEPTH, TRACE_BOARD_AT, SEEDS_MIN_DEPTH, PRE_FINAL_ROOT_CAP } from '@data/tuning';
+import {
+  BOARD_MIN_DEPTH, TRACE_BOARD_AT, SEEDS_MIN_DEPTH, PRE_FINAL_ROOT_CAP, FINAL_ROOT_MAX_BLOCKS, TRACE_MERGE_ROOT_EXTRA,
+  TRACE_PURGE_BITE_MULT,
+} from '@data/tuning';
+// Slice 7c: the lead owns this file's trace hooks (slice-7-plan.md §2.4, §4.3): ThreatInput.traces and planThreat's final
+// rule. Track TRACE raises TRACES_BUILT; nothing here changes while it is down (every input's traces are false).
+
+// The FINALE's own root plus a MERGE trace's blocks is the largest root a final ship's slot holds (04 §3.10; R33): the
+// layout already makes room for FINAL_ROOT_MAX_BLOCKS, so the trace needs no layout change. Checked at load.
+if (HOLLOW_STAGES.finale.rootBlocks + TRACE_MERGE_ROOT_EXTRA !== FINAL_ROOT_MAX_BLOCKS) {
+  throw new Error(`threat-plan: the FINALE's root ${HOLLOW_STAGES.finale.rootBlocks} + MERGE's ${TRACE_MERGE_ROOT_EXTRA} is not FINAL_ROOT_MAX_BLOCKS ${FINAL_ROOT_MAX_BLOCKS}`);
+}
+
+// No trace plays (every ship before the final one, the classic world, the nominal runs, and every run until TRACE's gates).
+export const NO_FINAL_TRACES: Readonly<FinalTraceInput> = { purge: false, merge: false, hunt: false };
 
 // The threat ladder (docs/phase3/04-threats.md §3.1, §3.8, §3.9; slice-2-plan §2.4), pure and DOM-free: planThreat is the
 // only place that decides a ship's act, whether HOLLOW boards on the beam into it, its stage, the folds and the root.
@@ -37,10 +51,12 @@ export function stageForAge(age: number): Exclude<HollowStage, 'finale'> {
 
 // The root a ship gets (04 §3.7–§3.10): the larger root of its stage and the stages folded into it, plus the beam-born
 // blocks HOLLOW was fed, capped at PRE_FINAL_ROOT_CAP before the final ship; the FINALE's root is its own (16) whatever it
-// was fed. Slice 7 adds MERGE's trace here (`traces`: +2 on the final ship, FINAL_ROOT_MAX_BLOCKS).
-export function rootBlocksFor(stage: HollowStage, folded: readonly HollowStage[], fed: number): number {
+// was fed. Slice 7c (R33): after a MERGE trace (`mergeTrace`, built) the FINALE's root is TRACE_MERGE_ROOT_EXTRA bigger
+// (FINAL_ROOT_MAX_BLOCKS, 18); it never changes a root before the final ship.
+export function rootBlocksFor(stage: HollowStage, folded: readonly HollowStage[], fed: number, mergeTrace = false): number {
   if (!(Number.isInteger(fed) && fed >= 0)) throw new Error(`rootBlocksFor: fed ${fed}`);
-  if (stage === 'finale') return HOLLOW_STAGES.finale.rootBlocks;
+  if (stage === 'finale') return HOLLOW_STAGES.finale.rootBlocks + (mergeTrace ? TRACE_MERGE_ROOT_EXTRA : 0);
+  if (mergeTrace) throw new Error(`rootBlocksFor: a MERGE trace on a '${stage}' root (it is the final ship's)`);
   const base = Math.max(HOLLOW_STAGES[stage].rootBlocks, ...folded.map((fold) => HOLLOW_STAGES[fold].rootBlocks));
   return Math.min(PRE_FINAL_ROOT_CAP, base + fed);
 }
@@ -62,7 +78,9 @@ function hollowShip(input: Readonly<ThreatInput>, boards: ShipThreat['boards']):
 
 // The ladder (slice-2-plan §2.4), in order:
 // 1. a final ship plays FINALE, with THE DEAL folded in when the run has not had it (04 §3.9: once a run, "a run that
-//    reaches the final ship without it gets it there");
+//    reaches the final ship without it gets it there"), and the last unit's traces (slice 7c, R33; ThreatInput.traces,
+//    all false until TRACE's gates): PURGE's bites every spreadEverySec × TRACE_PURGE_BITE_MULT (verbs and the duel as
+//    they are), MERGE's root FINAL_ROOT_MAX_BLOCKS, REASSIGNMENT's seeds beside your best skill ('near-skill');
 // 2. HOLLOW aboard: the stage for its age;
 // 3. HOLLOW boards on this beam: ARRIVAL (with WALLS folded in one hop from a final ship);
 // 4. from SEEDS_MIN_DEPTH: beam seeds only, no root;
@@ -74,7 +92,13 @@ export function planThreat(input: Readonly<ThreatInput>): ShipThreat {
   if (input.isFinal) {
     const folded: HollowStage[] = input.dealDone ? [] : ['hunt'];
     const hollow = { ...structuredClone(HOLLOW_STAGES.finale.hollow), deal: !input.dealDone };
-    return { ...factsOf(input), act: 'finale', boards: null, stage: 'finale', folded, hollow, rootBlocks: rootBlocksFor('finale', folded, input.fed) };
+    if (input.traces.purge && hollow.spreadEverySec !== null) hollow.spreadEverySec *= TRACE_PURGE_BITE_MULT;
+    if (input.traces.hunt && hollow.seed !== null) hollow.seed = { ...hollow.seed, target: 'near-skill' };
+    const rootBlocks = rootBlocksFor('finale', folded, input.fed, input.traces.merge);
+    return { ...factsOf(input), act: 'finale', boards: null, stage: 'finale', folded, hollow, rootBlocks };
+  }
+  if (input.traces.purge || input.traces.merge || input.traces.hunt) {
+    throw new Error(`planThreat: a final ship's traces on depth ${input.depth}, not a final ship`);
   }
   if (input.aboard) return hollowShip(input, null);
   const boards = boardsOnBeam(input);
@@ -117,11 +141,15 @@ export function fixedShipFacts(index: number): ShipThreatFacts {
 }
 
 // The ladder's input for the next ship, from the run's threat during the ship before it (its tally done) and whether THE
-// DEAL has happened this run (run.stats.deal !== null).
-export function threatInputFor(prev: Readonly<RunThreatState>, facts: ShipThreatFacts, dealDone: boolean): ThreatInput {
+// DEAL has happened this run (run.stats.deal !== null). Slice 7c: `traces`, the run's (systems/traces.ts finalTraceInput),
+// read only on a final ship's input (none elsewhere: a trace acts at the final ship, R33).
+export function threatInputFor(
+  prev: Readonly<RunThreatState>, facts: ShipThreatFacts, dealDone: boolean, traces: Readonly<FinalTraceInput>,
+): ThreatInput {
   return {
     depth: facts.depth, isFinal: facts.isFinal, oneHopFromFinal: facts.oneHopFromFinal, beamSeeds: facts.beamSeeds,
     trace: prev.trace, aboard: prev.aboard, age: prev.age, dealDone, fed: prev.fed,
+    traces: facts.isFinal ? { ...traces } : { ...NO_FINAL_TRACES },
   };
 }
 
@@ -154,7 +182,7 @@ export function nominalRunThreat(shipIndex: number): RunThreatState {
   let threat = createRunThreat();
   for (let index = 0; index <= shipIndex; index++) {
     const facts = fixedShipFacts(index);
-    threat = applyThreat(threat, planThreat(threatInputFor(threat, facts, false)));
+    threat = applyThreat(threat, planThreat(threatInputFor(threat, facts, false, NO_FINAL_TRACES)));
   }
   return threat;
 }
@@ -162,5 +190,5 @@ export function nominalRunThreat(shipIndex: number): RunThreatState {
 // The verdict for ship `shipIndex` on that nominal run (the plan nominalRunThreat(shipIndex) applied last).
 export function nominalShipThreat(shipIndex: number): ShipThreat {
   const before = shipIndex === 0 ? createRunThreat() : nominalRunThreat(shipIndex - 1);
-  return planThreat(threatInputFor(before, fixedShipFacts(shipIndex), false));
+  return planThreat(threatInputFor(before, fixedShipFacts(shipIndex), false, NO_FINAL_TRACES));
 }

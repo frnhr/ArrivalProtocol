@@ -322,7 +322,7 @@ const repairs = (store: Store<GameState>) => at(store).memory.filter((seg) => se
         chargeCarried: 30, starCredit: variant === 'hits' ? 12 : 0, stars: variant === 'hits' ? 2 : 0, card: null, cardCharge: 0,
         chargeFloorAdded: 0, chargeOverflowLost: 0, scripted: [], eccCorrected: 0, seeds: [], boarded: null,
         deliveries: variant === 'hits' ? [{ key: 'rq1', file: 'mv', segIds: ['x'], arrivedYear: 2400, firstOfKind: true, seeded: false }] : [],
-        skills: [],
+        skills: [], traceLines: [], giftCharge: 0,
       };
       const state = { ...base, run: { ...base.run, arrival } } as GameState;
       for (const skill of [false, true]) {

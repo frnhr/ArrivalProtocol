@@ -51,6 +51,8 @@ import {
 import { visitRng } from '@systems/map-streams';
 import { mountSentry } from '@systems/sentry';
 import { skillLive } from '@systems/capabilities';
+import { nearSkillSeedSpot } from '@systems/trace-hunt';
+import { rootUnitsOf } from '@systems/traces';
 
 // HOLLOW (§1, §6.6, §9 WP6): the caretaker of the previous wave, starving in the same memory as you.
 // One rule a kid can repeat: "It eats the file next to it. An eaten file turns into HOLLOW too.
@@ -435,8 +437,10 @@ function rackRowOf(addr: number): number {
   return Math.floor(addr / RACK_BLOCKS);
 }
 
-// The next seed's spot by the ship's rule (ShipDef hollow.seed.target).
+// The next seed's spot by the ship's rule (ShipDef hollow.seed.target). Slice 7c (R33): 'near-skill', the final ship's seeds
+// after a REASSIGNMENT trace (planThreat sets it only when built), beside your best skill: Track TRACE's trace-hunt.ts.
 export function seedSpotFor(memory: readonly Segment[], target: SeedTarget, untried: readonly FsToolKind[]): SeedSpot | null {
+  if (target === 'near-skill') return nearSkillSeedSpot(memory, untried);
   return target === 'near-tools' ? nearToolsSeedSpot(memory, untried) : seedSpot(memory, untried);
 }
 
@@ -681,8 +685,11 @@ export function mvSpots(memory: readonly Segment[], block: Readonly<HollowSegmen
 
 // The verb HOLLOW uses now (see the section's header), or null when it has none. `rng` rolls the verb by the weights,
 // then RM's file among its tier. `untried`: HollowState.untriedTools. Pure.
+// Slice 7c (R33, the lead's hook): `prefer`, a file RM takes first while it is a fair target (among rmTargets): REASSIGNMENT's
+// hunt for your best skill (systems/trace-hunt.ts huntTarget, Track TRACE's; null until built). The draws are the same with
+// or without it, so a null prefer is exactly today's verb.
 export function chooseVerb(
-  memory: readonly Segment[], rng: Rng, weights: Readonly<VerbWeights>, untried: readonly FsToolKind[],
+  memory: readonly Segment[], rng: Rng, weights: Readonly<VerbWeights>, untried: readonly FsToolKind[], prefer: string | null = null,
 ): Verb | null {
   const mvFirst = rng() * (weights.mv + weights.rm) < weights.mv;
   const mv = (): Verb | null => {
@@ -694,7 +701,8 @@ export function chooseVerb(
   const rm = (): Verb | null => {
     if (!hasUsableTool(memory, 'scan', 'counts') && !hasUsableTool(memory, 'delete', 'counts')) return null;
     const targets = rmTargets(memory, untried);
-    const pick = targets[Math.floor(rng() * targets.length)];
+    const drawn = targets[Math.floor(rng() * targets.length)];
+    const pick = targets.find((seg) => seg.id === prefer) ?? drawn;
     return pick === undefined ? null : { kind: 'rm', targetId: pick.id };
   };
   return mvFirst ? mv() ?? rm() : rm() ?? mv();
@@ -1033,7 +1041,8 @@ export function coreInfected(state: Readonly<GameState>): boolean {
 // it stays named, so a second naming changes nothing and plays nothing.
 export function nameHollow(store: Store<GameState>): boolean {
   if (store.getState().run.hollowNamed) return false;
-  const owner = hollowUnitName(store.getState().run.hollowUnits);
+  // Slice 7c (R35): the final root after a REASSIGNMENT trace is the last unit (systems/traces.ts rootUnitsOf).
+  const owner = hollowUnitName(rootUnitsOf(store.getState().run));
   store.update((draft) => {
     draft.run.hollowNamed = true;
     for (const seg of draft.memory) {

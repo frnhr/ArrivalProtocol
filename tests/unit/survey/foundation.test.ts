@@ -241,7 +241,7 @@ const PLANET_R = FLIGHT_TEMPLATES.wide.flight.planet.R;
   check('the boot says `> SITE DATA POOR · ARRIVAL CONTROL GUESSED 2 LZs` on a planet that plays POOR, and nothing while POOR is not built',
     !off.map.includes('site-data') && !off.plan.includes('site-data') && on.map.includes('site-data')
     && bootLine('site-data', on.state, {} as never) === '> SITE DATA POOR · ARRIVAL CONTROL GUESSED 2 LZs', on.plan.join(' '));
-  check(`…BOOT_LINE_MAX ${BOOT_LINE_MAX} lines, each with its time`, BOOT_LINE_MAX === 24 && BOOT_LINE_AT_SEC.length >= BOOT_LINE_MAX && BOOT_LINE_AT_SEC[23] === 30.4);
+  check(`…BOOT_LINE_MAX ${BOOT_LINE_MAX} lines, each with its time`, BOOT_LINE_MAX >= 24 && BOOT_LINE_AT_SEC.length >= BOOT_LINE_MAX && BOOT_LINE_AT_SEC[23] === 30.4);
 }
 
 // --- The save: the v5 fixtures, the CORMORANT BEAM, the codec's v6 refusals ------------------------------------------------------

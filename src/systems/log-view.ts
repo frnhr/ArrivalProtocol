@@ -1,8 +1,9 @@
 import type { GameState } from '@state/schema';
 import type { LogSegment, Segment } from '@/types/segment';
-import { LOG_ENTRIES, LOG_ENTRY_COUNT, LOG_NAME, LOG_TEXT, logEntryLines } from '@data/log-text';
+import { LOG_TEXT } from '@data/log-text';
+import { bookEntryKey, bookEntryLines } from '@data/log-books';
 import { FRESH_UNIT_CHARGE } from '@data/memory';
-import { logKnown } from '@state/log-selectors';
+import { logKnown, logDisplayName, bookShape } from '@state/log-selectors';
 
 // 046.log as the screens show it (05-story §3.2, §4; slice-2-plan §5.3), pure and DOM-free, so the headless tests check
 // what a kid would read: the chip (`046.log · 3/12`, glowing while an entry is unread) on the strip, in INSPECT and on
@@ -20,7 +21,7 @@ export const LOG_UI_TEXT = {
   unread: 'NEW',
   read: '▸ read 046.log',
   readCost: (unread: number): string => (unread > 0 ? `${unread} new` : 'open'),
-  found: (found: number): string => `${found} / ${LOG_ENTRY_COUNT} found`,
+  found: (found: number, total: number): string => `${found} / ${total} found`,
   lockedState: 'LOCKED · NOT YOURS',
 } as const;
 
@@ -45,9 +46,11 @@ export function logChip(state: Readonly<GameState>): LogChipModel {
   const known = logKnown(log);
   const found = log.found.length;
   const unread = log.found.filter((n) => !log.read.includes(n)).length;
-  const count = `${found}/${LOG_ENTRY_COUNT}`;
-  const name = known ? LOG_NAME.known : LOG_NAME.unknown;
-  return { known, name, found, total: LOG_ENTRY_COUNT, unread, glow: unread > 0, count, label: known ? `${name} · ${count}` : name };
+  // Slice 7c (R37): the book's entry count and name (every book is 046.log until LINEAGE_BUILT).
+  const total = bookShape(log.book).count;
+  const count = `${found}/${total}`;
+  const name = logDisplayName(log);
+  return { known, name, found, total, unread, glow: unread > 0, count, label: known ? `${name} · ${count}` : name };
 }
 
 // The entry a click on the chip (or INSPECT's READ) opens: the first one found and not read yet, else the last one
@@ -81,9 +84,11 @@ export interface LogReaderModel {
 export function logReaderModel(state: Readonly<GameState>): LogReaderModel {
   const log = state.run.log;
   const open = state.ui.logReader?.entry ?? null;
-  const rows = LOG_ENTRIES.map((entry): LogReaderRow => {
+  // Slice 7c (R37): the book's entries, keys and lines (data/log-books.ts, Track LINEAGE's words).
+  const entries = Array.from({ length: bookShape(log.book).count }, (_, i) => ({ n: i + 1, key: bookEntryKey(log.book, i + 1) }));
+  const rows = entries.map((entry): LogReaderRow => {
     const found = log.found.includes(entry.n);
-    const lines = found ? logEntryLines(entry.n, { charge: FRESH_UNIT_CHARGE }) : null;
+    const lines = found ? bookEntryLines(log.book, entry.n, { charge: FRESH_UNIT_CHARGE }) : null;
     // A found entry the slice never wrote is a data bug (log-text writes every entry a slice can find).
     if (found && lines === null) throw new Error(`logReaderModel: entry ${entry.n} is found but has no text`);
     return {
@@ -95,7 +100,7 @@ export function logReaderModel(state: Readonly<GameState>): LogReaderModel {
   return {
     title: LOG_TEXT.readerTitle,
     kicker: LOG_UI_TEXT.kicker,
-    counts: LOG_UI_TEXT.found(log.found.length),
+    counts: LOG_UI_TEXT.found(log.found.length, entries.length),
     open,
     rows,
     nextKey: next === undefined ? LOG_UI_TEXT.allFound : LOG_UI_TEXT.nextKey(next.key),

@@ -48,7 +48,7 @@ function crossTo(harness: Harness7, index: number): void {
   const scripted = arrivalDamage(layout.racks.segs, ship.arrivalDamage);
   startShip(harness.store, index, layout.racks, {
     hits: [], chargeCarried: packet.chargeCarried, starCredit: 0, stars: 0, card: null, cardCharge: 0, chargeFloorAdded: 0,
-    chargeOverflowLost: 0, scripted, eccCorrected: 0, seeds: [], boarded: null, deliveries: [], skills: [],
+    chargeOverflowLost: 0, scripted, eccCorrected: 0, seeds: [], boarded: null, deliveries: [], skills: [], traceLines: [], giftCharge: 0,
   }, nominalShipThreat(index));
   for (let i = 0; i < 400 && harness.store.getState().run.phase !== 'flight'; i++) harness.step();
   for (let i = 0; i < 40; i++) harness.step();

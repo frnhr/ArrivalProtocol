@@ -53,8 +53,9 @@ const threw = (fn: () => unknown): string => {
 // --- The gates, the tables ------------------------------------------------------------------------------------------------
 // The one gate left (the 7a fix pass dropped twoStep and night, review (e)): 7d's CONTACT.
 check('built: CONTACT not yet (7d)', !ENDINGS_BUILT.contact && JSON.stringify(Object.keys(ENDINGS_BUILT)) === '["contact"]');
-check(`RUN_SAVE_VERSION 7, META_VERSION 4, EMPTY_SHIP_FUEL_PCT = STAR_FUEL_PCT (${STAR_FUEL_PCT}: one ★ notch, R8)`,
-  RUN_SAVE_VERSION === 7 && META_VERSION === 4 && EMPTY_SHIP_FUEL_PCT === STAR_FUEL_PCT);
+// (7c bumped the save to 8: traces/foundation pins it; this suite's v6 fixtures migrate through 7 to it.)
+check(`RUN_SAVE_VERSION 7 or later, META_VERSION 4, EMPTY_SHIP_FUEL_PCT = STAR_FUEL_PCT (${STAR_FUEL_PCT}: one ★ notch, R8)`,
+  RUN_SAVE_VERSION >= 7 && META_VERSION === 4 && EMPTY_SHIP_FUEL_PCT === STAR_FUEL_PCT);
 check('the pieces: seven, and six built while CONTACT is down (ENDINGS n/6, R22)',
   ENDING_PIECES.length === 7 && builtPieces().length === 6 && !builtPieces().includes('contact'));
 check('step 1 is PURGE MERGE SPARE on keys 1–3, SPARE rules out SUNSET; step 2 is SUNSET STAY REASSIGNMENT CONTACT, CONTACT absent (R11)',

@@ -265,9 +265,15 @@ export interface ArrivalCharge {
 // `cardCharge`: what the picked card brings (+12 REPAIR CHARGE; none for every other card). `floor` is the destination's
 // (its memory layout's chargeFloor, slice 3a step 2: 12 on FULL and COMPACT ships, none on a TIGHT one, 01 §3.16 round 2
 // Q8: there the charge may arrive at 0); left out, the 12 every classic ship has.
-export function arrivalCharge(chargeCarried: number, starCredit: number, cardCharge = 0, floor: number = CHARGE_ARRIVAL_FLOOR): ArrivalCharge {
+// Slice 7c (R32): `giftCharge`, a trace's gift on arrival (systems/trace-gifts.ts traceGiftCharge: TRACE_GIFT_CHARGE at a gift
+// ship, REASSIGNMENT's allowance at the final ship; 0 until Track TRACE builds it), laid out with the rest, so a squeezed
+// receiver loses it as loudly as any charge.
+export function arrivalCharge(
+  chargeCarried: number, starCredit: number, cardCharge = 0, floor: number = CHARGE_ARRIVAL_FLOOR, giftCharge = 0,
+): ArrivalCharge {
   if (!(Number.isInteger(floor) && floor >= 0)) throw new Error(`arrivalCharge: floor ${floor}`);
-  const earned = chargeCarried + starCredit + cardCharge;
+  if (!(Number.isInteger(giftCharge) && giftCharge >= 0)) throw new Error(`arrivalCharge: gift ${giftCharge}`);
+  const earned = chargeCarried + starCredit + cardCharge + giftCharge;
   const blocks = Math.max(floor, earned);
   return { blocks, floorAdded: blocks - earned };
 }

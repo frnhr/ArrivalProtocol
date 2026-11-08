@@ -17,7 +17,7 @@ import {
 import { hopBetween } from '@systems/map-hop';
 import { unitArrival } from '@systems/arrival-preview';
 import { mapFacts } from '@systems/map-facts';
-import { planThreat, threatInputFor } from '@systems/threat-plan';
+import { planThreat, threatInputFor, NO_FINAL_TRACES } from '@systems/threat-plan';
 import { shipSummaryAt } from '@systems/map-run';
 import { shipsLeft } from '@systems/map-route';
 import { freshUnitRacks } from '@systems/carry';
@@ -173,7 +173,7 @@ check('LAPWING (TIGHT): MEMORY 256 · TIGHT · ROOM FOR YOU 88, the fit line is 
   && lapFit.room === 88 && lapFit.floor === 0, `${row(lapwing, 'fit')} ${JSON.stringify(lapFit)}`);
 // The review's m6: one preview. The card's fit is unitArrival's for the unit as it is (no drop, no pick), with the
 // ladder's verdict for the beam: the PACKET's own function.
-const lapVerdict = planThreat(threatInputFor(state.run.threat, mapFacts(state.run.map, 5, 8, 4), false));
+const lapVerdict = planThreat(threatInputFor(state.run.threat, mapFacts(state.run.map, 5, 8, 4), false, NO_FINAL_TRACES));
 check('…the fit is the PACKET\'s rule: unitArrival of the unit as it is against the hop, with the verdict\'s seeds',
   JSON.stringify(lapFit) === JSON.stringify(unitArrival(state, { hop: hopBetween(state.run.map, 5, 8), threat: lapVerdict, dropped: [], pick: null, deliveries: [] }).fit));
 
