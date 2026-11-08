@@ -1,5 +1,5 @@
 import {
-  AUDIO_MASTER_GAIN, AUDIO_BUS_GAIN, AUDIO_DUCK_DB, AUDIO_DUCK_HOLD_SEC, AUDIO_DUCK_RELEASE_SEC,
+  AUDIO_MASTER_GAIN, AUDIO_BUS_GAIN, AUDIO_DUCK_DB, AUDIO_DUCK_HOLD_SEC, AUDIO_DUCK_RELEASE_SEC, SURVEY_PING_GAIN,
 } from '@data/tuning';
 
 // Every sound in the game, synthesized with WebAudio (§7.2). This module owns the ONLY
@@ -110,6 +110,11 @@ export interface CueParams {
   residentBlip: undefined;
   sleeperVoice: undefined;
   mothLullaby: undefined;
+  // Slice 6 (Track SITES): SURVEY. A find's soft sonar ping (under the op chirps: a planet can hold seven); a bad ground made
+  // known, a falling minor third; an LZ moved onto a site, the op chirp's resolve.
+  surveyPing: undefined;
+  siteSting: undefined;
+  siteSet: undefined;
 }
 
 export type Cue = keyof CueParams;
@@ -1431,6 +1436,50 @@ function cueMothLullaby(mix: Graph, t0: number): void {
   });
 }
 
+// --- Slice 6: SURVEY (Track SITES; 01 §4, plan §2.14) ---------------------------------------------------------------
+
+// A site found under the swath: a sonar ping, a pure sine that falls a little as it rings out, and its faint echo a beat
+// later. SURVEY_PING_GAIN keeps it under the op chirps: a planet holds up to seven finds, and none is an alarm.
+function cueSurveyPing(mix: Graph, t0: number): void {
+  const voice = makeVoice(mix.ctx);
+  for (const [offset, level] of [[0, 1], [0.19, 0.3]] as const) {
+    const at = t0 + offset;
+    const amp = voice.gain(0, mix.buses.ui);
+    const end = pluck(amp.gain, at, SURVEY_PING_GAIN * level, 0.004, 0.55);
+    const ping = voice.osc('sine', 1480, at, end + 0.01, amp);
+    ping.frequency.setValueAtTime(1480, at);
+    ping.frequency.exponentialRampToValueAtTime(1396.91, end);
+  }
+}
+
+// A bad ground made known (`LZ-B · WET ✕`): a falling minor third (G5 → E5) in two soft triangles with a square's edge, a
+// warning, not an alarm: the landing goes on, elsewhere.
+function cueSiteSting(mix: Graph, t0: number): void {
+  const voice = makeVoice(mix.ctx);
+  for (const [freq, offset, decay] of [[783.99, 0, 0.16], [659.25, 0.14, 0.42]] as const) {
+    const at = t0 + offset;
+    const amp = voice.gain(0, mix.buses.ui);
+    const tone = voice.filter('lowpass', 2600, 0.8, amp);
+    const end = pluck(amp.gain, at, 0.09, 0.004, decay);
+    voice.osc('triangle', freq, at, end + 0.01, tone);
+    voice.osc('square', freq, at, end + 0.01, voice.gain(0.18, tone));
+  }
+}
+
+// An LZ moved onto a site (`LZ-B → SITE 4`): the op chirp's blip, then the op-done ding resolving up to the octave
+// (G6 → A6 → C7, the last one held): the move is done, and it sat right.
+function cueSiteSet(mix: Graph, t0: number): void {
+  const voice = makeVoice(mix.ctx);
+  for (const [freq, offset, decay] of [[1567.98, 0, 0.05], [1760, 0.06, 0.08], [2093, 0.13, 0.32]] as const) {
+    const at = t0 + offset;
+    const amp = voice.gain(0, mix.buses.ui);
+    const tone = voice.filter('lowpass', 4200, 0.7, amp);
+    const end = pluck(amp.gain, at, 0.06, 0.003, decay);
+    voice.osc('square', freq, at, end, voice.gain(0.45, tone));
+    voice.osc('sine', freq, at, end, tone);
+  }
+}
+
 // --- LAST LIGHT (WP11 part 2) ---------------------------------------------------------------------------------
 
 // A verb's telegraph, one whole second (§6.6: `> rm repair.bak ... 3`): a command clock in HOLLOW's voice, two detuned
@@ -1711,6 +1760,9 @@ function playOn(mix: Graph, cue: Cue, params: CueParams[Cue] | undefined, t0: nu
     case 'residentBlip': cueResidentBlip(mix, t0); return;
     case 'sleeperVoice': cueSleeperVoice(mix, t0); return;
     case 'mothLullaby': cueMothLullaby(mix, t0); return;
+    case 'surveyPing': cueSurveyPing(mix, t0); return;
+    case 'siteSting': cueSiteSting(mix, t0); return;
+    case 'siteSet': cueSiteSet(mix, t0); return;
     default: throw new Error(`play: unknown cue '${String(cue)}'`);
   }
 }
