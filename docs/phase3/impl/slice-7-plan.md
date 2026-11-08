@@ -1923,3 +1923,202 @@ items 2–5), 9f448ea (e2e), c5d5e70 (the merge).
 - No "Execution context was destroyed" in any of them.
 - **For slice 8:** playthrough's CORMORANT flight took **359 s** against its 6-minute check (slice 6 measured 315–342 s). 7a
   changes nothing before LAST LIGHT, so this is that flight's own spread, but the margin is now 1 s.
+
+## Deviations (7b foundation)
+
+Recorded by the 7b FOUNDATION agent (branch `found-7b`, from a036de2, the head of `claude/modest-hawking-209t0f` with 7a
+merged). §2.4's 7b seams, §2.5's events, §2.6's tuning and §2.12's hooks are built, with the stubs below. The gate
+`LAST_LANDING_BUILT` is down, so MERGE plays 7a's interim (R15) and nothing a player can reach changes. **No save bump**:
+`landing.lastLanding` (7a's reservation) is null at every save point and the codec refuses it set, so its fields never reach a
+save, and 7b needs no other saved field. No fixture was dumped, since no save shape changed. The unit tier is green: 213
+passed, 0 failed, 11 balance-only skipped, **233 s** on 4 workers (budget 265 s). The 1-minute load average went from 4.1 to
+9.2 during the run, sampled every 15 s, with the lead's e2e on the main checkout. A first run under a load of 10–12 took 357 s
+and failed `landing/drop-model` (Deviation 4). `npm run typecheck` and the tests' tsc are clean, and the import guard is green.
+The e2e was not run.
+
+### What the tracks stand on
+
+**Built (lead-owned):**
+- **`state/selectors.ts launchDrivers(state)`** (R24) and `lastLandingOn(state)`. Every launch-path reader the plan names now
+  reads `launchDrivers`:
+  - `landing-rules.ts`: `launchQueue`, `canEverLaunch`, `driversThatCanEverLaunch`, `driverFor`, `lockedPodAboard`, and
+    `onTargetTally`'s still-open;
+  - `landing.ts`: `requestLaunch` and `forceLandAll`;
+  - `autodrop.ts`: `decidePlan` and `planOver`;
+  - `autodrop-plan.ts`: `planLanding`'s queue;
+  - `landing-hud.ts`: the POD BAY's and the footer's launchable sets.
+  - The drop cache and `landingView`'s queue follow through `nextToLaunch` and `launchQueue`.
+  - HOLLOW, THE DEAL, the sleeper, LOAD NEXT, the strip and the debug pod list keep `driversInMemory`, because they mean
+    memory itself.
+- **`landing.ts launchDriver`**: a radio driver (one of `lastLanding.drivers`) skips the ops and the memory swap. It leaves
+  the radio list and sets `cadenceLeftSec = LAST_LANDING_CADENCE_SEC` in the launch's update. A driver that is both by radio
+  and in memory throws.
+- **During THE LAST LANDING** (`landing.lastLanding` set):
+  - `requestLaunch` spends no bay and skips `launchGuard`;
+  - `launchRefusal` skips BAY OFFLINE and BAY EMPTY and refuses RELOADING by `lastLanding.cadenceLeftSec`.
+- **The blind drop** (R27):
+  - `LaunchIntent.blind?: true` is accepted only from `'merge'` while `lastLanding` is set; any other use throws;
+  - `launchRecordFor` passes `DropFactors.blind = BLIND_DROP_MULT`;
+  - `landing-solve.ts dropHalfWidthKm` multiplies `f.blind ?? 1` into its one product.
+- **The `'merge'` seam:** `systems/last-landing.ts mountLastLanding` registers `lastLandingController` as the `'merge'`
+  resolver. It is mounted by `main.ts` after `mountFinale`, and by `wp6/harness6.ts:43`, which also exposes
+  `unmountLastLanding`.
+- **R26:**
+  - `systems/input.ts` gains the `'last-landing'` layer, above `'game'` and below `'choice'`;
+  - `systems/mode.ts setMode` refuses the MIND while `lastLandingOn`;
+  - `engineOpen`'s 7a lock already reads the `'last-landing'` phase.
+- **R29's beacons:** `landing-hud.ts parkedBeacons` adds THE LAST LANDING's pods still to fly (released aboard, with a radio
+  driver) and gives every beacon `restored: boolean`.
+- **The gated MERGE** (`data/last-landing.ts LAST_LANDING_BUILT`, down):
+  - `finale.ts mergeIn` (`:301`): with the gate up, every block of HOLLOW leaves memory, and `finale.restored` becomes
+    `ending-rules.ts lastLandingPods(state)` (R25: eaten, aboard or parked restorable).
+  - `finale.ts verdictDone` (`:413`): with the gate up and pods restored, it calls `startLastLanding(store, restored)` instead
+    of `reopenLanding`.
+  - `ending-rules.ts mergeRestorable` (`:145`) and MERGE's `NOW:` (`:184`): `lastLandingPods` and `FINALE_TEXT.now` with the
+    gate up; 7a's standing blocks and `nowInterim` while it is down.
+  - `restoredDriver(record)` moved from `finale.ts` (`driverFromRecord`) to `ending-rules.ts`, so DROP builds radio drivers
+    with the same rule.
+  - The confirm still clears `driverLost` and sets `record.restored` for the restored pods, so the codec's MERGE check
+    (foundation D5) holds for radio drivers unchanged.
+- **Tuning** (`tuning.ts` 7b blocks): the 7b lead block (`LAST_LANDING_CADENCE_SEC` 2.0, `LAST_LANDING_AUTODROP_ORBITS` 2,
+  `BLIND_MARGIN_KM` 150, `BLIND_DROP_MULT` 2.0, `LAST_LANDING_SKIP_MAX_STEPS` 200,000), plus empty `7b DROP` and `7b VIEW`
+  blocks.
+- **Events** (`events.ts` 7b LAST LANDING block):
+  - `'last-landing-start' { pods; flier }` and `'last-landing-end' { landed }`, both for DROP to emit;
+  - the cue block in `audio-cues.ts`: the start plays `transmitIn`.
+- **Words:**
+  - `data/last-landing-text.ts LAST_LANDING_TEXT` (VIEW's): `header`, `skipHint`, `radio(pod, family)`, `bayRow(count)`,
+    `reportRow({ restored, landed, offSite, noGo })`, `credit`;
+  - `FINALE_TEXT.now(1)` now says `1 eaten driver comes back · its pod lands on its own`.
+- **Debug:**
+  - `__ap.lastLanding()` returns `{ state, phase, built }`;
+  - `__ap.lastLanding.skip()` calls DROP's `skipLastLanding`;
+  - `__ap.ending` calls `skipLastLanding` instead of `forceLandAll` once the gate is up.
+- **`ending/last-landing-foundation.test.ts`** (21 checks, about 1 s) and the `7b DROP` / `7b VIEW` blocks of
+  `support/words.test.ts`.
+
+**The contract, per track.** "Neutral" stubs are safe on every tick and paint. "Throws" stubs throw through
+`not-built.ts notBuilt` (back again, `Track = 'DROP' | 'VIEW'`). Each file opens with its track's banner.
+
+| Track | Function (file) | Signature | Now |
+|---|---|---|---|
+| DROP | `startLastLanding` (systems/last-landing.ts) | `(store, pods: readonly number[]) => void` | throws |
+| DROP | `lastLandingController` | `(state) => LandingController \| null` (the `'merge'` resolver) | neutral: null |
+| DROP | `skipLastLanding` | `(store) => void` | throws |
+| DROP | `mountLastLanding` | `(store) => () => void` | built: registers the resolver (DROP adds its ticks, the input layer and a reset) |
+| DROP | `LAST_LANDING_BUILT` (data/last-landing.ts) | `boolean` | `false` |
+| VIEW | `lastLandingHeader` (systems/last-landing-hud.ts) | `(state) => { title; left; hint } \| null` | neutral: null |
+| VIEW | `podBayRestoredRow` | `(state) => { count; text } \| null` | neutral: null |
+| VIEW | `restoredReportRow` | `(tally: LandingTally) => { text; icons: PodIcon[] } \| null` | neutral: null (landing-report.ts:160 draws 7a's row) |
+| VIEW | `restoredCreditTag` | `(pod: PodSummary) => string` | neutral: `''` (landing-report.ts:202) |
+| VIEW | `mountLastLandingView` (components/run/LastLanding.ts) | `(store) => () => void` | built: paints nothing |
+| VIEW | `LAST_LANDING_TEXT` (data/last-landing-text.ts) | see above | seeded |
+
+**DROP's contract for `startLastLanding`** (written in the file's banner):
+- It is called by `verdictDone` at `'verdict'`, with the gate up, with `finale.restored` (non-empty, in pod order).
+- In its first update it does all of these:
+  - moves the phase to `'last-landing'`;
+  - sets `landing.lastLanding`, with drivers from `restoredDriver`;
+  - releases the pods (`fate 'aboard'`);
+  - reopens the landing (`ended`, `lingerAiSec`, `fuelAtEndPct`, `goLow` and `declined` cleared, as 7a's `reopenLanding`
+    did);
+  - forces `ui.mode 'tools'`.
+- Then it says `LAST_LANDING_TEXT.radio` per pod and emits `'last-landing-start'`.
+- At the end, it clears `lastLanding` and sets `'done'` in the same update, then emits `'last-landing-end'`. Finale.ts's
+  `'last-landing'` branch now ends only a landing with `lastLanding === null` (7a's interim), so the two never race.
+
+**Files each track owns:**
+- **DROP:**
+  - its own files: `systems/last-landing.ts`, `data/last-landing.ts`, the 7b DROP tuning block, and `ending/last-landing`
+    (from `wp11/merge-test`);
+  - its edits in shared files:
+    - the `LastLandingState` fields other than `pods` and `drivers` (`types/ending.ts`, by message to the lead; no save
+      effect);
+    - `support/words.test.ts:474–476` (its block);
+    - `ending/last-landing-foundation.test.ts:48–50` (the gate line) and `:88–92` (its stubs);
+    - the dry run's movers (below).
+- **VIEW:**
+  - its own files: `systems/last-landing-hud.ts`, `data/last-landing-text.ts`, `components/run/LastLanding.ts`, index.html's
+    `#lastLanding`, `styles/landing.css`, and the 7b VIEW tuning block;
+  - its marked edits: `PodBayWindow.ts:123` (the RESTORED row in `paint`) and `plot-landing.ts:382` (the `restored`
+    beacon's class);
+  - its edits in shared files:
+    - `audio-cues.ts:402–405` (the 7b cue block);
+    - `support/words.test.ts:480–492`;
+    - `ending/last-landing-foundation.test.ts:162–166` (its stubs);
+    - `ending/last-landing-models` (its new suite).
+
+### The dry run (`LAST_LANDING_BUILT` raised alone, the quick tier, then lowered)
+
+207 of 213 passed in 225 s. Six suites moved, and every one is DROP's churn: each throws `startLastLanding: not built` at
+MERGE's verdict, or reads an interim word.
+- `ending/last-landing-foundation.test.ts:49`: the gate line.
+- `ending/rules.test.ts:123`: MERGE's `NOW:` counts the standing blocks (R15's interim words).
+- `ending/finale-flow.test.ts:336–346`: MERGE + SUNSET with POD 1's driver eaten (7a review M1's block: `nowInterim`, the
+  driver back in place at 80, `'last-landing'` reopened, the pod landed). Also `:375` (its twin).
+- `wp11/merge-test.test.ts:163` onwards: MERGE with PODS 11 and 12 eaten (the in-place restore at their addresses, the reopened
+  landing). Plan §4.4 has this suite becoming `ending/last-landing`.
+- `wp11/p2/views.test.ts:267`: the MERGE verdict skipped → THE LAST LANDING.
+- `landing/hollow-landing.test.ts:110`: MERGE confirmed with an eaten lead driver.
+
+`wp11/fix1` passed. The BALANCE_ONLY `wp11/full-run` and `wp12/playthrough` were not run. Both reach MERGE only through
+`chooseEnding`, and their instant landing lands a reopened landing; with the gate up, they will need `skipLastLanding`.
+
+### Deviations
+
+1. **`launchDrivers` during THE LAST LANDING is the radio drivers only, not memory plus radio** (R24 said "plus").
+   - The landing had ended before the FINALE opened, so every driver still in memory belongs to a pod parked then (parked
+     pods keep their drivers in memory through the linger: `actions.ts recordDriverLost`'s note).
+   - "Plus" would put those drivers in the queue, the POD BAY's launchable set and the can-ever rules. `nextToLaunch` could
+     then name a parked pod, and `launchDriver` would throw.
+   - R25 flies only the restored pods.
+2. **The radio rules are keyed on the machine (`landing.lastLanding !== null`), not on `source === 'merge'`.**
+   - `skills/autodrop-review` already wraps AUTODROP v3 as a `'merge'` resolver on an ordinary landing, and it must keep the
+     bay's rules.
+   - So during THE LAST LANDING every launch is bay-free and confirm-free (only the `'merge'` controller launches then; the
+     input layer stops the kid). Outside it, `'merge'` is an ordinary controller.
+3. **No inline confirm during THE LAST LANDING** (`requestLaunch` skips `launchGuard`).
+   - There is no kid to ask (01: "no input but [ENTER]"). Its controller decides by R27's rules, and its pods score by the
+     normal ones (a pod into a full LZ is mislanded).
+   - The plan's v3 path still passes `confirmed: 'full'`, which is now ignored there.
+   - DROP may ask for the guard back if a decide needs it.
+4. **`landing/drop-model.test.ts`'s hand-built landing gains `lastLanding: null`.** A fake landing without the v7 field read
+   as a running LAST LANDING (BAY OFFLINE skipped). The selector and the refusal stay strict, with no `?? null`. It was the
+   only hand-built `LandingState` without the field.
+5. **`wp6/harness6.ts` mounts THE LAST LANDING now** (the plan left the harness alone), so DROP's suites need no harness edit.
+   `skills/autodrop-review.test.ts:134` and `:156` take the game's `'merge'` resolver out around its own `'merge'` wrapper
+   (`h.unmountLastLanding()`, then `mountLastLanding(h.store)`).
+6. **Tuning blocks.** The five numbers are 01 §3.17's own and sit in the 7b lead block, as §2.6 has them. The `7b DROP` and
+   `7b VIEW` blocks are empty, for new numbers.
+7. **`'last-landing-end'` has no cue.** §2.5 had `touchdownBell`, but that cue needs an LZ, and the last restored pod's
+   touchdown already plays `'all-pods-down'`'s `lockArp`. VIEW may add one in its block.
+8. **VIEW's report and credits come through lead hooks**, not VIEW edits in `landing-report.ts`: `restoredReportRow` (`:160`)
+   and `restoredCreditTag` (`:202`). With a model, the row's `line` reads `RESTORED BY MERGE · <text>`. Only
+   `PodBayWindow.ts` and `plot-landing.ts` keep marked edits (the edit sites carry a comment).
+9. **The header strip is a component of its own** (`components/run/LastLanding.ts`, `#lastLanding`, mounted by `main.ts`
+   after the FINALE card). The plan named none. **VIEW must key it on `landing.lastLanding`, not on the phase**: 7a's interim
+   also runs in `'last-landing'`.
+10. **`LastLandingState` stays as 7a typed it.** DROP may change any field but `pods` and `drivers` by asking the lead (the
+    file says so), because the machine never reaches a save. `orbitsFlown` may become a time limit, for example.
+11. **Words seeded beyond §2.9:** `LAST_LANDING_TEXT.reportRow` leaves out a part that is 0 and adds `NO-GO`. `FINALE_TEXT.now`
+    gains its singular (lead's words, 7a's file).
+
+### Notes for the tracks
+
+- **DROP:**
+  - Raise the gate last, then run the tier and move the dry run's six suites.
+  - The instant landing (`support/landing-instant.ts`, on outside `tests/unit/landing/`) would `forceLandAll` a reopened
+    landing, radio pods included. `ending/last-landing` sets `setLandingMode('manual')`.
+  - Your v1 and blind controllers should name `waitsFor` (slice 5's M1), so the strip's wait row stands over the kid's
+    `press [L]` rows. The input layer shuts the keys anyway.
+  - Bind ENTER, P and M on `'last-landing'` while `lastLanding` is set: `pushModal('last-landing')` at the start, and close it
+    at the end and on a world reset.
+  - Count `cadenceLeftSec` down in game time (an `onGameTick`). `launchDriver` sets it.
+  - The codec's `lastLanding` null check stays, so `skipLastLanding` must end before ENDING CHOSEN (it does, with `'done'`).
+- **VIEW:**
+  - Draw `Beacon.restored` steady amber.
+  - `podBayRestoredRow` counts `lastLanding.pods`.
+  - The report row counts pods, not colonists.
+- **The lead:**
+  - the contract review is next;
+  - §6.4's 7b e2e additions are the lead's at the batch end.
