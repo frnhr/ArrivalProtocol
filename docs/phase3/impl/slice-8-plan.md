@@ -746,3 +746,134 @@ are presented to Fran with the recommendation, and nothing is built.
 - **The e2e playthrough's pace** beyond §2.12's CORMORANT check; the COMPETENT wall-time target stays a KNOWN_GAP for
   Fran's playtest.
 - **Save, archive and content versions**: none bump.
+
+## Deviations (POLISH)
+
+Track POLISH, on branch `polish-8` from fa323d6 (the plan's commit on `claude/modest-hawking-209t0f`, before RETIRE phase 3
+and Step 0 merged). OPEN-DECISIONS 20 and 66 are marked BUILT, and items 113–116 hold the calls. Every new number is in
+`tuning.ts`'s new `--- Phase 3 slice 8 POLISH` block.
+
+### §2.11 [ENTER]'s freeze (OD 66)
+
+- **Built as planned:**
+  - `last-landing.ts skipLastLandingFrames` runs `skipLastLanding`'s loop in `LAST_LANDING_SKIP_FRAME_MS` (12) slices:
+    the clock's own step, the cap counted across slices, `skipped` set, and a paused clock let go first.
+  - The header reads `SKIPPING… n LEFT`.
+  - `LastLanding.ts`'s button and the layer's [ENTER] both go through `pressSkipLastLanding`.
+  - The headless suites keep the one-call skip. A page without `requestAnimationFrame` gets it from the key too, so
+    `ending/last-landing`'s "[ENTER] … in that one keypress" and its "skipped equals watched" check stand unchanged.
+- **Deviation 1 (item 113): task slices, not one slice per `requestAnimationFrame`.**
+  - Each slice is posted as its own task (`MessageChannel`).
+  - With rAF, 3 blind pods took 15–17 s in the cloud VM's Chromium. Each frame was about 90 ms, the main thread was
+    idle 12 of the 15 s, and the frame waited for the compositor.
+  - With tasks the skip takes about as long as the frozen one did, and the browser still paints 10–25 times a second.
+- **Deviation 2: the wall clock is held** (`clock.ts holdWallClock`, one function and one line in `mountClock`, a file
+  outside POLISH's list).
+  - Without it, the 50 ms interval adds real-time ticks between slices.
+  - The framed skip would then not be the one-call skip's result.
+- **Deviation 3 (item 115): only M is heard while it runs, not P and M.**
+  - P would pause the world that the skip flies.
+  - A pause from outside between slices (a hidden tab) is let go at the next slice. The result is unchanged (checked).
+  - Clicks, taps and the wheel are swallowed at the window, in the capture phase (`body.ll-skipping`). This answers
+    "buttons must not bleed through".
+- **Deviation 4: the e2e does not compare the page's result with a headless skip of the same seed.**
+  - Before [ENTER], the page's state depends on wall time. The drop's stream (`landing.ts dropRng`) is module state that a
+    page cannot rewind. So no second skip can start from the same point.
+  - The equality is proved headless instead. `ending/last-landing-frames` compares the whole end state, framed against
+    one-call, field for field, with a fake scheduler and a fake wall clock:
+    - quick: blind with 2 pods and AUTODROP v2 with 3, a hidden-tab pause between slices, keys, budget and a world reset;
+    - full: blind with 4 pods, v3 with 6, and all 16 pods blind at one step per slice;
+    - a control first: two one-call skips from one setup are equal, once the two module counters (log entry ids, numbered
+      segment ids) are left out.
+  - The e2e checks the longest task, the hint, the swallowed input, and the report's LANDED count against the pods' own
+    fates.
+- **Deviation 5 (item 114): 16 blind pods are not done in 4 s or less.**
+  - The steps alone cost 10 s in the VM: the old skip was one task of 9.9 s.
+  - Over slices the skip takes 12.9 s, with no long task.
+  - About half of a step is the SHIP view painting on every game tick. Item 114 proposes a view-quiet mode for the lead.
+- **Measured** (Chromium, the cloud VM, seed 7's LAST LIGHT, 3 or 16 drivers eaten, Nav Plotter dead so the pods drop
+  blind, [ENTER] at the first pod; script `measure-skip.mjs`, a copy of `last-landing.mjs`'s setup with a
+  `PerformanceObserver('longtask')`):
+
+  | Case | Before: longest task | Before: wall | After (rAF, rejected): longest / wall | After (tasks): longest task | After (tasks): wall | Same fates |
+  |---|---|---|---|---|---|---|
+  | 3 blind | 2,003 ms (one task) | 2.2 s | 93 ms / 15.0–17.4 s | 0 ms in 2 runs (one of them the e2e), 115 ms in 1 | 2.1–3.1 s | yes |
+  | 16 blind | 9,949 ms (one task) | 10.1 s | not run | 0 ms (none over 50) | 12.9 s | yes, all 16 |
+
+  - The "after" rows are from a quiet VM. In 3 s of watched play before [ENTER] there, no task was over 50 ms.
+  - Later, three more 3-pod runs were made while the other tracks' unit tiers loaded the VM (load average 9 on 4 cores).
+    Watched play then had long tasks of 57–176 ms, and the skip's longest task was 146–217 ms, at 3.3–4.6 s.
+    So under load the page is as janky skipping as playing, but never frozen.
+  - e2e `last-landing` (3 pods, quiet VM): longest task 0 ms, 3.1 s.
+
+### §2.12 The receiver bypass (OD 20)
+
+- **Built as planned:**
+  - `systems/receiver-bypass.ts` (pure) and `MindTerminal.ts` draw the line.
+  - It is keyed on the 'resident' tone.
+  - Letters roll through `BYPASS_ROLL_GLYPHS` at `BYPASS_ROLL_HZ`, then lock left to right, each up to
+    `BYPASS_LOCK_SPREAD_CHARS` places early, by garble.ts's mask seeded with the log entry.
+  - The whole line is locked by `BYPASS_RESOLVE_SEC` (1.2).
+  - A click on the lines, or the boot's end, resolves it.
+  - Under reduced motion the line is drawn resolved, with no roll and no flash.
+  - The styling is `styles/polish.css`: the rolling runs in `--resident-dim`, a lock flash in `--resident` /
+    `--resident-glow`.
+- **Deviation 6 (item 116): the line keeps the TERMINAL's typing time.**
+  - It shows whole as it starts and holds the queue for its usual 1.35 s (54 characters at 40 cps). The roll runs inside
+    that.
+  - So every later TERMINAL line types when it always did, and `say.ts typingSec`, which the director reads, still matches
+    the view.
+- **Deviation 7: only the TERMINAL draws it.**
+  - The line is on the mind channel. `CommsWindow.ts` draws only the radio channel, so it is not touched.
+- **Measured** (e2e `residents` and the screenshot script, GANNET's boot watched):
+  - The line was true at 1,231–1,256 ms after its row showed (1440×900), and at 1,240 ms at 390×844. The model resolves
+    by 1.2 s; the rest is the VM's 60–80 ms frames.
+  - Under reduced motion one frame was drawn, already true.
+- **Screenshots:** `tests/.out/polish-8/bypass-{1440x900,390x844,1440x900-reduced}-{1-rolling,2-locking,3-resolved}.png`.
+
+### Small debts
+
+- **The PACKET's headline on a `?` ship** (7d review): it reads `NEXT: LAPWING · ??? COLONISTS · …` until the ship's boot
+  (`transmit.ts`, `unknownShown`). `MAP_TEXT.packet.headline` takes `colonists: number | null`; `map-text.ts` is RETIRE's
+  file, and this hunk is far from its classic refusal.
+- **The v8 old colony's letter** (7d review): small, so built. `save-codec.ts migrateRunSave8` adds the passed old colony
+  stops' `old-colony:<slot>` ids to `run.inbox.read`. A BEAM or RUN START save's last stop keeps its letter for its boot.
+  Checked by the new `save/v8-old-colony`, on the v8 HERON fixture with a stop made the old colony by hand. No save bump:
+  it is the existing 8 → 9 step.
+- **The phone's FINALE step 2** (§2.12 debt 2): `phone.mjs` checks the step-2 sheet at 390×844. It must have four rows,
+  each a button at least 44 px tall inside the width, and the last one must scroll onto the screen.
+- **The CORMORANT flight's margin** (§2.12 debt 3): nothing to do. `playthrough.mjs SHIP_MAX_MS` has been 8 minutes since
+  7a/7b (its comment cites the 315–359 s spread), which is already over the plan's 420 s.
+- **The PACKET's MERGE hint** (§2.12 debt 4): not built. It is conditional on ENDINGS' §2.10 measure missing at 14 charge,
+  and it waits for RETIRE's merge (`map-text.ts`).
+- **`TRACES_BUILT`** (debt 1): ENDINGS' file, untouched.
+
+### Files outside §4.2's list
+
+- `clock.ts`: the hold (deviation 2).
+- `data/last-landing-text.ts`: one `skipping` line.
+- `main.ts`: one CSS import.
+- `systems/transmit.ts` and `data/map-text.ts`: the headline.
+- `systems/save-codec.ts`: the migration.
+- New: `systems/receiver-bypass.ts`, `styles/polish.css`, `tests/unit/ending/last-landing-frames.test.ts`,
+  `tests/unit/residents/receiver-bypass.test.ts`, `tests/unit/save/v8-old-colony.test.ts`.
+- `ending/last-landing.test.ts` is unchanged. The frames check is its own suite, so RETIRE's edits to that suite cannot
+  conflict.
+
+### Results
+
+- `npm run typecheck` is clean.
+- **Quick tier, run once at 43d3767's parent:** 225 of 227 suites passed, 13 BALANCE_ONLY skipped, in 596 s.
+  - The VM was loaded by the other tracks' tiers (load average 9–17 on 4 cores), so the run went over the 300 s budget.
+  - Two suites failed on time only: `skills/autodrop-plan`'s memo, at 1.75 ms against 1 ms, and `wp12/fix1/entries`,
+    at 98 s against 90 s. Both pass alone (3.4 s and 46 s).
+  - POLISH's new suites take 14 s (`ending/last-landing-frames`, quick), 3 s (`residents/receiver-bypass`) and 3 s
+    (`save/v8-old-colony`). `ending/last-landing-frames` passes at `--full` too.
+- **e2e, each run alone:**
+  - `last-landing`: 22/22.
+  - `residents`: 29/29.
+  - `phone`: 127/127.
+  - `run-flow`: its 59 checks pass, then the script throws at line 499. `__ap.runNumber(1)` fails with `createRunMap:
+    the stored arm is for run 3, the lineage's wave is 1`. It fails the same way on a clean checkout of fa323d6, so it
+    predates POLISH. It comes from RETIRE's fixture world (`state/initial.ts fixtureArm`, called from `debug.ts
+    debugRunNumber`), and is left for RETIRE or the lead.
