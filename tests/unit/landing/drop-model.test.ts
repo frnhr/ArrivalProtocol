@@ -155,6 +155,8 @@ function fake(opts: Fake = {}): GameState {
       featured: [], driverLost: null, restored: false, fate: { kind: 'aboard' } })),
     bay: { loaded: BAY_SLOTS, reloadTac: 0, cadenceLeftTac: 0 }, loadNext: null, startedAtTSec: 0, ended: null, lingerAiSec: null,
     noDriverAiSec: 0, window: null, fuelAtEndPct: null, orbitEpoch: 0, decay: { lastKickTSec: null, kicks: 0, last: null }, goLow: null, declined: null, ghostBursts: 0,
+    // Slice 7b: the launch path reads THE LAST LANDING's machine (selectors launchDrivers, launchRefusal); none here.
+    lastLanding: null,
   };
   return {
     run: { phase: 'landing' }, clock: { paused: false, tSec: 0 }, ui: { mode: opts.mode ?? 'tools' }, burn: { lastTickDvKmS: opts.dv ?? 0 },

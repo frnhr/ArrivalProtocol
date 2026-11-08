@@ -48,6 +48,7 @@ const threw = (fn: () => unknown): string => {
 // Track DROP's gate line:
 check('built: THE LAST LANDING not yet (7a\'s interim MERGE plays)', !LAST_LANDING_BUILT);
 // (end of DROP's gate line)
+
 check('the numbers are 01 §3.17\'s: 2.0 s between launches, 2 orbits of AUTODROP, ±(W/2 + 150 km), ×2 spread; the skip cap far above a run',
   LAST_LANDING_CADENCE_SEC === 2 && LAST_LANDING_AUTODROP_ORBITS === 2 && BLIND_MARGIN_KM === 150 && BLIND_DROP_MULT === 2
   && LAST_LANDING_SKIP_MAX_STEPS >= 100_000);
@@ -84,9 +85,12 @@ h.noFault();
 lockOn(h);
 const state = (): ReturnType<typeof h.store.getState> => h.store.getState();
 
-check('the stubs: DROP\'s start and skip throw, its resolver answers null; VIEW\'s models are neutral',
+// Track DROP's stubs (its block: as built, it rewrites these lines; ending/last-landing is its own suite):
+check('DROP\'s stubs: startLastLanding and skipLastLanding throw, the \'merge\' resolver answers null',
   /not built \(Track DROP/.test(threw(() => startLastLanding(h.store, [1]))) && /not built \(Track DROP/.test(threw(() => skipLastLanding(h.store)))
-  && lastLandingController(state()) === null && lastLandingHeader(state()) === null && podBayRestoredRow(state()) === null);
+  && lastLandingController(state()) === null);
+// (end of DROP's stubs)
+
 check('the \'merge\' resolver is registered by the harness\'s mount (a second one throws), and no controller flies',
   /already registered/.test(threw(() => registerLandingController('merge', () => null))) && activeLandingController(state()) === null);
 check('with no LAST LANDING the launch path reads memory: launchDrivers is driversInMemory, the beacons are none',
@@ -153,11 +157,12 @@ check('…with no bay (R26): an empty bay does not refuse it, the cadence does',
   check('…and nothing else launched: the memory drivers\' pods were parked as the landing ended',
     state().landing.pods.filter((candidate) => candidate.fate.kind === 'down').length === 1);
 }
-{
-  const tally = { restored: 200 } as never;
-  check('VIEW\'s report hooks are neutral: no row model, no credit tag', restoredReportRow(tally) === null
-    && restoredCreditTag({ pod: radioPod } as never) === '');
-}
 h.store.update((draft) => { draft.landing.lastLanding = null; });
+
+// Track VIEW's stubs (its block: as built, it rewrites these lines; ending/last-landing-models is its own suite):
+check('VIEW\'s models are neutral: no header, no POD BAY row, no report row model, no credit tag',
+  lastLandingHeader(state()) === null && podBayRestoredRow(state()) === null && restoredReportRow({ restored: 200 } as never) === null
+  && restoredCreditTag({ pod: radioPod } as never) === '');
+// (end of VIEW's stubs)
 
 finish();
