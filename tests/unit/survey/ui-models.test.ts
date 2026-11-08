@@ -3,9 +3,10 @@
 // built with both gates raised for the suite (tests/unit/support/survey.ts), its survey slice then written by hand. Under a
 // second. It checks:
 // • the SITES window: the header's five run states (survey-model.ts surveyRunning, Track SWATH's), the rim strip, the LZ
-//   rows (`GUESS`, `UNSURVEYED` with no SURVEY, `GROUND ?` before a rating, `ROCKY ✕` once known), the found sites by what is
-//   known (★ by siteStars, the wreck's words), the selection's pills (`SET AS LZ-B (800)`) and the refusals dimmed, written to
-//   survey-model.ts assignableLzs' contract (plan §6.3, review M8);
+//   rows (`GUESS`, `UNSURVEYED` with no SURVEY, `GROUND ?` before a rating, v1's rough tell `FLAT ?` / `ROUGH ?` on a
+//   guess its swath passed (slice 8), `ROCKY ✕` once known), the found sites by what is known (★ by siteStars, the wreck's
+//   words), the selection's pills (`SET AS LZ-B (800)`) and the refusals dimmed, written to survey-model.ts assignableLzs'
+//   contract (plan §6.3, review M8);
 // • the NAV PLOT's model: the mapped and unmapped arcs, the free sites' brackets, the LZs' `?` and `✕`, the wedge's width by
 //   version while SURVEY runs (twice as wide at v3);
 // • the GROUND TRACK's candidates and unmapped rim, through landing-hud.ts groundTrackModel;
@@ -25,7 +26,7 @@ import {
   sitesWindowModel, surveyPlotModel, surveyGroundBrackets, surveyUnmapped, surveyCardRow, surveyAheadLine, surveyLzRowSuffix,
   cellArcs, freeSites,
 } from '@systems/survey-hud';
-import { surveyRunning, swathHalfRad } from '@systems/survey-model';
+import { surveyRunning, swathHalfRad, guessTell, knownBad, surveySwap } from '@systems/survey-model';
 import { groundTrackModel } from '@systems/landing-hud';
 import { SITES_TEXT } from '@data/sites-text';
 import { SURVEY_TEXT } from '@data/survey-text';
@@ -105,10 +106,22 @@ built(() => {
   const v1 = giveSurvey(cormorant((s) => mapCells(s, 0, 36, false)), 1);
   const m1 = sitesWindowModel(v1);
   const found1 = v1.landing.survey.sites.filter((site) => site.kind !== 'guess' && site.found);
-  check('v1 · half mapped: `MAPPED 50%`, the strip half ▓, every LZ `GROUND ?`',
+  // Slice 8 (OPEN-DECISIONS 53): v1's rough tell. LZ-A's FLAT guess lies in the mapped half (`FLAT ?`), LZ-B's ROCKY one does
+  // not (`GROUND ?`); neither is rated.
+  check('v1 · half mapped: `MAPPED 50%`, the strip half ▓, LZ-A passed `FLAT ?` (the rough tell), LZ-B not passed `GROUND ?`',
     m1 !== null && m1.header === SITES_TEXT.window.header(50)
     && m1.rim === SITES_TEXT.window.rimMapped.repeat(SITES_RIM_BAR_CELLS / 2) + SITES_TEXT.window.rimUnmapped.repeat(SITES_RIM_BAR_CELLS / 2)
-    && m1.lzs.every((row) => row.ground.word === SITES_TEXT.row.groundUnknown), JSON.stringify(m1?.lzs));
+    && m1.lzs.map((row) => row.ground.word).join() === [SITES_TEXT.row.tellFlat, SITES_TEXT.row.groundUnknown].join()
+    && m1.lzs.every((row) => row.ground.known === null && row.ground.stars === 0), JSON.stringify(m1?.lzs));
+  const v1All = giveSurvey(cormorant((s) => mapCells(s, 0, SURVEY_CELLS, false)), 1);
+  const m1All = sitesWindowModel(v1All);
+  check('…v1, the whole rim mapped: LZ-B\'s ROCKY guess reads `ROUGH ?`, still unrated (no ✕, not known bad, no strip swap)',
+    m1All !== null && m1All.lzs[1]!.ground.word === SITES_TEXT.row.tellRough && m1All.lzs[1]!.ground.known === null
+    && m1All.lzs[0]!.ground.word === SITES_TEXT.row.tellFlat && guessTell(v1All, v1All.landing.survey.sites.find((site) => site.id === 'guess-B')!) === 'rough'
+    && !knownBad(v1All, 'LZ-B') && surveySwap(v1All) === null, JSON.stringify(m1All?.lzs));
+  check('…the tell is v1+\'s: no SURVEY aboard reads `UNSURVEYED` on the same rim; a candidate never has one',
+    guessTell(cormorant((s) => mapCells(s, 0, SURVEY_CELLS, false)), v1All.landing.survey.sites.find((site) => site.id === 'guess-B')!) === null
+    && v1All.landing.survey.sites.filter((site) => site.kind !== 'guess').every((site) => guessTell(v1All, site) === null));
   check('…the sites found in it listed in rim order with ROOM and WIDTH (`SITE 1 · ROOM 1,000 · NARROW · GROUND ?`), selectable',
     m1 !== null && found1.length > 0 && m1.sites.length === found1.length
     && m1.sites.every((row, i) => row.site === [...found1].sort((a, b) => a.centreRad - b.centreRad)[i]!.id && row.ground.known === null)

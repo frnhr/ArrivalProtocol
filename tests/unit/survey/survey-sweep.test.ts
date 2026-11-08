@@ -6,7 +6,8 @@
 // POOR with no SURVEY, v1, v2 and v3. The kid flies the capture by the strip (wp2 followDirector, with the WP7 defender) and
 // lands by the strip (landing/harness-landing followLanding: [L] at the windows, [F] to the next); with SURVEY it also moves
 // LZs, every tick:
-// • v1 (it knows no ground): an LZ still on a NARROW guess goes to the widest found candidate with ROOM it may take;
+// • v1 (it rates no ground): an LZ still on a NARROW guess, or on a guess its rough tell reads `ROUGH ?` (slice 8, OPEN-DECISIONS
+//   53), goes to the widest found candidate with ROOM it may take;
 // • v2, v3: an LZ on a ground it knows is bad goes to survey-model bestSwap (the strip's swap).
 // It reports per ship and in all: Q (points over the colonists aboard: the cycles' LANDED steps) and landed % (in an LZ with
 // room) against the same ship played GOOD, the pods down hard, the cycles; the mapped % at the capture by version, and FUEL at
@@ -44,7 +45,7 @@ import { mappedPct } from '@state/survey-selectors';
 import { freeSegment, mergeAdjacentFree } from '@systems/memory-ops';
 import { canStartOp, holdsThread } from '@systems/ops-core';
 import { assignSite, SURVEY_THREAD_OWNER } from '@systems/survey';
-import { assignRefusal, bestSwap, knownBad } from '@systems/survey-model';
+import { assignRefusal, bestSwap, knownBad, guessTell } from '@systems/survey-model';
 import { branchToLatch } from '@systems/skill-tree';
 import { visitNow } from '@systems/skill-levels';
 import { reachable } from '@systems/map-hop';
@@ -159,9 +160,13 @@ function moveLzs(version: SkillVersion): void {
       continue;
     }
     const on = state.landing.survey.sites.find((site) => site.id === lz.site);
-    if (on?.kind !== 'guess' || on.width !== 'narrow') continue;
+    if (on?.kind !== 'guess') continue;
+    // Slice 8 (OPEN-DECISIONS 53): a guess v1's rough tell reads `ROUGH ?` goes to the widest found candidate, blind, NARROW
+    // too (a NARROW site is likelier FLAT than a guess known rough); a NARROW guess as before.
+    const rough = guessTell(state, on) === 'rough';
+    if (!rough && on.width !== 'narrow') continue;
     const to = state.landing.survey.sites
-      .filter((site) => site.kind === 'candidate' && site.found && site.width !== 'narrow' && assignRefusal(state, lz.label, site.id) === null)
+      .filter((site) => site.kind === 'candidate' && site.found && (rough || site.width !== 'narrow') && assignRefusal(state, lz.label, site.id) === null)
       .sort((a, b) => b.halfWidthRad - a.halfWidthRad || b.roomPods - a.roomPods)[0];
     if (to !== undefined) assignSite(h.store, lz.label, to.id);
   }
