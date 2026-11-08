@@ -1,9 +1,10 @@
 // WP12 fix round 2 (minor 2): a doomed HALCYON's BEAM OUT line seen from the MIND. Amber: `NOT ENOUGH FUEL to miss the
 // planet — press BEAM OUT`, no key. Blue: `… — [TAB], press BEAM OUT` with the TAB toggle lit (a phone's cap reads
 // [SHIP]), whole on the strip; back in amber the plain line. At 1440x900 and on a 390x844 touch phone.
-// Slice 3a: on the classic HALCYON (__ap.ship(1), FULL: six racks) and on run 1's arm HALCYON (__ap.slot(2), COMPACT: five
-// racks, A B C E F), whose MIND strip is checked in its class's layout too (its racks, no row of its own for a free tail,
-// inside the screen).
+// Slice 3a: on run 1's arm HALCYON (__ap.slot(2), COMPACT: five racks, A B C E F), whose MIND strip is checked in its
+// class's layout too (its racks, no row of its own for a free tail, inside the screen). Track RETIRE: the classic HALCYON
+// (FULL, six racks) is retired, so the FULL layout is checked on run 1's VESPER (__ap.ship(3): the worked route's VESPER,
+// FULL), doomed the same way.
 // Usage: node tests/e2e/scenarios/beam-blue.mjs   (exits non-zero on a failed check; shots under tests/.out/e2e/shots; tests/e2e/run.mjs runs it)
 import { launch, BASE_URL } from '../lib.mjs';
 
@@ -23,10 +24,10 @@ for (const viewport of [{ name: '1440x900', width: 1440, height: 900, phone: fal
   page.on('pageerror', (err) => errors.push(String(err)));
   page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()); });
   const evaluate = (fn, arg) => page.evaluate(fn, arg);
-  const waitFor = async (predicate, maxMs) => {
+  const waitFor = async (predicate, maxMs, arg) => {
     const end = Date.now() + maxMs;
     while (Date.now() < end) {
-      if (await page.evaluate(predicate)) return true;
+      if (await page.evaluate(predicate, arg)) return true;
       await page.waitForTimeout(100);
     }
     return false;
@@ -44,8 +45,11 @@ for (const viewport of [{ name: '1440x900', width: 1440, height: 900, phone: fal
     await page.waitForTimeout(700);
   };
 
-  for (const world of ['classic', 'arm']) {
-    const tag = `${viewport.name} ${world} HALCYON`;
+  for (const leg of [
+    { ship: 'HALCYON', cls: 'COMPACT', racks: 'ABCEF', jump: () => window.__ap.slot(2) },
+    { ship: 'VESPER', cls: 'FULL', racks: 'ABCDEF', jump: () => window.__ap.ship(3) },
+  ]) {
+    const tag = `${viewport.name} ${leg.ship}`;
     // A fresh run 1 each time (no archive: a reload mid-run would start run 2 on a fresh roll; slice 3c: and no run save,
     // or the reload offers RESUME). Cleared before leaving the last page too, so it never opens on the last run's save.
     await evaluate(() => { window.__ap?.archiveClear(); window.__ap?.saveClear(); });
@@ -56,15 +60,14 @@ for (const viewport of [{ name: '1440x900', width: 1440, height: 900, phone: fal
     await waitFor(() => ['boot', 'flight'].includes(window.__ap.store.getState().run.phase), 8000);
     await evaluate(() => window.__ap.skipBoot());
     await waitFor(() => window.__ap.store.getState().run.phase === 'flight', 20000);
-    if (world === 'classic') await evaluate(() => window.__ap.ship(1));
-    else await evaluate(() => window.__ap.slot(2));
-    await waitFor(() => {
+    await evaluate(leg.jump);
+    await waitFor((name) => {
       const state = window.__ap.store.getState();
       if (state.run.phase === 'boot') window.__ap.skipBoot();
-      return state.run.phase === 'flight' && state.level.shipName === 'HALCYON';
-    }, 30000);
+      return state.run.phase === 'flight' && state.level.shipName === name;
+    }, 30000, leg.ship);
     const cls = await evaluate(() => window.__ap.store.getState().level.memoryClass);
-    check(`${tag}: ${world === 'classic' ? 'the classic HALCYON (FULL)' : 'the arm\'s HALCYON (COMPACT)'}`, cls === (world === 'classic' ? 'FULL' : 'COMPACT'), cls);
+    check(`${tag}: run 1's ${leg.ship} (${leg.cls})`, cls === leg.cls, cls);
     if ((await evaluate(() => window.__ap.store.getState().ui.mode)) !== 'tools') await toMode('tools');
     // Falling straight at the planet with an empty tank (phone.mjs's setup): no burn can save it.
     await evaluate(() => {
@@ -74,12 +77,12 @@ for (const viewport of [{ name: '1440x900', width: 1440, height: 900, phone: fal
         draft.orbit.x = radius; draft.orbit.y = 0; draft.orbit.vx = 0; draft.orbit.vy = 0.3 * Math.sqrt(state.level.planet.mu / radius); draft.burn.fuelPct = 0;
       });
     });
-    check(`${tag}: a doomed HALCYON offers BEAM OUT`, await waitFor(() => window.__ap.beamOutView().look === 'offered', 8000));
+    check(`${tag}: a doomed ${leg.ship} offers BEAM OUT`, await waitFor(() => window.__ap.beamOutView().look === 'offered', 8000));
     await page.waitForTimeout(1500);
     const amber = await strip();
     check(`${tag} amber: \`… — press BEAM OUT\`, no key`, amber.shown?.id === 'beam-out-offer'
       && /— press BEAM OUT$/.test(amber.shown.text) && amber.shown.keys.length === 0 && amber.over === 0, amber.rendered);
-    await page.screenshot({ path: `tests/.out/e2e/shots/beam-${viewport.name}-${world}-1-amber.png` });
+    await page.screenshot({ path: `tests/.out/e2e/shots/beam-${viewport.name}-${leg.ship}-1-amber.png` });
 
     await toMode('memory');
     const blue = await strip();
@@ -104,10 +107,10 @@ for (const viewport of [{ name: '1440x900', width: 1440, height: 900, phone: fal
       const wrap = document.getElementById('memWrap').getBoundingClientRect();
       return { rows, freeTails, left: Math.round(wrap.left), right: Math.round(wrap.right), width: innerWidth, overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth };
     }));
-    check(`${tag} blue: the MIND strip in its class's racks (${world === 'classic' ? 'A–F' : 'A B C E F'}), no rack with a row of its own for a free tail, inside the screen`,
-      Object.keys(racks.rows).join('') === (world === 'classic' ? 'ABCDEF' : 'ABCEF') && racks.freeTails.length === 0
+    check(`${tag} blue: the MIND strip in its class's racks (${leg.racks.split('').join(' ')}), no rack with a row of its own for a free tail, inside the screen`,
+      Object.keys(racks.rows).join('') === leg.racks && racks.freeTails.length === 0
       && racks.left >= 0 && racks.right <= racks.width && !racks.overflow, JSON.stringify(racks));
-    await page.screenshot({ path: `tests/.out/e2e/shots/beam-${viewport.name}-${world}-2-blue.png` });
+    await page.screenshot({ path: `tests/.out/e2e/shots/beam-${viewport.name}-${leg.ship}-2-blue.png` });
 
     await toMode('tools');
     const back = await strip();
