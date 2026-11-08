@@ -426,3 +426,7 @@ list.
     - **Known gap for slice 8:** MERGE's margin is thin on the worked route (slice-3a risk 6: "the MERGE margin moves to the
       route"). COMPETENT has the 20 charge in 2 of 5 runs (median 11). `full-run`'s quick seed 4 reaches the choice with
       13, so its "the quick seed reached its MERGE" check fails in `npm run balance` until the rebalance.
+89. **Tests of the classic licence schedule are deleted, not moved.** That schedule is COPY at the boot and SWAP at the
+    first ghost. DECIDED (RETIRE): 03 §6 retires that schedule, so the arm has nothing for those checks to test.
+    - Checks in the same suites that test behaviour the arm keeps (the DEAL, SWAP pairing, the ghost) move to the arm.
+    - Each deletion is listed in slice-4cde-plan "Deviations (RETIRE)".
