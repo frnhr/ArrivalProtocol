@@ -1,0 +1,5 @@
+/* Slice 6: Track SITES owns this file (docs/phase3/impl/slice-6-plan.md §2.14, §6.2): the SITES window, the survey's plot
+   layer, the GROUND TRACK's candidate brackets and unmapped ground, the stamps. Imported by main.ts after resident.css.
+   The FOUNDATION's one rule: the SITES window and its dock item (index.html, class survey-only) stay hidden until SITES
+   shows them (body.survey, as body.landing shows the POD BAY). */
+body:not(.survey) .survey-only { display: none !important; }
