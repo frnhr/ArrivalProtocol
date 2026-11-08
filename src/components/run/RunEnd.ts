@@ -108,7 +108,7 @@ function buildTally(shipsEl: HTMLElement): TallyParts {
   const undelivered = make('div', 're-tally-undelivered');
   // Slice 3c: the world update's summary (paintNext).
   const next = make('div', 're-tally-next');
-  // Slice 4 (02 §4, 03 §3.1): the tree's line, `TRAINED 12 of 54 · UNSPENT 3`, under the files that never arrived.
+  // Slice 4 (02 §4, 03 §3.1): the tree's line, `TRAINED 12 of 50 · UNSPENT 3`, under the files that never arrived.
   const skills = make('div', 're-tally-skills');
   side.append(make('div', 're-tally-route', MAP_TEXT.tally.route), chart, colonies, undelivered, skills, next);
   const list = make('div', 're-tally-list');

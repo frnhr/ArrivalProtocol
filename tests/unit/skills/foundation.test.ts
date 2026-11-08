@@ -1,6 +1,6 @@
 // Slice 4 FOUNDATION (docs/phase3/impl/slice-4-plan.md §5.1 item 7, §6): the skill tree's data and its pure cores, store
 // level, under a second.
-// • The table (03 §3.2, §3.4; plan §4.1): its validator passes, 54 cycles in all, a full set of 34 blocks, the largest
+// • The table (03 §3.2, §3.4; plan §4.1): its validator passes, 50 cycles in all (54 before slice 8), a full set of 34 blocks, the largest
 //   file SKILL_MAX_BLOCKS (AUTOBURN v3 with LOCK 810), sizes and prices by cell.
 // • Graded damage (03 §3.5): the effective version and lock for every band, and skillLive's copy that counts (missing,
 //   offline, damaged, the better of two copies).
@@ -59,16 +59,18 @@ const throws = (run: () => unknown): boolean => { try { run(); return false; } c
 check('the tree passes its validator at load (and again on demand)', !throws(validateSkillTree));
 check('four skills, one per branch, in SKILL_IDS order', SKILL_IDS.join() === 'autoburn,autodrop,survey,sentry'
   && new Set(SKILL_IDS.map((id) => SKILL_TREE[id].branch)).size === 4);
-check('the whole tree costs 54 cycles (the RUN TALLY\'s `TRAINED n of 54`)', treeTotalCycles() === 54, String(treeTotalCycles()));
+check('the whole tree costs 50 cycles (the RUN TALLY\'s `TRAINED n of 50`; slice 8 re-priced it from 54)', treeTotalCycles() === 50, String(treeTotalCycles()));
 check('a full set at v3 (LOCK 810) is 34 blocks', fullSetBlocks() === 34, String(fullSetBlocks()));
 check('the largest file is AUTOBURN v3 + LOCK 810 = 12 = SKILL_MAX_BLOCKS', skillBlocks('autoburn', 3, 2) === 12 && SKILL_MAX_BLOCKS === 12);
 check('sizes by cell: AUTOBURN v1 6, v1 + 270 7, v2 + 270 9; AUTODROP v1 4, v3 10; SENTRY v1 3',
   skillBlocks('autoburn', 1, 0) === 6 && skillBlocks('autoburn', 1, 1) === 7 && skillBlocks('autoburn', 2, 1) === 9
   && skillBlocks('autodrop', 1, 0) === 4 && skillBlocks('autodrop', 3, 0) === 10 && skillBlocks('sentry', 1, 0) === 3);
 check('…a lock on a skill without LOCK RANGE throws', throws(() => skillBlocks('autodrop', 1, 1)));
-check('prices by cell: roots 3 (SURVEY and SENTRY 2), v2 5, v3 8; LOCK 270 1, LOCK 810 2',
+check('prices by cell (slice 8): roots 3 (SURVEY and SENTRY 1), AUTODROP v2 5 / v3 8, AUTOBURN v2 4 / v3 7; LOCK 270 1, LOCK 810 2',
   levelPrice('autoburn', { kind: 'version', version: 1 }) === 3 && levelPrice('autodrop', { kind: 'version', version: 2 }) === 5
-  && levelPrice('autoburn', { kind: 'version', version: 3 }) === 8 && levelPrice('survey', { kind: 'version', version: 1 }) === 2
+  && levelPrice('autodrop', { kind: 'version', version: 3 }) === 8 && levelPrice('autoburn', { kind: 'version', version: 2 }) === 4
+  && levelPrice('autoburn', { kind: 'version', version: 3 }) === 7 && levelPrice('survey', { kind: 'version', version: 1 }) === 1
+  && levelPrice('sentry', { kind: 'version', version: 1 }) === 1
   && levelPrice('autoburn', { kind: 'lock', level: 1 }) === 1 && levelPrice('autoburn', { kind: 'lock', level: 2 }) === 2);
 // What this build implements, one check per skill so each track raises only its own line (slice-4cde foundation review M1).
 // FLIGHT: AUTOBURN v1–v3 (Track ORBIT, slice 4e).
@@ -148,10 +150,10 @@ check('the effective lock: ok its level, damaged one lower (810 → 270 → 90),
   const lostAll = lostLevels('autodrop', null, { version: 3, lock: 0 });
   check('AUTODROP v3 lost: v1 v2 v3, RESTORE ⌈16 / 2⌉ = 8 (03 §3.4\'s chip)', lostAll.length === 3 && restorePrice(lostAll) === 8);
   check('AUTODROP v3 packed as v1: v2 v3 lost, RESTORE ⌈13 / 2⌉ = 7', restorePrice(lostLevels('autodrop', { version: 1, lock: 0 }, { version: 3, lock: 0 })) === 7);
-  check('AUTOBURN v2 + LOCK 270 lost: RESTORE ⌈9 / 2⌉ = 5', restorePrice(lostLevels('autoburn', null, { version: 2, lock: 1 })) === 5);
+  check('AUTOBURN v2 + LOCK 270 lost: RESTORE ⌈8 / 2⌉ = 4 (v2 4 since slice 8)', restorePrice(lostLevels('autoburn', null, { version: 2, lock: 1 })) === 4);
   const packed = lostLevels('autoburn', { version: 1, lock: 1 }, { version: 2, lock: 1 });
-  check('AUTOBURN v2 + 270 packed as v1 (the lock kept, 7 blocks): v2 lost, RESTORE ⌈5 / 2⌉ = 3 (the walk\'s step 7)',
-    packed.length === 1 && packed[0]!.row.kind === 'version' && restorePrice(packed) === 3 && skillBlocks('autoburn', 1, 1) === 7);
+  check('AUTOBURN v2 + 270 packed as v1 (the lock kept, 7 blocks): v2 lost, RESTORE ⌈4 / 2⌉ = 2 (the walk\'s step 7)',
+    packed.length === 1 && packed[0]!.row.kind === 'version' && restorePrice(packed) === 2 && skillBlocks('autoburn', 1, 1) === 7);
   check('nothing lost: [] and RESTORE 0; held above paid (a grant) loses nothing',
     lostLevels('autoburn', { version: 2, lock: 1 }, { version: 2, lock: 1 }).length === 0 && restorePrice([]) === 0
     && lostLevels('autoburn', { version: 2, lock: 0 }, { version: 1, lock: 0 }).length === 0 && lostLevels('autoburn', null, null).length === 0);

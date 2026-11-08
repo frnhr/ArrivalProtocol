@@ -21,8 +21,11 @@ export const SKILL_IDS: readonly SkillId[] = ['autoburn', 'autodrop', 'survey', 
 // • v2 5: about one good ship.
 // • v3 8: more than any ship pays, so a focused branch reaches it around ship 4 or 5, when the big ships come.
 // • LOCK RANGE 1 and 2: cheap, as PHASE3 asks; each adds a block.
-// • SURVEY cheaper (9 in all): its value depends on how many POOR-data planets the route meets.
+// • SURVEY cheaper (8 in all): its value depends on how many POOR-data planets the route meets.
 // • SENTRY v3 5: a free wall on every ship is strong.
+// • Slice 8, THE REBALANCE (Track ECONOMY; slice-8-plan §2.1, §2.2, §2.15; OPEN-DECISIONS 90–93): SURVEY v1 1 and SENTRY v1 1
+//   (roots that pay little alone: v1 + v2 pay back sooner), AUTOBURN v2 4 (its pods per cycle were near 0, with no time
+//   value) and v3 7 (the lowest the validator allows on a start branch: more than one ship's 6). The tree costs 50.
 // • Sizes: bigger versions cost link, room, charge and repair time, and give HOLLOW and the seeds more to bite (03 §3.4);
 //   the largest file is SKILL_MAX_BLOCKS.
 // • `built`: what this build implements (types/skill.ts SkillDef): AUTOBURN, AUTODROP and SENTRY v1–v3 (slices 4a–4e);
@@ -32,8 +35,8 @@ export const SKILL_TREE: Readonly<Record<SkillId, SkillDef>> = {
     id: 'autoburn', branch: 'flight', fileName: 'AUTOBURN.skl', short: 'AB',
     versions: [
       { version: 1, mode: 'CAPTURE', price: 3, blocks: 6 },
-      { version: 2, mode: 'GREEN, THEN ROUND', price: 5, blocks: 8 },
-      { version: 3, mode: 'LANDING ORBIT', price: 8, blocks: 10 },
+      { version: 2, mode: 'GREEN, THEN ROUND', price: 4, blocks: 8 },
+      { version: 3, mode: 'LANDING ORBIT', price: 7, blocks: 10 },
     ],
     locks: [{ level: 1, price: 1, blocks: 1 }, { level: 2, price: 2, blocks: 1 }],
     opens: { kind: 'start' }, demos: 'captures', built: 3,
@@ -50,7 +53,7 @@ export const SKILL_TREE: Readonly<Record<SkillId, SkillDef>> = {
   survey: {
     id: 'survey', branch: 'survey', fileName: 'SURVEY.skl', short: 'SV',
     versions: [
-      { version: 1, mode: 'FIND', price: 2, blocks: 3 },
+      { version: 1, mode: 'FIND', price: 1, blocks: 3 },
       { version: 2, mode: 'RATE', price: 3, blocks: 4 },
       { version: 3, mode: 'SWEEP', price: 4, blocks: 6 },
     ],
@@ -60,7 +63,7 @@ export const SKILL_TREE: Readonly<Record<SkillId, SkillDef>> = {
   sentry: {
     id: 'sentry', branch: 'defence', fileName: 'SENTRY.skl', short: 'SN',
     versions: [
-      { version: 1, mode: 'SIGHT', price: 2, blocks: 3 },
+      { version: 1, mode: 'SIGHT', price: 1, blocks: 3 },
       { version: 2, mode: 'QUICK RM', price: 3, blocks: 4 },
       { version: 3, mode: 'FIREWALL', price: 5, blocks: 6 },
     ],
@@ -114,7 +117,7 @@ export function levelPrice(id: SkillId, row: CellRow): number {
   return lock.price;
 }
 
-// The whole tree's price (the RUN TALLY's `TRAINED n of 54`) and a full set's blocks at v3 (and LOCK 810).
+// The whole tree's price (the RUN TALLY's `TRAINED n of 50`) and a full set's blocks at v3 (and LOCK 810).
 export function treeTotalCycles(): number {
   return SKILL_IDS.reduce((sum, id) => {
     const def = SKILL_TREE[id];
@@ -128,7 +131,7 @@ export function fullSetBlocks(): number {
 
 // 03 §3.2 and §3.4's figures the table must keep (the spec's arithmetic, cross-checked): a re-pricing that moves them
 // must move the spec with it (slice 8).
-const SPEC_TREE_CYCLES = 54;
+const SPEC_TREE_CYCLES = 50;
 const SPEC_FULL_SET_BLOCKS = 34;
 
 // Throws on a tree that breaks a rule of 03 §3.2–§3.4 (run at load).

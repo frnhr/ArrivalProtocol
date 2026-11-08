@@ -109,8 +109,8 @@ toDesk(store);
     bank === 1 && trainCell(store, 'autoburn', v(2)) === 'unaffordable' && trainCell(store, 'autoburn', lock(2)) === 'needs-lower'
       && trainCell(store, 'autoburn', v(3)) === 'needs-lower', String(bank));
   grantCycles(store, 6, 'story', null);
-  check('…with 7: v2 then LOCK 270 bought (5 + 1), the bank 1', trainCell(store, 'autoburn', v(2)) === null
-    && trainCell(store, 'autoburn', lock(1)) === null && bankOf(store.getState().run.skills) === 1
+  check('…with 7: v2 then LOCK 270 bought (4 + 1: v2 4 since slice 8), the bank 2', trainCell(store, 'autoburn', v(2)) === null
+    && trainCell(store, 'autoburn', lock(1)) === null && bankOf(store.getState().run.skills) === 2
     && store.getState().run.skills.pending.map((p) => `${p.kind}:${p.to.version}.${p.to.lock}`).join() === 'train:2.0,lock:2.1');
   check('…UNDO of v2 first throws (LOCK 270 rides on it), and an index out of range throws', throws(() => undoPurchase(store, 0)) && throws(() => undoPurchase(store, 5)));
   undoPurchase(store, 1);

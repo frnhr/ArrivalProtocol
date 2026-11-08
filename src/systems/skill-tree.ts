@@ -288,7 +288,7 @@ export function branchToLatch(state: Readonly<GameState>, visit: number): SkillI
 
 // --- The run's totals (RUN END, the RUN TALLY, the archive) ---------------------------------------------------------------
 
-// The cycles' worth of the tree the run paid for (the RUN TALLY's `TRAINED n of 54`): every level up to each skill's paid
+// The cycles' worth of the tree the run paid for (the RUN TALLY's `TRAINED n of 50`): every level up to each skill's paid
 // level, at its price, whether or not it is still held (lost levels were trained all the same). Free purchases (a migrated
 // AUTOBURN, a grant) count at their cell's price: they are part of the tree the unit had.
 export function trainedCycles(skills: Readonly<RunSkillState>): number {

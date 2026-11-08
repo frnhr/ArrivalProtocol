@@ -6,10 +6,10 @@
 // • An upgrade replaces the file with a fresh one at 100% (new code heals and cures), in the old one's place; the old one
 //   has no chip.
 // • PACK AS (4b, round-2 decision 10): the chip's line and RESTORE prices (`AUTOBURN.skl v2 (9) → brake by hand · RESTORE
-//   5`, `PACK AS v1 (7) · RESTORE 3`); the copy crosses at the lower size with its id, integrity and infection kept; it is
+//   4`, `PACK AS v1 (7) · RESTORE 2`: v2 costs 4 since slice 8); the copy crosses at the lower size with its id, integrity and infection kept; it is
 //   refused on a file trained here and on a level that is not lower; leaving a packed file behind forgets it, packing a
 //   left-behind file takes it back. ◀ CHART forgets PACK AS with the drops.
-// • RESTORE at the next desk: v2 reads lost (`LOST · RESTORE 3`), the purchase brings v2 + LOCK 270 back fresh, and the
+// • RESTORE at the next desk: v2 reads lost (`LOST · RESTORE 2`), the purchase brings v2 + LOCK 270 back fresh, and the
 //   arrival names it 'restored'.
 // • The unit room as the second limit (01 §3.16): a TIGHT room counts the skills, binds before the link, and PACK AS or a
 //   drop is the way under it; skillRelief names the cheapest options first.
@@ -130,10 +130,10 @@ store.update((draft) => {
 setCourse(store, 11);
 {
   const chip = chipOf(store, (candidate) => candidate.segId === fileId)!;
-  check('the skill chip names its loss and RESTORE price: `AUTOBURN.skl v2 (9) → brake by hand · RESTORE 5`',
-    chip.note === 'AUTOBURN.skl v2 (9) → brake by hand · RESTORE 5' && chip.skill?.restore === 5 && chip.lock === null, chip.note);
-  check('…with `PACK AS v1 (7) · RESTORE 3` beside it (the lock kept)', chip.skill?.packAs.length === 1
-    && chip.skill.packAs[0]!.text === 'PACK AS v1 (7) · RESTORE 3' && !chip.skill.packAs[0]!.active, JSON.stringify(chip.skill?.packAs));
+  check('the skill chip names its loss and RESTORE price: `AUTOBURN.skl v2 (9) → brake by hand · RESTORE 4`',
+    chip.note === 'AUTOBURN.skl v2 (9) → brake by hand · RESTORE 4' && chip.skill?.restore === 4 && chip.lock === null, chip.note);
+  check('…with `PACK AS v1 (7) · RESTORE 2` beside it (the lock kept)', chip.skill?.packAs.length === 1
+    && chip.skill.packAs[0]!.text === 'PACK AS v1 (7) · RESTORE 2' && !chip.skill.packAs[0]!.active, JSON.stringify(chip.skill?.packAs));
   const order = transmitModel(store.getState()).chips.filter((candidate) => candidate.lock === null);
   check('…skills come last among the files that can stay behind', order.at(-1)?.segId === fileId, order.map((candidate) => candidate.name).join());
   check('…PACK AS at a level not below the file\'s throws', throws(() => setPackAs(store, fileId, { version: 2, lock: 1 }))
@@ -172,8 +172,8 @@ toDesk(store);
     && trainCell(store, 'autoburn', { kind: 'version', version: 2 }) === 'lost');
   grantCycles(store, 3, 'story', null);
   const bank = bankOf(store.getState().run.skills);
-  check('…RESTORE costs half the lost v2, rounded up (3)', restoreSkill(store, 'autoburn') === null
-    && bankOf(store.getState().run.skills) === bank - 3 && store.getState().run.skills.pending[0]!.to.version === 2);
+  check('…RESTORE costs half the lost v2, rounded up (2)', restoreSkill(store, 'autoburn') === null
+    && bankOf(store.getState().run.skills) === bank - 2 && store.getState().run.skills.pending[0]!.to.version === 2);
   check('…a second RESTORE has nothing to bring back', restoreSkill(store, 'autoburn') === 'owned');
   setCourse(store, 15);
   check('…PACK AS on the file it replaces throws (trained here)', throws(() => setPackAs(store, fileId, { version: 1, lock: 0 })));
@@ -199,9 +199,9 @@ toDesk(store);
   const packed = unitArrival(state, { ...plan, packAs: { [id]: { version: 1, lock: 1 } } }).fit;
   check('…PACK AS v1 brings the files under it (2 blocks)', packed.over === 0 && packed.files === files - 2, JSON.stringify(packed));
   const relief = skillRelief(state);
-  check('…skillRelief lists the cheapest first: PACK AS v1 (RESTORE 3, frees 2), then leaving it (RESTORE 5, frees 9)',
-    relief.length === 2 && relief[0]!.level?.version === 1 && relief[0]!.restore === 3 && relief[0]!.frees === 2
-      && relief[1]!.level === null && relief[1]!.restore === 5 && relief[1]!.frees === 9, JSON.stringify(relief));
+  check('…skillRelief lists the cheapest first: PACK AS v1 (RESTORE 2, frees 2), then leaving it (RESTORE 4, frees 9)',
+    relief.length === 2 && relief[0]!.level?.version === 1 && relief[0]!.restore === 2 && relief[0]!.frees === 2
+      && relief[1]!.level === null && relief[1]!.restore === 4 && relief[1]!.frees === 9, JSON.stringify(relief));
   check('…skillPacketPlan refuses PACK AS on a file that is not a skill', throws(() => skillPacketPlan(state, { [state.memory[0]!.id]: { version: 1, lock: 0 } })));
 }
 

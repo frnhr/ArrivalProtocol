@@ -123,9 +123,9 @@ const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), '..', 'save', 'fi
       && model.closed.join() === 'SURVEY · SURVEY,DEFENCE · SENTRY', `${branches} ${model.closed.join()}`);
   // (end of DROP's check)
   // AUTOBURN's cells (Track ORBIT): v3 is built (slice 4e), so it reads NEEDS v2 FIRST.
-  check('…v1 TRAINED (owned), v2 affordable (`5 · 8`), v3 NEEDS v2 FIRST (dim), LOCK 270 affordable (`1 · +1`), LOCK 810 NEEDS LOCK 270 FIRST',
+  check('…v1 TRAINED (owned), v2 affordable (`4 · 8`), v3 NEEDS v2 FIRST (dim), LOCK 270 affordable (`1 · +1`), LOCK 810 NEEDS LOCK 270 FIRST',
     look(model, 'autoburn:v1') === 'owned' && text(model, 'autoburn:v1') === TRAINING_TEXT.status.owned
-      && look(model, 'autoburn:v2') === 'affordable' && model.cells.find((c) => c.key === 'autoburn:v2')?.cost === '5 · 8'
+      && look(model, 'autoburn:v2') === 'affordable' && model.cells.find((c) => c.key === 'autoburn:v2')?.cost === '4 · 8'
       && look(model, 'autoburn:v3') === 'dim' && text(model, 'autoburn:v3') === TRAINING_TEXT.status.needsLower('v2') && look(model, 'autoburn:L1') === 'affordable'
       && model.cells.find((c) => c.key === 'autoburn:L1')?.cost === '1 · +1' && text(model, 'autoburn:L2') === TRAINING_TEXT.status.needsLower('LOCK 270'),
     model.cells.map((c) => `${c.key}:${c.look}:${c.status}`).join(' | '));
@@ -133,8 +133,8 @@ const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), '..', 'save', 'fi
     model.cells.find((c) => c.key === 'autoburn:v2')?.parent === 'autoburn:v1' && model.cells.find((c) => c.key === 'autoburn:L1')?.parent === 'autoburn:v1'
       && model.cells.find((c) => c.key === 'autoburn:L2')?.parent === 'autoburn:L1' && model.cells.find((c) => c.key === 'autoburn:v1')?.lit === true);
   check('…the default selection is the first cell TRAIN can buy (v2), its detail: mode, price and size, NEXT SHIP, TRAIN',
-    model.selected?.key === 'autoburn:v2' && model.detail?.lines[0] === 'GREEN, THEN ROUND' && model.detail.lines[1] === TRAINING_TEXT.detailCost(5, 8)
-      && model.detail.lines[2] === TRAINING_TEXT.skills.autoburn.next[1] && model.detail.action?.label === TRAINING_TEXT.train(5), JSON.stringify(model.detail));
+    model.selected?.key === 'autoburn:v2' && model.detail?.lines[0] === 'GREEN, THEN ROUND' && model.detail.lines[1] === TRAINING_TEXT.detailCost(4, 8)
+      && model.detail.lines[2] === TRAINING_TEXT.skills.autoburn.next[1] && model.detail.action?.label === TRAINING_TEXT.train(4), JSON.stringify(model.detail));
   check('…no CONTROL line, no top-up, no SAVED line past visit 1', model.control === null && model.topUp === null && model.saved === null);
   selectTrainingCell(store, 'autoburn', { kind: 'lock', level: 1 });
   startTrainingHold(store);

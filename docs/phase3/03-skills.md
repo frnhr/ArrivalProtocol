@@ -9,7 +9,7 @@ Spec for PHASE3 §7 and the tools-versus-skills split of §8.5, following the te
 - You spend them between ships in the **TRAINING** window on the map's DESK. Unspent cycles carry over. The tree resets
   every run.
 - Four branches of three versions: **AUTOBURN**, **AUTODROP**, **SURVEY**, **SENTRY** (defence), plus AUTOBURN's
-  cheap **LOCK RANGE** (90 → 270 → 810 tactical s). The whole tree costs 54; a run earns about 20–35.
+  cheap **LOCK RANGE** (90 → 270 → 810 tactical s). The whole tree costs 50 (54 before slice 8); a run earns about 20–35.
 - A skill is a `.skl` file of 3 to 12 blocks. A higher version is bigger: more link budget, more memory, more hits.
   The packet must fit the hop's link and the next ship's memory, which is smaller on small ships (`01-landing.md`'s
   memory classes), so a skill-heavy unit leaves files behind for a tight ship late in a run.
@@ -95,19 +95,24 @@ Each cell shows the price in cycles and the size in blocks.
 
 | Branch | v1 | v2 | v3 | Opens |
 |---|---|---|---|---|
-| FLIGHT: **AUTOBURN** | CAPTURE: brakes into orbit at ▼ · 3 · 6 | GREEN, THEN ROUND: makes the orbit green; on a green orbit, makes it round · 5 · 8 | LANDING ORBIT: flies to the highest orbit where every LZ's drop fits, and holds it there · 8 · 10 | v1 at visit 1, the rest at visit 2 |
+| FLIGHT: **AUTOBURN** | CAPTURE: brakes into orbit at ▼ · 3 · 6 | GREEN, THEN ROUND: makes the orbit green; on a green orbit, makes it round · 4 · 8 | LANDING ORBIT: flies to the highest orbit where every LZ's drop fits, and holds it there · 7 · 10 | v1 at visit 1, the rest at visit 2 |
 | FLIGHT side axis: **LOCK RANGE** | 90 s (comes with AUTOBURN v1) | 270 s · 1 · +1 | 810 s · 2 · +1 more | visit 2; needs AUTOBURN v1 |
 | LANDING: **AUTODROP** | CENTRE: hold the key, and each pod waits for the window's centre · 3 · 4 | PASS: set this pass's split, and it flies the whole pass, also from the MIND · 5 · 7 | PLAN: plans the split over all passes to match the counts, and flies it · 8 · 10 | v1 at visit 1, the rest at visit 2 |
-| **SURVEY** | FIND: candidate sites pop up under the swath, with ROOM and WIDTH · 2 · 3 | RATE: shows GROUND (FLAT, ROCKY, WET) and ★ ratings; swap a bad guess · 3 · 4 | SWEEP: twice the swath, and it holds no thread · 4 · 6 | visit 4, or the first later visit with a POOR-data planet as a possible next ship |
-| DEFENCE: **SENTRY** | SIGHT: every disguised seed is revealed at the boot · 2 · 3 | QUICK RM: rm on HOLLOW twice as fast, and it can be aimed at a seed's warning outline · 3 · 4 | FIREWALL: compiles a FIREWALL.sys at every boot · 5 · 6 | visit 3 (after the first seeds) |
+| **SURVEY** | FIND: candidate sites pop up under the swath, with ROOM and WIDTH; a guess the swath passed reads `FLAT ?` or `ROUGH ?` · 1 · 3 | RATE: shows GROUND (FLAT, ROCKY, WET) and ★ ratings; swap a bad guess · 3 · 4 | SWEEP: twice the swath, and it holds no thread · 4 · 6 | visit 4, or the first later visit with a POOR-data planet as a possible next ship |
+| DEFENCE: **SENTRY** | SIGHT: every disguised seed is revealed at the boot · 1 · 3 | QUICK RM: rm on HOLLOW twice as fast, and it can be aimed at a seed's warning outline · 3 · 4 | FIREWALL: compiles a FIREWALL.sys at every boot · 5 · 6 | visit 3 (after the first seeds) |
 
-- **Totals:** FLIGHT 19, LANDING 16, SURVEY 9, DEFENCE 10, so 54 in all.
+- **Totals:** FLIGHT 17, LANDING 16, SURVEY 8, DEFENCE 9, so 50 in all (54 before slice 8's rebalance).
 - **Why these prices:**
   - **Roots 3:** a ship-1 landing buys one, never two.
-  - **v2 5:** about one good ship.
+  - **v2 5:** about one good ship. AUTOBURN's v2 is 4 (slice 8): it paid about 0 pods per cycle on its own.
   - **v3 8:** more than any ship pays, so a focused branch reaches it around ship 4 or 5, when the big ships come.
+    AUTOBURN's v3 is 7 (slice 8), the lowest price that is still more than one ship pays (6): it is a thin upgrade on
+    healthy ships (§10).
   - **LOCK RANGE 1 and 2:** cheap, as PHASE3 asks.
-  - **SURVEY cheaper:** its value depends on how many POOR-data planets the route meets.
+  - **SURVEY cheaper:** its value depends on how many POOR-data planets the route meets. Its v1 is 1 (slice 8), so
+    v1 + v2 pay back sooner.
+  - **SENTRY v1 1** (slice 8): a run meets a disguised seed in about a third of the runs that reach depth 5, so SIGHT
+    alone names nothing in most runs.
   - **SENTRY v3 5:** a free wall on every ship is strong.
 - **Prerequisites are only within a branch,** so "I'm a lander" is a clean choice.
 - **The opening rule:**
@@ -525,8 +530,8 @@ A player who prefers landing, on `02-map.md` §3.14's route.
 | 5 CORMORANT | 9 | 80% | 1 + 4 = 5 | 9 | — | AUTODROP v3 | 8 | 1 | 23, 20 carried | 87 → −4: see below → 3 |
 | 6 LAST LIGHT | 16 | 90% | 5, unspent | — | — | — | — | — | — | — |
 
-This run earns 30 (25 of them spendable) and spends 24 of the tree's 54. The two long hops are where the skills
-press:
+This run earns 30 (25 of them spendable) and spends 24 of the tree's 54 (at the prices before slice 8's rebalance). The
+two long hops are where the skills press:
 
 - **Before VESPER,** the kid leaves Repair.bak behind to fit the 86-block link.
 - **Before LAST LIGHT,** the packet is 4 blocks over: 68 for the unit and `046.log` and 23 for the skills, against a
@@ -742,7 +747,7 @@ lines about training, and the REASSIGNMENT trace.
     way back there), or cannot see yet. Because it is picked on the PACKET screen, its file joins the packet at once,
     takes link room like a purchase, and arrives at the next boot with the TRAINED line (`from the resident that left
     MARROW`).
-- **To `02-map.md`, which has picked them up:** the `+2 CYCLES` salvage card, and the RUN TALLY line `TRAINED n of 54 ·
+- **To `02-map.md`, which has picked them up:** the `+2 CYCLES` salvage card, and the RUN TALLY line `TRAINED n of 50 ·
   UNSPENT n`.
 - **To `05-story.md`:** the archive record (§3.11).
 
