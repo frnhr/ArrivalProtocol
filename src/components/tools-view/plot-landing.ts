@@ -392,6 +392,8 @@ export function createPlotLandingLayer(svg: SVGSVGElement, below: SVGElement, ab
       }
       const at = proj.project(beacon.pos);
       setCircle(node, at.x, at.y, BEACON_RADIUS);
+      // (7b VIEW) The class switches in place, so a parked pod MERGE gave back turns amber where it rides (landing.css).
+      node.classList.toggle('restored', beacon.restored);
     });
     return boxes;
   }

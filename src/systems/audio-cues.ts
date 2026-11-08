@@ -401,7 +401,8 @@ export function mountAudioCues(store: Store<GameState>): () => void {
 
     // --- 7b LAST LANDING. The drivers come back on the radio's sweep. Its end plays nothing of its own: the last restored
     // pod's touchdown rings 'all-pods-down''s lockArp already (a bell needs an LZ, and a second one reads as a second pod).
-    on('last-landing-start', () => play('transmitIn')),
+    // Track VIEW: under the radio's sweep, the header strip lands on a light stamp (LastLanding.ts's ll-arrive).
+    on('last-landing-start', () => { play('transmitIn'); play('stampHit', { heavy: false }); }),
     // --- end of 7b LAST LANDING ---
   ];
   offs.push(onPostTick(() => playedThisTick.clear()));
