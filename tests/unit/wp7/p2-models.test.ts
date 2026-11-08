@@ -12,7 +12,9 @@
 // TODO(phase2): RUN END's words are Track UI's (RUN_END_TEXT below landing-text's UI banner); the lines are checked
 // through its functions, so a rewording needs no change here, a new layout may.
 // • every new line fits the strip (≤ 70) with worst-case values.
-import '../support/classic-world';
+// Track RETIRE (phase 3): on run 1's arm. The hop to HALCYON is the worked route's (21 LY, 31 years early, link 123, its
+// three hits all corrected by ECC); the first desk's pick (AUTOBURN v1) rides in the packet, locked as TRAINED HERE; RUN
+// END's fleet is the route's (the worked route's six ships: 11,000), its ranks absolute (RANK_FLEET_COLONISTS).
 import { check, finish } from '../wp1/harness';
 import { createHarness7 } from './harness7';
 import { startBeamOut, cancelBeamOut, shipResultOf, ringMissOf } from '@systems/run';
@@ -34,17 +36,19 @@ import {
   TRANSMIT_TEXT, RUN_END_TITLE, RUN_END_WHY, LINES, BEAM_OUT_TEXT, SHIP_OUTCOME_WORD,
 } from '@data/script';
 import { RUN_END_TEXT } from '@data/landing-text';
+import { PACKET_SKILL_TEXT } from '@data/training-text';
+import { mapAlong, WORKED_ROUTE } from '@systems/arm-fixture';
 import { formatCount } from '@data/format';
 import { MOVE_PREVIEW_TEXT, HOLLOW_HUD_TEXT } from '@data/hollow-text';
-import { MAX_LINE_CHARS, NAME_MAX_CHARS } from '@data/tuning';
+import { MAX_LINE_CHARS, NAME_MAX_CHARS, RANK_FLEET_COLONISTS } from '@data/tuning';
 import type { ShipResult, TransitHit } from '@state/schema';
 
 const h = createHarness7(21, { soulsFound: false });
 
 // A ship result for RUN END's model: what the fold of a landing gives (one LZ, the colonists landed in it, nothing else).
-function shipResult(fields: Pick<ShipResult, 'shipId' | 'shipName' | 'slot' | 'outcome' | 'colonistsAboard' | 'landedInLz' | 'points' | 'stars' | 'fuelLeftPct' | 'ringMiss'>): ShipResult {
+function shipResult(fields: Pick<ShipResult, 'shipId' | 'shipName' | 'slot' | 'depth' | 'outcome' | 'colonistsAboard' | 'landedInLz' | 'points' | 'stars' | 'fuelLeftPct' | 'ringMiss'>): ShipResult {
   return {
-    ...fields, depth: fields.slot + 1,
+    ...fields,
     lzs: [{ lz: 'LZ-A', count: fields.colonistsAboard, landed: fields.landedInLz, mislanded: 0, hard: 0 }],
     offSite: 0, noGo: 0, restored: 0, parked: [], notLaunched: fields.colonistsAboard - fields.landedInLz,
     colony: null, pods: [], survey: null,
@@ -71,17 +75,17 @@ check('CONTINUE → TRANSMIT', state().run.phase === 'transmit');
 
 {
   const model = transmitModel(state());
-  check('TRANSMIT: NEXT: HALCYON · 1,000 COLONISTS · 22 LY', model.headline === 'NEXT: HALCYON · 1,000 COLONISTS · 22 LY', model.headline);
+  check('TRANSMIT: NEXT: HALCYON · 1,000 COLONISTS · 21 LY · 31 YRS EARLY', model.headline === 'NEXT: HALCYON · 1,000 COLONISTS · 21 LY · 31 YRS EARLY', model.headline);
   check('…no why line after a ship that landed', model.why === null);
-  check('…the packet line: LINK 120 · FILES n · CHARGE n → FITS', /^LINK 120 · FILES \d+ · CHARGE \d+ → FITS$/.test(model.packetLine), model.packetLine);
+  check('…the packet line: LINK 123 · FILES n · CHARGE n → FITS', /^LINK 123 · FILES \d+ · CHARGE \d+ → FITS$/.test(model.packetLine), model.packetLine);
   const names = model.chips.map((chip) => chip.name);
   // Phase 3 slice 2: 046.log (still `???` until scanned) rides in every packet, locked.
-  check('…the chips, safest to drop first: the spare REPAIRs, Telemetry, Autopilot, Sensor Interp, AI Comms, then the locked',
-    names.join(',') === 'Repair,Repair.bak,Telemetry,Autopilot,Sensor Interp,AI Comms,AI Core,Engine I/O,Nav Plotter,Scan,???', names.join(','));
+  check('…the chips, safest to drop first: the spare REPAIRs, Telemetry, Autopilot, Sensor Interp, AI Comms, then the locked (the skill trained here last)',
+    names.join(',') === 'Repair,Repair.bak,Telemetry,Autopilot,Sensor Interp,AI Comms,AI Core,Engine I/O,Nav Plotter,Scan,???,AUTOBURN.skl', names.join(','));
   const locked = model.chips.filter((chip) => chip.lock !== null);
-  check('…locked: the Core (THIS IS YOU), Engine I/O, Nav Plotter, the only SCAN and 046.log, each saying why',
+  check('…locked: the Core (THIS IS YOU), Engine I/O, Nav Plotter, the only SCAN, 046.log and AUTOBURN.skl (trained here), each saying why',
     locked.map((chip) => chip.note).join(' | ') === [TRANSMIT_TEXT.locked.core, TRANSMIT_TEXT.locked.engine, TRANSMIT_TEXT.locked.navplot,
-      TRANSMIT_TEXT.locked.lastCopy('SCAN'), LOG_TEXT.packetLock].join(' | '), locked.map((chip) => chip.note).join(' | '));
+      TRANSMIT_TEXT.locked.lastCopy('SCAN'), LOG_TEXT.packetLock, PACKET_SKILL_TEXT.trainedHere].join(' | '), locked.map((chip) => chip.note).join(' | '));
   check('…an AI tool says what leaving it does (Autopilot: no W/A/S/D presets)',
     model.chips.find((chip) => chip.name === 'Autopilot')?.note === TRANSMIT_TEXT.without.autopilot, model.chips.find((chip) => chip.name === 'Autopilot')?.note);
   check('…everything fits: nothing can be dropped, and the screen says so', model.chips.every((chip) => !chip.toggleable) && model.dropLine === TRANSMIT_TEXT.fits);
@@ -145,9 +149,13 @@ check('CONTINUE → TRANSMIT', state().run.phase === 'transmit');
   off();
   const arrival = state().run.arrival!;
   // Phase 3 slice 2 (risk 10): HALCYON's Sensor Interp arrives at 62 by its own scripted line, which flashes with it.
-  check('the boot\'s ECC line emits the crossing\'s hits once, in order, and the ship\'s own damage with its own line', flashed.length === 2
-    && JSON.stringify(flashed[0]) === JSON.stringify(arrival.hits) && JSON.stringify(flashed[1]) === JSON.stringify(arrival.scripted),
-    `${flashed.length} × ${flashed[0]?.length}`);
+  // Track RETIRE: on the worked route (seed 21) ECC corrects one of the hop's three hits, and the two that land take Sensor
+  // Interp to 60, under HALCYON's own 62: its arrival damage has nothing left to do, so it says no line and flashes nothing.
+  const sensor = state().memory.find((seg) => seg.role === 'sensor');
+  check('the boot\'s ECC line emits the crossing\'s hits once, in order; HALCYON\'s own damage (Sensor Interp to 62) adds no flash when a hit took it lower',
+    flashed.length === 1 && JSON.stringify(flashed[0]) === JSON.stringify(arrival.hits) && arrival.hits.length === 2 && arrival.eccCorrected === 1
+    && arrival.scripted.length === 0 && sensor !== undefined && hasIntegrity(sensor) && sensor.integrity <= 62,
+    `${flashed.length} × ${flashed[0]?.length} · ${arrival.eccCorrected} corrected · scripted ${arrival.scripted.length}`);
   const lastTo = new Map<string, number>();
   for (const hit of flashed.flat()) lastTo.set(hit.segId, hit.to);
   const consistent = [...lastTo].every(([segId, to]) => {
@@ -238,29 +246,34 @@ check('CONTINUE → TRANSMIT', state().run.phase === 'transmit');
 
 // --- RUN END -------------------------------------------------------------------------------------------
 {
-  // Slice 1a: 200 colonists a pod, 3 + 5 + 12 + 12 + 16 pods. The ranks keep the 12,400 reference they were authored
-  // against (RANK_FLEET_COLONISTS) and scale to the fleet; the rank arithmetic below keeps its explicit 4,400.
-  check('RUN END: the fleet has 9,600 colonists (ARES-VII 600 + HALCYON 1,000 + KESTREL 2,400 + VESPER 2,400 + LAST LIGHT 3,200)', fleetColonists() === 9600, String(fleetColonists()));
+  // Slice 1a: 200 colonists a pod. The ranks keep the 12,400 reference they were authored against (RANK_FLEET_COLONISTS);
+  // on the arm they are absolute (rankBasis), and rankSteps still scales them for any fleet (the explicit 4,400 below).
+  // Track RETIRE: the fleet is the route's ships, 3 + 5 + 6 + 16 + 9 + 16 pods on the worked route.
+  const worked = mapAlong(state().run.map, WORKED_ROUTE);
+  check('RUN END: the worked route\'s fleet has 11,000 colonists (ARES-VII 600 + HALCYON 1,000 + KESTREL 1,200 + VESPER 3,200 + CORMORANT 1,800 + LAST LIGHT 3,200)',
+    fleetColonists(worked) === 11000, String(fleetColonists(worked)));
   check('…§4.4\'s rank steps at the 12,400 reference exactly', JSON.stringify(rankSteps(12400).map((step) => step.minScore)) === '[0,3000,6800,10700]');
   check('…scaled to the 4,400 the fleet has (rounded to 100)', JSON.stringify(rankSteps(4400).map((step) => step.minScore)) === '[0,1100,2400,3800]',
     JSON.stringify(rankSteps(4400)));
   check('…rankOf: 2,000 is SHEPHERD with CARETAKER next; 4,100 is ARK ANGEL, the top', rankOf(2000, 4400).rank.name === 'SHEPHERD'
     && rankOf(2000, 4400).next?.name === 'CARETAKER' && rankOf(4100, 4400).rank.name === 'ARK ANGEL' && rankOf(4100, 4400).next === null);
-  const ares = shipResult({ shipId: 'ares-vii', shipName: 'ARES-VII', slot: 0, outcome: 'locked', colonistsAboard: 600, landedInLz: 600, points: 600, stars: 2, fuelLeftPct: 17.4, ringMiss: null });
-  const halcyon = shipResult({ shipId: 'halcyon', shipName: 'HALCYON', slot: 1, outcome: 'partial', colonistsAboard: 1000, landedInLz: 800, points: 800, stars: 1, fuelLeftPct: 3, ringMiss: { apsis: '▼', km: 140.4 } });
+  const ares = shipResult({ shipId: 'ares-vii', shipName: 'ARES-VII', slot: 0, depth: 1, outcome: 'locked', colonistsAboard: 600, landedInLz: 600, points: 600, stars: 2, fuelLeftPct: 17.4, ringMiss: null });
+  const halcyon = shipResult({ shipId: 'halcyon', shipName: 'HALCYON', slot: 2, depth: 2, outcome: 'partial', colonistsAboard: 1000, landedInLz: 800, points: 800, stars: 1, fuelLeftPct: 3, ringMiss: { apsis: '▼', km: 140.4 } });
   check('…near misses: the next rank first, then a nearly locked loop, then a FUEL ★ just missed (two at most)',
     JSON.stringify(nearMisses([ares, halcyon], 2000, 4400)) === JSON.stringify([RUN_END_TEXT.rankGap(400, 'CARETAKER'), RUN_END_TEXT.lockMiss('▼', 140, 'HALCYON')]),
     JSON.stringify(nearMisses([ares, halcyon], 2000, 4400)));
   check('…at the top rank: the lock, then the FUEL', JSON.stringify(nearMisses([ares, halcyon], 4100, 4400))
     === JSON.stringify([RUN_END_TEXT.lockMiss('▼', 140, 'HALCYON'), RUN_END_TEXT.fuelMiss(18, 'ARES-VII')]), JSON.stringify(nearMisses([ares, halcyon], 4100, 4400)));
   // WP11: WP7's interim END OF THE FLEET is gone (the fleet ends with the final ship): the run here ends FINAL SHIP LOST.
+  // Track RETIRE: on HALCYON (the route ARES-VII → HALCYON), so the fleet is those two ships' 1,600.
+  h.shipAlone(1, 4);
   h.store.update((d) => { d.run.ships = [ares, halcyon]; d.run.phase = 'end'; d.run.endCause = 'flagship-lost'; });
   const model = runEndModel(state());
-  check('…the whole model: FINAL SHIP LOST, 1,400 / 9,600 LANDED, sombre',
-    model.title === 'FINAL SHIP LOST' && model.landed === 1400 && model.fleetColonists === 9600 && model.totalLine === RUN_END_TEXT.total(1400, 9600)
+  check('…the whole model: FINAL SHIP LOST, 1,400 / 1,600 LANDED (the route\'s two ships), sombre',
+    model.title === 'FINAL SHIP LOST' && model.landed === 1400 && model.fleetColonists === 1600 && model.totalLine === RUN_END_TEXT.total(1400, 1600)
     && model.tone === 'sombre', `${model.title} | ${model.totalLine} | ${model.tone}`);
-  check('…the SCORE is the landing points (1,400), and the rank is by it (of 9,600)', model.score === 1400 && model.scoreLine === RUN_END_TEXT.score(1400)
-    && model.rank === rankOf(1400, 9600).rank.name, `${model.scoreLine} ${model.rank}`);
+  check('…the SCORE is the landing points (1,400), and the rank is by it (absolute: of RANK_FLEET_COLONISTS)', model.score === 1400 && model.scoreLine === RUN_END_TEXT.score(1400)
+    && model.rank === rankOf(1400, RANK_FLEET_COLONISTS).rank.name, `${model.scoreLine} ${model.rank}`);
   // Slice 3a (DESK): the RUN TALLY has a row per ship the run finished and no NOT REACHED rows, on both worlds.
   check('…one row per ship the run finished, with its outcome word and colonists landed; no NOT REACHED rows', model.ships.map((row) => `${row.shipName}:${row.outcomeWord}:${row.landedLine}`).join(' | ')
     === `ARES-VII:${SHIP_OUTCOME_WORD.locked}:${RUN_END_TEXT.shipLanded(600, 600)} | HALCYON:${SHIP_OUTCOME_WORD.partial}:${RUN_END_TEXT.shipLanded(800, 1000)}`,
