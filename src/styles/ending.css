@@ -1,6 +1,329 @@
 /* Slice 7a: Track CARD owns this file (docs/phase3/impl/slice-7-plan.md §2.10, §4.1): the FINALE's two-step card (game.css's
-   .finale-choice block moves here, and CARD deletes it from game.css), its phone sheet and the FUEL notch's SUNSET tooltip.
-   Imported by main.ts after desk.css. The FOUNDATION's one rule (review m3): the final LANDING REPORT's ending line under
-   the colony (LandingReport.ts .lr-ending; FINALE's words), in the beacon's small caps. CARD owns the rule. */
+   WP11 .finale-choice block moved here and grew two steps), its phone sheet, and the final LANDING REPORT's ending line.
+   Imported by main.ts after desk.css. Every colour comes from tokens.css; the card's own custom properties below only name
+   which token each ending speaks in. Reduced motion keeps every word and drops the pulses, the glitch and the slides. */
+
+/* ── The report's ending line (review m3): under the colony (LandingReport.ts .lr-ending; FINALE's words), in the beacon's
+   small caps. ── */
 .lr-ending { margin-top: 4px; font-size: 11px; letter-spacing: 0.16em; color: var(--text); opacity: 0.85; }
 .lr-ending[hidden] { display: none; }
+
+/* ── The card: over the final ship's orbit view, still dark from the duel (the landing goes on under it). ── */
+.finale-choice {
+  /* The tone each ending speaks in (05 §4: PURGE cold white, MERGE pink into blue). SPARE is 046's pink going into the
+     ship's amber; SUNSET the flare of a burn at dusk; STAY a colony's green; REASSIGNMENT CONTROL's own amber; CONTACT the
+     signal's pale blue. */
+  --fc-purge: var(--purge);
+  --fc-merge: var(--hollow);
+  --fc-merge-to: var(--layer-mind);
+  --fc-spare: var(--hollow);
+  --fc-spare-to: var(--layer-ship);
+  --fc-sunset: var(--pod-flare);
+  --fc-sunset-to: var(--warn);
+  --fc-stay: var(--soul);
+  --fc-reassignment: var(--layer-ship-bright);
+  --fc-contact: var(--cure-spark);
+  position: fixed; inset: 0; z-index: 650;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--finale-backdrop);
+  font-family: 'JetBrains Mono', monospace;
+  animation: fc-backdrop-in 0.8s ease-out both;
+}
+.finale-choice[hidden] { display: none; }
+.finale-choice.closing { animation: fc-backdrop-out var(--fc-fade-ms, 600ms) ease-in both; }
+@keyframes fc-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fc-backdrop-out { from { opacity: 1; } to { opacity: 0; } }
+.finale-choice [hidden] { display: none !important; }
+
+.fc-card {
+  position: relative;
+  width: min(780px, calc(100% - 32px));
+  max-height: calc(100% - 32px); overflow-y: auto;
+  display: flex; flex-direction: column; align-items: center; gap: 9px; padding: 20px 26px 18px;
+  border: 1px solid var(--hollow); background: var(--hollow-bg);
+  box-shadow: 0 0 40px var(--merge-glow), inset 0 0 30px color-mix(in srgb, var(--hollow) 10%, transparent);
+  color: var(--report-text); text-align: center;
+  animation: fc-card-in 0.7s cubic-bezier(0.2, 1.2, 0.4, 1) both;
+  transition: border-color 0.5s ease-out, box-shadow 0.5s ease-out, background 0.5s ease-out;
+}
+@keyframes fc-card-in { from { opacity: 0; transform: scale(0.94); } to { opacity: 1; transform: scale(1); } }
+/* A step change keeps the card and slides its body in. */
+.fc-card.turned > * { animation: fc-turn 0.42s ease-out both; }
+@keyframes fc-turn { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+/* Step 2 is about you: the card cools from HOLLOW's pink into the mind's blue. */
+.finale-choice.face-you .fc-card {
+  border-color: var(--layer-mind); background: var(--report-bg);
+  box-shadow: 0 0 40px var(--merge-glow-blue), inset 0 0 30px color-mix(in srgb, var(--layer-mind) 8%, transparent);
+}
+
+/* ── The header ── */
+.fc-picked {
+  align-self: stretch; display: flex; align-items: baseline; gap: 10px; padding: 4px 10px;
+  border-left: 2px solid var(--edge-bright); font-size: 11px; color: var(--report-dim); text-align: left;
+}
+.fc-picked::before { content: '▸'; color: var(--report-dim); }
+.fc-picked-word { font-family: 'VT323', monospace; font-size: 20px; line-height: 1; letter-spacing: 0.16em; }
+.fc-picked-word.fc-purge { color: var(--fc-purge); }
+.fc-picked-word.fc-merge { color: var(--fc-merge); }
+.fc-picked-word.fc-spare { color: var(--fc-spare); }
+.fc-picked-word.fc-followed { color: var(--hollow); }
+.fc-picked-cmd { letter-spacing: 0.04em; }
+.fc-kicker { font-size: 10px; letter-spacing: 0.34em; color: var(--hollow-text); }
+.face-you .fc-kicker { color: var(--layer-ship); }
+/* The root's name arrives torn: a short glitch as the card comes up (none in reduced motion). */
+.face-root .fc-kicker, .face-followed .fc-kicker { animation: fc-glitch 0.9s steps(1) 0.25s both; }
+@keyframes fc-glitch {
+  0% { transform: translateX(-3px); clip-path: inset(0 0 55% 0); opacity: 0.6; }
+  12% { transform: translateX(4px); clip-path: inset(40% 0 0 0); }
+  24% { transform: translateX(-1px); clip-path: inset(0 0 20% 0); }
+  36% { transform: none; clip-path: none; opacity: 1; text-shadow: 2px 0 var(--layer-mind), -2px 0 var(--hollow-red); }
+  48%, 100% { transform: none; clip-path: none; opacity: 1; text-shadow: none; }
+}
+.fc-last { display: flex; justify-content: center; padding: 2px 0; }
+/* The one block left: black with red static, beating slowly like something waiting. */
+.fc-block {
+  width: 22px; height: 30px; border: 1px solid var(--hollow-red);
+  background: repeating-linear-gradient(135deg, var(--hollow-static) 0 2px, var(--hollow-bg) 2px 5px);
+  box-shadow: 0 0 14px var(--hollow-static);
+  animation: fc-block-beat 1.6s ease-in-out infinite;
+}
+@keyframes fc-block-beat { 0%, 100% { opacity: 0.55; transform: scale(0.94); } 50% { opacity: 1; transform: scale(1.04); } }
+/* Entry 12 from the root (or UNRESOLVED's line), in HOLLOW's pink, a line at a time; every line keeps its room. */
+.fc-words {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 3px; max-width: 100%;
+  font-size: 13px; line-height: 1.45; color: var(--hollow); text-shadow: 0 0 8px var(--merge-glow); text-align: left;
+}
+.fc-word-line { min-height: 1.45em; white-space: pre-wrap; }
+.fc-word-line.typing::after { content: '▌'; margin-left: 1px; animation: caret-blink 0.6s steps(2) infinite; }
+.face-followed .fc-words { font-size: 15px; align-items: center; }
+.fc-quote { font-size: 12px; color: var(--layer-ship-bright); letter-spacing: 0.02em; }
+.fc-title {
+  margin-top: 2px;
+  font-family: 'VT323', monospace; font-size: 36px; line-height: 1; letter-spacing: 0.14em;
+  color: var(--hollow); text-shadow: 0 0 16px var(--merge-glow);
+}
+.face-you .fc-title { color: var(--layer-mind); text-shadow: 0 0 16px var(--merge-glow-blue); }
+
+/* ── The options: one row each, the key, word, command and meaning in aligned columns, then the price, NOW: and the NEXT
+   RUN: row's room (R12) under the word. ── */
+.fc-options {
+  display: grid; grid-template-columns: auto max-content max-content minmax(0, 1fr); gap: 8px 0;
+  width: 100%; margin-top: 2px;
+  opacity: 0; transform: translateY(6px); transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+  pointer-events: none;
+}
+.fc-options.shown { opacity: 1; transform: none; }
+.finale-choice.armed .fc-options.shown { pointer-events: auto; }
+.fc-row {
+  --fc-tone: var(--report-text);
+  grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; row-gap: 3px; align-items: baseline;
+  position: relative; padding: 9px 14px 8px 0;
+  font-family: inherit; color: var(--report-text); text-align: left; background: transparent; cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--fc-tone) 45%, var(--edge-bright));
+  border-left: 3px solid var(--fc-tone);
+  transition: background 0.15s ease-out, box-shadow 0.15s ease-out, opacity 0.25s ease-out;
+}
+.fc-options.shown .fc-row { animation: fc-row-in 0.45s ease-out both; }
+.fc-options.shown .fc-row:nth-child(2) { animation-delay: 0.08s; }
+.fc-options.shown .fc-row:nth-child(3) { animation-delay: 0.16s; }
+.fc-options.shown .fc-row:nth-child(4) { animation-delay: 0.24s; }
+@keyframes fc-row-in { from { opacity: 0; transform: translateX(-8px); } }
+.finale-choice:not(.armed) .fc-row { cursor: default; }
+.fc-head { display: contents; }
+.fc-key { justify-self: center; align-self: center; margin: 0 12px; }
+.fc-word {
+  padding-right: 18px;
+  font-family: 'VT323', monospace; font-size: 30px; line-height: 0.9; letter-spacing: 0.16em; color: var(--fc-tone);
+  text-shadow: 0 0 10px color-mix(in srgb, var(--fc-tone) 35%, transparent);
+}
+.fc-cmd { padding-right: 18px; font-size: 12px; letter-spacing: 0.04em; color: var(--report-dim); white-space: nowrap; }
+.fc-what { font-size: 12px; line-height: 1.35; }
+.fc-price, .fc-now, .fc-next { grid-column: 2 / -1; font-size: 11px; line-height: 1.4; }
+.fc-price { display: flex; align-items: center; gap: 10px; color: var(--report-dim); }
+.fc-caption { letter-spacing: 0.04em; }
+.fc-now { color: var(--soul); }
+.fc-next { color: var(--report-dim); }
+.fc-next.reserved { visibility: hidden; }
+/* The price meter: what the kid has against the price's tick (MERGE's 20 charge, the ★ 20% of FUEL); the part MERGE spends
+   is hatched off the fill's end. */
+.fc-meter { display: none; position: relative; flex: none; width: 150px; height: 8px; border: 1px solid var(--edge-bright); background: color-mix(in srgb, var(--fc-tone) 6%, transparent); }
+.fc-price.metered .fc-meter { display: block; }
+.fc-meter-fill {
+  position: absolute; left: 0; top: 0; bottom: 0; transition: width 0.3s ease-out;
+  background: linear-gradient(90deg, var(--fc-meter, var(--layer-mind)) 0, var(--fc-meter, var(--layer-mind)) var(--spend-from, 100%), transparent var(--spend-from, 100%)),
+    repeating-linear-gradient(135deg, var(--hollow) 0 3px, color-mix(in srgb, var(--hollow) 30%, transparent) 3px 6px);
+}
+.fc-meter-tick { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--fc-tone); box-shadow: 0 0 6px var(--fc-tone); }
+.fc-price[data-kind='fuel'] { --fc-meter: var(--layer-ship); padding-top: 5px; }
+.fc-price[data-kind='fuel'] .fc-meter-tick { background: var(--star); box-shadow: 0 0 6px var(--star-glow); }
+.fc-price[data-kind='fuel'] .fc-meter-tick::after {
+  content: '★'; position: absolute; left: 50%; top: -13px; transform: translateX(-50%); font-size: 10px; color: var(--star);
+}
+.fc-price.short .fc-meter-fill { background: var(--warn); }
+.fc-price.short .fc-caption { color: var(--warn); }
+
+/* Each ending's tone. */
+.fc-purge { --fc-tone: var(--fc-purge); }
+.fc-merge { --fc-tone: var(--fc-merge); border-right-color: var(--fc-merge-to); border-bottom-color: var(--fc-merge-to); }
+.fc-spare { --fc-tone: var(--fc-spare); border-right-color: var(--fc-spare-to); border-bottom-color: var(--fc-spare-to); }
+.fc-sunset { --fc-tone: var(--fc-sunset); }
+.fc-stay { --fc-tone: var(--fc-stay); }
+.fc-reassignment { --fc-tone: var(--fc-reassignment); }
+.fc-contact { --fc-tone: var(--fc-contact); }
+.fc-row.fc-merge .fc-word, .fc-row.fc-spare .fc-word, .fc-row.fc-sunset .fc-word {
+  -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none;
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--fc-tone) 40%, transparent));
+}
+.fc-row.fc-merge .fc-word { background-image: linear-gradient(90deg, var(--fc-merge), var(--fc-merge-to)); }
+.fc-row.fc-spare .fc-word { background-image: linear-gradient(90deg, var(--fc-spare), var(--fc-spare-to)); }
+.fc-row.fc-sunset .fc-word { background-image: linear-gradient(180deg, var(--fc-sunset) 30%, var(--fc-sunset-to)); }
+.finale-choice.armed .fc-row.open:hover {
+  background: color-mix(in srgb, var(--fc-tone) 9%, transparent);
+  box-shadow: 0 0 22px color-mix(in srgb, var(--fc-tone) 30%, transparent);
+}
+/* Out of reach: greyed, dashed, and it says what it needs. */
+.fc-row.needs, .fc-row.unknown { opacity: 0.6; border-style: dashed; border-left-style: solid; cursor: not-allowed; }
+.fc-row.needs .fc-caption, .fc-row.unknown .fc-caption { color: var(--warn); }
+.fc-row.unknown { --fc-tone: var(--report-dim); }
+.fc-row.unknown .fc-word { color: var(--report-dim); background-image: none; -webkit-background-clip: border-box; background-clip: border-box; filter: none; text-shadow: none; }
+.fc-row.unknown .fc-price { grid-column: 3 / -1; }
+.fc-row.ruled-out .fc-word { text-decoration: line-through; text-decoration-thickness: 2px; }
+/* Step 1's pick, kept after [ESC] BACK (R7). */
+.fc-row.picked { background: color-mix(in srgb, var(--fc-tone) 7%, transparent); box-shadow: inset 0 0 0 1px var(--fc-tone); }
+.fc-row.picked::after { content: '◂'; position: absolute; right: 10px; top: 10px; font-size: 12px; color: var(--fc-tone); }
+.fc-row.refused { animation: fc-refuse 0.32s steps(4) both; }
+@keyframes fc-refuse { 25% { transform: translateX(-4px); } 50% { transform: translateX(4px); } 75% { transform: translateX(-2px); } }
+
+/* ── STAY's sub-row (R9; review M3): which colony, newest first. The other rows step back while it is open. ── */
+.finale-choice.stay-open .fc-row:not(.fc-stay) { opacity: 0.3; }
+.fc-stay-pick {
+  align-self: stretch; display: flex; flex-direction: column; gap: 6px; padding: 8px 12px 10px;
+  border: 1px solid var(--fc-stay); border-left-width: 3px; background: color-mix(in srgb, var(--fc-stay) 6%, transparent);
+  text-align: left; animation: fc-row-in 0.3s ease-out both;
+}
+.fc-stay-title { font-size: 10px; letter-spacing: 0.3em; color: var(--fc-stay); }
+.fc-stay-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 6px; }
+.fc-stay-ship {
+  display: flex; align-items: center; gap: 10px; padding: 6px 10px;
+  font-family: inherit; font-size: 12px; color: var(--report-text); text-align: left; background: transparent; cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--fc-stay) 50%, var(--edge-bright));
+}
+.fc-stay-ship:hover { background: color-mix(in srgb, var(--fc-stay) 12%, transparent); }
+.fc-stay-ship.refused { animation: fc-refuse 0.32s steps(4) both; }
+.fc-stay-back { align-self: flex-start; }
+/* The sub-row has its own way back; the step's waits under it. */
+.finale-choice.stay-open .fc-foot { display: none; }
+
+/* ── The foot: step 2's way back, UNRESOLVED's way on. ── */
+.fc-foot { align-self: stretch; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.fc-back, .fc-cont, .fc-stay-back {
+  padding: 5px 10px; font-family: inherit; font-size: 11px; letter-spacing: 0.14em; color: var(--report-dim);
+  background: transparent; border: 1px solid var(--edge-bright); cursor: pointer;
+}
+.fc-back:hover, .fc-stay-back:hover { color: var(--report-text); border-color: var(--report-text); }
+.fc-cont { margin: 4px auto 0; padding: 8px 18px; font-size: 13px; color: var(--hollow); border-color: var(--hollow); }
+.finale-choice.armed .fc-cont:hover { background: color-mix(in srgb, var(--hollow) 10%, transparent); box-shadow: 0 0 18px var(--merge-glow); }
+.finale-choice:not(.armed) .fc-foot { opacity: 0.4; }
+.fc-cont.refused { animation: fc-refuse 0.32s steps(4) both; }
+
+/* ── The verdict (R13): the card clears and types it, one voice each. ── */
+.finale-choice.ending .fc-picked, .finale-choice.ending .fc-kicker, .finale-choice.ending .fc-last,
+.finale-choice.ending .fc-title, .finale-choice.ending .fc-words, .finale-choice.ending .fc-quote,
+.finale-choice.ending .fc-options, .finale-choice.ending .fc-stay-pick, .finale-choice.ending .fc-foot { display: none; }
+.finale-choice.ending { cursor: pointer; }
+.fc-card.chose-purge {
+  border-color: var(--purge); background: var(--report-bg);
+  box-shadow: 0 0 46px var(--purge-glow); animation: fc-purge-flash 0.9s ease-out both;
+}
+@keyframes fc-purge-flash { 0% { background: var(--purge); } 35% { background: var(--report-bg); } }
+.fc-card.chose-merge {
+  border-color: var(--hollow); border-right-color: var(--layer-mind); border-bottom-color: var(--layer-mind);
+  background: var(--report-bg);
+  box-shadow: 0 0 40px var(--merge-glow), 0 0 60px var(--merge-glow-blue);
+  animation: fc-merge-in 1.6s ease-out both;
+}
+@keyframes fc-merge-in {
+  0% { box-shadow: 0 0 90px var(--hollow), 0 0 10px var(--layer-mind); }
+  100% { box-shadow: 0 0 40px var(--merge-glow), 0 0 60px var(--merge-glow-blue); }
+}
+/* SPARE: two colours moving apart, 046 into the ship. */
+.fc-card.chose-spare {
+  border-color: var(--hollow); border-right-color: var(--layer-ship); border-bottom-color: var(--layer-ship);
+  background: var(--report-bg); animation: fc-spare-in 1.6s ease-out both;
+}
+@keyframes fc-spare-in {
+  0% { box-shadow: 0 0 30px var(--merge-glow), 0 0 30px var(--merge-glow); }
+  100% { box-shadow: -30px 0 50px var(--merge-glow), 30px 0 50px color-mix(in srgb, var(--layer-ship) 30%, transparent); }
+}
+.fc-card.chose-followed { border-color: var(--hollow); background: var(--report-bg); }
+/* SUNSET: whatever step 1 was, the card goes to dusk as the ship leaves. */
+.fc-card.you-sunset { animation: fc-dusk 2.4s ease-out both; }
+@keyframes fc-dusk {
+  0% { box-shadow: 0 30px 80px color-mix(in srgb, var(--pod-flare) 45%, transparent); }
+  100% { box-shadow: 0 30px 60px color-mix(in srgb, var(--pod-flare) 12%, transparent); }
+}
+.fc-ending { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%; padding: 10px 0 4px; }
+.fc-line { max-width: 100%; white-space: pre-wrap; animation: fc-line-in 0.3s ease-out both; }
+/* A line still to come keeps its room on the card (every line is laid out at once), and fades in with its first letter. */
+.fc-line.pending { visibility: hidden; animation: none; }
+@keyframes fc-line-in { from { opacity: 0; } to { opacity: 1; } }
+.fc-line.typing .fc-line-text::after { content: '▌'; margin-left: 1px; animation: caret-blink 0.6s steps(2) infinite; }
+.fc-line.voice-cmd { font-size: 15px; color: var(--layer-mind); text-shadow: 0 0 8px var(--merge-glow-blue); }
+.chose-purge .fc-line.voice-cmd { color: var(--purge); text-shadow: 0 0 8px var(--purge-glow); }
+.chose-spare .fc-line.voice-cmd:first-child, .chose-followed .fc-line.voice-cmd:first-child { color: var(--hollow); text-shadow: 0 0 8px var(--merge-glow); }
+.you-sunset .fc-line.voice-cmd:nth-child(2) { color: var(--fc-sunset); }
+.you-stay .fc-line.voice-cmd:nth-child(2) { color: var(--fc-stay); }
+.you-reassignment .fc-line.voice-cmd:nth-child(2) { color: var(--fc-reassignment); }
+.fc-line.voice-story { font-family: 'VT323', monospace; font-size: 30px; line-height: 1.05; letter-spacing: 0.08em; color: var(--report-text); }
+.chose-purge .fc-line.voice-story { color: var(--purge); }
+.fc-line.voice-us {
+  font-size: 18px; font-weight: 700;
+  background: linear-gradient(90deg, var(--hollow), var(--layer-mind));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 8px var(--merge-glow));
+}
+.fc-line.voice-control { display: flex; flex-direction: column; gap: 2px; font-size: 13px; color: var(--layer-ship-bright); }
+.fc-line-tag { font-size: 9px; letter-spacing: 0.3em; color: var(--layer-ship); }
+.fc-hint { font-size: 10px; letter-spacing: 0.2em; color: var(--report-dim); animation: fc-line-in 0.6s ease-out both; }
+.fc-hint.pending { visibility: hidden; animation: none; }
+
+body.reduced-motion .finale-choice, body.reduced-motion .fc-card, body.reduced-motion .fc-card.turned > *,
+body.reduced-motion .fc-card.chose-purge, body.reduced-motion .fc-card.chose-merge, body.reduced-motion .fc-card.chose-spare,
+body.reduced-motion .fc-card.you-sunset, body.reduced-motion .fc-block, body.reduced-motion .fc-kicker,
+body.reduced-motion .fc-options.shown .fc-row, body.reduced-motion .fc-row.refused, body.reduced-motion .fc-stay-pick,
+body.reduced-motion .fc-stay-ship.refused, body.reduced-motion .fc-cont.refused, body.reduced-motion .fc-line { animation: none; }
+body.reduced-motion .fc-options { transition: none; transform: none; }
+body.reduced-motion .fc-word-line.typing::after, body.reduced-motion .fc-line.typing .fc-line-text::after { animation: none; }
+
+/* ── The phone (≤ 768 px): a full-screen sheet, the rows stacked, every key a tap (the phone hides the key caps that name no
+   on-screen control: a row, a colony, BACK and CONTINUE are their own buttons). The verdict sits in the sheet's middle. ── */
+@media (max-width: 768px) {
+  .finale-choice { align-items: stretch; }
+  .fc-card {
+    width: 100%; max-height: none; height: 100%; justify-content: flex-start;
+    padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px)); gap: 8px;
+    border-width: 2px 0 0; box-shadow: none;
+  }
+  .finale-choice.ending .fc-card { justify-content: center; }
+  .fc-kicker { letter-spacing: 0.2em; }
+  .fc-title { font-size: 28px; }
+  .fc-words { font-size: 12px; }
+  .fc-options { display: flex; flex-direction: column; gap: 8px; }
+  .fc-row { display: flex; flex-direction: column; align-items: stretch; gap: 3px; padding: 9px 12px 9px 10px; }
+  .fc-head { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 10px; row-gap: 2px; }
+  .fc-key { margin: 0; }
+  .fc-word { padding-right: 0; font-size: 26px; }
+  .fc-cmd { flex-basis: 100%; padding-right: 0; overflow: hidden; text-overflow: ellipsis; }
+  .fc-what { flex-basis: 100%; }
+  .fc-price { flex-wrap: wrap; row-gap: 4px; }
+  .fc-meter { width: min(150px, 100%); }
+  .fc-next.reserved { display: none; }
+  .fc-row.picked::after { top: 9px; }
+  .fc-stay-list { grid-template-columns: 1fr; }
+  .fc-stay-ship { padding: 10px; }
+  .fc-foot { margin-top: auto; }
+  .fc-back, .fc-stay-back { padding: 10px 16px; }
+  .fc-back .keycap, .fc-stay-back .keycap { display: none; }
+  .fc-cont { width: 100%; padding: 12px; }
+  .fc-line.voice-story { font-size: 24px; }
+}
