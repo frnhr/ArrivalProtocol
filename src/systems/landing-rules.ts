@@ -622,14 +622,17 @@ export interface LaunchFrom {
 // the ship screen changes it, so it outranks every flight and drop reason.
 // Slice 7b (R26): during THE LAST LANDING (landing.lastLanding set) the pods leave from no bay: BAY OFFLINE and BAY EMPTY do
 // not apply and Bay Ctrl is not read; RELOADING is its own cadence (LastLandingState.cadenceLeftSec, LAST_LANDING_CADENCE_SEC
-// of game time from each launch, landing.ts launchDriver). Keyed on the machine, not on the source: a 'merge' controller on
-// an ordinary landing (skills/autodrop-review's wrapper) launches by the bay's rules.
+// tactical s of world time from each launch, landing.ts launchDriver; Track DROP's Deviation 1). Keyed on the machine, not on
+// the source: a 'merge' controller on an ordinary landing (skills/autodrop-review's wrapper) launches by the bay's rules.
+// The one source rule: while THE LAST LANDING flies, a 'player' launch is MERGE FLYING (R26: its pods are MERGE's; the input
+// layer shuts the keys, this shuts every other way in: a click, the phone bar, __ap.launch).
 export function launchRefusal(
   state: Readonly<GameState>, sol: Readonly<DropSolution> | null, from: LaunchFrom, pod?: number,
 ): LaunchRefusal | null {
   const radio = state.landing.lastLanding;
   if (state.run.phase !== 'landing') return 'NOT LANDING';
   if (state.landing.ended !== null) return 'LANDING OVER';
+  if (radio !== null && from.source === 'player') return 'MERGE FLYING';
   if (state.clock.paused) return 'PAUSED';
   if (state.ui.mode === 'memory' && !from.fromMind) return 'SHIP SCREEN';
   if (radio === null && bayOfflineIn(state)) return 'BAY OFFLINE';

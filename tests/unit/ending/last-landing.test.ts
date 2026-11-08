@@ -26,7 +26,7 @@ import { startRun, lossPlan } from '@systems/run';
 import { continueAfterReport } from '../support/classic-flow';
 import { runEndModel } from '@systems/run-end';
 import { actionDelete, recordDriverLost } from '@state/actions';
-import { podRecord, landingView, onTargetTally } from '@systems/landing-rules';
+import { podRecord, landingView, launchRefusal, onTargetTally } from '@systems/landing-rules';
 import { isPodCode } from '../support/pod-code';
 import { setLandingMode, landInstantly } from '../support/landing-instant';
 import { getOpsBySeg, threadsTotal } from '@systems/ops-core';
@@ -54,6 +54,11 @@ import { byDepth, fullOnly } from '../depth';
 import { skipLastLanding, nextTurn } from '@systems/last-landing';
 import { getDropSolution } from '@systems/drop-cache';
 import { activeLandingController } from '@systems/landing-controller';
+import { playerLaunch } from '@systems/landing-controls';
+import { requestLaunch } from '@systems/landing';
+import { bayWindowModel } from '@systems/landing-hud';
+import { capabilitiesNow } from '@systems/capabilities';
+import { LAUNCH_REFUSAL_TEXT, launchRefusalKey } from '@data/landing-text';
 import { windowsAhead, planLanding } from '@systems/autodrop-plan';
 import type { LaunchRecord } from '@/types/landing';
 import {
@@ -448,6 +453,29 @@ const normalS = (launch: Readonly<LaunchRecord>): number => armNormalS(state(), 
   const paused = state().clock.paused;
   h.press('KeyP');
   check('P pauses and resumes on THE LAST LANDING\'s layer', paused && !state().clock.paused);
+  // The kid's hands are refused every way in while MERGE flies (the coordinator's addition, via Track VIEW): [L]'s and the
+  // POD BAY's playerLaunch, __ap.launch's requestLaunch as 'player'; MERGE's own launches are not.
+  {
+    const eventsBefore = h.events.length;
+    const asked = playerLaunch(h.store, () => { throw new Error('last-landing: a refused launch asked to confirm'); });
+    const debugAsked = requestLaunch(h.store, { source: 'player', pod: pods[0]! });
+    const refusedKeys = h.events.slice(eventsBefore).filter((event) => event.name === 'refused').map((event) => (event.payload as { reason: string }).reason);
+    check('a player launch while MERGE flies: refused MERGE FLYING (playerLaunch and __ap.launch\'s path), its buzz, nothing launched',
+      asked.kind === 'refused' && asked.reason === 'MERGE FLYING' && debugAsked.kind === 'refused' && debugAsked.reason === 'MERGE FLYING'
+      && refusedKeys.length === 2 && refusedKeys.every((key) => key === launchRefusalKey('MERGE FLYING')) && pods.every((pod) => fateOf(pod).kind === 'aboard'),
+      `${JSON.stringify(asked)} ${JSON.stringify(debugAsked)} ${refusedKeys.join()}`);
+    const sol = getDropSolution();
+    const paused = { ...state(), clock: { ...state().clock, paused: true } };
+    check('…it outranks PAUSED and NO DROP SOLUTION, and never applies to MERGE\'s own launches',
+      launchRefusal(paused, null, { source: 'player', fromMind: false }) === 'MERGE FLYING'
+      && launchRefusal(paused, null, { source: 'merge', fromMind: true }) === 'PAUSED'
+      && launchRefusal(state(), sol, { source: 'merge', fromMind: true }) !== 'MERGE FLYING');
+    const caps = capabilitiesNow(state());
+    const bay = bayWindowModel(state(), sol, 'closed', { ...caps, bay: { ...caps.bay, offline: true } });
+    check('…the POD BAY\'s LAUNCH says it (blocked), over NO BAY CTRL (no bay applies), in ≤ 70 characters',
+      bay.launch.look === 'blocked' && bay.launch.status === LAUNCH_REFUSAL_TEXT['MERGE FLYING'] && LAUNCH_REFUSAL_TEXT['MERGE FLYING'].length <= 70,
+      JSON.stringify(bay.launch));
+  }
   watchToEnd();
   const launches = pods.map(launchOf).sort((a, b) => a.atTSec - b.atTSec);
   check('arm LAST LIGHT, 4 eaten, AUTODROP v1: flown by v1, each pod at the normal spread, every dot\'s centre inside its LZ\'s sure part',
