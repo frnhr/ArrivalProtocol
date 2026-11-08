@@ -59,6 +59,7 @@ import { SURVEY_RULES } from '@data/survey-rules';
 import { copyLessonDue, hollowAboard } from '@state/threat-selectors';
 import { THREAT_TEXT, eccSeedsLine } from '@data/threat-text';
 import { LOG_TEXT, LOG_HINT_TARGET } from '@data/log-text';
+import { bookKeyFound } from '@data/log-books';
 import { bootLogKeys, logKnown } from '@state/log-selectors';
 import type { PodRecord } from '@/types/landing';
 import { autoburnDropLine, autoburnAvailable } from '@systems/autoburn';
@@ -1111,7 +1112,7 @@ export function bootLine(kind: BootLineKind, state: Readonly<GameState>, vars: L
     case 'log': {
       const entries = bootLogEntries(state);
       if (entries.length === 0) throw new Error('bootLine: a log line with no key found');
-      return LOG_TEXT.keyFound(entries);
+      return bookKeyFound(state.run.log.book, entries);
     }
     case 'scripted':
       if (arrival === null) throw new Error('bootLine: arrival damage on a ship nothing transmitted to');

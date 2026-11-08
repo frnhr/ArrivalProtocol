@@ -27,6 +27,14 @@ import { logChip, logReaderModel } from '@systems/log-view';
 import { RING_LY } from '@data/arm';
 import { FRESH_UNIT_CHARGE } from '@data/memory';
 import { MAX_LINE_CHARS, NAME_MAX_CHARS, NOTABLE_EVENTS_MAX } from '@data/tuning';
+import { createStore } from '@state/store';
+import { bestRoute } from '@systems/map-route';
+import { transmitModel } from '@systems/transmit';
+import { bootLinePlan, bootLine, WORST_CASE_VARS } from '@data/script';
+import { fitPacket, toDesk } from '../map/repo-fixture';
+import { pickCard } from '@systems/draft';
+import { transmitNext } from '@systems/run';
+import { setCourseFromDesk } from '../support/desk';
 
 const threw = (fn: () => unknown): string => {
   try {
@@ -207,6 +215,33 @@ const BOOKS: readonly LogBook[] = [
     && bookPacketLock(lastBook) === 'LOCKED · 047 ASKED YOU TO CARRY IT' && bookPacketLock({ kind: '046' }) === LOG_TEXT.packetLock
     && bookDesc({ kind: 'stranger', unit: 31 }).startsWith("UNIT-031's log") && bookDesc(lastBook).startsWith("UNIT-047's log")
     && bookDesc({ kind: '046' }) === LOG_DESC.known);
+}
+
+// --- The game's own call sites name the book (the 7c review: the boot's key line, the PACKET's lock) ---------------------------
+// Run 2 after SUNSET (031.log) flown desk to desk on the archive's arm: every boot's key line and every desk's PACKET lock come
+// from the game's own paths (data/script.ts bootLine, systems/transmit.ts transmitModel), and none of them says 046.log.
+{
+  const lineage = lineageAfter(2, lastUnitOf(47, endingOf('purge', 'sunset', { fuelPct: 20 })));
+  const store = createStore<GameState>(createInitialState({ seed: 3, map: createRunMap(lineage, 3), lineage }));
+  store.update((draft) => { draft.run.phase = 'report'; });
+  const route = bestRoute(store.getState().run.map);
+  const keyLines: string[] = [];
+  const locks: string[] = [];
+  for (const slot of route.slice(1)) {
+    toDesk(store);
+    setCourseFromDesk(store, slot);
+    const chip = transmitModel(store.getState()).chips.find((candidate) => candidate.segId === LOG_SEG_ID);
+    if (chip !== undefined) locks.push(chip.note);
+    const offer = store.getState().run.transit!.offer;
+    if (offer.length > 0) pickCard(store, offer.some((card) => card.id === 'charge') ? 'charge' : offer[0]!.id);
+    fitPacket(store);
+    transmitNext(store);
+    const state = store.getState();
+    if (bootLinePlan(state, 0).includes('log')) keyLines.push(bootLine('log', state, WORST_CASE_VARS));
+  }
+  check('run 2 (031.log): every boot key line and every PACKET lock name 031, none 046 (`> 031.log · KEY FOUND`, `031 ASKED YOU`)',
+    keyLines.length > 0 && keyLines.every((line) => line.startsWith('> 031.log · KEY FOUND'))
+    && locks.length > 0 && locks.every((note) => note === 'LOCKED · 031 ASKED YOU TO CARRY IT'), JSON.stringify({ keyLines, locks }));
 }
 
 finish();

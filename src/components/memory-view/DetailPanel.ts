@@ -34,6 +34,7 @@ import { visibleDamage } from './MemoryStats';
 import { logChip, LOG_UI_TEXT } from '@systems/log-view';
 import { hollowLabel } from '@systems/say';
 import { LOG_DESC } from '@data/log-text';
+import { bookDesc, BOOK_TEXT } from '@data/log-books';
 import { isDisguised, decoyFileView } from '@state/threat-selectors';
 import { residentInspect, type ResidentInspect } from '@systems/resident-hud';
 
@@ -285,14 +286,14 @@ function logHtml(seg: LogSegment, state: Readonly<GameState>): string {
     <div class="detail-row"><span class="k">size</span><span class="v">${sizeText(seg.size)}</span></div>
     <div class="detail-row"><span class="k">state</span><span class="v partial">${LOG_UI_TEXT.lockedState}</span></div>
     ${found}
-    <div class="detail-desc">${escapeHtml(chip.known ? LOG_DESC.known : LOG_DESC.unknown)}</div>`;
+    <div class="detail-desc">${escapeHtml(chip.known ? bookDesc(state.run.log.book) : LOG_DESC.unknown)}</div>`;
 }
 
 function logActions(state: Readonly<GameState>, seg: LogSegment): ActionOption[] {
   const chip = logChip(state);
   const out: ActionOption[] = [];
   if (chip.found > 0) {
-    out.push({ id: 'read-log', label: LOG_UI_TEXT.read, cost: LOG_UI_TEXT.readCost(chip.unread), cls: chip.glow ? 'read-log glow' : 'read-log' });
+    out.push({ id: 'read-log', label: BOOK_TEXT.read(chip.name), cost: LOG_UI_TEXT.readCost(chip.unread), cls: chip.glow ? 'read-log glow' : 'read-log' });
   }
   if (!state.run.log.scanned) out.push(scanOption(state, seg, '◎ scan'));
   return out;

@@ -20,7 +20,6 @@ export const LOG_UI_TEXT = {
   allFound: 'EVERY KEY FOUND',
   close: 'CLOSE',
   unread: 'NEW',
-  read: '▸ read 046.log',
   readCost: (unread: number): string => (unread > 0 ? `${unread} new` : 'open'),
   found: (found: number, total: number): string => `${found} / ${total} found`,
   lockedState: 'LOCKED · NOT YOURS',

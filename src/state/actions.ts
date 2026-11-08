@@ -20,7 +20,8 @@ import {
 } from '@systems/memory-ops';
 import { targetRefusal, isOpenFree, chargeInUse, swapPair, type SwapPair } from '@systems/tool-targets';
 import { emit, NO_PAYLOAD } from '@systems/events';
-import { LOG_TEXT } from '@data/log-text';
+import { bookScanLine } from '@data/log-books';
+import { bookShape } from '@state/log-selectors';
 import { say } from '@systems/say';
 import { TOOL_ICONS, repairRatePerSec } from '@data/fs-tools';
 import { rootRemains, layoutOf } from '@data/memory';
@@ -312,7 +313,11 @@ export function actionScan(store: Store<GameState>, seg: Segment): ToolRefusal |
   // event (the name, CONTROL's line).
   if (seg.type === 'log') {
     runQuickOp(store, seg, 'scan', 'scan', scanSec(seg.size), () => { emit('log-scanned', NO_PAYLOAD); },
-      () => OP_ECHO.scan(echoName(seg), LOG_TEXT.scan(store.getState().run.log.found.length)));
+      () => {
+        // Slice 7c (R37): the book's own name, unit and entry count (031.log on a run 2).
+        const log = store.getState().run.log;
+        return OP_ECHO.scan(echoName(seg), bookScanLine(log.book, bookShape(log.book).count, log.found.length));
+      });
     return null;
   }
   // Slice 4d (04 §3.6, plan R9): a disguised seed scans as the file it shows (1.0 + 0.1 per block: 1.2 s) and is unmasked:

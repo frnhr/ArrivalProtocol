@@ -35,6 +35,7 @@ import type { FsToolKind } from '@/types/fs-tool';
 import { repairRatePerSec } from '@data/fs-tools';
 import { FRESH_UNIT_CHARGE, hexAddr, layoutOf, layoutOfMemory } from '@data/memory';
 import { HOLLOW_ALERT_TEXT, HOLLOW_DESC, HOLLOW_STORY, HOLLOW_ECHO, hollowUnitName } from '@data/hollow-text';
+import { strangerOf } from '@data/lineage-text';
 import { SEEDS_ONLY_DEF } from '@data/threats';
 import { THREAT_TEXT, SENTRY_TEXT } from '@data/threat-text';
 import { keepChargeDue, isDisguised } from '@state/threat-selectors';
@@ -1167,6 +1168,14 @@ function endCoreLost(store: Store<GameState>): void {
 // Phase 3 slice 2 (05 §3.5): HOLLOW's beats key on what the run has not been told yet (run.threat.told, run.hollowNamed),
 // not on the ship or the stage, so a beat a lost ship never got to is told on the next ship HOLLOW is awake on, and none
 // is told twice. This is ARRIVAL's story ('notices-you'); the told beat closes every story.
+// HOLLOW's first story line on a ship: `> you remember me. good.` once its ghost has greeted the unit this run, else it
+// notices the unit. Slice 7c (R34): a relay stranger never met the lost unit's ghost, so it never says it is remembered (the
+// 7c review; the ghost was the last unit's, the stranger is someone else).
+export function noticedLine(state: Readonly<GameState>): string {
+  const remembered = state.run.ghostSpoken && strangerOf(state.run.hollowUnits) === null;
+  return remembered ? HOLLOW_STORY.remembers : HOLLOW_STORY.noticed(state.mission.transmissionNum);
+}
+
 function noticedBeats(): StoryBeat[] {
   return [
     {
@@ -1175,8 +1184,7 @@ function noticedBeats(): StoryBeat[] {
       // knows it is known (§5.2). Otherwise, run 2+ too (the ghost speaks further on, or a unit that stayed left none), it
       // notices you as on run 1.
       tell: (store) => {
-        const state = store.getState();
-        say('hollow', state.run.ghostSpoken ? HOLLOW_STORY.remembers : HOLLOW_STORY.noticed(state.mission.transmissionNum), { critical: true });
+        say('hollow', noticedLine(store.getState()), { critical: true });
         store.update((draft) => { draft.run.threat.told.noticed = true; });
       },
     },

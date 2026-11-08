@@ -23,7 +23,7 @@ import { unitArrival, type ArrivalPreview } from '@systems/arrival-preview';
 import { MAP_TEXT } from '@data/map-text';
 import { TOOL_WORD } from '@data/fs-tools';
 import { TRANSMIT_TEXT, DRAFT_TEXT } from '@data/script';
-import { LOG_TEXT } from '@data/log-text';
+import { bookPacketLock } from '@data/log-books';
 import { THREAT_TEXT } from '@data/threat-text';
 import { noWorkingRm } from '@state/threat-selectors';
 import { hollowLabel } from '@systems/say';
@@ -269,7 +269,7 @@ function dropOrder(kept: readonly Segment[], seg: Segment): number {
   return UPGRADES_AFTER_ROLES;
 }
 
-function lockNote(lock: DropLock, seg: Segment): string {
+function lockNote(state: Readonly<GameState>, lock: DropLock, seg: Segment): string {
   switch (lock) {
     case 'core': return TRANSMIT_TEXT.locked.core;
     case 'engine': return TRANSMIT_TEXT.locked.engine;
@@ -278,7 +278,7 @@ function lockNote(lock: DropLock, seg: Segment): string {
       if (seg.type !== 'fs-tool') throw new Error(`lockNote: ${seg.name} is a last copy but not a filesystem tool`);
       return TRANSMIT_TEXT.locked.lastCopy(TOOL_WORD[seg.fsTool]);
     case 'charge': throw new Error('lockNote: REPAIR CHARGE is not a chip (it fills the link)');
-    case 'log': return LOG_TEXT.packetLock;
+    case 'log': return bookPacketLock(state.run.log.book);   // slice 7c (R37): the book's own unit
     case 'trained': return PACKET_SKILL_TEXT.trainedHere;
   }
 }
@@ -398,7 +398,7 @@ export function transmitModel(state: Readonly<GameState>): TransmitModel {
       // A drop is offered while it buys charge across the link or on arrival, or while files are over the room or the
       // link (then it is needed whatever it buys: 01 §3.16, the review's B1; TRANSMIT ▸ waits).
       toggleable: dropped || (lock === null && (chargeGain > 0 || arriveGain > 0 || fit.over > 0 || fit.overLink > 0)),
-      note: lock !== null ? lockNote(lock, seg) : skill !== null ? skillNote(skill) : effectNote(kept, seg),
+      note: lock !== null ? lockNote(state, lock, seg) : skill !== null ? skillNote(skill) : effectNote(kept, seg),
       chargeGain,
       arriveGain,
       log: isLog,

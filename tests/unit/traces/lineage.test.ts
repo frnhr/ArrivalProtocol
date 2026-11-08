@@ -25,6 +25,7 @@ import { freshMeta, lineageOf, ghostLine, LAST_CAUSES, type LastUnit, type RunLi
 import { bestRoute } from '@systems/map-route';
 import { runTracesOf, rootUnitsOf, onFinalShip } from '@systems/traces';
 import { hollowLabel } from '@systems/say';
+import { noticedLine } from '@systems/hollow';
 import { on } from '@systems/events';
 import { faceBootLines, lineageControlLine, strangerBootLine, lineageBootLineSaid } from '@systems/lineage-boot';
 import { bootLinePlan, bootLine, WORST_CASE_VARS, type BootLineKind } from '@data/script';
@@ -231,6 +232,13 @@ const lineageKinds: readonly BootLineKind[] = ['face', 'lineage-control', 'stran
     && GHOST_LINE['won-purge'] === null && GHOST_LINE['won-merge'] === null && GHOST_LINE.unresolved === null
     && ghostLine(48, lastUnitOf(47, null, 'overwritten')) === "> hi 048. it's 047. 046 ate me. now i'm hungry too."
     && ghostLine(48, lastUnitOf(47, null, 'flagship-lost')) === "> hi 048. it's 047. i lost the flagship. then i got hungry.", silent.join());
+  // The 7c review: after a lost unit's ghost spoke, the relay stranger does not say `> you remember me. good.` (it never met
+  // the unit); HOLLOW the last unit (a v7 run kept it) and run 1's 046 still do.
+  const base = createInitialState({ seed: 3, lineage: lineageAfter(2, lastUnitOf(47, null, 'overwritten')) });
+  const spoken = (hollowUnits: number[]): GameState => ({ ...base, run: { ...base.run, ghostSpoken: true, hollowUnits } });
+  check('…after the ghost spoke, a stranger HOLLOW notices you as on run 1 (no `you remember me`); a last-unit HOLLOW remembers',
+    noticedLine(spoken([31])) === HOLLOW_STORY.noticed(base.mission.transmissionNum) && noticedLine(spoken([38])) !== HOLLOW_STORY.remembers
+    && noticedLine(spoken([47])) === HOLLOW_STORY.remembers && noticedLine({ ...base, run: { ...base.run, ghostSpoken: false, hollowUnits: [47] } }) !== HOLLOW_STORY.remembers);
 }
 
 // --- Every lineage line at its worst case -----------------------------------------------------------------------------------
