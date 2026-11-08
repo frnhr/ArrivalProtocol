@@ -120,11 +120,19 @@ export interface SurveyPlotLz {
   label: string | null;           // FLIGHT only
 }
 
-// The NAV PLOT's survey layer (plot-survey.ts, in flight and landing on POOR planets, under the landing layer): the swath's
-// wedge while SURVEY maps (±swath under the ship; twice as wide at v3), the mapped and unmapped rim, the free sites' dashed
+// A swath SURVEY maps now: ±halfRad around a world angle (`at`: under the ship; a later 'dot' swath, SWATH's planned
+// follow-up mapping around the drop dot during the landing, joins the list with the dot's angle and the same swathHalfRad).
+export interface SurveyWedge {
+  at: 'ship' | 'dot';
+  centreRad: number;
+  halfRad: number;
+}
+
+// The NAV PLOT's survey layer (plot-survey.ts, in flight and landing on POOR planets, under the landing layer): the swaths'
+// wedges while SURVEY maps (±swath under the ship; twice as wide at v3), the mapped and unmapped rim, the free sites' dashed
 // brackets, the LZs' `?` and `✕`. null: nothing drawn (a GOOD planet, or another phase).
 export interface SurveyPlotModel {
-  wedge: { centreRad: number; halfRad: number } | null;
+  wedges: SurveyWedge[];
   mapped: RimArc[];
   unmapped: RimArc[];
   brackets: SurveyBracket[];
@@ -147,7 +155,7 @@ export function surveyPlotModel(state: Readonly<GameState>): SurveyPlotModel | n
     };
   });
   return {
-    wedge: halfRad > 0 ? { centreRad: Math.atan2(state.orbit.y, state.orbit.x), halfRad } : null,
+    wedges: halfRad > 0 ? [{ at: 'ship', centreRad: Math.atan2(state.orbit.y, state.orbit.x), halfRad }] : [],
     mapped: cellArcs(survey.mapped, true),
     unmapped: cellArcs(survey.mapped, false),
     brackets: freeSites(state).map((site) => ({

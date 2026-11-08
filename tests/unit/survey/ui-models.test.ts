@@ -5,7 +5,7 @@
 // • the SITES window: the header's five run states (survey-model.ts surveyRunning, Track SWATH's), the rim strip, the LZ
 //   rows (`GUESS`, `UNSURVEYED` with no SURVEY, `GROUND ?` before a rating, `ROCKY ✕` once known), the found sites by what is
 //   known (★ by siteStars, the wreck's words), the selection's pills (`SET AS LZ-B (800)`) and the refusals dimmed, written to
-//   survey-model.ts assignableLzs' contract (they go green once Track SWATH has built it: plan §6.3, review M8);
+//   survey-model.ts assignableLzs' contract (plan §6.3, review M8);
 // • the NAV PLOT's model: the mapped and unmapped arcs, the free sites' brackets, the LZs' `?` and `✕`, the wedge's width by
 //   version while SURVEY runs (twice as wide at v3);
 // • the GROUND TRACK's candidates and unmapped rim, through landing-hud.ts groundTrackModel;
@@ -130,29 +130,39 @@ built(() => {
   check('…all mapped: the header says it, no PAUSE, and no `NONE YET` line', m2 !== null && m2.header === SITES_TEXT.window.header(100)
     && m2.pause === null && m2.empty === null && m2.status.includes('PLANET MAPPED'), m2?.status);
 
-  // The header's five run states (surveyRunning's; Track SWATH's), at v2 half mapped.
-  const states = ['running', 'waiting', 'paused', 'off'] as const;
-  const halfV2 = giveSurvey(cormorant((s) => { mapCells(s, 0, 30, false); s.landing.survey.claimed = true; }), 2);
-  const status = sitesWindowModel(halfV2);
-  const running = surveyRunning(halfV2);
-  const expect = {
-    running: SITES_TEXT.window.status.running(2), waiting: SITES_TEXT.window.status.waiting(2), paused: SITES_TEXT.window.status.paused(2),
-    off: SITES_TEXT.window.status.idle(2), done: SITES_TEXT.window.status.done(2, 0),
-  } as const;
-  check(`…the header names SURVEY's state as surveyRunning says it (now '${running}'): ${states.join(', ')}`,
-    status !== null && status.status === expect[running], `${running}: ${status?.status}`);
+  // The header's five run states (survey-model.ts surveyRunning, Track SWATH's), half mapped: each built as the rule reads it.
+  const runAt = (version: 2 | 3, edit: (state: GameState) => void): GameState =>
+    giveSurvey(cormorant((s) => { mapCells(s, 0, 30, false); edit(s); }), version);
+  const candidates = sites.filter((site) => site.kind !== 'guess').length;
+  const cases: { name: string; state: GameState; want: string; tone: string; pause: string | null }[] = [
+    { name: 'running (v2, its thread held)', state: runAt(2, (s) => { s.landing.survey.claimed = true; }),
+      want: SITES_TEXT.window.status.running(2), tone: 'good', pause: SITES_TEXT.window.pause },
+    { name: 'running (v3, no thread)', state: runAt(3, () => {}), want: SITES_TEXT.window.status.sweeping(3), tone: 'good', pause: SITES_TEXT.window.pause },
+    { name: 'waiting (v2, no spare thread)', state: runAt(2, () => {}), want: SITES_TEXT.window.status.waiting(2), tone: 'warn', pause: SITES_TEXT.window.pause },
+    { name: 'paused', state: runAt(2, (s) => { s.landing.survey.paused = true; }), want: SITES_TEXT.window.status.paused(2), tone: 'warn',
+      pause: SITES_TEXT.window.resume },
+    { name: 'off (the clock paused)', state: runAt(2, (s) => { s.clock.paused = true; }), want: SITES_TEXT.window.status.idle(2), tone: 'dim', pause: null },
+    { name: 'done (after the landing too)', state: runAt(2, (s) => { mapCells(s, 0, SURVEY_CELLS, false); s.run.phase = 'report'; }),
+      want: SITES_TEXT.window.status.done(2, candidates), tone: 'good', pause: null },
+  ];
+  const wrong = cases.filter(({ state, want, tone, pause }) => {
+    const model = sitesWindowModel(state);
+    return model === null || model.status !== want || model.tone !== tone || (model.pause?.label ?? null) !== pause;
+  });
+  check(`…the header names SURVEY's state by surveyRunning: ${cases.map((c) => c.name).join(', ')}`, wrong.length === 0,
+    wrong.map((c) => `${c.name} → ${surveyRunning(c.state)}: ${sitesWindowModel(c.state)?.status}`).join(' | '));
   const paused = giveSurvey(cormorant((s) => { mapCells(s, 0, 30, false); s.landing.survey.paused = true; }), 2);
-  check('…a PAUSE reads `PAUSED · ITS THREAD IS FREE` with `[ RESUME ]` (green once SWATH builds surveyRunning)',
+  check('…a PAUSE reads `PAUSED · ITS THREAD IS FREE` with `[ RESUME ]` ',
     surveyRunning(paused) === 'paused' && sitesWindowModel(paused)?.status === SITES_TEXT.window.status.paused(2)
     && sitesWindowModel(paused)?.pause?.label === SITES_TEXT.window.resume, `${surveyRunning(paused)} ${JSON.stringify(sitesWindowModel(paused)?.pause)}`);
 
-  // The pills (assignableLzs' contract: every LZ with its refusal, in label order; green once SWATH builds it).
+  // The pills (assignableLzs' contract: every LZ with its refusal, in label order).
   if (wide !== undefined) {
     const pick = sitesWindowModel(v2, wide.id);
     const selectedRow = pick?.sites.find((row) => row.selected);
     check('…a click selects the site: its row marked, the hint gone', selectedRow?.site === wide.id && pick?.hint === null);
     const set = pick?.pills.find((pill) => pill.lz === 'LZ-B');
-    check(`…its pills: \`SET AS LZ-B (${SURVEY_TEXT.room(4)})\` for an LZ it can take (assignableLzs; green after SWATH)`,
+    check(`…its pills: \`SET AS LZ-B (${SURVEY_TEXT.room(4)})\` for an LZ it can take (assignableLzs)`,
       pick !== null && pick.pills.length === 2 && set?.refusal === null && set.text === SITES_TEXT.pill('LZ-B', SURVEY_TEXT.room(4)),
       JSON.stringify(pick?.pills));
     const landing = cormorant((s) => {
@@ -213,13 +223,13 @@ built(() => {
   check('…once rated bad LZ-B reads `✕` (red); in LANDING the glyph alone (the landing layer names the LZ)',
     landingPlot?.lzs.find((lz) => lz.lz === 'LZ-B')?.glyph === SITES_TEXT.plot.bad && landingPlot.lzs.every((lz) => lz.label === null)
     && landingPlot.mapped.length === 1 && landingPlot.mapped[0]!.toRad === TAU && landingPlot.unmapped.length === 0);
-  // The wedge: while SURVEY runs, ±swathHalfRad under the ship, twice as wide at v3 (green once SWATH builds the rule).
+  // The wedge: while SURVEY runs, ±swathHalfRad under the ship, twice as wide at v3.
   const v3 = giveSurvey(cormorant((s) => mapCells(s, 0, 10, false)), 3);
-  const wedge3 = surveyPlotModel(v3)?.wedge ?? null;
-  check(`…v3 running (${surveyRunning(v3)}): the wedge under the ship, ±swathHalfRad(3) = 2 × swathHalfRad(1) (green after SWATH)`,
+  const wedge3 = surveyPlotModel(v3)?.wedges.find((wedge) => wedge.at === 'ship') ?? null;
+  check(`…v3 running (${surveyRunning(v3)}): the wedge under the ship, ±swathHalfRad(3) = 2 × swathHalfRad(1) `,
     wedge3 !== null && wedge3.halfRad === swathHalfRad(3) && Math.abs(swathHalfRad(3) - 2 * swathHalfRad(1)) < 1e-12 && swathHalfRad(1) > 0
     && Math.abs(wedge3.centreRad - Math.atan2(v3.orbit.y, v3.orbit.x)) < 1e-12, JSON.stringify(wedge3));
-  check('…no wedge while SURVEY does not map (no SURVEY aboard)', surveyPlotModel(cormorant())?.wedge === null);
+  check('…no wedge while SURVEY does not map (no SURVEY aboard)', surveyPlotModel(cormorant())?.wedges.length === 0);
 
   // The GROUND TRACK (LANDING): candidates dashed and clickable by their site id, the unmapped rim as `░`.
   const ground = giveSurvey(cormorant((s) => { mapCells(s, 0, 36, true); s.run.phase = 'landing'; }), 2);

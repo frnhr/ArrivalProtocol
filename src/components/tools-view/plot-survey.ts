@@ -188,17 +188,16 @@ export function createPlotSurveyLayer(svg: SVGSVGElement, below: SVGElement): Pl
       return [];
     }
     show(root, true);
-    // The wedge from the centre to past the rim, and the footprint it maps on the rim.
-    show(wedge, model.wedge !== null);
-    show(footprint, model.wedge !== null);
-    if (model.wedge !== null) {
-      const { centreRad, halfRad } = model.wedge;
-      const reach = planetUnits * (1 + SURVEY_WEDGE_REACH);
+    // Each swath's wedge from the centre to past the rim, and the footprint it maps on the rim (one path each for all).
+    const reach = planetUnits * (1 + SURVEY_WEDGE_REACH);
+    wedge.setAttribute('d', model.wedges.map(({ centreRad, halfRad }) => {
       const from = polar(cx, cy, reach, centreRad - halfRad);
       const to = polar(cx, cy, reach, centreRad + halfRad);
-      wedge.setAttribute('d', `M${fmt(cx)},${fmt(cy)}L${fmt(from.x)},${fmt(from.y)}A${fmt(reach)},${fmt(reach)} 0 0,0 ${fmt(to.x)},${fmt(to.y)}Z`);
-      footprint.setAttribute('d', rimArc(cx, cy, planetUnits + RIM_GAP, centreRad, halfRad));
-    }
+      return `M${fmt(cx)},${fmt(cy)}L${fmt(from.x)},${fmt(from.y)}A${fmt(reach)},${fmt(reach)} 0 0,0 ${fmt(to.x)},${fmt(to.y)}Z`;
+    }).join(''));
+    footprint.setAttribute('d', model.wedges.map(({ centreRad, halfRad }) => rimArc(cx, cy, planetUnits + RIM_GAP, centreRad, halfRad)).join(''));
+    show(wedge, model.wedges.length > 0);
+    show(footprint, model.wedges.length > 0);
     unmappedPath.setAttribute('d', arcsPath(model.unmapped, cx, cy, planetUnits + RIM_GAP));
     mappedPath.setAttribute('d', arcsPath(model.mapped, cx, cy, planetUnits + RIM_GAP));
 
