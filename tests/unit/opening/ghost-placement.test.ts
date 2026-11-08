@@ -3,8 +3,8 @@
 // • Run 2 after UNIT-047 was lost on VESPER, every ship left by a crash (EMERGENCY TRANSMIT): ARES-VII, HALCYON and
 //   KESTREL boot without it; VESPER's boot opens on it (before the boarding's 108% unpack, which still fires its moment),
 //   a skip waits while it types; LAST LIGHT's boot has none (it spoke once).
-// • HOLLOW's notice after VESPER's first fight is `> you remember me. good.` once the ghost has spoken this run, and
-//   `> ...048?` on a run 2 whose ghost speaks further on (lost on LAST LIGHT: it has not spoken by VESPER).
+// • HOLLOW's notice after VESPER's first fight is `> ...048?` both once the ghost has spoken this run (HOLLOW is the relay
+//   stranger UNIT-031, slice 7c: it never met the ghost) and on a run 2 whose ghost speaks further on (lost on LAST LIGHT).
 import { check, finish } from '../wp1/harness';
 import { createHarness7 } from '../wp7/harness7';
 import { lockOn } from '../landing/harness-landing';
@@ -84,7 +84,7 @@ check('…and the boarding moment still fires (hollow-boarded, as the 108% line 
   h.events.filter((event) => event.name === 'hollow-boarded').length === boardsBefore + 1);
 check('…the ghost said once', said().filter((entry) => entry.text === ghost).length === 1);
 
-// HOLLOW's notice after VESPER's first fight: the ghost spoke at this boot, so HOLLOW is remembered.
+// HOLLOW's notice after VESPER's first fight, after the ghost spoke at this boot.
 function fightToNotice(): string | null {
   setLandingMode('manual');
   if (!s().run.licences.includes('repair')) installTool(h.store, 'repair');
@@ -107,8 +107,10 @@ function fightToNotice(): string | null {
   return said(from).find((entry) => entry.speaker === 'hollow')?.text ?? null;
 }
 const noticeAfterGhost = fightToNotice();
-check('VESPER\'s first fight: HOLLOW\'s notice is `> you remember me. good.` (its ghost greeted the unit at this boot)',
-  noticeAfterGhost === HOLLOW_STORY.remembers, noticeAfterGhost ?? 'no notice');
+// Slice 7c (R34; the 7c review): HOLLOW on run 2 is the relay stranger UNIT-031, not the lost unit whose ghost spoke, so it
+// does not say it is remembered (hollow.ts noticedLine; a last-unit HOLLOW still does: traces/lineage).
+check('VESPER\'s first fight: the ghost spoke at this boot, but HOLLOW is the stranger UNIT-031: its notice is `> ...048?`, not `remembers`',
+  s().run.ghostSpoken && JSON.stringify(s().run.hollowUnits) === '[31]' && noticeAfterGhost === HOLLOW_STORY.noticed(48), noticeAfterGhost ?? 'no notice');
 
 // --- On to LAST LIGHT (HOLLOW eats the Core: EMERGENCY TRANSMIT from the landing): it spoke once ---------------------------
 {
