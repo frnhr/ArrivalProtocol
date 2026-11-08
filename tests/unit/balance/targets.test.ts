@@ -71,7 +71,7 @@ function record(player: PlayerId, seed: number, route: readonly number[], varian
       { skill: 'sentry', kind: 'train', version: 1, cost: 2, visit: 3 }, { skill: 'sentry', kind: 'train', version: 3, cost: 5, visit: 5 },
     ],
     pods: { aboard: 55, landed: variant === null ? 50 : 48 }, boardedBy: seed % 4 === 0 ? 'trace' : 'forced', driversEaten: 2, waits: 1,
-    mindBusySec: 10, mindAiSec: 100, signals: seed % 3, restores: 0, restoresHealed: 0, emptyShip: seed % 2 === 0, reserveRefusals: 0,
+    mindBusySec: 10, mindAiSec: 100, signals: seed % 3, restores: 0, restoresHealed: 0, emptyShip: seed % 2 === 0, reserveRefusals: 0, landingsEnded: 0,
   };
 }
 const routesFlown = Object.values(ROUTE_SET);

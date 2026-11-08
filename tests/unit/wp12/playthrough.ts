@@ -304,6 +304,8 @@ export interface RunRecord {
   restoresHealed: number;
   emptyShip: boolean | null;
   reserveRefusals: number;
+  // PT_LANDING=strip: landings the kid ended at LANDING_GIVE_UP_SEC.
+  landingsEnded: number;
 }
 
 const POD_COLONISTS = 200;
@@ -312,6 +314,10 @@ const PT_LANDING = process.env.PT_LANDING ?? 'instant';
 if (PT_LANDING !== 'instant' && PT_LANDING !== 'strip') throw new Error(`PT_LANDING=${PT_LANDING} is neither instant nor strip`);
 // The strip rows that ask for END LANDING (landing/harness-landing's, exactly).
 const END_LANDING_ROWS: ReadonlySet<string> = new Set(['landing-L12', 'landing-L12-band', 'landing-L12-bay', 'landing-L12-nodrop']);
+// A strip landing still open after this many wall s is ended by the kid (END LANDING), as the sweeps end a landing a locked
+// pod holds open (survey-sweep, autodrop-sweep): the first strip quick report had 2 of 168 runs stuck there past
+// PRINT_MAX_WALL_SEC. Counted in RunRecord.landingsEnded, so a rule that holds landings open shows.
+const LANDING_GIVE_UP_SEC = 600;
 
 // PT_TRACE=1: every strip line and every kid action, with the wall clock, FUEL and pace (for reading one run).
 const TRACE = process.env.PT_TRACE === '1';
@@ -337,7 +343,7 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
     planned: [...PT_ROUTE], mergeCost: MERGE_COST_CHARGE, signalsForContact: SIGNALS_FOR_CONTACT, variant: process.env.PT_VARIANT || null,
     cycles: { earned: 0, granted: 0, spent: 0, unspentLastDesk: null, trained: 0, tree: treeTotalCycles(), floor: 0 }, purchases: [],
     pods: { aboard: 0, landed: 0 }, boardedBy: null, driversEaten: 0, waits: 0, mindBusySec: 0, mindAiSec: 0, signals: 0,
-    restores: 0, restoresHealed: 0, emptyShip: null, reserveRefusals: 0,
+    restores: 0, restoresHealed: 0, emptyShip: null, reserveRefusals: 0, landingsEnded: 0,
   };
   // Slice 8: the files left behind on the TRANSMIT into each ship (by ships ended so far, as diag), AUTOBURN's last claim state.
   const filesLeft: number[] = [];
@@ -812,13 +818,19 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
 
   const printing = (): void => {
     const end = harness.wall() + PRINT_MAX_WALL_SEC;
+    const giveUp = harness.wall() + LANDING_GIVE_UP_SEC;
     let chose = false;
     while (state().run.phase === 'landing' && !state().run.coreLost && harness.wall() < end) {
       step();
       shipCall = false;
       mindTick();
-      if (PT_LANDING === 'strip') flyLanding();
-      else releaseL();
+      if (PT_LANDING === 'strip') {
+        flyLanding();
+        if (harness.wall() >= giveUp && state().run.phase === 'landing' && state().landing.ended === null && endLanding(harness.store) === null) {
+          record.landingsEnded++;
+          trace(`landing ended by the kid after ${LANDING_GIVE_UP_SEC} wall s`);
+        }
+      } else releaseL();
       const now = state();
       if (!chose && finaleAtStep1(now)) {
         chose = true;
