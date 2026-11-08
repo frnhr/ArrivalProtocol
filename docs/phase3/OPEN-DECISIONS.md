@@ -381,10 +381,10 @@ The calls one agent made building 7d's FOUNDATION and both its tracks (`docs/pha
 
 ## Retiring the classic world
 
-Track RETIRE (slice-4cde-plan §9; item 12). Phase 1 is done. Phase 2 is done for 185 of the tier's 222 quick suites
-and for both BALANCE_ONLY playthrough harnesses. `map/memory-refactor`, the classic digest, is deleted. The other 37
-suites still build the classic five, and phase 3 waits on them. The plan's "Deviations (RETIRE)" has the details and the
-list.
+Track RETIRE (slice-4cde-plan §9; item 12). Phase 1 is done. Phase 2 is done for 213 of the tier's 222 quick suites
+and for both BALANCE_ONLY playthrough harnesses. `map/memory-refactor`, the classic digest, is deleted. The other 9
+suites still build the classic five, and phase 3 waits on them. The plan's "Deviations (RETIRE)" has the details, the
+list, and the classic licence schedule's checks deleted (three, per the lead's decision).
 
 85. **The headless fixture world is run 1's arm.** BUILT: `createInitialState` with no map builds run 1's arm on the seed,
     with the unit on authored ship `shipIndex` (0 ARES-VII … 4 LAST LIGHT) along the worked route. Each stop carries its
