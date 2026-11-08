@@ -17,6 +17,9 @@ import { getOps, canStartOp } from '@systems/ops-core';
 import { packUnit, layoutCarried } from '@systems/carry';
 import { resetWorld } from '@systems/reset';
 import { createInitialState, fixtureWorldNow } from '@state/initial';
+import { createRunMap } from '@systems/map-run';
+import { mapAlong, nominalAlong, workedRouteTo, authoredSlot } from '@systems/arm-fixture';
+import { giveTools } from '../map/repo-fixture';
 import { nominalShipThreat } from '@systems/threat-plan';
 import { FRESH_UNIT_RACK_E, FRESH_UNIT_RACK_F } from '@data/memory';
 import { classicShip, CLASSIC_HOPS } from '@data/classic-five';
@@ -37,8 +40,13 @@ export interface VesperOpts {
 }
 
 // VESPER's verdict as the HUNT stage (phase 2's VESPER def, its 14-block root): what \`hunt\` builds the ship with.
-export function huntVerdict(): ShipThreat {
-  return { ...nominalShipThreat(VESPER), act: 'hollow', stage: 'hunt', folded: [], hollow: phase2HollowOf(VESPER), rootBlocks: 14 };
+// Phase 2's VESPER verdict: HOLLOW's HUNT stage aboard with a 14-block root. On run 1's arm (the fixture world) its facts are
+// the worked route's VESPER's (map-facts: depth 4, the hop from KESTREL); on the classic five, the nominal run's.
+export function huntVerdict(seed = 1): ShipThreat {
+  const facts = fixtureWorldNow() === 'classic'
+    ? nominalShipThreat(VESPER)
+    : (() => { const slots = workedRouteTo(authoredSlot(VESPER)); return nominalAlong(mapAlong(createRunMap({ wave: 1 }, seed), slots), slots).verdict; })();
+  return { ...facts, act: 'hollow', stage: 'hunt', folded: [], hollow: phase2HollowOf(VESPER), rootBlocks: 14 };
 }
 
 export interface Harness10 extends Harness9 {
@@ -81,9 +89,17 @@ export function createHarness10(seed = 1, opts: { soulsFound?: boolean } = {}): 
     ...base,
     vesper(nextSeed, vesperOpts = {}) {
       base.shipAlone(VESPER, nextSeed, { kit: vesperOpts.kit ?? false });
-      if (vesperOpts.hunt) {
-        // The classic five's VESPER with a HUNT verdict (Track RETIRE: not moved to the arm yet).
-        if (fixtureWorldNow() !== 'classic') throw new Error('harness10.vesper: { hunt } is the classic VESPER\'s (import support/classic-world)');
+      if (vesperOpts.hunt && fixtureWorldNow() !== 'classic') {
+        // Run 1's arm VESPER with the HUNT verdict: the fresh unit laid out for it over the hop from KESTREL (its root in the
+        // slot, the seeds' hunting ground), and the tools phase 2's VESPER fought it with (the worked route's MOVE and
+        // DELETE, and the COPY and SWAP the classic schedule licensed there; the arm's come by request).
+        const threat = huntVerdict(nextSeed);
+        const fresh = createInitialState({ seed: nextSeed, shipIndex: VESPER, carried: 'fresh', threat });
+        fresh.director.done = [...base.store.getState().director.done];
+        base.store.update((d) => { Object.assign(d, fresh); });
+        resetWorld();
+        giveTools(base.store, ['move', 'delete', 'copy', 'swap']);
+      } else if (vesperOpts.hunt) {
         const threat = huntVerdict();
         const ship = classicShip(VESPER);
         const files = [...FRESH_UNIT_RACK_E, ...FRESH_UNIT_RACK_F]

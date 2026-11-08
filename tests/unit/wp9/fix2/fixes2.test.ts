@@ -13,7 +13,6 @@
 //   holding again dodges; waiting it out lapses (once) and the rack is hit.
 // • Minor: two REPAIRs started in the window do not move the deadline (it is judged at the engine's own power).
 // • Minor: the dodge search has no 2-letter names and no precision literals in rule code; every new line fits.
-import '../../support/classic-world';
 import { readFileSync } from 'node:fs';
 import { check, finish } from '../../wp1/harness';
 import { createHarness9 } from '../harness9';

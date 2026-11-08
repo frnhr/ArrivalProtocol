@@ -12,12 +12,12 @@
 //   change (hit → clear: CLEAR OF THE DEBRIS); the jump never carries the ship past the choice or past the verdict.
 // LEAD-2 item 5 moved the dodge's deadline 2.2 tac s earlier (judged with every Core thread busy), so the first SKIP's
 // stop moves with it: each tree is checked against its own deadline.
-import '../support/classic-world';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { check, finish } from '../wp1/harness';
 import { SKIP_END_LEAD_TAC, ZONE_TACTICAL_LEAD_TAC, DODGE_DEADLINE_RESOLUTION_TAC, DODGE_TACTICAL_LEAD_TAC } from '@data/tuning';
-import { classicShip } from '@data/classic-five';
+import { createInitialState } from '@state/initial';
+import { currentShip } from '@systems/map-run';
 
 interface Outcome {
   deadlineTac: number | null;
@@ -49,11 +49,12 @@ function fly(tree: 'lead2' | 'base', mode: 'hit' | 'dodge'): Outcome {
   return JSON.parse(line) as Outcome;
 }
 
-const warp = classicShip(2).flight.tacticalWarp;
+const KESTREL = currentShip(createInitialState({ seed: 1, shipIndex: 2, carried: 'fresh' }));
+const warp = KESTREL.flight.tacticalWarp;
 // One TACTICAL tick (50 ms at the ship's tactical warp), in tactical seconds.
 const TICK_TAC = 0.05;
 // A SKIP's recorded stop is the tick after it lands (CRUISE ×80 there: 0.16 tac s on KESTREL).
-const CRUISE_TICK_TAC = (0.05 * classicShip(2).flight.cruiseWarp) / warp;
+const CRUISE_TICK_TAC = (0.05 * KESTREL.flight.cruiseWarp) / warp;
 
 // --- MODE=hit -------------------------------------------------------------------------------------------------------
 {
@@ -61,10 +62,15 @@ const CRUISE_TICK_TAC = (0.05 * classicShip(2).flight.cruiseWarp) / warp;
   const before = fly('base', 'hit');
   // Slice 2: KESTREL's drivers arrive hurt by the layer's roll (data/driver-damage.ts), so a hit driver may start below
   // 100; the debris still takes the same files in the same rack for the same loss.
-  const losses = (outcome: Outcome): string => JSON.stringify(outcome.hits.map((hit) => ({ segId: hit.segId, rack: hit.rack, loss: hit.from - hit.to })));
-  const sameHits = now.hits.length > 0 && losses(now) === losses(before)
-    && JSON.stringify(now.spentIds) === JSON.stringify(before.spentIds);
-  check('KESTREL, no correction: the debris hits the same files in the same rack for the same loss as before LEAD-2',
+  // Track RETIRE: this tree flies run 1's arm KESTREL, whose six pods (POD 01–06) sit in rack B with the debris, where the
+  // reference's classic KESTREL had its six in rack C (POD 07–12): the same six files of the debris's rack, in order, each
+  // for the same loss.
+  const losses = (outcome: Outcome): string => JSON.stringify(outcome.hits.map((hit) => hit.from - hit.to));
+  const inRack = (outcome: Outcome, rack: string, pods: readonly number[]): boolean => outcome.hits.length === pods.length
+    && outcome.hits.every((hit, i) => hit.rack === rack && hit.segId === `driver_pod${String(pods[i]).padStart(2, '0')}`);
+  const sameHits = now.hits.length > 0 && losses(now) === losses(before) && inRack(now, 'B', [1, 2, 3, 4, 5, 6])
+    && inRack(before, 'C', [7, 8, 9, 10, 11, 12]) && JSON.stringify(now.spentIds) === JSON.stringify(before.spentIds);
+  check('KESTREL, no correction: the debris hits its rack\'s six files for the same loss as before LEAD-2',
     sameHits, `${now.hits.map((item) => `${item.segId} ${item.from}→${item.to}`).join(', ')} | before: ${before.hits.length} files`);
   const dtTac = Math.abs((now.hitTac ?? NaN) - (before.hitTac ?? NaN));
   check('…at the same game time, within one TACTICAL tick, and the same place',

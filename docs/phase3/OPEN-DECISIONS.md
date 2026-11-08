@@ -381,9 +381,10 @@ The calls one agent made building 7d's FOUNDATION and both its tracks (`docs/pha
 
 ## Retiring the classic world
 
-Track RETIRE (slice-4cde-plan §9; item 12). Phase 1 is done. Phase 2 is done for 168 of the 223 quick suites and for both
-BALANCE_ONLY playthrough harnesses. The other 55 suites still build the classic five, and phase 3 waits on them. The
-plan's "Deviations (RETIRE)" has the details and the list.
+Track RETIRE (slice-4cde-plan §9; item 12). Phase 1 is done. Phase 2 is done for 185 of the tier's 222 quick suites
+and for both BALANCE_ONLY playthrough harnesses. `map/memory-refactor`, the classic digest, is deleted. The other 37
+suites still build the classic five, and phase 3 waits on them. The plan's "Deviations (RETIRE)" has the details and the
+list.
 
 85. **The headless fixture world is run 1's arm.** BUILT: `createInitialState` with no map builds run 1's arm on the seed,
     with the unit on authored ship `shipIndex` (0 ARES-VII … 4 LAST LIGHT) along the worked route. Each stop carries its
@@ -394,16 +395,23 @@ plan's "Deviations (RETIRE)" has the details and the list.
     the harness helpers learned the class's memory size, the worked-route desk, the kit and the passed results. Of those
     33, 17 keep a check of a classic-only branch, built with `withClassicWorld`; those checks go in phase 3. `map/arm-parity` pins run 1's seed-7 arm (its 20
     ShipDefs, its built ships, a flown run) and did not move.
-86. **A ship alone on the arm carries the worked route's kit** (`support/arm-ship.ts WORKED_KIT`, opt-in `kit`): MOVE by
-    HALCYON, DELETE by KESTREL, SWAP by CORMORANT (VESPER: none, it arrives 4 years late), COPY by LAST LIGHT. That is
-    what 02 §3.14's requests deliver (`map/run1-route` pins each delivery). The classic five's licence schedule played
-    this part. **For the lead:** the alternative is a kit per suite, which would make each suite's tools explicit.
-87. **The save codec refuses a `'classic'` world; it does not migrate one.** RECOMMENDED. No save ever held one: encode
-    always threw on it (3c), and the page never routes through the classic five. There is nothing to migrate to. A
-    classic save's route and ships have no arm counterpart: VESPER → LAST LIGHT is 83 LY, out of range. When phase 3
-    narrows `RunMapState.world` to `'arm'`, keep the field (no save bump). Let the codec's `oneOf('arm')` refuse any other
-    value as `shape`, and drop the separate `'classic'` refusal and its text (`map-text.ts`). Keep a codec check that a
-    hand-edited `world: 'classic'` payload is refused cleanly (`kind === 'shape'`), not thrown.
+86. **A ship alone on the arm carries the worked route's kit, opt-in.** DECIDED (the lead) and BUILT
+    (`support/arm-ship.ts WORKED_KIT`, the `kit` option of `shipAlone`, `lastLight`, `vesper` and `kestrel`).
+    - The kit is MOVE by HALCYON, DELETE by KESTREL, SWAP by CORMORANT and COPY by LAST LIGHT. VESPER gets no SWAP: it
+      arrives 4 years late.
+    - That is what 02 §3.14's requests deliver (`map/run1-route` pins each delivery). On the classic five, the licence
+      schedule played this part.
+    - `vesper({ hunt })` also gives COPY and SWAP, the tools phase 2's VESPER fought the HUNT with.
+87. **The save codec refuses a `'classic'` world; it does not migrate one.** DECIDED (the lead). The refusal is BUILT, and
+    `save/codec` checks it.
+    - No save ever held a classic world: encode always threw on it (3c), and the page never routes through the classic
+      five.
+    - There is nothing to migrate to. A classic save's route and ships have no arm counterpart: VESPER → LAST LIGHT is
+      83 LY, out of range.
+    - Phase 3 narrows `RunMapState.world` to `'arm'` but keeps the field, so no save bump is needed.
+      - The codec's `oneOf('arm')` then refuses any other value as `shape`, and the separate `'classic'` refusal and its
+        text (`map-text.ts`) go.
+      - A codec check stays: a hand-edited `world: 'classic'` payload is refused cleanly (`kind === 'shape'`), not thrown.
 88. **The BALANCE_ONLY harnesses fly the arm** (slice 8 needs them there). BUILT:
     - `wp12/playthrough` plays the worked route (or `PT_ROUTE`). At each desk its kid makes the first pick, trains its
       `buys` list (COMPETENT and LITERAL buy down AUTOBURN, AUTODROP and SENTRY; SLOPPY only the pick), requests the tag

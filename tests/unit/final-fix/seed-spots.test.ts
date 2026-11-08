@@ -10,7 +10,6 @@
 // • seedBitesAiFile and the director: on VESPER's coast, in the COPY lesson's first seconds, a seed one bite from the
 //   Core puts `RM THE SEED` on the strip (outranksLeadIn); one that bites only a tool leaves the lesson its lead-in.
 // Usage: node_modules/.bin/tsx --tsconfig tsconfig.json tests/unit/final-fix/seed-spots.test.ts
-import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createHarness11 } from '../wp11/harness11';
 import { seedSpot, nearToolsSeedSpot, seedBitesAiFile, hollowReach, type SeedSpot } from '@systems/hollow';
@@ -55,7 +54,7 @@ function bittenBy(memory: readonly Segment[], spot: SeedSpot): Segment[] {
 
 // --- LAST LIGHT: a driver moved into rack A's free tail --------------------------------------------------------------
 {
-  h.lastLight(5, { hollowAsleep: true });
+  h.lastLight(5, { kit: true, hollowAsleep: true });
   const memory = clone(state().memory);
   const c13 = find(memory, (seg) => seg.type === 'driver' && seg.pod === 13, 'POD 13') as DriverSegment;
   const cargo = find(memory, (seg) => seg.type === 'ship' && seg.role === 'cargo', 'Cargo Ctrl');

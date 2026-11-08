@@ -4,7 +4,6 @@
 // the press stops the SKIP and burns on the same tick, the dodge holds, and WP9's dodge rules are unchanged (a SKIP
 // still lands SKIP_END_LEAD_TAC before the deadline: tests/unit/lead2/dodge-rules.test.ts). Rows: HOLLOW asleep and awake
 // (the real run), SPACE 1, 3, 5 and 6 s into the SKIP (the last one 0:16 before the deadline).
-import '../../support/classic-world';
 import { check, finish } from '../../wp1/harness';
 import { createHarness9 } from '../../wp9/harness9';
 
@@ -39,12 +38,12 @@ for (const hollowAsleep of [true, false]) {
     if (!released) h.keyUp('Space');
     const hit = state().hazards.hitIds.length > 0;
     const row = `HOLLOW ${hollowAsleep ? 'asleep' : 'awake'}, ${intoSkipSec} s into the SKIP (skipping ${skipping}, "${lineAtPress}"): `
-      + `burning at the press ${firingAtPress}, released ${released}, rack C ${hit ? 'HIT' : 'not hit'}, then "${line()}"`;
+      + `burning at the press ${firingAtPress}, released ${released}, rack B ${hit ? 'HIT' : 'not hit'}, then "${line()}"`;
     rows.push(row);
-    if (!(skipping && /^TOO WIDE — .*hold \[SPACE\] · \d+:\d\d to dodge DEBRIS C$/.test(lineAtPress) && firingAtPress && released && !hit)) bad ||= row;
+    if (!(skipping && /^TOO WIDE — .*hold \[SPACE\] · \d+:\d\d to dodge DEBRIS B$/.test(lineAtPress) && firingAtPress && released && !hit)) bad ||= row;
   }
 }
-check('KESTREL: SPACE held during the opening SKIP as TOO WIDE asks burns at once, and the dodge holds (rack C not hit)',
+check('KESTREL: SPACE held during the opening SKIP as TOO WIDE asks burns at once, and the dodge holds (the debris rack not hit: B, run 1\'s arm KESTREL\'s, since Track RETIRE)',
   bad === '', bad || rows.join(' | '));
 
 finish();

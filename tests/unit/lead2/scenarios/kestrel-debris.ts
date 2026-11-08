@@ -5,7 +5,6 @@
 // dodge's deadline), holding SPACE (IN) until the strip says RELEASE, then turns RETRO. Prints one JSON line: the hit
 // (game time, files, their loss), the zone-forecast verdict changes in order, where each SKIP stopped and why, the
 // dodge's deadline, whether its last DODGE_TACTICAL_LEAD_TAC ran at TACTICAL, and the wall time it all took.
-import '../../support/classic-world';
 import { createHarness9 } from '../../wp9/harness9';
 import { getPrediction } from '@systems/predict';
 import { skipBlockReason } from '@systems/pace';

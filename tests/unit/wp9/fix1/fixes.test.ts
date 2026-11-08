@@ -13,8 +13,8 @@
 // • The quality items: isCorrectionRow knows every F6–F8 row the table makes; debrisRack throws on anything but a
 //   one-rack cloud; AUTOBURN.skl's chip breaks at its dot; AUTOBURN.skl goes to rack D's tail when racks E–F are full;
 //   every new line fits the strip.
-import '../../support/classic-world';
 import { check, finish } from '../../wp1/harness';
+import { fixtureShip } from '../../support/arm-ship';
 import { createHarness9, KESTREL } from '../harness9';
 import { continueAfterReport } from '../../support/classic-flow';
 import { toggleDrop, transmitModel } from '@systems/transmit';
@@ -38,7 +38,6 @@ import { debrisRack, type ZoneHit } from '@/types/zone';
 import { AUTOBURN_TEXT, AUTO_REFUSAL_LINES, AUTOBURN_REFUSAL, AUTO_MINI_TEXT } from '@data/skill-text';
 import { RACK_TAG_TEXT } from '@data/zone-text';
 import { MAX_LINE_CHARS, RACK_BLOCKS, WAKE_AFTER_DODGE_SEC } from '@data/tuning';
-import { classicShip } from '@data/classic-five';
 import type { Segment } from '@/types/segment';
 import { phase2HollowOf } from '../../support/hollow-world';
 import { MEMORY_LAYOUTS } from '@data/memory';
@@ -49,7 +48,7 @@ const warp = () => state().level.tacticalWarp;
 const fits = (line: string): boolean => line.length <= MAX_LINE_CHARS;
 const debrisHit = (): ZoneHit => getPrediction().zoneHits.find((hit) => hit.kind === 'debris')!;
 // A licence the run may already hold (licences persist for the run; h.kestrel keeps them).
-const ensureTool = (kind: 'repair' | 'move'): void => {
+const ensureTool = (kind: 'repair' | 'move' | 'delete'): void => {
   if (!state().run.licences.includes(kind)) installTool(h.store, kind);
 };
 const correctIn = (): void => {
@@ -61,7 +60,7 @@ const correctIn = (): void => {
 
 // --- TRANSMIT ▸ to KESTREL with no Sensor Interp ------------------------------------------------------------
 {
-  const ship = classicShip(KESTREL);
+  const ship = fixtureShip(KESTREL);
   const noSensor: Segment[] = [{ id: 'core', name: 'AI Core', type: 'core', role: 'core', size: 16, integrity: 100, state: 'intact' } as Segment];
   check('arrivalDamage: a unit with no file of the role is not damaged by that rule (no throw)', arrivalDamage(noSensor, ship.arrivalDamage).length === 0);
 
@@ -169,6 +168,8 @@ const correctIn = (): void => {
   h.kestrel(5, { phase2Hollow: true, sensorHealed: true });
   ensureTool('repair');
   ensureTool('move');
+  // DELETE was the classic schedule's at KESTREL's start; on run 1's arm it comes by request (Track RETIRE).
+  ensureTool('delete');
   correctIn();
   // Walls first (the kid's MOVEs: POD 09 and POD 10 out of reach), then HOLLOW wakes now.
   h.store.update((d) => {

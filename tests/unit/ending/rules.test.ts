@@ -9,7 +9,6 @@
 // • optionState (R11): open with its meter and NOW:, needs with its line and meter, `named` only when seen before, PURGE and
 //   REASSIGNMENT always open, SUNSET greyed by a SPARE pick (`SPARE GIVES IT THE SHIP`, named), CONTACT hidden;
 // • endingRecordAt / endingRecordOf (M4), finaleRunCause (R17), reportEndingLine with NIGHT's titles (B1).
-import '../support/classic-world';
 import { check, finish } from '../landing/checks';
 import type { GameState, ShipResult } from '@state/schema';
 import type { PodSummary, PodRecord, Touchdown, LaunchRecord } from '@/types/landing';
@@ -24,6 +23,7 @@ import { ENDING_TITLE } from '@data/epilogue-text';
 import { EMPTY_SHIP_FUEL_PCT, MERGE_COST_CHARGE, STAY_PICK_MAX, DRIVER_BLOCKS } from '@data/tuning';
 
 const LAST_LIGHT = 4;
+const WORKED_ROUTE: readonly number[] = [0, 2, 5, 11, 15, 19];
 const base = (): GameState => {
   const state = createInitialState({ seed: 7, shipIndex: LAST_LIGHT, carried: 'fresh' });
   state.run.phase = 'landing';
@@ -46,8 +46,10 @@ const ended = (state: GameState, fuelPct: number): GameState => {
 const summary = (pod: number, colonists: number, place: PodSummary['place'], touch: PodSummary['touch'], fate: PodSummary['fate'] = 'down'): PodSummary => ({
   pod, family: 'OKAFOR', colonists, fate, place, lz: place === 'lz' ? 'LZ-A' : null, touch, points: 0, parkedWhy: null, restored: false, featured: [],
 });
-const result = (slot: number, colony: string | null, pods: PodSummary[]): ShipResult => ({
-  shipId: `ship-${slot}`, shipName: `SHIP ${slot}`, slot, depth: slot + 1, outcome: 'locked', colonistsAboard: 0, lzs: [], offSite: 0, noGo: 0,
+// A ship result at route position `at` (Track RETIRE: run 1's worked route, so position 2 is KESTREL in slot 5; the classic
+// five's slot was the position).
+const result = (at: number, colony: string | null, pods: PodSummary[]): ShipResult => ({
+  shipId: `ship-${WORKED_ROUTE[at]!}`, shipName: `SHIP ${WORKED_ROUTE[at]!}`, slot: WORKED_ROUTE[at]!, depth: at + 1, outcome: 'locked', colonistsAboard: 0, lzs: [], offSite: 0, noGo: 0,
   restored: 0, parked: [], notLaunched: 0, landedInLz: 0, points: 0, stars: 0, fuelLeftPct: 0, ringMiss: null, survey: null, colony, pods,
 });
 const onTarget = (slot: number, colony: string): ShipResult => result(slot, colony, [summary(1, 200, 'lz', 'soft'), summary(2, 200, 'lz', 'soft')]);
@@ -84,7 +86,7 @@ const onTarget = (slot: number, colony: string): ShipResult => result(slot, colo
     result(3, null, [])];
   const ships = stayCandidates(state);
   check('STAY: the final ship (live tally) first, then the run\'s ★ ON TARGET ships newest first; a hard landing or an empty ship is not',
-    ships.map((ship) => `${ship.slot}:${ship.colony}`).join() === '4:FIRST LIGHT,2:SALTMARSH,0:RIVERSIDE', JSON.stringify(ships));
+    ships.map((ship) => `${ship.slot}:${ship.colony}`).join() === '19:FIRST LIGHT,5:SALTMARSH,0:RIVERSIDE', JSON.stringify(ships));
   check('…each with its route year', ships.every((ship) => ship.year === routeYear(state.run.map, ship.slot)) && ships[0]!.year > ships[2]!.year);
   const unlaunched = ended(base(), 50);
   unlaunched.run.ships = [result(0, 'RIVERSIDE', [summary(1, 960, 'lz', 'soft'), summary(2, 40, null, null, 'not-launched')])];

@@ -30,11 +30,9 @@
 // drivers (4 degraded and 1 failing, never the lead or the slot's neighbours). Re-measured on 12 seeds by the strip:
 // 12/12 locked and root deleted, 0.00 drivers lost (worst 0), 60 verb moments (0 landed, 51 blocked); 2 seeds in quick
 // (3 before the slice 2 review's tier trim).
-import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createHarness11, LAST_LIGHT } from './harness11';
 import { createInitialState } from '@state/initial';
-import { freshUnitRacks } from '@systems/carry';
 import { createRng, type Rng } from '@systems/rng';
 import { chooseVerb, landVerb, verbWeights, type Verb } from '@systems/hollow';
 import { verbNow } from '@systems/hollow-verbs';
@@ -53,7 +51,6 @@ import {
   BAND_DEGRADED_MIN, WALL_MIN_BLOCKS, GLITCH_BURST_LEVEL, GLITCH_BURST_MS, VERB_TELEGRAPH_SEC, VERB_FIRST_TELEGRAPH_SEC,
 } from '@data/tuning';
 import { HOLLOW_VERB } from '@data/hollow-text';
-import { classicShip } from '@data/classic-five';
 import { byDepth } from '../depth';
 import { setLandingMode } from '../support/landing-instant';
 import { followLanding } from '../landing/harness-landing';
@@ -63,7 +60,7 @@ import { chooseEnding, finaleAtStep1 } from '../support/finale';
 
 // --- A. Fairness, pure ------------------------------------------------------------------------------------------------
 
-const ship = classicShip(LAST_LIGHT);
+
 
 function openFreeSpots(memory: readonly Segment[], size: number): { addr: number }[] {
   const starts = segmentStarts(memory);
@@ -106,7 +103,7 @@ function fsCopy(kind: FsToolKind, index: number, rng: Rng): FsToolSegment {
 // A LAST LIGHT memory shaken up (see A in the header).
 function shakenMemory(seed: number): Segment[] {
   const rng = createRng(seed * 7919 + 13);
-  const memory = createInitialState({ seed, shipIndex: LAST_LIGHT, carried: freshUnitRacks(ship) }).memory;
+  const memory = createInitialState({ seed, shipIndex: LAST_LIGHT, carried: 'fresh' }).memory;
   // The unit's own fs-tools: the fresh unit brings Scan; a run brings the others. 0–3 copies of each kind.
   for (const seg of memory.filter((candidate) => candidate.type === 'fs-tool')) replaceWith(memory, seg, [freeSegment(seg.size)]);
   for (const kind of FS_TOOL_KINDS) {
@@ -267,7 +264,7 @@ function mvProblem(memory: Segment[], verb: Extract<Verb, { kind: 'mv' }>): stri
 
 // With nothing fair to aim at, HOLLOW skips; MV with nowhere to go falls to RM.
 {
-  const memory = createInitialState({ seed: 3, shipIndex: LAST_LIGHT, carried: freshUnitRacks(ship) }).memory;
+  const memory = createInitialState({ seed: 3, shipIndex: LAST_LIGHT, carried: 'fresh' }).memory;
   // The fresh unit: Scan only (no spare), no upgrade; Thrust.alt deleted; no block but the root.
   const alt = memory.find((seg) => seg.type === 'ship-backup')!;
   replaceWith(memory, alt, [freeSegment(alt.size)]);
@@ -280,7 +277,7 @@ function mvProblem(memory: Segment[], verb: Extract<Verb, { kind: 'mv' }>): stri
   const mvVerb = chooseVerb(memory, createRng(1), { mv: 1000, rm: 1 }, []);
   check('A: …with Rm in memory: MV takes the seed', mvVerb?.kind === 'mv' && mvVerb.targetId === seedBlock.id, JSON.stringify(mvVerb));
   // Fill every free block but the seed's neighbours so no spot fits: MV falls to RM (a reserve backup comes back).
-  const backup = structuredClone(createInitialState({ seed: 3, shipIndex: LAST_LIGHT, carried: freshUnitRacks(ship) }).memory.find((seg) => seg.type === 'ship-backup')!);
+  const backup = structuredClone(createInitialState({ seed: 3, shipIndex: LAST_LIGHT, carried: 'fresh' }).memory.find((seg) => seg.type === 'ship-backup')!);
   backup.id = newSegId('alt');
   place(memory, backup, createRng(5));
   const crowded = memory.map((seg) => (seg.type === 'free' && seg.size >= 2 ? seg : seg));
@@ -295,7 +292,7 @@ function mvProblem(memory: Segment[], verb: Extract<Verb, { kind: 'mv' }>): stri
 
 // A tool licensed on this ship and not used yet is never RM'd, even as a spare; once used it is (the lead's TODO).
 {
-  const memory = createInitialState({ seed: 4, shipIndex: LAST_LIGHT, carried: freshUnitRacks(ship) }).memory;
+  const memory = createInitialState({ seed: 4, shipIndex: LAST_LIGHT, carried: 'fresh' }).memory;
   const alt = memory.find((seg) => seg.type === 'ship-backup')!;
   replaceWith(memory, alt, [freeSegment(alt.size)]);
   // Copy and Copy.cp: the only spare. Scan and Rm so every verb is blockable.
@@ -348,7 +345,7 @@ const events = (name: string): number => h.events.filter((event) => event.name =
 
 // LAST LIGHT on its coast (CRUISE: nothing pressing), HOLLOW awake but not biting (the counter is what is measured).
 function coast(seed: number): void {
-  h.lastLight(seed);
+  h.lastLight(seed, { kit: true });
   // REPAIR comes with the first look inside or the first need (licences.ts); this kid has looked: Repair and Repair.bak.
   if (!isLicensed(state(), 'repair')) installTool(h.store, 'repair');
   h.store.update((d) => {
@@ -451,10 +448,13 @@ coast(14);
   const bak = state().memory.find((seg) => seg.name === 'Repair.bak')!;
   const free = state().memory.filter((seg) => seg.type === 'free' && seg.reservedBy === undefined).sort((a, b) => b.size - a.size)[0]!;
   const moved = actionMove(h.store, bak, { regionSegIds: [free.id], col: 0 });
+  // The MOVE's op holds the file under both its ids (the copy it is writing, `t_repair_bak~n`, and the original): the verb
+  // may aim at either; it is Repair.bak mid-op either way.
+  const moving = getOps().find((operation) => operation.kind === 'move')?.targetIds ?? [];
   const verb = telegraphNow();
   h.step();
   check('B: a target already mid-op (a MOVE running on it) is blocked on the countdown\'s first tick',
-    moved === null && verb?.targetId === bak.id && state().hollow.verb === null && state().hollow.verbsBlocked === 1,
+    moved === null && verb !== null && moving.includes(verb.targetId) && moving.includes(bak.id) && state().hollow.verb === null && state().hollow.verbsBlocked === 1,
     `move ${moved}, verb ${JSON.stringify(verb)}, ops ${getOps().length}`);
 }
 
@@ -483,7 +483,7 @@ coast(15);
 }
 
 // The clock and the countdown stand still while the flight is at TACTICAL (the crash course at the start).
-h.lastLight(16);
+h.lastLight(16, { kit: true });
 h.store.update((d) => { d.hollow.phase = 'awake'; d.hollow.biteInSec = 9999; d.hollow.seedInSec = 9999; d.hollow.seedMoments = 1; });
 h.step();
 {
@@ -516,7 +516,7 @@ h.step();
   const failures: string[] = [];
   const started = Date.now();
   for (let seed = 1; seed <= SEEDS; seed++) {
-    h.lastLight(seed);
+    h.lastLight(seed, { kit: true });
     h.flyLastLight(900);
     if (h.status() !== 'locked' && h.status() !== 'accepted') { failures.push(`seed ${seed}: ${h.status()}`); lostTotal += 16; continue; }
     if (h.status() === 'locked') locked++;

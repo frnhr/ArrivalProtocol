@@ -15,7 +15,6 @@
 // echoed and CONTROL's line; the story moved to the epilogue). Its worst-case words are checked for every ending.
 // Slice 1a: the landing stands while a scenario sets up ('manual' landing mode) and lands at once when it lets it go;
 // POD 11 and POD 12 (either side of LAST LIGHT's root) are the drivers MERGE gives back.
-import '../../support/classic-world';
 import { check, finish } from '../../wp1/harness';
 import { createHarness11 } from '../harness11';
 import { theRoot, infectNow } from '@systems/hollow';
@@ -28,7 +27,6 @@ import { actionDelete } from '@state/actions';
 import { driversInMemory, finalePending, quantizeCorruption } from '@state/selectors';
 import { HOLLOW_VERB, hollowUnitName } from '@data/hollow-text';
 import { echoWord } from '@data/tool-text';
-import { CLASSIC_FIVE } from '@data/classic-five';
 import {
   MAX_LINE_CHARS, FINALE_VERDICT_MAX_LINES, GLITCH_BURST_LEVEL, DUEL_SPIKE_LEVEL_START, DUEL_SPIKE_LEVEL_END, ROOT_DELETE_SEC,
   ROOT_GONE_GLITCH_LEVEL, MERGE_GLITCH_LEVEL, MERGE_COST_CHARGE, DUEL_SPIKE_EVERY_END_SEC, DUEL_SPIKE_EVERY_START_SEC,
@@ -36,7 +34,6 @@ import {
 } from '@data/tuning';
 import type { GameState, EndingLine } from '@state/schema';
 import type { DriverSegment } from '@/types/segment';
-import type { ShipResult } from '@state/schema';
 import { isPodCode } from '../../support/pod-code';
 import { setLandingMode, landInstantly } from '../../support/landing-instant';
 import { chooseEnding, finaleAtStep1, settleFinale } from '../../support/finale';
@@ -94,7 +91,7 @@ const eventsSince = (from: number, name: string): { payload: unknown; wall: numb
 check('the MERGE tick is LAST LIGHT\'s only (none on ARES-VII)', state().level.shipName === 'ARES-VII' && mergeTickCharge(state()) === null);
 
 // --- LAST LIGHT: the verbs' lines ------------------------------------------------------------------------------------
-h.lastLight(41);
+h.lastLight(41, { kit: true });
 check(`LAST LIGHT from its start: the MERGE ${MERGE_COST_CHARGE} tick on the charge readouts`, mergeTickCharge(state()) === MERGE_COST_CHARGE);
 h.flyLastLight(900, { deleteRoot: false });
 check('the strip-following kid locks LAST LIGHT', h.status() === 'locked', h.status());
@@ -192,14 +189,11 @@ check('say: a line with a look must be critical (a queued one would count down a
   check('every pod down while the choice stood (the report waits for the choice)', driversInMemory(state()).length === 0
     && state().run.phase === 'landing' && finaleAtStep1(state()));
   h.stepFor(3);
-  // LAST LIGHT is flown alone here: the run brought ships 1–4 into orbit before it (their results, as a run records
-  // them), so PURGE's full claim is true (tests/unit/wp11/p2/purge-fleet.test.ts has a run that lost one).
-  h.store.update((d) => {
-    d.run.ships = CLASSIC_FIVE.filter((ship) => !ship.final).map((ship, index): ShipResult => ({
-      shipId: ship.id, shipName: ship.name, slot: index, depth: index + 1, outcome: 'locked', colonistsAboard: 0, lzs: [], offSite: 0, noGo: 0,
-      restored: 0, parked: [], notLaunched: 0, landedInLz: 0, points: 0, stars: 0, fuelLeftPct: 0, ringMiss: null, survey: null, colony: null, pods: [],
-    }));
-  });
+  // LAST LIGHT is flown alone here: the fixture world records the worked route's five ships before it in orbit (their
+  // results, as a run records them), so PURGE's full claim is true (tests/unit/wp11/p2/purge-fleet.test.ts has a run that
+  // lost one).
+  check('…the five ships before it are on the run, every one in orbit', state().run.ships.length === 5
+    && state().run.ships.every((result) => result.outcome === 'locked'), JSON.stringify(state().run.ships.map((result) => result.shipName)));
   const refusal = chooseEnding(h.store, 'purge', 'reassignment', { verdict: 'type' });
   const ending = state().hollow.finale.ending;
   check('PURGE writes its typed ending', refusal === null && ending !== null && ending.choice.hollow === 'purge', String(refusal));
@@ -229,7 +223,7 @@ check('say: a line with a look must be critical (a queued one would count down a
 
 // --- MERGE: what it brought back, its glitch, and a skipped ending ------------------------------------------------------
 {
-  h.lastLight(43);
+  h.lastLight(43, { kit: true });
   h.flyLastLight(900, { deleteRoot: false });
   check('LAST LIGHT locked again (for MERGE)', h.status() === 'locked', h.status());
   h.step();

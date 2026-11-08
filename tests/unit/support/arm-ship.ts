@@ -7,7 +7,12 @@
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import type { FsToolKind } from '@/types/fs-tool';
-import { currentSlot } from '@systems/map-run';
+import type { ShipDef } from '@data/ships';
+import type { CarriedRacks } from '@data/memory';
+import { currentSlot, currentShip, createRunMap } from '@systems/map-run';
+import { mapAlong, nominalAlong, workedRouteTo, authoredSlot } from '@systems/arm-fixture';
+import { freshUnitRacks } from '@systems/carry';
+import { createInitialState } from '@state/initial';
 import { giveTools } from '../map/repo-fixture';
 
 export const WORKED_KIT: Readonly<Record<number, readonly FsToolKind[]>> = {
@@ -22,4 +27,22 @@ export function giveWorkedKit(store: Store<GameState>): void {
   const kit = WORKED_KIT[currentSlot(state.run)];
   if (kit === undefined) throw new Error(`giveWorkedKit: slot ${currentSlot(state.run)} is not on the worked route`);
   giveTools(store, kit);
+}
+
+// Run 1's authored ship `index` (0 ARES-VII … 4 LAST LIGHT) as the fixture world builds it: its ShipDef (state/initial.ts,
+// the worked route; the details rolled from `seed`, which is the arm seed there). In place of classicShip(index).
+export function fixtureShip(index: number, seed = 1): ShipDef {
+  return currentShip(createInitialState({ seed, shipIndex: index, carried: index === 0 ? null : 'fresh' }));
+}
+
+// A fresh unit's racks as the fixture world carries them into authored ship `index` (createInitialState's `carried:
+// 'fresh'`): packed for the worked route's hop into it and laid out for its nominal verdict, on `ship` (the fixture's
+// ShipDef unless given: a suite's own variant of it, phase 2's FULL geometry for one). In place of
+// freshUnitRacks(classicShip(index)).
+export function fixtureFreshRacks(index: number, ship: ShipDef = fixtureShip(index), seed = 1): CarriedRacks {
+  const slots = workedRouteTo(authoredSlot(index));
+  const map = mapAlong(createRunMap({ wave: 1 }, seed), slots);
+  const hop = map.route.at(-1)!.hop;
+  if (hop === null) throw new Error('fixtureFreshRacks: ship 1 meets a fresh unit by itself');
+  return freshUnitRacks(ship, hop.linkBlocks, nominalAlong(map, slots).verdict);
 }
