@@ -12,6 +12,7 @@ import { endLanding } from '@systems/landing';
 import { launchDown, launchUp, playerLaunch, type LaunchConfirm } from '@systems/landing-controls';
 import { bayWindowModel, type AutodropBayModel, type BayWindowModel } from '@systems/landing-hud';
 import { pressAutodrop, setPassCount } from '@systems/autodrop';
+import { podBayRestoredRow } from '@systems/last-landing-hud';  // slice 7b, Track VIEW's marked edit
 import { setMode } from '@systems/mode';
 import { askInline } from '@components/hud/InlineConfirm';
 import { createScrambler } from '@components/hud/scrambler';
@@ -120,7 +121,29 @@ export function mountPodBayWindow(store: Store<GameState>, deps: PodBayDeps): ()
     patch(endBtn, model.endLanding.label);
     endBtn.disabled = !model.endLanding.enabled;
     paintAutodrop(model.autodrop);
-    // (Slice 7b, Track VIEW's marked edit: the `RESTORED 4` row from systems/last-landing-hud.ts podBayRestoredRow goes here.)
+    // (Slice 7b, Track VIEW's marked edit: the `RESTORED 4` row from systems/last-landing-hud.ts podBayRestoredRow, R29.)
+    // Built on its first paint under the next pod's line (index.html stays DROP's); a pip per restored pod, in pod order.
+    const restored = podBayRestoredRow(state);
+    let restoredEl = win.querySelector<HTMLElement>('.pb-restored');
+    if (restored !== null && restoredEl === null) {
+      restoredEl = make('div', 'pb-restored');
+      restoredEl.append(make('span', 'pb-restored-text'), make('span', 'pb-restored-pips'), make('span', 'pb-restored-note'));
+      nextEl.after(restoredEl);
+    }
+    if (restoredEl !== null) {
+      restoredEl.hidden = restored === null;
+      if (restored !== null) {
+        patch(restoredEl.querySelector<HTMLElement>('.pb-restored-text')!, restored.text);
+        patch(restoredEl.querySelector<HTMLElement>('.pb-restored-note')!, restored.note);
+        const pipsEl = restoredEl.querySelector<HTMLElement>('.pb-restored-pips')!;
+        const pips = restored.pips.join(' ');
+        if (pipsEl.dataset.pips !== pips) {
+          pipsEl.dataset.pips = pips;
+          pipsEl.replaceChildren(...restored.pips.map((at) => make('span', `pb-restored-pip ${at}`, at === 'waiting' ? '◉' : at === 'falling' ? '▾' : '▮')));
+        }
+      }
+    }
+    // (end of VIEW's marked edit)
   }
 
   let lastPip = '';

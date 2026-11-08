@@ -552,3 +552,137 @@ body.reduced-motion .pb-go.armed { animation: none; }
 @media (max-width: 768px) {
   body.landing .phone-bar > #pbGoBtn { grid-column: 1 / -1; min-height: 36px; margin-top: 6px; font-size: 13px; }
 }
+
+/* ── Slice 7b, Track VIEW: THE LAST LANDING (01 §3.17, R29). The header strip over the SHIP view (LastLanding.ts), the
+ *    POD BAY's RESTORED row (PodBayWindow's marked edit), the restored beacons (plot-landing's marked edit) and the
+ *    report's RESTORED BY MERGE row. Restored is steady amber everywhere: the pods ride on drivers given back, so nothing
+ *    blinks for help any more. ── */
+.last-landing {
+  position: fixed;
+  left: 50%;
+  top: calc(var(--header-h) + var(--objective-h) + 6px);
+  transform: translateX(-50%);
+  z-index: 155;
+  max-width: calc(100vw - 32px);
+  pointer-events: none;
+}
+.last-landing[hidden] { display: none; }
+/* The pause card takes the same place: the strip steps down under it. */
+body:has(#pauseVeil:not([hidden])) .last-landing { top: calc(var(--header-h) + var(--objective-h) + 52px); }
+.ll-strip {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 5px 8px 5px 18px;
+  border: 1px solid var(--accent);
+  border-left-width: 4px;
+  background: var(--window);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--bg) 70%, transparent), 0 0 28px color-mix(in srgb, var(--accent) 18%, transparent);
+  white-space: nowrap;
+}
+.ll-title {
+  font-family: 'VT323', monospace;
+  font-size: 28px;
+  line-height: 1;
+  letter-spacing: 0.22em;
+  color: var(--accent-bright);
+  text-shadow: 0 0 10px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.ll-middle { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ll-status { font-size: 11px; letter-spacing: 0.14em; color: var(--accent); }
+.ll-status.all-down { color: var(--soul); }
+.ll-flier { font-size: 9px; letter-spacing: 0.12em; color: var(--accent-dim); overflow: hidden; text-overflow: ellipsis; }
+.ll-skip {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--edge-bright);
+  background: transparent;
+  color: var(--accent);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  cursor: pointer;
+}
+.ll-skip:hover:not(:disabled) { border-color: var(--accent); color: var(--accent-bright); }
+.ll-skip:disabled { opacity: 0.35; cursor: default; }
+.ll-skip kbd.keycap { font-size: 10px; color: inherit; border-color: currentColor; }
+/* It lands like a stamp as the drivers come back on the radio's sweep (audio-cues: transmitIn with stampHit). */
+.last-landing.ll-arrive .ll-strip { animation: ll-arrive 0.55s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
+.last-landing.ll-arrive .ll-title { animation: ll-title 1.6s steps(8) both; }
+@keyframes ll-arrive { 0% { opacity: 0; transform: translateY(-10px) scaleY(0.4); } 60% { opacity: 1; } 100% { opacity: 1; transform: none; } }
+@keyframes ll-title { 0% { opacity: 0.2; } 25% { opacity: 1; } 37% { opacity: 0.4; } 50%, 100% { opacity: 1; } }
+body.reduced-motion .last-landing.ll-arrive .ll-strip,
+body.reduced-motion .last-landing.ll-arrive .ll-title { animation: none; }
+/* What THE LAST LANDING shuts (R26: the MIND, the dock; only [ENTER], P and M) reads as shut, and takes no pointer: the
+   POD BAY's LAUNCH, [G] and END LANDING (the input layer stops their keys, not their buttons; on a phone LAUNCH and [G]
+   ride in the flight bar, found by id), and the bay's count, which no restored pod spends (R26: no bay). */
+body.ll-on .dock, body.ll-on #modeToggle,
+body.ll-on #podLaunchBtn, body.ll-on #pbGoBtn, body.ll-on #pbEnd { opacity: 0.35; pointer-events: none; }
+body.ll-on .pb-bay-row { opacity: 0.35; }
+/* On a phone the header and the strip flow in two or three rows, so the strip sits at the foot instead, over the view tabs
+   and the SHIP / MIND toggle that THE LAST LANDING shuts anyway; its button is the skip (no keyboard there). */
+@media (max-width: 768px) {
+  .last-landing { left: 16px; right: 16px; top: auto; bottom: 48px; transform: none; max-width: none; }
+  body:has(#pauseVeil:not([hidden])) .last-landing { top: auto; }
+  .ll-strip { gap: 4px 10px; padding: 6px 6px 6px 12px; flex-wrap: wrap; }
+  .ll-title { font-size: 22px; letter-spacing: 0.16em; }
+  .ll-middle { flex: 1 1 auto; }
+  .ll-flier { display: none; }
+  .ll-skip { margin-left: auto; padding: 6px 8px; font-size: 9px; letter-spacing: 0.1em; }
+  /* The view tabs (the phone's dock) are shut, and the strip covers only their lower half: hidden rather than dimmed, so
+     no half-row of tab labels peeks out over it. They keep their room, so nothing above them moves. */
+  body.ll-on .dock { visibility: hidden; }
+}
+
+/* The POD BAY's RESTORED row (R29): `RESTORED 4`, a pip per pod (◉ riding the orbit, ▾ falling, ▮ down), the radio note. */
+.pb-restored {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  padding: 5px 0 5px 8px;
+  border-left: 2px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+.pb-restored[hidden] { display: none; }
+.pb-restored-text { font-family: 'VT323', monospace; font-size: 19px; line-height: 1; letter-spacing: 0.06em; color: var(--accent-bright); }
+.pb-restored-pips { display: inline-flex; gap: 3px; font-size: 11px; line-height: 1; }
+.pb-restored-pip.waiting { color: var(--accent); text-shadow: 0 0 4px color-mix(in srgb, var(--accent) 60%, transparent); }
+.pb-restored-pip.falling { color: var(--accent-bright); }
+.pb-restored-pip.down { color: var(--soul); }
+.pb-restored-note { flex-basis: 100%; font-size: 9px; letter-spacing: 0.12em; color: var(--accent-dim); }
+
+/* The NAV PLOT's restored beacons (R29): from blinking to steady amber, where they ride; the turn is a short fade. A soft
+   ring around each (a wide, faint stroke) keeps them readable beside the ship's own marker. */
+.np-beacon.restored {
+  fill: var(--accent-bright);
+  fill-opacity: 1;
+  stroke: var(--accent);
+  stroke-opacity: 0.45;
+  stroke-width: 5;
+  vector-effect: non-scaling-stroke;
+  animation: none;
+  filter: drop-shadow(0 0 3px var(--accent));
+  transition: fill 0.6s ease-out, stroke-opacity 0.6s ease-out;
+}
+
+/* The report's RESTORED BY MERGE row (R29): the label over its icons and counts (it is longer than an LZ's label), in the
+ *    amber of the drivers given back; the icons are each pod's own outcome. */
+.lr-row.kind-restored {
+  grid-template-columns: auto 1fr;
+  row-gap: 3px;
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px dashed color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.lr-row.kind-restored .lr-label { grid-column: 1 / -1; color: var(--accent); }
+.lr-row.kind-restored .lr-text { color: var(--accent-bright); font-size: 20px; }
+/* A phone: the counts take a row of their own under the icons, so `1 OFF-SITE` never breaks at its hyphen. */
+@media (max-width: 768px) {
+  .lr-row.kind-restored { grid-template-columns: 1fr; }
+  .lr-row.kind-restored .lr-text { font-size: 17px; text-align: left; white-space: normal; }
+}

@@ -2297,3 +2297,76 @@ TIGHT leaves room only in LZ-B, as many as the restored pods: "the kid's own lan
   `forceLandAll`s THE LAST LANDING's radio pods on its first tick: soft, in an LZ with room. Those harnesses therefore do not
   play R27's rules after a MERGE. `wp11/full-run` passes at full depth (310 s). `wp12/playthrough` was not run.
 - **§6.4's 7b e2e additions** are the lead's.
+
+## Deviations (Track VIEW 7b)
+
+Recorded by Track VIEW (branch `view-7b`, from 4cc8feb, the 7b foundation). R29, the header and the hint are built against the
+foundation's contract, painted from hand-built `lastLanding` states (DROP's machine is not on this branch). **No save bump**,
+no tuning number (the `7b VIEW` block stays empty). The unit tier is green: 214 passed, 0 failed, 11 balance-only skipped,
+**235 s** on 4 workers. `npm run typecheck` and the tests' tsc are clean. The e2e was not run.
+
+### What is built
+
+- **`systems/last-landing-hud.ts`** (pure, read every paint):
+  - `lastLandingHeader(state)`: null unless `landing.lastLanding` is set (deviation 9: never the phase). Its `left` counts
+    the restored pods not yet `'down'` (a falling pod is still left);
+  - `podBayRestoredRow(state)`: `RESTORED n` over every `lastLanding.pods`, the radio note, a pip per pod in pod order;
+  - `restoredReportRow(tally)`: counts **pods**, from each `PodSummary.restored` (MERGE's confirm sets it), so it holds after
+    the machine has cleared; its icons are each restored pod's own outcome;
+  - `restoredCreditTag(pod)`: ` (restored)` or `''`.
+  - Fail loudly: a restored pod that has left the orbit (`not-launched`, …) mid-machine, or a restored pod with no final fate
+    or no place in the report, throws.
+- **`components/run/LastLanding.ts`** (`#lastLanding`): the header strip. `THE LAST LANDING`, `3 OF 4 PODS TO LAND` (`ALL 4
+  DOWN` at the end), who flies them (R27), and `[ENTER] SKIP TO THE END` as a button with its keycap. The button calls DROP's
+  `skipLastLanding` (a phone's only way to skip), disabled once all are down. It sets `body.ll-on` while it shows, and lands
+  with a short stamp animation (none under reduced motion).
+- **POD BAY** (`PodBayWindow.ts`'s marked edit): the `.pb-restored` row is built on its first paint under the next pod's line
+  (index.html is untouched): `RESTORED 4`, a pip per pod (◉ riding the orbit, ▾ falling, ▮ down), `DRIVERS BY RADIO · 80%`.
+- **NAV PLOT** (`plot-landing.ts`'s marked edit): `Beacon.restored` toggles `.restored` in place, so a beacon turns steady
+  amber where it rides, with a soft ring and glow; parked beacons keep their grey blink.
+- **LANDING REPORT** (through the lead's hooks only): the RESTORED BY MERGE row with its icons and `4 RESTORED · 3 LANDED · 1
+  OFF-SITE`, and ` (restored)` on the restored pods' credits.
+- **Audio** (`audio-cues.ts`'s 7b block): `'last-landing-start'` plays `transmitIn` with a light `stampHit` under it, as the
+  strip lands. `'last-landing-end'` still plays nothing (foundation deviation 7 stands).
+- **Tests:** `ending/last-landing-models` (19 checks, about 1 s): the header and the row on hand-built machines (all four
+  fliers, falling, parked at the end, all down, a pod gone from the orbit throws), the report row and the credit tag on
+  hand-built tallies, and both through `landingReportModel`'s hooks on a landed ARES-VII. `support/words.test`'s 7b VIEW
+  block renders every line at its worst case (≤ 70) and pins 01 §3.17's words. `ending/last-landing-foundation`'s VIEW
+  stub check now says "no machine, no restored pod: nothing paints".
+- **Visual check** (Playwright, 1440×900 and 390×844, seed 7's LAST LIGHT, four drivers eaten, MERGE + SUNSET, the machine
+  staged by hand through `__ap.store`): shots and crops in `tests/.out/view-7b/` (the script is `stage.mjs` there, ignored).
+
+### Deviations
+
+1. **The models say more than the contract's shapes** (supersets; no caller breaks):
+   - `lastLandingHeader` adds `count`, `status` (the `3 OF 4 PODS TO LAND` line) and `flier` to `{ title; left; hint }`;
+   - `podBayRestoredRow` adds `note` and `pips` to `{ count; text }`.
+2. **Words beyond §2.9** (all in `LAST_LANDING_TEXT`, checked in the words block):
+   - `left(left, count)` and `flier[v1 | v2 | v3 | blind]` for the strip's middle;
+   - `bayNote(integrity)` (`DRIVERS BY RADIO · 80%`), under the POD BAY row;
+   - `reportRow` gains an optional `MISLANDED` part. A blind pod takes its window whatever the counts, so it can come down in
+     a full LZ. `LANDED` keeps the headline's sense: in an LZ with room.
+3. **The report row's icons are in the text's order** (soft, hard, mislanded, off-site, no-go, then a pod still parked), not
+   in pod order, so the icons read the same as the counts beside them. On screen the row's label sits on a line of its own
+   over the icons and counts (it is longer than an LZ's label). On a phone the counts take a third line.
+4. **The header strip's place.** On a desktop it floats centred under the objective line, over the windows' title bars (the
+   pause card's place; it steps down under the pause card). On a phone (≤ 768 px) it sits at the foot, over the view tabs,
+   which are hidden while it shows (R26 shuts them; dimmed, a half-row peeked out over the strip).
+5. **What THE LAST LANDING shuts reads as shut** (`body.ll-on`, CSS only): the dock and the mode toggle are dimmed, and the
+   POD BAY's LAUNCH, [G] and END LANDING (`#podLaunchBtn`, `#pbGoBtn`, `#pbEnd`, the phone's flight bar included) are dimmed
+   and take no pointer. The bay's count row is dimmed (no bay is spent, R26). The input layer stops their keys, not their
+   buttons, and `requestLaunch` from `'player'` is not refused during the machine (foundation deviations 2–3), so the CSS is
+   the only thing between a click and a kid's launch of a restored pod. See the patch request below.
+6. **The header's skip button calls `skipLastLanding` directly.** It is DROP's function and throws `not built` on this branch.
+   The button is unreachable here (no machine starts without DROP), and the merge order (DROP, then VIEW) makes it live.
+7. **NAV PLOT: only the beacons change.** A restored pod's ◘ landing mark looks like any other pod's. The marks' model
+   (`landing-hud.ts`, the lead's) has no `restored` flag, and the report says which pods were restored.
+
+### Patches requested
+
+- **DROP or the lead: refuse a `'player'` launch while `landing.lastLanding` is set** (`landing.ts requestLaunch` or
+  `landing-controls.ts playerLaunch`), throwing or refusing as the lead prefers. Today the CSS of deviation 5 is the only
+  guard on the buttons, and a debug `__ap.launch()` launches a restored pod as the kid (the visual check used it to stage a
+  falling pod). With the guard, the check stages by `forceLandAll` or DROP's machine instead.
+- **The lead (e2e, §6.4):** the header strip (`#lastLanding`, hidden through 7a's interim), `.pb-restored`,
+  `.np-beacon.restored` and `.lr-row.kind-restored` are the selectors to check once DROP's machine flies.
