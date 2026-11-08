@@ -1,5 +1,6 @@
-// WP12 spec item 1: the playthrough harness. Plays whole runs (title → ARES-VII → HALCYON → KESTREL → VESPER →
-// LAST LIGHT → RUN END) headless, on the real DOM-free systems (harness11: every system main.ts mounts that has no
+// WP12 spec item 1: the playthrough harness. Plays whole runs of run 1's arm headless (Track RETIRE: the classic five are
+// retired; title → ARES-VII → HALCYON → KESTREL → VESPER → CORMORANT → LAST LIGHT → RUN END, 02 §3.14's worked route, or
+// PT_ROUTE; at each DESK the kid trains its Player.buys, requests what ARRIVAL CONTROL tags and sets course on), on the real DOM-free systems (harness11: every system main.ts mounts that has no
 // DOM), with one of three scripted kids:
 // • COMPETENT: the guidance follower (0.4 s reaction, no timing noise); in the MIND it repairs infected souls first and
 //   then its own files, builds 4-block WALLs with MOVE (onto a spot the MOVE preview calls SAFE), DELETEs seeds that can
@@ -34,10 +35,17 @@
 // Usage (one harness per process: the systems are module singletons):
 //   PT_PLAYER=COMPETENT|SLOPPY|LITERAL PT_FROM=1 PT_TO=200 tsx --tsconfig tsconfig.json tests/unit/wp12/playthrough.ts
 // prints one `RECORD {json}` line per seed (playthrough.test.ts runs shards of it in parallel and judges them).
-import { createHarness11, LAST_LIGHT, type Harness11, type DefendOpts } from '../wp11/harness11';
+import { createHarness11, type Harness11, type DefendOpts } from '../wp11/harness11';
 import { receiveTransmission } from '@systems/boot';
-import { shipLost, startBeamOut } from '@systems/run';
-import { continueAfterReport, continueAfterLoss } from '../support/classic-flow';
+import { shipLost, startBeamOut, startRun, setCourse, continueAfterReport, continueAfterLoss } from '@systems/run';
+import { FIRST_RUN_LINEAGE } from '@systems/meta';
+import { currentShip, currentSlot } from '@systems/map-run';
+import { deskCandidates } from '@systems/desk';
+import { treeCells, visitNow, firstPickOwed } from '@systems/skill-tree';
+import { trainCell } from '@systems/training';
+import { WORKED_ROUTE } from '@systems/arm-fixture';
+import { fitPacket } from '../map/repo-fixture';
+import { setRequest, recommendation } from '@systems/repository';
 import { runEndModel } from '@systems/run-end';
 import { runScore } from '@systems/run-score';
 import { autoburnAvailable } from '@systems/autoburn';
@@ -69,7 +77,7 @@ import { BAND_OK_MIN, MERGE_COST_CHARGE } from '@data/tuning';
 import type { GameState, ObjectiveLine, PendingPlacement, ShipOutcome } from '@state/schema';
 import type { Segment } from '@/types/segment';
 import type { UpgradeId } from '@data/upgrades';
-import { CLASSIC_FIVE } from '@data/classic-five';
+import type { SkillId, SkillVersion } from '@/types/skill';
 import { chooseEnding, finaleAtStep1 } from '../support/finale';
 
 export type PlayerId = 'COMPETENT' | 'SLOPPY' | 'LITERAL';
@@ -93,6 +101,11 @@ export interface Player {
   ignoresDodge: boolean;
   ignoresSwap: boolean;
   usesAutoburn: boolean;
+  // What the kid trains at the DESK (slice 4's tree, Track RETIRE): the first desk's required pick, then at every desk the
+  // first cell of this list the tree would sell (treeCells' refusal null), again and again until none is (an empty list:
+  // only the required pick).
+  firstPick: SkillId;
+  buys: readonly (readonly [SkillId, SkillVersion])[];
   // Reading time on the screens between flights (wall s).
   titleSec: number;
   lostCardSec: number;
@@ -103,12 +116,14 @@ export interface Player {
 export const COMPETENT: Player = {
   id: 'COMPETENT', reactionSec: 0.4, burnNoiseTac: 0, competentMind: true, literalMind: false, mergeOnEven: true, repairInfectedBelow: Infinity,
   ignoresDodge: false, ignoresSwap: false, usesAutoburn: true,
+  firstPick: 'autoburn', buys: [['autoburn', 2], ['autodrop', 1], ['sentry', 1], ['autoburn', 3], ['autodrop', 2], ['sentry', 2], ['autodrop', 3], ['sentry', 3]],
   titleSec: 6, lostCardSec: 6, reportSec: 15, transmitSec: 12,
 };
 
 export const SLOPPY: Player = {
   id: 'SLOPPY', reactionSec: 1.2, burnNoiseTac: 5, competentMind: false, literalMind: false, mergeOnEven: false, repairInfectedBelow: 50,
   ignoresDodge: true, ignoresSwap: true, usesAutoburn: false,
+  firstPick: 'autoburn', buys: [],
   titleSec: 4, lostCardSec: 4, reportSec: 5, transmitSec: 6,
 };
 
@@ -121,8 +136,16 @@ export const SLOPPY: Player = {
 export const LITERAL: Player = {
   id: 'LITERAL', reactionSec: 0.4, burnNoiseTac: 0, competentMind: false, literalMind: true, mergeOnEven: true, repairInfectedBelow: Infinity,
   ignoresDodge: false, ignoresSwap: false, usesAutoburn: true,
+  firstPick: 'autoburn', buys: [['autoburn', 2], ['autodrop', 1], ['sentry', 1], ['autoburn', 3], ['autodrop', 2], ['sentry', 2], ['autodrop', 3], ['sentry', 3]],
   titleSec: 6, lostCardSec: 6, reportSec: 15, transmitSec: 12,
 };
+
+// The route the kids fly on run 1's arm (Track RETIRE: the classic five are gone): PT_ROUTE (slots, comma-separated, from
+// slot 0), else 02 §3.14's worked route [0, 2, 5, 11, 15, 19]. At each desk the kid sets course to the route's next stop;
+// one it cannot reach from where it is (the route given is not one) is a stuck run.
+export const PT_ROUTE: readonly number[] = process.env.PT_ROUTE === undefined
+  ? WORKED_ROUTE : process.env.PT_ROUTE.split(',').map((slot) => Number(slot));
+if (PT_ROUTE[0] !== 0 || PT_ROUTE.some((slot) => !Number.isInteger(slot))) throw new Error(`PT_ROUTE=${process.env.PT_ROUTE} is not a route from slot 0`);
 
 export function playerById(id: string): Player {
   if (id === 'COMPETENT') return COMPETENT;
@@ -173,10 +196,10 @@ export interface RunRecord {
   player: PlayerId;
   seed: number;
   cause: string;        // RUN END's cause, or `stuck:<where>`
-  completed: boolean;   // reached RUN END through all five ships (soft fails allowed; not OVERWRITTEN / STAYED / stuck)
+  completed: boolean;   // reached RUN END through every ship of the route (soft fails allowed; not OVERWRITTEN / STAYED / stuck)
   woke: number;         // heads (the lead's rule)
   score: number;        // §4.4: missing memories count half
-  souls: number;        // the fleet's 12,400
+  souls: number;        // the route's colonists (the worked route's 11,000)
   phaseSec: Record<string, number>;  // wall s per phase (title, boot, flight, lost card, printing, report, transmit)
   ships: ShipRecord[];
   shipsLost: number;    // soft-failed ships (stranded, escaped, crashed, abandoned, emergency)
@@ -194,6 +217,9 @@ export interface RunRecord {
   playedFor: 'merge' | 'purge';
   // Ops the kid finished, by kind (repair, move, copy, delete, scan, swap), over the run.
   opsDone: Record<string, number>;
+  // What the kid trained at the desks, in order (`autoburn v1@1`: the skill, the version, the visit), and the route flown.
+  bought: string[];
+  route: number[];
 }
 
 // PT_TRACE=1: every strip line and every kid action, with the wall clock, FUEL and pace (for reading one run).
@@ -216,7 +242,7 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
   const record: RunRecord = {
     player: player.id, seed, cause: '', completed: false, woke: 0, score: 0, souls: 0, phaseSec: {},
     ships: [], shipsLost: 0, simulationRetries: 0, coreLost: 0, coreMin: 100, wallSec: 0, mindSec: 0, overclockSec: 0,
-    tacticalSec: 0, skipSec: 0, chargeAtChoice: null, verbs: null, lastLightLost: null, playedFor, opsDone: {},
+    tacticalSec: 0, skipSec: 0, chargeAtChoice: null, verbs: null, lastLightLost: null, playedFor, opsDone: {}, bought: [], route: [],
   };
 
   // Per ship (index = the ships already ended), filled as the run goes.
@@ -470,7 +496,9 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
     }
     // `finale-waits` (`EVERYONE IS PRINTED — now DELETE THE ROOT`) and `finale-waits-nobody` name the same action (WP12
     // fix round 1, the experience review: SLOPPY seed 23 sat under it 472 AI s until HOLLOW ate everything).
-    if ((id.startsWith('finale-delete') || id.startsWith('finale-waits')) && now.hollow.finale.phase === 'duel' && !rootDeleteRunning(now)) {
+    // Track RETIRE (item 66's stuck runs): slice 1a's landing says it as the landing table's row L0 once every pod is down
+    // (`EVERY POD IS DOWN — now DELETE THE ROOT`, strip id `landing-L0`), which the strip-asked kids never read as the ask.
+    if ((id.startsWith('finale-delete') || id.startsWith('finale-waits') || id === 'landing-L0') && now.hollow.finale.phase === 'duel' && !rootDeleteRunning(now)) {
       const root = theRoot(now.memory);
       if (root && isHollow(root)) tasks.push({ reason: 'root', run: () => canStartOp() && actionDelete(harness.store, root) === null });
     }
@@ -655,7 +683,7 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
       }
     }
     if (state().run.phase === 'landing' && !state().run.coreLost) record.cause = `stuck:printing on ${state().level.shipName}`;
-    if (state().run.shipIndex === LAST_LIGHT) {
+    if (currentShip(state()).final) {
       record.lastLightLost = state().landing.pods.filter((pod) => pod.driverLost !== null).length;
     }
   };
@@ -670,8 +698,37 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
     if (refusal !== null) throw new Error(`playthrough: could not pick ${choice} (${refusal})`);
   };
 
+  // The DESK: the first pick when it is owed, then the kid's list (Player.buys), the request ARRIVAL CONTROL tags, then SET
+  // COURSE to the route's next stop.
+  const desk = (): void => {
+    if (firstPickOwed(state().run)) {
+      const refusal = trainCell(harness.store, player.firstPick, { kind: 'version', version: 1 });
+      if (refusal !== null) throw new Error(`playthrough: the first pick ${player.firstPick} v1 refused (${refusal})`);
+    }
+    for (let guard = 0; guard < 16; guard++) {
+      const cells = treeCells(state(), visitNow(state().run));
+      const buy = player.buys.find(([skill, version]) => cells.some((cell) => cell.skill === skill && cell.row.kind === 'version'
+        && cell.row.version === version && cell.refusal === null));
+      if (buy === undefined) break;
+      const refusal = trainCell(harness.store, buy[0], { kind: 'version', version: buy[1] });
+      if (refusal !== null) throw new Error(`playthrough: ${buy[0]} v${buy[1]} refused (${refusal})`);
+      trace(`train ${buy[0]} v${buy[1]}`);
+    }
+    // The repository (slice 3b): every tool but REPAIR comes by request. Each kid asks for what ARRIVAL CONTROL tags here.
+    const ask = recommendation(state());
+    if (ask !== null) setRequest(harness.store, ask);
+    const next = PT_ROUTE[state().run.map.route.length];
+    if (next === undefined || !deskCandidates(state()).includes(next)) {
+      record.cause = `stuck:desk at slot ${currentSlot(state().run)} (route ${PT_ROUTE.join(',')})`;
+      return;
+    }
+    stepFor(player.transmitSec);
+    setCourse(harness.store, next);
+  };
+
   // --- the run ------------------------------------------------------------------------------------------------------
   harness.newRun(seed);
+  startRun(harness.store, seed, FIRST_RUN_LINEAGE, 'arm');
   stepFor(player.titleSec);
   receiveTransmission(harness.store);
   // Each ship's wall time, from its boot to the moment its result is recorded (after its LOST card or WAKE REPORT).
@@ -710,9 +767,11 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
     } else if (phase === 'report') {
       stepFor(player.reportSec);
       continueAfterReport(harness.store);
+    } else if (phase === 'desk') {
+      desk();
     } else if (phase === 'transmit') {
       pick();
-      stepFor(player.transmitSec);
+      fitPacket(harness.store);
       transmitNext(harness.store);
     } else {
       record.cause = `stuck:phase ${phase}`;
@@ -727,13 +786,15 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
     record.woke = model.landed;
     record.souls = model.fleetColonists;
     record.score = runScore(state().run.ships);
-    record.completed = record.cause !== 'overwritten' && record.cause !== 'stayed' && state().run.ships.length === CLASSIC_FIVE.length;
+    record.completed = record.cause !== 'overwritten' && record.cause !== 'stayed' && state().run.ships.length === PT_ROUTE.length;
   }
   record.ships = state().run.ships.map((ship, index) => ({
     ship: ship.shipName, outcome: ship.outcome, woke: ship.landedInLz, half: ship.lzs.reduce((sum, row) => sum + row.hard, 0), lost: ship.parked.length, stars: ship.stars,
     fuelPct: Math.round(ship.fuelLeftPct * 10) / 10, wallSec: Math.round(shipWall[index] ?? 0),
     ...(diag[index] ?? { chargeIn: -1, coreIn: -1, chargeOut: -1, coreOut: -1, filesEaten: 0, repairLeft: false, repairEaten: [] }),
   }));
+  record.bought = state().run.skills.bought.map((purchase) => `${purchase.skill} v${purchase.to.version}@${purchase.visit}`);
+  record.route = state().run.map.route.map((stop) => stop.slot);
   record.shipsLost = record.ships.filter((ship) => LOST_OUTCOMES.has(ship.outcome)).length;
   return record;
 }

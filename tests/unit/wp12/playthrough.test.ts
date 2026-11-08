@@ -127,19 +127,26 @@ const median = (values: number[]): number => {
   return sorted[Math.floor(sorted.length / 2)]!;
 };
 const minutes = (sec: number): string => `${(sec / 60).toFixed(1)}`;
-const SHIP_NAMES = ['ARES-VII', 'HALCYON', 'KESTREL', 'VESPER', 'LAST LIGHT'];
+// The route's ships, by depth (Track RETIRE: run 1's arm, the worked route unless PT_ROUTE; playthrough.ts PT_ROUTE), named
+// from the longest run flown.
+let SHIP_NAMES: string[] = [];
+const nameShips = (all: readonly RunRecord[]): void => {
+  const longest = all.reduce<RunRecord | null>((best, run) => (best === null || run.ships.length > best.ships.length ? run : best), null);
+  SHIP_NAMES = longest?.ships.map((ship) => ship.ship) ?? [];
+};
 const LOST = new Set(['stranded', 'escaped', 'crashed', 'abandoned', 'emergency']);
 
 function table(results: Map<PlayerId, RunRecord[]>): string {
+  nameShips([...results.values()].flat());
   const lines: string[] = [];
   const row = (label: string, cells: string[]): void => { lines.push(`| ${label.padEnd(51)} | ${cells.map((cell) => cell.padStart(26)).join(' | ')} |`); };
   const players = [...results.keys()];
   lines.push(`| ${'Measure'.padEnd(51)} | ${players.map((player) => `${player} (${results.get(player)!.length} seeds)`.padStart(26)).join(' | ')} |`);
   lines.push(`|${'-'.repeat(53)}|${players.map(() => '-'.repeat(28)).join('|')}|`);
   const each = (measure: (records: RunRecord[]) => string): string[] => players.map((player) => measure(results.get(player)!));
-  row('souls woke (heads), mean', each((records) => pct(mean(records.map((run) => run.woke)), records[0]?.souls ?? 12400)));
-  row('souls woke (heads), worst seed', each((records) => pct(Math.min(...records.map((run) => run.woke)), records[0]?.souls ?? 12400)));
-  row('SCORE (missing memories half), mean', each((records) => pct(mean(records.map((run) => run.score)), records[0]?.souls ?? 12400)));
+  row('souls woke (heads), mean', each((records) => pct(mean(records.map((run) => run.woke)), records[0]?.souls ?? 11000)));
+  row('souls woke (heads), worst seed', each((records) => pct(Math.min(...records.map((run) => run.woke)), records[0]?.souls ?? 11000)));
+  row('SCORE (missing memories half), mean', each((records) => pct(mean(records.map((run) => run.score)), records[0]?.souls ?? 11000)));
   row('run completed (all 5 ships, not OVERWRITTEN/STAYED)', each((records) => pct(records.filter((run) => run.completed).length, records.length)));
   row('…completed with ≥ 30% souls woke', each((records) => pct(records.filter((run) => run.completed && run.woke >= 0.3 * run.souls).length, records.length)));
   row('≥ 1 ship lost (soft fail)', each((records) => pct(records.filter((run) => run.shipsLost >= 1).length, records.length)));
@@ -220,7 +227,7 @@ async function main(): Promise<void> {
 
   const competent = results.get('COMPETENT');
   if (competent) {
-    const souls = competent[0]?.souls ?? 12400;
+    const souls = competent[0]?.souls ?? 11000;
     const woke = mean(competent.map((run) => run.woke));
     balance('COMPETENT: ≥ 85% of the souls woke (mean over the seeds)', woke >= 0.85 * souls, pct(woke, souls));
     for (const [index, name] of SHIP_NAMES.entries()) {

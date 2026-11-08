@@ -1,7 +1,13 @@
-// BALANCE_ONLY: slice 3b review (the unit tier's budget): the classic five's whole run; map/run1-route flies the arm end to
-// end, and wp11/merge-test and wp11/fix1 keep both endings in the quick tier.
+// BALANCE_ONLY: slice 3b review (the unit tier's budget): the whole run on 50 seeds; map/run1-route flies the arm end to
+// end on one, and wp11/merge-test and wp11/fix1 keep both endings in the quick tier.
+// Track RETIRE: on run 1's arm since the classic five's retirement (it flew them until then): the worked route (02 §3.14),
+// at each desk the request ARRIVAL CONTROL tags and SET COURSE to the route's next ship (the first desk's required pick is
+// AUTOBURN v1, support/desk). The per-ship checks below are the arm's own facts where the classic five's differed
+// (map/run1-route pins them on seed 3): the tools come by request, not by licence; HOLLOW boards on the beam into
+// CORMORANT (M3: one hop from New Haven), not VESPER; VESPER flies without SWAP (it is still on its way), the kid
+// repairing Thrust Ctrl when the strip asks (the limping engine), so VESPER locks or is accepted.
 // WP11 acceptance 4 (§9 WP11): the whole run, headless, on 50 seeds. Title → ARES-VII → HALCYON → KESTREL → VESPER →
-// LAST LIGHT → RUN END, flown by the strip-following kid with the defenders (WP7's REPAIR and MOVE, WP9's sensor and
+// CORMORANT → LAST LIGHT → RUN END, flown by the strip-following kid with the defenders (WP7's REPAIR and MOVE, WP9's sensor and
 // seeds, WP10's pip → SWAP, WP11's verb blocks and the root's DELETE), [B] when AUTOBURN is offered, THE DEAL refused, the
 // first card at every TRANSMIT, and at the finale MERGE on even seeds (when the charge pays for it) and PURGE on odd
 // ones. A lost ship goes on the way its card's button does (continueAfterLoss). The run must end in the victory RUN END
@@ -21,20 +27,27 @@
 // • every hand-over: nothing running, memory valid, every reset module initial; the carried Engine I/O less the logged
 //   hits; the charge that crossed (min(held, link − files)) plus 6 per ★, the card's, the floor, less any overflow; the
 //   crossing's hits; a divider naming the ship on both screens; the boot's ECC and charge lines; 046.log's keys;
-// • ARES-VII and HALCYON calm (HALCYON opens TOO WIDE with IN engaged; no MOVE yet);
-// • KESTREL: its own sensor damage, the run-1 beam seed next to Telemetry and AUTOBURN.skl at its boot; blind at first;
-//   DELETE at its start and MOVE by its lock; the seed rm'd, the sensor repaired, the debris dodged;
-// • VESPER: the 108% boarding with a 10-block root, Thrust Ctrl at 31% unscanned; COPY, SWAP at the first burst and the
-//   SWAP done; HOLLOW's fight after the capture, and its name;
-// • LAST LIGHT: THE DEAL offered and refused; every ship locked to its LANDING REPORT; RUN END's sums.
+// • ARES-VII and HALCYON calm (HALCYON opens TOO WIDE with IN engaged; MOVE by its delivery);
+// • KESTREL: its own sensor damage, the run-1 beam seed next to Telemetry and AUTOBURN.skl (bought at the first desk) at its
+//   boot; blind at first; DELETE and MOVE by their deliveries; the seed rm'd, the sensor repaired, the debris dodged;
+// • VESPER: Thrust Ctrl at 31% unscanned, no HOLLOW aboard; locked or accepted without SWAP;
+// • CORMORANT: HOLLOW's forced boarding with its root, SWAP by its delivery; HOLLOW's fight after the capture, and its name;
+// • LAST LIGHT: THE DEAL offered and refused; every ship but VESPER locked to its LANDING REPORT; RUN END's sums.
 import { check, finish } from '../wp1/harness';
-import { createHarness11, LAST_LIGHT } from './harness11';
+import { createHarness11 } from './harness11';
 import { receiveTransmission } from '@systems/boot';
-import { shipLost } from '@systems/run';
-import { continueAfterReport, continueAfterLoss } from '../support/classic-flow';
+import { shipLost, startRun, continueAfterReport, continueAfterLoss } from '@systems/run';
+import { FIRST_RUN_LINEAGE } from '@systems/meta';
+import { setCourseFromDesk } from '../support/desk';
+import { setRequest, recommendation } from '@systems/repository';
+import { currentShip } from '@systems/map-run';
+import { hitsLanding } from '@systems/map-hop';
+import { WORKED_ROUTE } from '@systems/arm-fixture';
+import { actionRepair } from '@state/actions';
+import { getOpsBySeg } from '@systems/ops-core';
+import { layoutOf } from '@data/memory';
 import { runEndModel } from '@systems/run-end';
 import { autoburnAvailable } from '@systems/autoburn';
-import { giveSkillFile } from '../support/skills';
 import { getPrediction } from '@systems/predict';
 import { followDirector } from '../wp2/harness2';
 import { pickChoice } from '@systems/say';
@@ -61,9 +74,7 @@ import { LINES, transitEccLine, scriptedDamageLine } from '@data/script';
 import { LOG_TEXT } from '@data/log-text';
 import { eccSeedsLine } from '@data/threat-text';
 import { STAR_CHARGE_BONUS, BAND_OK_MIN } from '@data/tuning';
-import { classicShip, CLASSIC_HOPS, CLASSIC_WORLD_SLOTS } from '@data/classic-five';
 import { solLy } from '@systems/map-geometry';
-import { MEMORY_LAYOUTS } from '@data/memory';
 import { chooseEnding, finaleAtStep1 } from '../support/finale';
 
 const FINAL_LANDING_SEC = Number(process.env.FINAL_LANDING_SEC ?? 48);
@@ -101,14 +112,15 @@ function expect(name: string, ok: boolean, detail = ''): void {
   if (!ok) entry.fails.push(`seed ${seedNow}: ${detail}`);
   perShip.set(name, entry);
 }
-const said = (from: number): string[] => state().log.entries.slice(from).map((entry) => entry.text);
+// By entry id, not index: the log keeps its last LOG_MAX_ENTRIES (six ships' boots outgrow it).
+const said = (afterId: number): string[] => state().log.entries.filter((entry) => entry.id > afterId).map((entry) => entry.text);
 const integrityOf = (role: 'engine-io' | 'sensor' | 'thrust-ctrl'): number => {
   const file = getByRole(state(), role);
   return file !== null && hasIntegrity(file) ? file.integrity : -1;
 };
 // Where this ship's events and lines start (its boot).
 let eventsAtBoot = 0;
-let logAtBoot = 0;
+let logAtBoot = -1;
 
 // TRANSMIT ▸ with the hand-over's checks: the first card picked (as the harness would), the packet read, then the arrival.
 function transmitChecked(): void {
@@ -119,16 +131,14 @@ function transmitChecked(): void {
   const stars = state().run.pendingStars;
   const credit = state().run.pendingStarCredit;
   eventsAtBoot = h.events.length;
-  logAtBoot = state().log.entries.length;
+  logAtBoot = state().log.entries.at(-1)?.id ?? -1;
   h.transmit();
   const arrival = state().run.arrival!;
-  const ship = classicShip(state().run.shipIndex);
-  // Slice 4 (the lead's decision): the classic world has no tree, so where phase 2's boot installed AUTOBURN.skl from the
-  // two manual captures (KESTREL's), the suite gives it (classic-only test setup; the arm sells it at the desk).
-  if (ship.id === 'kestrel' && state().run.stats.demos.length >= 2) giveSkillFile(h.store, 'autoburn', 1);
+  const ship = currentShip(state());
+  const hop = state().run.map.route.at(-1)!.hop!;
   let memoryOk = true;
-  try { assertMemoryInvariants(state().memory, MEMORY_LAYOUTS.FULL.totalBlocks); } catch { memoryOk = false; }
-  expect('every hand-over: no op running, memory 384 and valid, every reset module in its initial state',
+  try { assertMemoryInvariants(state().memory, layoutOf(state()).totalBlocks); } catch { memoryOk = false; }
+  expect('every hand-over: no op running, memory its class\'s size and valid, every reset module in its initial state',
     getOps().length === 0 && memoryOk && resetReport().length === 0, `${ship.name}: ${JSON.stringify(resetReport())}`);
   const engineHits = arrival.hits.filter((hit) => hit.role === 'engine-io').reduce((sum, hit) => sum + (hit.from - hit.to), 0);
   expect('every hand-over: the carried Engine I/O = its integrity before the beam minus the hits the log names',
@@ -139,8 +149,8 @@ function transmitChecked(): void {
     arrival.chargeCarried === crossed && arrival.starCredit === credit && credit === STAR_CHARGE_BONUS * stars && chargeLeft(state()) === total,
     `${ship.name}: held ${plan.chargeHeld}, link ${plan.linkBlocks} − files ${plan.filesBlocks} → ${arrival.chargeCarried}; ★ ${stars} → ${arrival.starCredit}; total ${total} vs ${chargeLeft(state())}`);
   if (plan.extraHits === 0 && plan.coreHit === 0 && !plan.coreReset) {
-    expect('every hand-over (no emergency): the crossing dealt the ship\'s transit hits', arrival.hits.length === CLASSIC_HOPS[ship.slot]!.transitHits,
-      `${ship.name}: ${arrival.hits.length} of ${CLASSIC_HOPS[ship.slot]!.transitHits}`);
+    expect('every hand-over (no emergency): the crossing dealt the hop\'s hits less what ECC corrected (round(d / 7) − ECC)',
+      arrival.hits.length === hitsLanding(hop, 0), `${ship.name}: ${arrival.hits.length} of ${hitsLanding(hop, 0)}`);
   }
   const dividers = state().log.entries.filter((entry) => entry.divider && entry.text === LINES.logDivider(ship.name));
   expect('every hand-over: the log keeps its history, with a divider naming the ship on both screens', dividers.length === 2
@@ -150,74 +160,91 @@ function transmitChecked(): void {
 // The boot just ended: its lines, then the ship's opening state.
 function bootChecked(): void {
   const index = state().run.shipIndex;
-  const ship = classicShip(index);
+  const ship = currentShip(state());
+  const route = state().run.map.route;
   const arrival = state().run.arrival;
   const lines = said(logAtBoot);
   if (arrival !== null) {
     expect('every boot after a beam: the ECC line from the actual hits, then the charge line',
       lines.includes(transitEccLine(arrival.hits)) && lines.some((text) => text.startsWith('> +')),
-      `${ship.name}: ${lines.slice(0, 6).join(' | ')}`);
+      `${ship.name} (${state().run.phase}): ${lines.join(' | ')}`);
   }
-  // Slice 3a: the rings (05 §3.2): this boot finds the rings between the last ship's world and this one's (the classic five
-  // sit at 8, 29, 55, 107 and 180 LY from SOL), and on the final ship 10–11.
-  const solOf = (i: number): number => solLy(CLASSIC_WORLD_SLOTS[i]!);
+  // Slice 3a: the rings (05 §3.2): this boot finds the rings between the last ship's world and this one's, and on the final
+  // ship 10–11.
+  const solOf = (i: number): number => solLy(route[i]!.slot);
   const before = index === 0 ? [] : logEntriesAtBoot(solOf(index - 1), false);
   const keys = logEntriesAtBoot(solOf(index), ship.final).filter((entry) => !before.includes(entry));
   if (keys.length > 0) {
-    expect('every boot past ship 1: `> 046.log · KEY FOUND`, and the run finds its entries (02, 03, 04–06, 07–11)',
+    expect('every boot past ship 1: `> 046.log · KEY FOUND`, and the run finds its entries (02, 03, 04–06, 07–08, 09–11)',
       lines.includes(LOG_TEXT.keyFound(keys)) && keys.every((entry) => state().run.log.found.includes(entry)),
       `${ship.name}: ${JSON.stringify(state().run.log.found)}`);
   }
-  if (ship.id === 'halcyon') {
+  if (ship.name === 'HALCYON') {
     expect('HALCYON opens TOO WIDE with IN engaged', /^TOO WIDE/.test(h.objective()?.text ?? '') && state().burn.sasMode === 'radial-in',
       h.objective()?.text ?? '');
   }
-  if (ship.id === 'kestrel' && arrival !== null) {
+  if (ship.name === 'KESTREL' && arrival !== null) {
     expect('KESTREL\'s boot: its own damage line (SENSOR INTERP 45% — PATH UNCERTAIN), Sensor Interp at 45',
       lines.includes(scriptedDamageLine(arrival.scripted)) && integrityOf('sensor') <= 45, `${integrityOf('sensor')} | ${lines.join(' | ')}`);
     expect('KESTREL\'s boot (run 1): one beam seed, next to Telemetry, named on the ECC seeds line',
       arrival.seeds.length === 1 && arrival.seeds[0]!.targetName === 'Telemetry' && lines.includes(eccSeedsLine(['Telemetry']))
         && beamSeedsInMemory(state().memory).length === 1, JSON.stringify(arrival.seeds));
-    expect('KESTREL\'s boot: AUTOBURN.skl v1 in memory after the two manual captures (given: the classic world has no tree)',
-      state().run.stats.demos.length >= 2 && state().memory.some((seg) => seg.type === 'upgrade' && seg.upgrade === 'autoburn'),
-      `${state().run.stats.demos.length} captures`);
+    expect('KESTREL\'s boot: AUTOBURN.skl v1 in memory (the first desk\'s pick, carried in the packet)',
+      state().memory.some((seg) => seg.type === 'upgrade' && seg.upgrade === 'autoburn'), `${state().run.stats.demos.length} captures`);
     expect('KESTREL flies blind at first (PATH UNCERTAIN)', capabilitiesNow(state()).plot.mode === 'uncertain', capabilitiesNow(state()).plot.mode);
   }
-  if (ship.id === 'vesper') {
+  if (ship.name === 'VESPER') {
     const thrust = getByRole(state(), 'thrust-ctrl');
-    expect('VESPER\'s boot: HOLLOW boards (the 108% unpack, hollow-boarded) with a 10-block root; Thrust Ctrl at 31%, unscanned',
-      h.events.slice(eventsAtBoot).some((event) => event.name === 'hollow-boarded') && theRoot(state().memory)?.size === 10
+    expect('VESPER\'s boot: no HOLLOW aboard (CORMORANT is one hop from New Haven, not VESPER); Thrust Ctrl at 31%, unscanned',
+      !h.events.slice(eventsAtBoot).some((event) => event.name === 'hollow-boarded') && theRoot(state().memory) === null
         && thrust !== null && hasIntegrity(thrust) && thrust.integrity === 31 && 'scanned' in thrust && !thrust.scanned,
       `root ${theRoot(state().memory)?.size}, thrust ${integrityOf('thrust-ctrl')}`);
+  }
+  if (ship.name === 'CORMORANT') {
+    expect('CORMORANT\'s boot: HOLLOW boards, forced (M3: New Haven is one hop away), with its root in the slot',
+      h.events.slice(eventsAtBoot).some((event) => event.name === 'hollow-boarded') && state().run.arrival?.boarded?.cause === 'forced'
+        && (theRoot(state().memory)?.size ?? 0) > 0, `${state().run.arrival?.boarded?.cause ?? 'not boarded'}, root ${theRoot(state().memory)?.size}`);
   }
 }
 
 // The ship's landing is over (its LANDING REPORT is up, or it was lost): what its flight did.
 function shipChecked(): void {
-  const ship = classicShip(state().run.shipIndex);
+  const ship = currentShip(state());
   const events = h.events.slice(eventsAtBoot);
   const licences = state().run.licences;
-  expect('every ship locks and reaches its LANDING REPORT', state().run.phase === 'report' && state().burn.status === 'locked',
-    `${ship.name}: ${state().run.phase} ${state().burn.status}`);
-  if (ship.id === 'ares-vii' || ship.id === 'halcyon') {
+  if (ship.name === 'VESPER') {
+    expect('VESPER (ENGINE FAULT, no SWAP aboard yet) locks or is accepted and reaches its LANDING REPORT',
+      state().run.phase === 'report' && (state().burn.status === 'locked' || state().burn.status === 'accepted'),
+      `${ship.name}: ${state().run.phase} ${state().burn.status}`);
+  } else {
+    expect('every ship but VESPER locks and reaches its LANDING REPORT', state().run.phase === 'report' && state().burn.status === 'locked',
+      `${ship.name}: ${state().run.phase} ${state().burn.status}`);
+  }
+  if (ship.name === 'ARES-VII' || ship.name === 'HALCYON') {
     expect('ARES-VII and HALCYON are calm: no HOLLOW block, no bite', !state().memory.some((seg) => seg.type === 'hollow')
       && !events.some((event) => event.name === 'hollow-infect'), ship.name);
   }
-  if (ship.id === 'halcyon') expect('HALCYON: no MOVE yet (it comes at KESTREL\'s coast)', !licences.includes('move'), licences.join(','));
-  if (ship.id === 'kestrel') {
-    expect('KESTREL: DELETE at its start and MOVE by its lock', licences.includes('delete') && licences.includes('move'), licences.join(','));
+  if (ship.name === 'HALCYON') {
+    expect('HALCYON: MOVE by its delivery (requested at the first desk), no DELETE yet', licences.includes('move') && !licences.includes('delete'),
+      licences.join(','));
+  }
+  if (ship.name === 'KESTREL') {
+    expect('KESTREL: DELETE and MOVE by their deliveries', licences.includes('delete') && licences.includes('move'), licences.join(','));
     expect('KESTREL: the beam seed rm\'d before the ship ends', beamSeedsInMemory(state().memory).length === 0
       && events.some((event) => event.name === 'seed-deleted'), String(beamSeedsInMemory(state().memory).length));
     expect('KESTREL: Sensor Interp repaired', integrityOf('sensor') >= BAND_OK_MIN, String(integrityOf('sensor')));
     expect('KESTREL: the early IN correction cleared the debris (0 hits)', !events.some((event) => event.name === 'zone-hit'));
   }
-  if (ship.id === 'vesper') {
-    expect('VESPER: COPY, SWAP at the first uncommanded burst, and the kid SWAPped (Thrust.old)', licences.includes('copy')
-      && licences.includes('swap') && state().memory.some((seg) => seg.name === 'Thrust.old'), licences.join(','));
-    expect('VESPER: HOLLOW fought after the capture (it bit) and named itself', events.some((event) => event.name === 'hollow-infect')
+  if (ship.name === 'VESPER') {
+    expect('VESPER: no SWAP yet (it is on its way: 4 years late), the kid repaired Thrust Ctrl when the strip asked', !licences.includes('swap')
+      && thrustRepairedOn.includes('VESPER'), `${licences.join(',')} | repaired on ${thrustRepairedOn.join(',') || 'none'}`);
+  }
+  if (ship.name === 'CORMORANT') {
+    expect('CORMORANT: SWAP by its delivery', licences.includes('swap'), licences.join(','));
+    expect('CORMORANT: HOLLOW fought after the capture (it bit) and named itself', events.some((event) => event.name === 'hollow-infect')
       && state().run.hollowNamed, `named ${state().run.hollowNamed}`);
   }
-  if (ship.id === 'last-light') {
+  if (ship.final) {
     expect('LAST LIGHT: THE DEAL offered and refused', state().run.stats.deal?.outcome === 'refused', JSON.stringify(state().run.stats.deal));
   }
 }
@@ -226,12 +253,20 @@ function shipChecked(): void {
 // its two threads.
 let defendOpts: { coreHealBelow?: number; coreHealTo?: number } = {};
 
+// The ships whose Thrust Ctrl the kid repaired when the strip asked (no Swap aboard: the limping engine, map/run1-route's).
+const thrustRepairedOn: string[] = [];
+
 function flyShip(): void {
   followDirector(h, {
     reactionSec: 0.4,
     maxWall: 1500,
     mistake: () => {
       h.defend11(defendOpts);
+      const shown = state().director.shown?.id ?? '';
+      const thrust = getByRole(state(), 'thrust-ctrl');
+      if ((shown === 'tut-ghost-noswap' || shown === 'tut-ghost-noswap-tab') && thrust !== null && getOpsBySeg(thrust.id).length === 0 && !state().clock.paused) {
+        if (actionRepair(h.store, thrust) === null) thrustRepairedOn.push(state().level.shipName);
+      }
       const deal = state().hollow.deal;
       if (deal.phase === 'offered' && deal.entryId !== null) pickChoice(deal.entryId, DEAL_REFUSE);
       if (state().burn.auto.phase === 'idle' && autoburnAvailable(state(), getPrediction())) h.press('KeyB');
@@ -242,7 +277,7 @@ function flyShip(): void {
 
 // Defends through the landing to the LANDING REPORT (on the flagship: through the duel and the choice).
 function toReport(choice: 'purge' | 'merge'): boolean {
-  if (state().run.shipIndex === LAST_LIGHT && FINAL_STRIP) {
+  if (currentShip(state()).final && FINAL_STRIP) {
     let picked = false;
     followLanding(h, {
       maxWall: 900,
@@ -256,7 +291,7 @@ function toReport(choice: 'purge' | 'merge'): boolean {
         chooseEnding(h.store, choice === 'merge' && chargeLeft(state()) >= MERGE_COST_CHARGE ? 'merge' : 'purge');
       },
     });
-  } else if (state().run.shipIndex === LAST_LIGHT) {
+  } else if (currentShip(state()).final) {
     const end = h.wall() + 600;
     while (!finaleAtStep1(state()) && state().run.phase === 'landing' && !state().run.coreLost && h.wall() < end) {
       h.defend11(defendOpts);
@@ -272,7 +307,7 @@ function toReport(choice: 'purge' | 'merge'): boolean {
   }
   const end = h.wall() + 600;
   while (state().run.phase === 'landing' && !state().run.coreLost && h.wall() < end) { h.defend11(defendOpts); h.step(); }
-  if (state().run.shipIndex === LAST_LIGHT) lostOnLastLight = state().landing.pods.filter((record) => record.driverLost !== null).length;
+  if (currentShip(state()).final) lostOnLastLight = state().landing.pods.filter((record) => record.driverLost !== null).length;
   return state().run.phase === 'report';
 }
 
@@ -287,9 +322,11 @@ const results: SeedResult[] = [];
 const started = Date.now();
 for (const seed of SEED_LIST) {
   h.newRun(seed);
+  startRun(h.store, seed, FIRST_RUN_LINEAGE, 'arm');
+  thrustRepairedOn.length = 0;
   seedNow = seed;
   eventsAtBoot = h.events.length;
-  logAtBoot = state().log.entries.length;
+  logAtBoot = state().log.entries.at(-1)?.id ?? -1;
   receiveTransmission(h.store);
   h.stepUntil(() => state().run.phase === 'flight', 15);
   bootChecked();
@@ -307,7 +344,7 @@ for (const seed of SEED_LIST) {
     if (here === progress) break;
     progress = here;
     if (state().run.phase === 'boot') h.stepUntil(() => state().run.phase !== 'boot', 25);
-    setLandingMode(state().run.shipIndex !== LAST_LIGHT ? 'instant' : FINAL_STRIP ? 'manual' : FINAL_LANDING_SEC > 0 ? { after: FINAL_LANDING_SEC } : 'instant');
+    setLandingMode(!currentShip(state()).final ? 'instant' : FINAL_STRIP ? 'manual' : FINAL_LANDING_SEC > 0 ? { after: FINAL_LANDING_SEC } : 'instant');
     if (state().run.phase === 'flight' && state().burn.status === 'approaching' && !state().run.coreLost) flyShip();
     if (shipLost(state())) {
       // The LOST card's button.
@@ -321,9 +358,16 @@ for (const seed of SEED_LIST) {
       shipChecked();
       continueAfterReport(h.store);
     }
+    if (state().run.phase === 'desk') {
+      const next = WORKED_ROUTE[state().run.map.route.length];
+      if (next === undefined) break;
+      const ask = recommendation(state());
+      if (ask !== null) setRequest(h.store, ask);
+      setCourseFromDesk(h.store, next);
+    }
     if (state().run.phase === 'transmit') {
       transmitChecked();
-      h.stepUntil(() => state().run.phase === 'flight', 25);
+      h.stepUntil(() => state().run.phase === 'flight', 60);
       bootChecked();
     }
   }
@@ -331,7 +375,7 @@ for (const seed of SEED_LIST) {
   const model = ended ? runEndModel(state()) : null;
   if (ended) {
     const ships = state().run.ships;
-    expect('RUN END: five ship results; LANDED is the colonists down in an LZ, SCORE the landing points', ships.length === 5
+    expect('RUN END: a result for each of the route\'s six ships; LANDED is the colonists down in an LZ, SCORE the landing points', ships.length === WORKED_ROUTE.length
       && runLanded(ships) === ships.reduce((sum, ship) => sum + ship.landedInLz, 0) && runScore(ships) === ships.reduce((sum, ship) => sum + ship.points, 0)
       && runScore(ships) > 0, `${ships.length} ships, landed ${runLanded(ships)}, score ${runScore(ships)}`);
   }
@@ -370,7 +414,7 @@ const balance = (name: string, ok: boolean, detail: string): void => {
 };
 balance(`…at least half of the runs reach the choice with the ${MERGE_COST_CHARGE} MERGE costs (the lead's target, 21:30)`,
   affordable * 2 >= atChoice.length, `${affordable}/${atChoice.length}`);
-check(`ships 1–5 end in the victory RUN END in ≥ 90% of ${SEEDS} seeds`, victories >= Math.ceil(0.9 * SEEDS), `${victories}/${SEEDS}`);
+check(`the route's six ships end in the victory RUN END in ≥ 90% of ${SEEDS} seeds`, victories >= Math.ceil(0.9 * SEEDS), `${victories}/${SEEDS}`);
 if (SEEDS >= 2) check('…both endings were reached', merges > 0 && victories - merges > 0, `${merges} MERGE, ${victories - merges} PURGE`);
 else check('…the quick seed reached its MERGE (PURGE: merge-test and fix1)', merges === SEEDS, `${merges} MERGE, ${victories - merges} PURGE`);
 setLandingMode('instant');
