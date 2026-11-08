@@ -163,20 +163,31 @@ Status words:
       | Room only in LZ-B | 5% | 14% | 100% |
 
     - The kid can't launch a restored pod by hand (`MERGE IS FLYING THEM — [ENTER] SKIPS TO THE END`).
-44. **Where the next run's gifts wait** (R31):
-    - never on TIGHT, authored, `?`, first or final ships, except named fallbacks;
-    - 046's cache goes on Marrow or Ostrava.
-45. **What the gifts are** (R32):
-    - each is +15 REPAIR CHARGE through the normal arrival path;
-    - SUNSET adds a spare tool, Rm first.
-46. **The final ship's traces** (R33):
-    - PURGE wipes beam and delivery seeds, and bites ×0.85;
+44. **Where the next run's gifts wait** (R31). BUILT (7c foundation, `systems/traces.ts placeTraces`):
+    - never on TIGHT, authored, `?`, first or final ships, except named fallbacks (SUNSET's first ship, STAY's final ship,
+      allowed for their kind whatever they are; run 1's arm has both authored);
+    - 046's cache goes on Marrow or Ostrava (else any layers 2–6 ship); two kinds never share a ship;
+    - measured: in 1,350 RUN STARTs (runs 2–4 × the 15 endings × 30 seeds) every placement passed the save's check; in the
+      sweep's 20 seeds each gift's ship was on a route 59 times of 60.
+45. **What the gifts are** (R32). BUILT (Track TRACE):
+    - each is +15 REPAIR CHARGE through the normal arrival path, so the PACKET, the layout and the boot's charge line count
+      it (`+ 15 (GIFT)` in the PACKET's sum since the review);
+    - SPARE adds the first of THREAD+ and FIREWALL.sys the unit lacks, and its beam carries no seeds; SUNSET a spare tool,
+      Rm first (charge only with none in the kit); STAY a letter from the colony in that boot's INBOX;
+    - measured (the sweep, 20 seeds): every gift lands, +15.0 / +14.9 / +15.0 charge at its ship (SPARE / SUNSET / STAY;
+      one SUNSET squeeze took a block); SUNSET +0.4 pods, STAY +0.1 against no trace.
+46. **The final ship's traces** (R33). BUILT (Track TRACE, with the review's hunt fix):
+    - PURGE wipes beam and delivery seeds, and bites ×0.85 (12 → 10.2 s);
     - MERGE gives +1 thread capacity and an 18-block root;
-    - the non-compliant choices cost one wild seed;
-    - REASSIGNMENT's root unlinks your highest-version `.skl` first.
-47. **The relay strangers alternate 031 and 038 by run** (R34).
-48. **The strangers' logs have 6 entries; `047.log` has 7** (R37).
-    - The segment id stays `log046`.
+    - the non-compliant choices cost one wild seed, one a run however many are held;
+    - REASSIGNMENT's root unlinks your highest-version `.skl` first: RM takes it whatever rmTargets' tier (the review; it
+      used to wait behind every spare tool), and the FINALE's seeds land in a hunting gap left before it;
+    - measured: see 70 (the hunt reaches the skill; REASSIGNMENT stays +1.2 to +1.6 pods).
+47. **The relay strangers alternate 031 and 038 by run** (R34). BUILT (Track LINEAGE): 031 on runs 2 and 4, 038 on run 3,
+    whatever the last ending; the boarding ship's boot closes with `> another one. they keep sending you.`
+48. **The strangers' logs have 6 entries; `047.log` has 7** (R37). BUILT (Track LINEAGE).
+    - The segment id stays `log046`; every screen that names the file (the key line, SCAN, the PACKET lock, INSPECT, READ)
+      names the book since the review.
 49. **The `▓░` glyph shows on `?` ships that carry fragments** (R40).
 50. **CONTACT's trace** is two signal stops, each worth +8 charge and a fragment (R41).
     - It is behind its own gate and may ship dark.
@@ -279,3 +290,36 @@ number its own items from 60 too; renumber at the merge.
     - **The BALANCE_ONLY `wp12/playthrough` on the classic five has stuck runs** (`stuck:printing on LAST LIGHT`,
       6 LITERAL and 6 SLOPPY PURGE runs). They predate slices 6 and 7: the classic world's scripted kids have rotted.
       They go with the classic world's retirement (item 12).
+
+## Slice 7c, built
+
+The 7c review's calls (`docs/phase3/impl/slice-7c-review.md`; the plan's "Deviations (7c review fixes)"). 7d may number its
+own items from 67 too; renumber at the merge.
+
+67. **The hunt ignores RM's tiers** (R33's "first"; TRACE's patch 3). BUILT: `hollow.ts chooseVerb` takes REASSIGNMENT's
+    hunted `.skl` (`huntable`: a skill file, never `rmProtected`) whatever `rmTargets`' tier, and `landVerb` accepts it while
+    the hunt is on. An op already running on the skill drops the preference for that verb (it would be blocked at once), so
+    the tier's draw stands. To reverse: `prefer` only from `rmTargets` again (the spare tier first).
+68. **The FINALE's seeds get a hunting gap before the hunted skill** (TRACE's optional patch 4). BUILT: `carry.ts
+    layoutCarried` leaves WALL + seed + gap (7 blocks) before the skill on a `'near-skill'` final ship when the receiver has
+    the room, as VESPER's tools get. On a full receiver the boot's REPAIR licence can take part of it (the last free run that
+    fits); the seed then lands beside the skill only if a seed still fits there, else the FINALE's own spot. To reverse:
+    `huntingGap` returns none for `'near-skill'`.
+69. **The face names an unnamed root as it speaks** (review m). BUILT: the face's first line runs `nameHollow`, so the root's
+    blocks read `UNIT-047` under `> hi 048. it's 047.` when no story beat had named HOLLOW this run.
+70. **REASSIGNMENT's lead stays, DEFERRED to slice 8.** After the hunt fix, the sweep (20 seeds, the WP11 defender, the
+    instant lander) has the root telegraph RM at a `.skl` 4.8–5.7 times a final ship (it was 0–0.1), and unlink none: the
+    defender blocks every verb with an op, as a kid who watches the TERMINAL does. The four REASSIGNMENT endings read +1.5,
+    +1.6, +1.6 and +1.2 pods against no trace (TRACE measured +1.3, +1.3, +1.5, +1.2), outside ±1. The allowance's +15 is the
+    gain; the hunt costs only a thread and a SCAN. Slice 8's levers: a smaller allowance, a hunt RM that a SCAN cannot block
+    (or that comes faster than the telegraph), or a cost on pods.
+71. **The boot's charge line folds its parts when they pass 70 characters** (review B1). BUILT: `data/script.ts chargeLine`
+    drops `CHARGE` from the later parts (`+12 (CARD)`), and with all four sources at their widest says one sum
+    (`+144 CHARGE (★★★ CARD GIFT FLOOR)`). The full line with ★★ + CARD + GIFT was 76 characters and stopped the final boot.
+72. **The title shows the last ending's NEXT RUN: lines** (02 §3.12; CHART's optional patch). BUILT: under the ENDINGS line,
+    as the final card said them (`systems/title.ts titleModel.traces`). None on run 1 or after a run with no ending.
+73. **A given gift's `· FOUND` row is never on screen.** NOTED: the DESK only shows reachable ships' cards
+    (`desk.ts selectShip`), and a gift's ship is behind the unit once it is given. The row stays (it is free) for a later
+    card that shows passed ships. To use it: let the card open on a passed ship.
+74. **`LINEAGE_BUILT` stays until 7d** (review m). DEFERRED: the gate-down paths (`hollowUnitsAfter`, the won ghost lines,
+    046.log on every book) retire with `TRACES_BUILT`'s CONTACT line in 7d's fix pass, as 59 did for 7a's gates.

@@ -3033,3 +3033,88 @@ line turn on with it. The visual check raised the six gates locally (never commi
 - `support/words.test.ts` 7c CHART block: every CHART template at its worst, and every `NEXT RUN:` body behind its lead.
 - Note for the lead: in a worktree under `.claude/`, Vite's watcher missed edits. Restart the dev server after a change
   before trusting a shot.
+
+## Deviations (7c review fixes)
+
+Recorded by the 7c review-and-fix agent (on `claude/modest-hawking-209t0f`, from dfb1a72, the three tracks merged). The
+findings are in `slice-7c-review.md`; the gameplay calls are OPEN-DECISIONS 67–74 ("Slice 7c, built"), and 44–48 are marked
+BUILT with the sweep's numbers. **No save bump**: nothing new is saved. Commits: c1956b4 (B2), ebfefc1 (M2, M4), 00ad6fa
+(M1, m1, m2, m4), 3c689d2 (M3, m6), 1e28c80 (m3, m5, the e2e's route hook), 0ee7f18 (B1), df065c1 (the e2e), and the docs
+commit.
+
+### How each finding was fixed
+
+- **B1 (the boot's charge line threw).** `data/script.ts chargeLine` folds its parts past 70 characters: the later parts
+  lose `CHARGE` (`+12 (CARD)`), and with all four sources at their widest it says one sum naming each
+  (`+144 CHARGE (★★★ CARD GIFT FLOOR)`). `support/words`' 7c TRACE block renders it at the worst case. OPEN-DECISIONS 71.
+- **B2 (`ending/epilogue` red in the integrated tier).** The check pins the built lines: PURGE + REASSIGNMENT's two NEXT RUN:
+  lines in 05 §3.12's words and order, SPARE + STAY's (`that same seed`), UNRESOLVED's one, a lost run's none.
+- **M1 (the hunt never reached a skill; TRACE's patch 3).**
+  - `hollow.ts huntable(seg)`: a `.skl` the verbs do not spare. `chooseVerb` takes `prefer` when it is huntable, whatever
+    `rmTargets`' tier, and otherwise from the tier as before; the draws are unchanged.
+  - `landVerb(memory, verb, untried, hunted)` accepts an RM at the hunted skill while it is huntable. `hollow-verbs.ts land`
+    passes `huntedSkill(memory)` while `huntsHere`, and `startVerb` drops the preference when an op runs on the skill.
+  - `traces/final-ship`'s "spare first" check is now "the skill first" (40/40 past Repair.bak, and it lands), plus one that
+    the tier holds without the hunt. OPEN-DECISIONS 67; the sweep is 70.
+- **M2 (046.log on every book; LINEAGE's patches).** The boot's key line (`bookKeyFound`), the SCAN header (`bookScanLine`
+  with `bookShape(book).count`), the PACKET lock (`bookPacketLock`; `transmit.ts lockNote` takes the state), INSPECT's words
+  (`bookDesc`) and READ (`BOOK_TEXT.read(chip.name)`). `log-view.ts`'s stale `LOG_UI_TEXT.read` is gone. `traces/logs` flies
+  run 2 after SUNSET desk to desk and pins every key line and PACKET lock as 031's.
+- **M3 (the FINALE card's NEXT RUN: rows were empty; CHART's patch).** `finale-card.ts CardInput.rootUnits` (FinaleChoice
+  passes `rootUnits(state)`), and `rowOf` fills `nextRun` from `trace-hud.ts nextRunBody` for open and needs rows (null for
+  unknown); on step 2 after SPARE the seed is `that same seed`. `ending/card-models` pins both steps.
+- **M4 (a stranger said `> you remember me. good.`).** `hollow.ts noticedLine(state)`: remembered only when the ghost spoke
+  and HOLLOW is no relay stranger (`strangerOf(hollowUnits) === null`). `traces/lineage` pins it.
+- **m1 (the PACKET's sum left the gift out).** `TRANSMIT_TEXT.arrival` takes `giftCharge`; `arrivalPreview` passes it.
+- **m2 (the preview's seed allowance).** `unitArrival` runs `{ beam.min, beam.max + deliverySeedsMax }` through
+  `traceSeedAllowance`, so SPARE's ship and the final ship after PURGE count no delivery seed, and the wild seed is added once.
+- **m3 (the face over a `???` root).** `lineage-boot.ts lineageBootLineSaid` runs `nameHollow` on the face's first line.
+  OPEN-DECISIONS 69.
+- **m4 (the hunting gap; TRACE's optional patch).** `carry.ts huntingGap` returns the gap and the file it goes before
+  (`'near-tools'`: rack F's first, as before; `'near-skill'`: the hunted skill). `huntedSkill` moves to `state/selectors.ts`
+  (re-exported by `trace-hunt.ts`) so the layout reads it without HOLLOW's modules. OPEN-DECISIONS 68.
+- **m5 (`__ap.ship` kept an arm run's traces on the classic world).** `debugJump` clears `run.traces`.
+- **m6 (the title's traces; CHART's optional item).** `systems/title.ts TitleModel.traces`, `#titleTraces` under the ENDINGS
+  line. OPEN-DECISIONS 72. `ui/title-resume` pins it.
+- **Checked, no change:** `TRACE_HUD_TEXT.supplyHere` already takes the unit (`supplyHere(colony, unitName)`, CHART's
+  Deviation 4).
+- **NOTED:** m7 (`· FOUND` never on screen, OPEN-DECISIONS 73), m8 (`__ap.route` / `__ap.slot` re-arrive with no trace:
+  `debugArrive` plans with `NO_FINAL_TRACES` and no gift; the e2e crosses every trace hop by the real TRANSMIT), m9 (the
+  PACKET's sum passes 70 at its worst with the card and a gift: a DOM line that wraps), m10 (`LINEAGE_BUILT` retires in 7d,
+  OPEN-DECISIONS 74), m11 (the classic world's cards would show NEXT RUN: lines; the classic world is a fixture, never
+  archived).
+- **New debug hook:** `__ap.traces.route(via?)`, the shortest route from the first ship to the final ship through `via`.
+
+### The sweep after the hunt fix (`traces/traces-sweep`, BALANCE_ONLY, `TS_SEEDS=20`; 538 s on one core)
+
+| Ending | pods | Δpods | eaten | Δeaten | charge at the duel | Δcharge | `.skl` RM telegraphed / landed | gift ship Δcharge (n) |
+|---|---|---|---|---|---|---|---|---|
+| REASSIGNMENT (UNRESOLVED) | 15.8 | +1.5 | 0.2 | −1.4 | 11.0 | +8.0 | 4.8 / 0 | — |
+| PURGE + REASSIGNMENT | 15.9 | +1.6 | 0.1 | −1.6 | 16.4 | +13.3 | 5.2 / 0 | — |
+| MERGE + REASSIGNMENT | 15.9 | +1.6 | 0.1 | −1.5 | 13.5 | +10.4 | 5.7 / 0 | — |
+| SPARE + REASSIGNMENT | 15.8 | +1.2 | 0.3 | −1.1 | 14.6 | +11.4 | 5.0 / 0 | +15.0 (20) |
+| SUNSET (UNRESOLVED) | 14.5 | +0.4 | 1.5 | −0.4 | 2.6 | −0.6 | 0 / 0 | +14.9 (19) |
+| STAY (UNRESOLVED) | 14.7 | +0.1 | 1.4 | 0.0 | 2.5 | +0.3 | 0 / 0 | +15.0 (20) |
+
+- Both hard checks pass (R33's numbers at every final boot; every gift lands).
+- The hunt now reaches the skill: RM is telegraphed at a `.skl` about five times a final ship (TRACE's run: 0 to 0.1). The
+  sweep's WP11 defender blocks every verb with an op, so none landed. A kid who misses one loses the skill. A skill lost on a
+  ship already locked costs no pod.
+- The REASSIGNMENT endings do **not** come back within ±1 pod of no trace (+1.2 to +1.6; TRACE's +1.2 to +1.5). The allowance's
+  +15 is the gain. DEFERRED to slice 8 (OPEN-DECISIONS 70) with its levers.
+- The gift endings stay within ±1 (SUNSET +0.4, STAY +0.1). The duel was won in every run.
+
+### e2e (Chromium, each scenario alone)
+
+- `traces` (new, registered): 19/19, 213 s. A first run caught B1 (the page's `say` threw at the final boot with ★★ + CARD +
+  GIFT), and the face never typed.
+- `run2` (updated: HOLLOW is UNIT-031, and a won run 1 says no ghost line): 23/23, 72 s.
+
+### Tests
+
+- `npm run typecheck` and the tests' tsc are clean.
+- **The quick tier, once at the end:** 220 passed, 0 failed, 13 balance-only skipped, **194 s** on 4 workers (budget 265 s).
+  The 1-minute load average was 1.87 at the start and 7.26 at its peak and end (sampled every 15 s; nothing else running).
+  An earlier run after the code fixes (198 s, load 0.87 → 7.73) had one mover, `opening/ghost-placement` (M4), re-baselined.
+- **Changed suites:** `ending/epilogue` (B2), `ending/card-models` (M3), `traces/final-ship` (M1, m4), `traces/gifts` (m1),
+  `traces/logs` (M2), `traces/lineage` (M4, m3), `ui/title-resume` (m6), `support/words` (B1), `opening/ghost-placement` (M4).
