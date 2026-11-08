@@ -273,7 +273,9 @@ h.step();
   check('the next run: no MERGE bonus (deleted in 3c): its unit\'s Core has fewer than 3 threads, and the run carries no bonus field',
     !('mergeBonus' in state().run) && core?.type === 'core' && core.capacity < 3, `${core?.type === 'core' ? core.capacity : '?'} ${threadsTotal()}`);
   check('…and the Core reads healthy', selectCorruption(state()) === 0);
-  check('…and HOLLOW is both of them now (UNIT-046·047)', JSON.stringify(state().run.hollowUnits) === '[46,47]', JSON.stringify(state().run.hollowUnits));
+  // Slice 7c (R34, R35): mid-run HOLLOW is the relay stranger (031 on run 2), and the merged pair is the final root only
+  // after a REASSIGNMENT trace (rootUnitsOf: traces/lineage).
+  check('…and mid-run HOLLOW is the relay stranger (UNIT-031), not the merged pair', JSON.stringify(state().run.hollowUnits) === '[31]', JSON.stringify(state().run.hollowUnits));
 }
 
 // --- PURGE ---------------------------------------------------------------------------------------------------------------

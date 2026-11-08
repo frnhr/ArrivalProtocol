@@ -1,7 +1,7 @@
 import type { GameState } from '@state/schema';
 import type { LogSegment, Segment } from '@/types/segment';
 import { LOG_TEXT } from '@data/log-text';
-import { bookEntryKey, bookEntryLines } from '@data/log-books';
+import { bookEntryKey, bookEntryLines, bookName, bookUnit, BOOK_TEXT } from '@data/log-books';
 import { FRESH_UNIT_CHARGE } from '@data/memory';
 import { logKnown, logDisplayName, bookShape } from '@state/log-selectors';
 
@@ -13,6 +13,7 @@ import { logKnown, logDisplayName, bookShape } from '@state/log-selectors';
 
 // The reader's own words beside log-text's (OPENING's): the column heads, the next key, the way out.
 export const LOG_UI_TEXT = {
+  // Slice 7c (R37): the reader's kicker and title follow the book (data/log-books.ts BOOK_TEXT.kicker, bookName).
   kicker: 'LOG READER · UNIT-046',
   entry: 'ENTRY',
   nextKey: (key: string): string => `NEXT KEY: ${key}`,
@@ -98,8 +99,8 @@ export function logReaderModel(state: Readonly<GameState>): LogReaderModel {
   });
   const next = rows.find((row) => !row.found);
   return {
-    title: LOG_TEXT.readerTitle,
-    kicker: LOG_UI_TEXT.kicker,
+    title: log.book.kind === '046' ? LOG_TEXT.readerTitle : bookName(log.book),
+    kicker: log.book.kind === '046' ? LOG_UI_TEXT.kicker : BOOK_TEXT.kicker(bookUnit(log.book)),
     counts: LOG_UI_TEXT.found(log.found.length, entries.length),
     open,
     rows,

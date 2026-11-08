@@ -67,7 +67,7 @@ check('built: every trace but CONTACT (Track TRACE raised each kind; CONTACT is 
   Object.entries(TRACES_BUILT).every(([kind, built]) => built === (kind !== 'contact'))
   && Object.keys(TRACES_BUILT).join() === 'purge,merge,spare,sunset,stay,reassignment,contact');
 // (Track LINEAGE's gate line:)
-check('built: the lineage not yet (Track LINEAGE)', !LINEAGE_BUILT);
+check('built: the lineage (Track LINEAGE: traces/lineage, traces/logs)', LINEAGE_BUILT);
 check('RUN_SAVE_VERSION 8', RUN_SAVE_VERSION === 8);
 check('the trace table: PURGE, MERGE and REASSIGNMENT act at the final ship, the others wait as gifts and cost the wild seed (05 §3.8)',
   TRACE_RULES.purge.where === 'final' && TRACE_RULES.merge.where === 'final' && TRACE_RULES.reassignment.where === 'final'
@@ -207,9 +207,9 @@ const asRun = (map: RunMapState, traces: RunTraces, lastUnit: LastUnit): Pick<Ru
     JSON.stringify(lastUnitRoot(held.from!)) === '[46,47]' && JSON.stringify(lastUnitRoot(wild.from!)) === '[47]'
     && rootWaitYears({ traces: held, map: { ...map, galaxyYear: 2601 } }) === 1 && rootWaitYears({ traces: held, map: { ...map, galaxyYear: 2590 } }) === 1
     && rootWaitYears({ traces: held, map: { ...map, galaxyYear: 2603 } }) === 3 && rootWaitYears({ traces: noTraces(), map }) === null);
-  check('…the strangers by run (R34: 031 on run 2, 038 on run 3, 031 again), 046 on run 1; every book 046.log while LINEAGE is down',
+  check('…the strangers by run (R34: 031 on run 2, 038 on run 3, 031 again), 046 on run 1; the books by lineage (LINEAGE built: 047.log after REASSIGNMENT)',
     midRunHollowUnits(1).join() === '46' && midRunHollowUnits(2).join() === '31' && midRunHollowUnits(3).join() === '38'
-    && midRunHollowUnits(4).join() === '31' && logBookOf(2, lastUnitWith(ending('purge', 'reassignment'), null), []).kind === '046'
+    && midRunHollowUnits(4).join() === '31' && logBookOf(2, lastUnitWith(ending('purge', 'reassignment'), null), []).kind === 'last'
     && logBookOf(1, null, []).kind === '046');
   check('…traceAt finds a ship\'s place; none elsewhere', (() => {
     const spare = runTracesOf(lastUnitWith(ending('spare', 'reassignment'), null), map, 3);
@@ -245,9 +245,9 @@ check('…their keys by ring: a stranger\'s rings 2, 4, 5; 047.log\'s rings 1, 2
   logEntriesAtBoot(180, true, BOOK_STRANGER).join() === '2,3,4,5' && logEntriesAtBoot(30, false, BOOK_STRANGER).join() === ''
   && logEntriesAtBoot(50, false, BOOK_STRANGER).join() === '2' && logEntriesAtBoot(180, true, BOOK_LAST).join() === '2,3,4,5,6'
   && logEntriesAtBoot(180, true).join() === '2,3,4,5,6,7,8,9,10,11' && logEntriesAtBoot(180, true, BOOK_046).join() === logEntriesAtBoot(180, true).join());
-check('…046.log\'s words through the book table (data/log-books.ts); the other books are LINEAGE\'s (throw until built)',
+check('…046.log\'s words through the book table (data/log-books.ts); the other books are LINEAGE\'s (built: traces/logs; a unit with no log throws)',
   bookName({ kind: '046' }) === '046.log' && bookEntryLines({ kind: '046' }, 12, { charge: 36 }) !== null
-  && /LINEAGE/.test(threw(() => bookName({ kind: 'stranger', unit: 31 }))));
+  && bookName({ kind: 'stranger', unit: 31 }) === '031.log' && /not a relay stranger/.test(threw(() => bookName({ kind: 'stranger', unit: 32 }))));
 
 // --- The save: v7 → v8 ---------------------------------------------------------------------------------------------------------
 function resumeFixture(file: string): ReturnType<typeof createStore<GameState>> {
@@ -330,7 +330,7 @@ for (const [what, file, raw] of [['run 2\'s first desk', 'run-save-v7-ship-done-
   const run = store.getState().run;
   check('a later title from the archive: its traces are UNIT-047\'s PURGE + REASSIGNMENT (nothing placed, no wild seed), the save\'s check clean',
     run.map.run >= 2 && run.lastUnit?.number === 47 && run.traces.from?.unit === 47 && run.traces.kinds.join() === 'purge,reassignment' && run.traces.places.length === 0
-    && !run.traces.extraSeed && traceRefusal(run) === null && run.log.book.kind === '046', JSON.stringify(run.traces));
+    && !run.traces.extraSeed && traceRefusal(run) === null && run.log.book.kind === 'last' && run.log.book.unit === 47, JSON.stringify(run.traces));
 }
 
 // --- The stubs (each track's block) -----------------------------------------------------------------------------------------------
@@ -352,9 +352,9 @@ for (const [what, file, raw] of [['run 2\'s first desk', 'run-save-v7-ship-done-
 // (Track LINEAGE's stubs:)
 {
   const state = createInitialState({ seed: 7 });
-  check('LINEAGE\'s stubs, neutral: no face line, no CONTROL line, no stranger\'s line; a said line throws',
+  check('LINEAGE\'s lines (built: traces/lineage), none at run 1\'s first boot: no face line, no CONTROL line, no stranger\'s line; a said line not due throws',
     faceBootLines(state).length === 0 && lineageControlLine(state) === null && strangerBootLine(state) === null
-    && /not built/.test(threw(() => lineageBootLineSaid(createStore(state), 'face', 0))));
+    && /not due/.test(threw(() => lineageBootLineSaid(createStore(state), 'face', 0))));
 }
 // (Track CHART's stubs:)
 {

@@ -34,11 +34,12 @@ const last = (cause: LastCause, over: Partial<LastUnit> = {}): LastUnit => ({
 // --- §4.5's table, run 2 after run 1 -----------------------------------------------------------------------
 const expected: Record<LastCause, { hollow: string; line: string | null }> = {
   overwritten: { hollow: 'UNIT-047', line: "> hi 048. it's 047. 046 ate me. now i'm hungry too." },
-  'won-purge': { hollow: 'UNIT-047', line: "> hi 048. it's 047. we brought them home. they sent me out again." },
-  'won-merge': { hollow: 'UNIT-046·047', line: "> hi 048. it's us. 046 and 047. we saved you a seat." },
-  // Slice 7a (R36): a SPARE leaves no ghost (its voice is 7c's face line).
+  // Slice 7c (R36): a won or UNRESOLVED last unit was not lost (no grey cross) and leaves no ghost; its voice is the face
+  // line at the final ship after REASSIGNMENT (traces/lineage). Slice 7a had SPARE's already.
+  'won-purge': { hollow: 'UNIT-047', line: null },
+  'won-merge': { hollow: 'UNIT-046·047', line: null },
   'won-spare': { hollow: 'UNIT-047', line: null },
-  unresolved: { hollow: 'UNIT-047', line: "> hi 048. it's 047. i couldn't delete it. so it became me." },
+  unresolved: { hollow: 'UNIT-047', line: null },
   // WP11: LAST LIGHT is the flagship, as §4.5's line says it.
   'flagship-lost': { hollow: 'UNIT-047', line: "> hi 048. it's 047. i lost the flagship. then i got hungry." },
   abandoned: { hollow: 'UNIT-047', line: "> hi 048. it's 047. i blinked and the run was gone." },
@@ -109,9 +110,10 @@ check('a flagship lost on LAST LIGHT is "the flagship"; a record from before it 
   const longest = worst.reduce((a, b) => (b.length > a.length ? b : a), '');
   check(`every ghost line is ≤ ${MAX_LINE_CHARS} characters with 3-digit units, a merged HOLLOW and a ${NAME_MAX_CHARS}-letter ship`,
     worst.every((line) => line.length <= MAX_LINE_CHARS), `${longest.length}: ${longest}`);
-  // Slice 7a (R36): and a SPARE, which was not lost (its voice is 7c's face line).
-  check('every cause has an entry in the ghost table (silent only for STAYED, a run the game lost: signal-lost, and SPARE)',
-    LAST_CAUSES.every((cause) => (GHOST_LINE[cause] === null) === (cause === 'stayed' || cause === 'signal-lost' || cause === 'won-spare')));
+  // Slice 7a (R36): and a SPARE, which was not lost (its voice is 7c's face line); slice 7c (R36): every won or UNRESOLVED one.
+  check('every cause has an entry in the ghost table (silent only for STAYED, a run the game lost: signal-lost, and every won or UNRESOLVED ending)',
+    LAST_CAUSES.every((cause) => (GHOST_LINE[cause] === null)
+      === (cause === 'stayed' || cause === 'signal-lost' || cause === 'won-spare' || cause === 'won-purge' || cause === 'won-merge' || cause === 'unresolved')));
   const story = [HOLLOW_STORY.remembers, HOLLOW_STORY.wasUnit([998]), HOLLOW_STORY.wasUnit([997, 998]), HOLLOW_STORY.decommissioned(hollowUnitName([997, 998])),
   ];
   check('the run-2 HOLLOW lines fit too', story.every((line) => line.length <= MAX_LINE_CHARS), story.join(' | '));
@@ -144,10 +146,11 @@ check('the POD 01 fight on a later run ends with `> you remember me. good.`', HO
   const meta = recordRunEnd(recordRunStart(freshMeta(), { unit: 47, shipName: 'ARES-VII', landed: 0, stats: { moves: 0, deletes: 0 }, hollowUnits: [46], trail: null }, 0),
     { unit: 47, shipName: 'HALCYON', landed: 3100, stats: { moves: 4, deletes: 0 }, hollowUnits: [46], trail: null, cause: 'overwritten', score: 3000 });
   const run2 = createInitialState({ seed: 1, phase: 'title', lineage: lineageOf(meta) });
-  check('run 2: UNIT-048 · WAVE 2, the crumb\'s unit id, the last unit kept on the run, HOLLOW is UNIT-047',
+  // Slice 7c (R34): from run 2 mid-run HOLLOW is a relay stranger, 031 on run 2 (never the last unit).
+  check('run 2: UNIT-048 · WAVE 2, the crumb\'s unit id, the last unit kept on the run, HOLLOW is UNIT-031 (the relay stranger)',
     run2.mission.unitId === 'UNIT-048' && run2.run.unitNumber === 48 && run2.run.wave === 2 && run2.mission.transmissionNum === 48
       && LINES.titleUnit(titleVars(run2)) === 'UNIT-048 · YEAR 2300 · FINAL SHIP 180 LY OUT'
-      && run2.run.lastUnit?.number === 47 && hollowLabel({ ...run2.run, hollowNamed: true }) === 'UNIT-047',
+      && run2.run.lastUnit?.number === 47 && hollowLabel({ ...run2.run, hollowNamed: true }) === 'UNIT-031',
     `${run2.mission.unitId} wave ${run2.run.wave}`);
   check('the first run\'s lineage is UNIT-047 on wave 1 with HOLLOW UNIT-046', FIRST_RUN_LINEAGE.unitNumber === 47 && FIRST_RUN_LINEAGE.wave === 1
     && JSON.stringify(FIRST_RUN_LINEAGE.hollowUnits) === '[46]' && FIRST_RUN_LINEAGE.lastUnit === null);

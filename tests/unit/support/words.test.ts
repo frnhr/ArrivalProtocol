@@ -543,14 +543,35 @@ const SLICE7_BASE: Readonly<Record<string, unknown>> = {
 
 // --- 7c LINEAGE (data/lineage-text.ts LINEAGE_TEXT; the books' words in data/log-books.ts): Track LINEAGE adds its checks here
 {
-  // Three-digit units (UNIT-147 is the widest a long lineage reaches), a three-digit wait and charge.
+  // Three-digit units (UNIT-147 is the widest a long lineage reaches), a root of two units (an earlier MERGE's), a three-digit
+  // wait and charge, the merged pair's words; for the books a 12-character ship (NAME_MAX_CHARS), four-digit colonists, the
+  // widest book name and entry count.
+  const { STRANGER_LOGS, LAST_LOG_TEXT, BOOK_TEXT, bookKeyFound, bookScanLine } = await import('@data/log-books');
+  const { LOG_TEXT } = await import('@data/log-text');
   const LINEAGE_WORST: Readonly<Record<string, unknown>> = {
-    unit: 147, next: 148, us: 147, rooted: 146, first: 146, second: 147, years: 999, charge: 999,
+    unit: 147, next: 148, us: 147, rooted: [145, 146], root: [146, 147], years: 999, charge: 999, merged: true,
+    vars: { charge: 999 }, shipName: 'W'.repeat(12), value: 9999, name: '147.log',
   };
-  const lines = renderSlice6(LINEAGE_TEXT, [], 'LINEAGE_TEXT', { ...SLICE7_BASE, ...LINEAGE_WORST });
+  const worst = { ...SLICE7_BASE, ...LINEAGE_WORST };
+  const lastBook = { kind: 'last' as const, unit: 147, step1: 'purge' as const, events: [] };
+  const lines = [
+    ...renderSlice6(LINEAGE_TEXT, [], 'LINEAGE_TEXT', worst),
+    ...renderSlice6({ STRANGER_LOGS, LAST_LOG_TEXT, BOOK_TEXT }, [], 'log-books', worst).flatMap((text) => text.split(',')),
+    // The root entries type from the root as HOLLOW's own lines (LOG_TEXT.rootLine's `> `), at their widest.
+    ...[...LAST_LOG_TEXT.root(999), ...Object.values(STRANGER_LOGS).map((log) => log[log.length - 1]!({ charge: 999 })).flat()].map(LOG_TEXT.rootLine),
+    bookKeyFound(lastBook, [2, 3, 4, 5, 6]), bookScanLine(lastBook, 7, 7), bookKeyFound({ kind: 'stranger', unit: 38 }, [2]),
+  ];
   const bad = lines.filter((text) => text.length > MAX_LINE_CHARS || RULES.some((rule) => rule.re.test(text)));
   check(`7c LINEAGE words: every line (${lines.length}) fits (≤ ${MAX_LINE_CHARS}) at its worst case and says no never-say word`,
-    lines.length > 0 && bad.length === 0, JSON.stringify(bad));
+    lines.length > 40 && bad.length === 0, JSON.stringify(bad));
+  // The renderer joins a template's lines with commas (String of an array): the books' lines are checked one by one too.
+  const entries = [
+    ...Object.values(STRANGER_LOGS).flatMap((log) => log.map((entry) => entry({ charge: 999 }))),
+    LAST_LOG_TEXT.welcome(147, 999), ...Object.values(LAST_LOG_TEXT.events).map((template) => template('W'.repeat(12), 9999)),
+    ...LAST_LOG_TEXT.fillers.map((filler) => filler()), ...Object.values(LAST_LOG_TEXT.tails).map((tail) => tail()), LAST_LOG_TEXT.root(148),
+  ];
+  const badEntry = entries.filter((entry) => entry.length < 1 || entry.length > 3 || entry.some((text) => text.length > MAX_LINE_CHARS || RULES.some((rule) => rule.re.test(text))));
+  check(`…every book entry (${entries.length}) is 1–3 lines, each ≤ ${MAX_LINE_CHARS} at its worst case`, entries.length === 12 + 1 + 6 + 4 + 4 + 1 && badEntry.length === 0, JSON.stringify(badEntry));
 }
 
 // --- end of 7c LINEAGE -----------------------------------------------------------------------------------------------------

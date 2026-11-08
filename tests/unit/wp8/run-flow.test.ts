@@ -105,9 +105,10 @@ check('RUN END is written: lastUnit UNIT-047, overwritten on LAST LIGHT, no run 
 
 // --- Run 2: the title ----------------------------------------------------------------------------------------
 newRunFromArchive(12);
-check('NEW RUN: UNIT-048 · WAVE 2, the last unit on the run, HOLLOW is UNIT-047 (unnamed; not aboard the calm ship 1)',
+// Slice 7c (R34): from run 2 mid-run HOLLOW is the relay stranger (031 on run 2, 038 on run 3), never the last unit.
+check('NEW RUN: UNIT-048 · WAVE 2, the last unit on the run, HOLLOW is UNIT-031 (the relay stranger; unnamed; not aboard the calm ship 1)',
   state().run.unitNumber === 48 && state().run.wave === 2 && state().mission.unitId === 'UNIT-048' && state().run.lastUnit?.number === 47
-    && JSON.stringify(state().run.hollowUnits) === '[47]' && !state().run.hollowNamed && !state().memory.some((seg) => seg.type === 'hollow'));
+    && JSON.stringify(state().run.hollowUnits) === '[31]' && !state().run.hollowNamed && !state().memory.some((seg) => seg.type === 'hollow'));
 // Slice 3a: 05 §3.12's title line (the run's start year, the final ship's distance from SOL, as lineVars reads them).
 const titleLine = LINES.titleUnit({
   ...WORST_CASE_VARS, unit: state().mission.transmissionNum, wave: state().mission.wave, distanceLy: solLy(END_SLOTS[0]!), year: state().run.map.startYear,
@@ -201,7 +202,7 @@ check('the next page load finds it left: lastUnit UNIT-048, abandoned at HALCYON
   reopened === 'ok' && stored().lastUnit?.number === 48 && stored().lastUnit?.cause === 'abandoned' && stored().lastUnit?.shipName === 'HALCYON'
     && stored().activeRun === null);
 newRunFromArchive(13);
-check('run 3 is UNIT-049 · WAVE 3, and HOLLOW is UNIT-048', state().run.unitNumber === 49 && state().run.wave === 3 && JSON.stringify(state().run.hollowUnits) === '[48]');
+check('run 3 is UNIT-049 · WAVE 3, and HOLLOW is UNIT-038 (the second relay stranger)', state().run.unitNumber === 49 && state().run.wave === 3 && JSON.stringify(state().run.hollowUnits) === '[38]');
 receiveTransmission(h.store);
 h.stepUntil(() => state().run.phase === 'flight', 15);
 check('…ship 1\'s boot has no ghost (it was abandoned at HALCYON)', !said().some((entry) => entry.speaker === 'hollow') && !state().run.ghostSpoken);

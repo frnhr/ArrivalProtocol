@@ -115,8 +115,9 @@ const progress = (over: Partial<RunProgress> = {}): RunProgress => ({
   check('…with no save to resume it, abandonActiveRun records it as lastUnit "abandoned", where the unit was, and writes it', opened === 'ok'
     && stored.activeRun === null && stored.lastUnit?.cause === 'abandoned' && stored.lastUnit.number === 47 && stored.lastUnit.shipName === 'HALCYON'
     && stored.lastUnit.landed === 2200 && stored.runs === 1, JSON.stringify(stored));
-  check('…the next run is UNIT-048 on wave 2, and its HOLLOW is UNIT-047', archiveLineage().unitNumber === 48 && archiveLineage().wave === 2
-    && JSON.stringify(archiveLineage().hollowUnits) === '[47]');
+  // Slice 7c (R34): mid-run HOLLOW from run 2 is the relay stranger (031 on run 2), never the last unit.
+  check('…the next run is UNIT-048 on wave 2, and its HOLLOW is UNIT-031 (the relay stranger)', archiveLineage().unitNumber === 48 && archiveLineage().wave === 2
+    && JSON.stringify(archiveLineage().hollowUnits) === '[31]');
   closeArchive();
 }
 

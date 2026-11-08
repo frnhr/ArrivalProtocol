@@ -2858,3 +2858,96 @@ on one core (load average about 1). 543 s on the last run.
 
 **Track CHART:** `TRACE_HUD_TEXT.supplyHere` hard-codes `UNIT-047`. STAY's colony was founded by the last unit, which is
 UNIT-048 on run 3, so it wants the unit as `stayLetter.from` now takes it.
+
+## Deviations (Track LINEAGE)
+
+Recorded by Track LINEAGE (branch `lineage-7c`, from 3a96ad3, the head of `claude/modest-hawking-209t0f` with the 7c foundation
+merged). R34–R37 are built and `LINEAGE_BUILT` is raised. TRACE's gates are untouched (all down on this branch), so the face
+and CONTROL's lines play once TRACE raises `reassignment` (and the non-compliant line once it raises a non-compliant kind).
+
+### What is built
+
+- **`data/lineage-text.ts`:** the stranger's lines, the face by step 1 (05 §3.12's four), the face's wait line, CONTROL's
+  `UNIT-047 was reassigned successfully. Please ignore it. :)` and `Your predecessor is non-compliant. Please be compliant.
+  :)`; `strangerOf(hollowUnits)` (a single unit of `STRANGER_UNITS`, else null).
+- **`systems/lineage-boot.ts`** (arm only, every line behind `LINEAGE_BUILT`):
+  - `faceBootLines`: on the final ship with REASSIGNMENT held and built (the rule `rootUnitsOf` reads), two lines: the step-1
+    line, then `> 3 years at this dish. they gave you 36 blocks too. mine ran out.` (`ours` for a merged pair). The wait is
+    `rootWaitYears`; the charge `FRESH_UNIT_CHARGE`.
+  - `lineageControlLine`: after the face, `reassigned(last unit)`; else, on a final ship whose dish runs wild
+    (`finalTraces(run).wild`), `nonCompliant`.
+  - `strangerBootLine`: `> another one. they keep sending you.` on the boot whose arrival boarded HOLLOW
+    (`arrival.boarded`), when HOLLOW is a relay stranger, and not where the face speaks.
+  - `lineageBootLineSaid`: the face's first line emits `'root-face' { unit }`; every kind throws when its line is not due.
+- **`data/log-books.ts`:** `031.log` and `038.log` (6 written entries each, by the stranger's unit), `047.log`'s builder
+  (`LAST_LOG_TEXT`: 01 the welcome with the unit and the charge, 02–05 the book's events in the archive's order with one
+  template per `NotableEventKind`, a written filler for each missing event, 06 the tail by step 1, 07 the root line to the
+  unit after it). The KEY columns come from `RING_LY`, in the shapes' order. Also `bookUnit`, `bookDesc`, `bookKeyFound`,
+  `bookScanLine`, `bookPacketLock` and `BOOK_TEXT` (the book's own words where a screen names the file). At load every
+  stranger has its 6 entries, and every entry fits at its worst case.
+- **`data/log-text.ts`:** `LOG_TEXT.keyFound(entries, name)` and `LOG_TEXT.scan(found, name, unit, count)` take the book's
+  name, with 046.log's as the default, so 046.log's words are unchanged.
+- **`systems/story-log.ts`:** the chip's description follows the book (`bookDesc`). **`systems/log-view.ts`:** the reader's
+  title and kicker follow the book (`031.log`, `LOG READER · UNIT-031`).
+- **`hollow-text.ts`:**
+  - HOLLOW_STORY: `wasUnit` names a stranger (`> i was 031. they sent me long before you.`).
+  - GHOST_LINE (R36): `won-purge`, `won-merge` and `unresolved` are null while `LINEAGE_BUILT` is up (`wonGhost`). The
+    gate-down words stay until the fix pass retires the gate.
+- **Suites:** `traces/lineage` (22 checks, about 1 s) and `traces/logs` (21 checks, about 1 s). `support/words`'s 7c LINEAGE
+  block renders LINEAGE_TEXT and the books at their worst case, and checks every book entry line by line.
+
+### Deviations
+
+1. **The face is two lines, not three or four.** It is 05 §3.12's step-1 line, then one line that folds 05 §3.5's `i've been
+   at this dish 3 years` and `they gave you 36 blocks of charge too. mine ran out.` together. `BOOT_LINE_MAX` counts two face
+   lines. `faceByStep1.merge` *is* §3.5's merged line (`> hi 048. it's us. 046 and 047. we saved you a seat.`), so the
+   foundation's seeds `face`, `faceCharge` and `faceMerged` are gone. `faceByStep1.merge(next, root)` names the pair from
+   `lastUnitRoot`. PURGE and SPARE name the last unit's own root (`rootUnits`): `i deleted 031.` on a run 3.
+2. **The face does not name an unnamed root.** The root's blocks already carry the last unit's name (laid out through
+   `hollowLabel` → `rootUnitsOf`), so `lineageBootLineSaid` only emits `'root-face'`. No flag is needed from the lead.
+3. **CONTROL's `nonCompliant` line is said at a final boot whose dish runs wild.** That is the only place the cost is
+   physical (R33). It is at most one CONTROL line a boot, and `reassigned` wins, though the two can't meet: REASSIGNMENT is
+   compliant.
+4. **The stranger's line is not said at a boot where the face takes the root over** (the last unit answers, not the
+   stranger). It is placed by the lead's plan before HOLLOW's own line, so on a boarding ship that also says `keepCharge`
+   it is not the boot's very last line.
+5. **047.log's 07 speaks to `book.unit + 1`.** A `'last'` book only ever follows the previous run's unit: an abandoned or
+   lost one leaves no ending, so it leaves no `'last'` book. `LogVars` stays `{ charge }`, so no caller changes.
+6. **The welcome (047.log 01) keeps 046's `Seven ships to bring in.`** It is the template 05 §3.8 names, with the unit and the
+   charge swapped. The book does not know the last unit's arm.
+7. **Lines outside my blocks, all forced by the build:**
+   - `hollow-text.ts`'s import of `lineage-text` and `traces` (3 lines at the top of the file);
+   - `traces/foundation.test.ts:246–248`, the lead's books check, which pinned the stubs throwing. It now pins `031.log`
+     and that a unit with no log throws.
+8. **One mover beyond the dry run's five suites, from R36** (the foundation left GHOST_LINE as it was):
+   - `wp11/fix1:318` (`we brought them home` after a PURGE) now pins that a PURGE leaves no ghost;
+   - `wp8/ghost`'s cause table (`:35–50`) and its silent-set check (`:113`) moved with R36, beside its listed `:147`.
+9. **`traces/lineage` sets TRACE's gates for its own process.** `TRACES_BUILT` is a plain object, and the suite's
+   `withGates` sets `reassignment` and `sunset` both ways around each check, then restores them. So the suite reads the
+   same before and after TRACE's merge, and it never flies with a gate TRACE has not built (the boots are planned with the
+   gate up, the sends are made with it as merged).
+
+### The movers, as changed
+
+- `ending/last-landing:272`: the run after a MERGE meets UNIT-031 mid-run (`[31]`). The pair is the root only after
+  REASSIGNMENT.
+- `wp8/run-flow:108`: run 2's HOLLOW is UNIT-031. `:204`: run 3's is UNIT-038.
+- `wp8/ghost:147`: run 2's HOLLOW is UNIT-031. Also R36's table and silent set (deviation 8).
+- `wp8/meta:118`: the next run's HOLLOW is UNIT-031.
+- `traces/foundation:68`: the gate is up. `:208`: the books by lineage (`'last'` after REASSIGNMENT). `:329`: the later
+  title's book is `047.log` (unit 47). Its LINEAGE stubs block now checks run 1's first boot says no lineage line, and that a
+  line that is not due throws.
+- `wp11/fix1:318` (deviation 8).
+
+### Patches requested (lead)
+
+These call sites still name 046.log on every book, and each needs a one-line change:
+- `data/script.ts:1114`: `LOG_TEXT.keyFound(entries)` → `bookKeyFound(state.run.log.book, entries)`. On a run 2 the boot's
+  key line reads `> 046.log · KEY FOUND` over 031.log or 047.log.
+- `state/actions.ts:315`: `LOG_TEXT.scan(found)` → `bookScanLine(book, bookShape(book).count, found)`.
+- `systems/transmit.ts:281`: `LOG_TEXT.packetLock` → `bookPacketLock(state.run.log.book)`.
+- `components/memory-view/DetailPanel.ts:288`: `LOG_DESC.known` → `bookDesc(state.run.log.book)` (or the segment's `desc`,
+  which story-log now keeps). Also `:295`: `LOG_UI_TEXT.read` → `BOOK_TEXT.read(chip.name)`.
+- `systems/hollow.ts:1179`: after a lost last unit's ghost (`ghostSpoken`), a stranger HOLLOW should not say `> you
+  remember me. good.`: `ghostSpoken && strangerOf(state.run.hollowUnits) === null`.
+- The e2e's `run2.mjs` (not run here): run 2's HOLLOW is UNIT-031, and a won last run has no ghost line at the final ship.

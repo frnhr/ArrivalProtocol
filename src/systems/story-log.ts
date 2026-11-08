@@ -9,6 +9,7 @@ import { say } from '@systems/say';
 import { playsTutorial } from '@systems/meta';
 import { FRESH_UNIT_CHARGE } from '@data/memory';
 import { LOG_NAME, LOG_DESC, LOG_TEXT } from '@data/log-text';
+import { bookDesc } from '@data/log-books';
 
 // 046.log through the run (docs/phase3/05-story.md §3.2, §3.5; slice-2-plan §1.1 items 14–15), stateful: the keys found
 // at the boots (`> 046.log · KEY FOUND · ENTRY 0n`), the SCAN reaction (the header, CONTROL's ignore line, the file
@@ -69,18 +70,20 @@ function rootKeyDue(state: Readonly<GameState>): boolean {
   return state.hollow.finale.phase === 'step1' && state.hollow.finale.rootFell && !state.run.log.found.includes(bookShape(state.run.log.book).root);
 }
 
-// The log's chip says what the run knows (logKnown): `???`, or `046.log` from the SCAN or the first key on.
+// The log's chip says what the run knows (logKnown): `???`, or the book's name (`046.log`, `031.log`, `047.log`) from the SCAN
+// or the first key on, with its book's description (slice 7c, R37).
 function syncLogName(store: Store<GameState>): void {
   const state = store.getState();
   const name = logDisplayName(state.run.log);
   const index = state.memory.findIndex((seg) => seg.type === 'log');
   const seg = state.memory[index];
   if (seg === undefined || seg.type !== 'log' || seg.name === name) return;
+  const desc = name === LOG_NAME.unknown ? LOG_DESC.unknown : bookDesc(state.run.log.book);
   store.update((draft) => {
     const live = draft.memory[index];
     if (live === undefined || live.type !== 'log') throw new Error('story-log: the log segment moved during its rename');
     live.name = name;
-    live.desc = name === LOG_NAME.unknown ? LOG_DESC.unknown : LOG_DESC.known;
+    live.desc = desc;
     draft.ui.memoryRev++;
   });
 }

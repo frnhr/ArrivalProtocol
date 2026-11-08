@@ -26,7 +26,7 @@ export const TRACES_BUILT: Readonly<Record<TraceKind, boolean>> = {
 // systems/traces.ts midRunHollowUnits), the books (state/log-selectors.ts logBookOf), the face line and CONTROL's lineage
 // lines at the boot. Down: run 2's HOLLOW is the last unit and every book is 046.log, as before slice 7c.
 // Track LINEAGE raises this line.
-export const LINEAGE_BUILT: boolean = false;
+export const LINEAGE_BUILT: boolean = true;
 
 export function traceBuilt(kind: TraceKind): boolean {
   return TRACES_BUILT[kind];
