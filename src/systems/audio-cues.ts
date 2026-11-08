@@ -385,11 +385,11 @@ export function mountAudioCues(store: Store<GameState>): () => void {
 
     // --- 7 ENDING. The root's sleep plays nothing of its own: 'root-deleted' already tears. Each track's lines sit between
     // spacer lines (review M1), so the tracks' hunks never touch.
-    // Track CARD's cues (the card): its hold as each step shows; SPARE's two notes moving apart (CARD's spareNotes; the cold
-    // tone until then); step 2's stamp (CARD's sunsetRumble on SUNSET).
-    on('finale-open', () => play('finaleHold')),
-    on('finale-chosen', ({ hollow }) => { if (hollow === 'spare') play('purgeTone'); }),
-    on('finale-step2', () => play('stampHit', { heavy: false })),
+    // Track CARD's cues (the card): the hold under step 1 (also after [ESC] BACK), CONTROL's chime as step 2 asks about you
+    // (its quote heads the step); SPARE's two notes moving apart; step 2's stamp, and SUNSET's rumble fading out.
+    on('finale-open', ({ step }) => { if (step === 1) play('finaleHold'); else play('typeTick', { voice: 'control' }); }),
+    on('finale-chosen', ({ hollow }) => { if (hollow === 'spare') play('spareNotes'); }),
+    on('finale-step2', ({ you }) => { if (you === 'sunset') play('sunsetRumble'); else play('stampHit', { heavy: false }); }),
     // Track NIGHT's cues (the epilogue): the choir as it opens (§2.10; review m10), a tick per line typed.
     on('epilogue-open', () => play('arrivalChoir')),
     on('epilogue-line', () => play('typeTick', { voice: 'sys' })),

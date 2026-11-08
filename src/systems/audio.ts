@@ -115,6 +115,10 @@ export interface CueParams {
   surveyPing: undefined;
   siteSting: undefined;
   siteSet: undefined;
+  // Slice 7a (Track CARD, 05 §4): the FINALE's two new endings. SPARE's two notes moving apart (046 leaving in its ship);
+  // SUNSET's low rumble fading out (the empty ship leaving orbit with you).
+  spareNotes: undefined;
+  sunsetRumble: undefined;
 }
 
 export type Cue = keyof CueParams;
@@ -1480,6 +1484,50 @@ function cueSiteSet(mix: Graph, t0: number): void {
   }
 }
 
+// --- Slice 7a: the FINALE's endings (Track CARD; 05 §4) -------------------------------------------------------------
+
+// SPARE: two notes that start as one (HOLLOW's root, a little detuned against itself) and move apart, one up a fifth and one
+// down a fourth, each fading as it goes: 046 leaving in its own ship. No chord resolves it; it is a parting, not a merge.
+function cueSpareNotes(mix: Graph, t0: number): void {
+  const voice = makeVoice(mix.ctx);
+  duck(mix, t0);
+  const out = voice.gain(1, voice.filter('lowpass', 2400, 0.7, mix.buses.chord));
+  const start = HOLLOW_SCALE[2]!;
+  for (const [to, level, pan] of [[start * 1.5, 0.15, 1], [start * 0.75, 0.17, -1]] as const) {
+    const amp = voice.gain(0, out);
+    amp.gain.setValueAtTime(0, t0);
+    amp.gain.linearRampToValueAtTime(level, t0 + 0.12);
+    amp.gain.setValueAtTime(level, t0 + 0.9);
+    amp.gain.exponentialRampToValueAtTime(SILENT, t0 + 4.2);
+    for (const detune of [-6, 6]) {
+      const note = voice.osc('triangle', start, t0, t0 + 4.3, amp, detune + pan * 4);
+      note.frequency.setValueAtTime(start, t0 + 0.35);
+      note.frequency.exponentialRampToValueAtTime(to, t0 + 2.6);
+    }
+    voice.osc('sine', start * 2, t0, t0 + 1.4, voice.gain(level * 0.25, amp));
+  }
+}
+
+// SUNSET: a low rumble fading out, the empty ship's engine lighting one last time and leaving: brown noise through a lowpass
+// that closes as it goes, a sub that sinks, and a warm fifth far above it that lingers longest.
+function cueSunsetRumble(mix: Graph, t0: number): void {
+  const voice = makeVoice(mix.ctx);
+  duck(mix, t0);
+  const out = voice.gain(1, mix.buses.chord);
+  const rumble = voice.gain(0, out);
+  const low = voice.filter('lowpass', 700, 0.9, rumble);
+  sweep(low.frequency, t0 + 0.4, 700, 90, 5);
+  const rumbleEnd = swell(rumble.gain, t0, 0.55, 0.6, 5.2);
+  voice.noise(mix.brown, t0, rumbleEnd, low);
+  const sub = voice.gain(0, out);
+  const subEnd = swell(sub.gain, t0, 0.22, 0.5, 4.6);
+  const body = voice.osc('sine', 52, t0, subEnd + 0.01, sub);
+  sweep(body.frequency, t0 + 0.5, 52, 31, 4);
+  const glow = voice.gain(0, voice.filter('lowpass', 1400, 0.7, out));
+  const glowEnd = swell(glow.gain, t0 + 0.8, 0.05, 1.4, 5.5);
+  for (const freq of [220, 329.63]) voice.osc('sine', freq, t0 + 0.8, glowEnd + 0.01, glow, freq === 220 ? -3 : 3);
+}
+
 // --- LAST LIGHT (WP11 part 2) ---------------------------------------------------------------------------------
 
 // A verb's telegraph, one whole second (§6.6: `> rm repair.bak ... 3`): a command clock in HOLLOW's voice, two detuned
@@ -1763,6 +1811,8 @@ function playOn(mix: Graph, cue: Cue, params: CueParams[Cue] | undefined, t0: nu
     case 'surveyPing': cueSurveyPing(mix, t0); return;
     case 'siteSting': cueSiteSting(mix, t0); return;
     case 'siteSet': cueSiteSet(mix, t0); return;
+    case 'spareNotes': cueSpareNotes(mix, t0); return;
+    case 'sunsetRumble': cueSunsetRumble(mix, t0); return;
     default: throw new Error(`play: unknown cue '${String(cue)}'`);
   }
 }
