@@ -1,3 +1,5 @@
+// Slice 7b: the lead owns this file's MERGE lines (slice-7-plan.md §4.2): restoredDriver, lastLandingPods and the gated
+// mergeRestorable and `NOW:` (data/last-landing.ts LAST_LANDING_BUILT, Track DROP's line).
 // Slice 7a: Track FINALE owns this file after the FOUNDATION (docs/phase3/impl/slice-7-plan.md §2.1, §4.1, §5.1): the
 // FINALE's rules, pure (no store, no module state): THE EMPTY SHIP (R8), STAY's ships (R9), each option's state on the card
 // (R11), the ending record the archive keeps (R3) and the run's cause (R17), and the report's ending line. Track CARD reads
@@ -6,7 +8,9 @@
 import type { GameState, RunEndCause, ShipResult } from '@state/schema';
 import type { EndingPiece, EndingRecord, HollowFate, YouChoice } from '@/types/ending';
 import type { RunMapState } from '@/types/map';
-import { chargeLeft, hasUsableTool, isHollow } from '@state/selectors';
+import type { DriverSegment } from '@/types/segment';
+import type { PodRecord } from '@/types/landing';
+import { chargeLeft, hasUsableTool, integrityState, isHollow } from '@state/selectors';
 import { currentSlot } from '@systems/map-streams';
 import { shownFuelPct } from '@systems/flight-hud';
 import { onTargetTally, onTargetEarned } from '@systems/landing-rules';
@@ -14,7 +18,10 @@ import { FS_TOOL_KINDS } from '@data/fs-tools';
 import { FINALE_TEXT } from '@data/finale-text';
 import { ENDING_TITLE } from '@data/epilogue-text';
 import { ENDINGS_BUILT, endingTitleKey } from '@data/endings';
-import { EMPTY_SHIP_FUEL_PCT, MERGE_COST_CHARGE, STAY_PICK_MAX } from '@data/tuning';
+import { LAST_LANDING_BUILT } from '@data/last-landing';
+import { driverName } from '@data/landing-text';
+import { driverSegId } from '@data/pod-ids';
+import { DRIVER_BLOCKS, EMPTY_SHIP_FUEL_PCT, MERGE_COST_CHARGE, MERGE_DRIVER_INTEGRITY, STAY_PICK_MAX } from '@data/tuning';
 
 // THE EMPTY SHIP (R8): the final ship in orbit after its landing (ORBIT LOCKED or ACCEPT ORBIT), no pod aboard (a parked
 // pod counts as released), and FUEL as shown at the landing's end ≥ EMPTY_SHIP_FUEL_PCT. `fuelPct` is that FUEL (null
@@ -106,9 +113,36 @@ export type OptionState =
   | { kind: 'needs'; need: string; named: boolean; price: PriceMeter | null }
   | { kind: 'hidden' };
 
-// The drivers MERGE would give back now (R15's interim, 7a): every pod whose driver HOLLOW ate on this ship and whose block
+// THE LAST LANDING's pods (7b; R25, 01 §3.17): every pod of this ship whose driver HOLLOW ate and which is still in the
+// ship's orbit, aboard or parked restorable. A pod whose driver died some other way stays parked; one the ship took out of
+// orbit is gone with it. Read before MERGE's confirm (the confirm clears their driverLost: finale.restored keeps them).
+export function lastLandingPods(state: Readonly<GameState>): number[] {
+  const inOrbit = (record: Readonly<PodRecord>): boolean => record.fate.kind === 'aboard' || (record.fate.kind === 'parked' && record.fate.restorable);
+  return state.landing.pods.filter((record) => record.driverLost === 'eaten' && inOrbit(record)).map((record) => record.pod);
+}
+
+// A driver HOLLOW ate, back from its pod's record (the pod outlived it), at MERGE_DRIVER_INTEGRITY: in place in memory (7a's
+// interim, finale.ts mergeIn) or by radio (7b: landing.lastLanding.drivers, never in memory, R24).
+export function restoredDriver(record: Readonly<PodRecord>): DriverSegment {
+  return {
+    id: driverSegId(record.pod),
+    name: driverName(record.pod, record.family),
+    type: 'driver',
+    size: DRIVER_BLOCKS,
+    integrity: MERGE_DRIVER_INTEGRITY,
+    state: integrityState(MERGE_DRIVER_INTEGRITY),
+    pod: record.pod,
+    family: record.family,
+    colonists: record.colonists,
+    featured: structuredClone(record.featured),
+  };
+}
+
+// The drivers MERGE would give back now. 7a's interim (R15): every pod whose driver HOLLOW ate on this ship and whose block
 // still stands in memory (finale.ts restores those in place; a block the kid DELETEd is gone, and its pod stays parked).
+// 7b, once its gate is raised: THE LAST LANDING's pods, by radio (lastLandingPods), whatever became of the blocks.
 export function mergeRestorable(state: Readonly<GameState>): number[] {
+  if (LAST_LANDING_BUILT) return lastLandingPods(state);
   const standing = new Set(state.memory.filter(isHollow).map((seg) => seg.atePod).filter((pod) => pod !== undefined));
   return state.landing.pods.filter((record) => record.driverLost === 'eaten' && standing.has(record.pod)).map((record) => record.pod);
 }
@@ -146,7 +180,9 @@ export function optionState(state: Readonly<GameState>, piece: EndingPiece, seen
       const price: PriceMeter = { kind: 'charge', have, need: MERGE_COST_CHARGE };
       if (have < MERGE_COST_CHARGE) return needs(piece, seen, FINALE_TEXT.needs.charge(have), price);
       const back = mergeRestorable(state).length;
-      return { kind: 'open', price, now: back > 0 ? FINALE_TEXT.nowInterim(back) : null };
+      // 7b's gate: the pods land on their own (FINALE_TEXT.now); until it is raised the kid launches them (nowInterim).
+      const now = LAST_LANDING_BUILT ? FINALE_TEXT.now : FINALE_TEXT.nowInterim;
+      return { kind: 'open', price, now: back > 0 ? now(back) : null };
     }
     case 'spare':
       return emptyShipOption(state, piece, seen);

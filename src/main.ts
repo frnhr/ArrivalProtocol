@@ -32,6 +32,7 @@ import { mountResidents } from '@systems/residents';
 import { mountSurvey } from '@systems/survey';
 import { mountHollowVerbs } from '@systems/hollow-verbs';
 import { mountFinale } from '@systems/finale';
+import { mountLastLanding } from '@systems/last-landing';
 import { mountDirector } from '@systems/director';
 import { mountBoot } from '@systems/boot';
 import { unlockAudio } from '@systems/audio';
@@ -100,6 +101,7 @@ import { mountMergeTick } from '@components/memory-view/MergeTick';
 import { mountLaunchFx } from '@components/memory-view/LaunchFx';
 import { mountPodTags } from '@components/memory-view/PodTags';
 import { mountFinaleChoice } from '@components/run/FinaleChoice';
+import { mountLastLandingView } from '@components/run/LastLanding';
 import { mountSkillsWindow } from '@components/run/SkillsWindow';
 import { mountInboxWindow } from '@components/run/InboxWindow';
 import { mountSitesWindow } from '@components/tools-view/SitesWindow';
@@ -173,6 +175,9 @@ mountSurvey(store);
 // root's DELETE completes in the ops core's tick, so the finale sees the last block standing in the same one).
 mountHollowVerbs(store);
 mountFinale(store);
+// Slice 7b: THE LAST LANDING after MERGE (systems/last-landing.ts, Track DROP): its 'merge' controller resolver, after the
+// FINALE that starts it.
+mountLastLanding(store);
 // The run (WP7): the stats, BEAM OUT's bar on world time, and the soft fails' bookkeeping.
 mountRun(store);
 // Phase 3 slice 2: 046.log through the run (the keys at the boots, the SCAN, the reader after ship 1's report).
@@ -300,6 +305,8 @@ mountFinalCard(store);
 mountLogReader(store);
 // WP11: LAST LIGHT's choice, once the root's DELETE has left its last block.
 mountFinaleChoice(store);
+// Slice 7b: THE LAST LANDING's header strip and hint over the SHIP view (Track VIEW).
+mountLastLandingView(store);
 mountPlacement(store, memWrap);
 // After the strip: HOLLOW's reach (NEXT BITE, arrows, GAP/WALL), the infection's crawl and readouts,
 // the tug's green boundary and HOLLOW's moments are painted onto its rebuilt chips.

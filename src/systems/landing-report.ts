@@ -1,3 +1,5 @@
+// Slice 7b: the lead owns this file (slice-7-plan.md §4.2): the RESTORED BY MERGE row's counts and icons and the credits'
+// `(restored)` come from Track VIEW's systems/last-landing-hud.ts (restoredReportRow, restoredCreditTag; neutral until built).
 // Slice 7a: the lead owns this file (slice-7-plan.md §4.1): the endingLine hook (systems/ending-rules.ts reportEndingLine,
 // Track FINALE's; 7b's VIEW marks its RESTORED row's icons here). Slice 3c: Track UI's model stands.
 import type { GameState } from '@state/schema';
@@ -15,6 +17,7 @@ import { COLONISTS_PER_POD, STAR_CHARGE_BONUS } from '@data/tuning';
 import { residentReportRows, type ResidentReportRow } from '@systems/resident-hud';
 import { surveyLzRowSuffix } from '@systems/survey-hud';
 import { reportEndingLine } from '@systems/ending-rules';
+import { restoredCreditTag, restoredReportRow } from '@systems/last-landing-hud';
 
 // The LANDING REPORT's view model (01-landing §4, plan §1.4), pure: everything the screen shows, from landingResult and
 // the stars, so the screen (components/run/LandingReport.ts) only lays it out and times it. It plays in three stages:
@@ -153,7 +156,10 @@ function reportRows(tally: LandingTally, locked: ReadonlyMap<number, ResidentRep
     rows.push({ kind: 'not-launched', label: podCode(pod.pod), text: line.slice(podCode(pod.pod).length + 3), icons: ['not-launched'], tone: 'muted', line, why: null });
   }
   if (tally.restored > 0) {
-    rows.push({ kind: 'restored', label: LANDING_REPORT_TEXT.restored, text: '', icons: [], tone: 'good', line: LANDING_REPORT_TEXT.restored, why: null });
+    // Slice 7b (R29): its counts and icons are Track VIEW's (null: the row as 7a drew it).
+    const restored = restoredReportRow(tally);
+    const line = restored === null ? LANDING_REPORT_TEXT.restored : `${LANDING_REPORT_TEXT.restored} · ${restored.text}`;
+    rows.push({ kind: 'restored', label: LANDING_REPORT_TEXT.restored, text: restored?.text ?? '', icons: restored?.icons ?? [], tone: 'good', line, why: null });
   }
   return rows;
 }
@@ -192,7 +198,8 @@ function credits(state: Readonly<GameState>, tally: LandingTally): LandingReport
     const touch = pod.touch!;
     const { colonist, words } = creditedSay(record.featured, touch, pod.pod, said);
     said.add(words);
-    const where = LANDING_REPORT_UI_TEXT.creditWhere(pod.place!, pod.lz, touch);
+    // Slice 7b (R29): a restored pod's ` (restored)` (Track VIEW's; '' until built).
+    const where = LANDING_REPORT_UI_TEXT.creditWhere(pod.place!, pod.lz, touch) + restoredCreditTag(pod);
     return {
       pod: pod.pod, family: pod.family, names: pod.featured.map((colonist) => colonist.name), place: pod.place!, touch, points: pod.points, lead: pod.pod === landing.lead,
       lz: pod.lz, colonist: { name: colonist.name, age: colonist.age, about: colonist.line, words }, where,

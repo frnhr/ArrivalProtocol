@@ -1,3 +1,4 @@
+// Slice 7b: Track VIEW makes one marked edit here (slice-7-plan.md §4.2: the RESTORED row, in paint).
 // Slice 4c–4e: Track DROP owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2). Others ask by message.
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
@@ -119,6 +120,7 @@ export function mountPodBayWindow(store: Store<GameState>, deps: PodBayDeps): ()
     patch(endBtn, model.endLanding.label);
     endBtn.disabled = !model.endLanding.enabled;
     paintAutodrop(model.autodrop);
+    // (Slice 7b, Track VIEW's marked edit: the `RESTORED 4` row from systems/last-landing-hud.ts podBayRestoredRow goes here.)
   }
 
   let lastPip = '';

@@ -18,6 +18,7 @@ import { landingKid, VESPER_ROUTE } from './landing-kid';
 import { planLanding } from '@systems/autodrop-plan';
 import { autodropController, autodropLineOf, autodropTutorialDue } from '@systems/autodrop';
 import { activeLandingController, controllerLaunchInSec, registerLandingController } from '@systems/landing-controller';
+import { mountLastLanding } from '@systems/last-landing';
 import { getDropSolution } from '@systems/drop-cache';
 import { releaseThread, reserveThread, threadsBusy, threadsTotal } from '@systems/ops-core';
 import { demoSkill, AUTODROP_DEMO_TUNING } from '@systems/skill-tree';
@@ -129,6 +130,8 @@ for (const version of [2, 3] as const) {
   armLanding(h, [ARM.ARES, ARM.HALCYON], { autodrop: 3, demos: [0.05, -0.05], healDrivers: true, healInstruments: true });
   h.step();
   h.press('KeyG');
+  // Slice 7b: the game's own 'merge' resolver (systems/last-landing.ts, mounted by the harness) stands aside for this one.
+  h.unmountLastLanding();
   const off = registerLandingController('merge', (state) => autodropController(state, { version: 3, queue: [], source: 'merge' }));
   launches.length = 0;
   let claimed = false;
@@ -150,6 +153,7 @@ for (const version of [2, 3] as const) {
   }
   const active = activeLandingController(st());
   off();
+  mountLastLanding(h.store);
   check('m6: a \'merge\' resolver wrapping AUTODROP (source \'merge\') answers as itself: no throw, and its launches are MERGE\'s',
     !threw && active?.source === 'merge' && launches.length > 0 && launches.every((launch) => launch.source === 'merge'), JSON.stringify(launches));
   check('m5: under it AUTODROP\'s own machinery stands aside: no Core thread claimed, no strip rows of its own', !claimed && !lines, `claimed ${claimed} lines ${lines}`);

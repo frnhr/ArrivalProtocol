@@ -379,7 +379,7 @@ export function createPlotLandingLayer(svg: SVGSVGElement, below: SVGElement, ab
       if (node.getAttribute('class') !== cls) node.setAttribute('class', cls);
     }
 
-    // Beacons.
+    // Beacons. (Slice 7b, Track VIEW's marked edit: a beacon with `restored` is THE LAST LANDING's, steady amber, R29.)
     const parked = new Set(model.beacons.map((beacon) => beacon.pod));
     prune(beaconNodes, parked, (node) => node.remove());
     model.beacons.forEach((beacon, i) => {

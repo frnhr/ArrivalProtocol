@@ -13,6 +13,8 @@ import { mountSurvey } from '@systems/survey';
 // and on every ship but the flagship).
 import { mountHollowVerbs } from '@systems/hollow-verbs';
 import { mountFinale } from '@systems/finale';
+// Slice 7b: THE LAST LANDING's 'merge' resolver, after the finale as main.ts mounts it (inert until Track DROP builds it).
+import { mountLastLanding } from '@systems/last-landing';
 import { assertMemoryInvariants } from '@systems/memory-ops';
 import { isPodCode } from '../support/pod-code';
 import type { Segment, DriverSegment } from '@/types/segment';
@@ -23,6 +25,9 @@ export interface Harness6 extends Harness5 {
   maybeSoul: (code: string) => DriverSegment | null;
   checkMemory: () => void;
   hollowBlocks: () => Segment[];
+  // Slice 7b: takes THE LAST LANDING's 'merge' resolver out of the registry (a suite that registers its own 'merge' resolver
+  // calls it first, and mountLastLanding(h.store) after, to put the game's back).
+  unmountLastLanding: () => void;
 }
 
 export function createHarness6(seed = 1, opts: { soulsFound?: boolean } = {}): Harness6 {
@@ -35,8 +40,10 @@ export function createHarness6(seed = 1, opts: { soulsFound?: boolean } = {}): H
   mountSurvey(base.store);
   mountHollowVerbs(base.store);
   mountFinale(base.store);
+  const offLastLanding = mountLastLanding(base.store);
   return {
     ...base,
+    unmountLastLanding: offLastLanding,
     maybeSoul: (code) => base.souls().find((soul) => isPodCode(soul.pod, code)) ?? null,
     checkMemory: () => assertMemoryInvariants(base.store.getState().memory, MEMORY_LAYOUTS.FULL.totalBlocks),
     hollowBlocks: () => base.store.getState().memory.filter((seg) => seg.type === 'hollow'),
