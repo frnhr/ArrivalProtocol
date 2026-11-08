@@ -54,6 +54,10 @@
 // and how the ship ended is logged. The RUN TALLY says `NEVER ARRIVED: —`.
 // About 20 minutes; shots under tests/.out/e2e/shots/play-*.
 // Usage: node tests/e2e/scenarios/playthrough.mjs   (env E2E_BASE_URL, SEED, SHOT_VIEWPORT; tests/e2e/run.mjs runs it)
+// Slice 6: CORMORANT is POOR on seed 7 (LZ-B on a ROCKY guess) and the kid trains no SURVEY: its card's SITE DATA and LZ rows,
+// the boot's SITE DATA POOR line after the ECC lines (none on the GOOD ships), and at its landing the first pod down on LZ-B
+// shows the ground (the stamp `LZ-B · ROCKY ✕`, CONTROL's lines, the report's `· ROCKY · n HARD`). Every points check reads
+// the page, so the hard pods move no check.
 // Debugging a ship: PLAY_FROM=6 flies headless to LAST LIGHT after the title (__ap.route along the worked route, a fresh
 // unit carried in; the earlier ships' checks are skipped), PLAY_TRACE=1 logs every strip line the kid reads, with the time
 // and the screen. LAND_BY_STRIP=1,2,3,4,5,6 lands those ships by the strip (default 1,2,6: all six add about 4 minutes).
@@ -429,6 +433,14 @@ check('title: the card is up with UNIT-047 · YEAR 2300 · FINAL SHIP 180 LY OUT
   && title.button === '[ RECEIVE TRANSMISSION ]' && title.phase === 'title', JSON.stringify(title));
 await shot('0-title');
 await page.locator('#titleReceive').click();
+// Every stamp the page shows, kept (a later stamp replaces the one on screen): slice 6's reveal stamp is read from it. Only the
+// stamp layer is watched: an observer on the whole page would run on every frame's DOM and slow the real-time flights.
+await st(() => {
+  window.__e2eStamps = [];
+  new MutationObserver((records) => {
+    for (const record of records) for (const node of record.addedNodes) if (node.classList?.contains('stamp')) window.__e2eStamps.push(node.textContent);
+  }).observe(document.getElementById('stampLayer'), { childList: true });
+});
 
 // --- The ships ----------------------------------------------------------------------------------------------------------
 const run = { lines: new Set(), long: [], unfit: new Set(), shipsFlown: [], landed: [], miniSeen: 0, readingLines: 0, reports: [], noSalvageV2: [] };
@@ -494,6 +506,23 @@ for (const [index, name] of SHIPS.entries()) {
         closed.at >= 0 && closed.tone === 'resident' && closed.sleepBefore, JSON.stringify(closed));
     } else {
       check(`${tag}: …no RECEIVER CLOSED line (no resident on this ship)`, closed.at < 0, JSON.stringify(closed));
+    }
+  }
+  // Slice 6: a POOR planet's boot line after the ship's own arrival-damage lines (the ECC group), before the deliveries; the
+  // GOOD ships have none.
+  {
+    const order = await st(() => window.__ap.log().filter((entry) => entry.id > window.__e2eLogFrom).map((entry) => entry.text));
+    const at = order.indexOf('> SITE DATA POOR · ARRIVAL CONTROL GUESSED 2 LZs');
+    const lastEcc = order.reduce((last, text, i) => (/^> ECC:/.test(text) ? i : last), -1);
+    const firstDelivery = order.findIndex((text) => /^> DELIVERY:/.test(text));
+    if (name === 'CORMORANT') {
+      check(`${tag}: …the boot types \`> SITE DATA POOR · ARRIVAL CONTROL GUESSED 2 LZs\` after the ECC lines, before the deliveries (slice 6)`,
+        at > lastEcc && lastEcc >= 0 && (firstDelivery < 0 || at < firstDelivery), JSON.stringify({ at, lastEcc, firstDelivery }));
+      // CONTROL's quip at the first flight tick (read now: the log keeps only its latest lines by the landing).
+      check(`${tag}: …CONTROL says \`We guessed the landing sites! :)\` as the flight starts (slice 6)`,
+        await waitFor(() => window.__ap.log().some((entry) => entry.speaker === 'control' && entry.text === 'We guessed the landing sites! :)'), 5000));
+    } else {
+      check(`${tag}: …no SITE DATA POOR line (its site data is GOOD)`, !order.some((text) => /^> SITE DATA POOR/.test(text)));
     }
   }
   if (name === 'KESTREL') {
@@ -831,6 +860,16 @@ for (const [index, name] of SHIPS.entries()) {
         done.trace ?? 'no TRACE line');
     }
     if (name === 'CORMORANT') {
+      // Slice 6: no SURVEY aboard, so the first pod down on LZ-B's ROCKY guess showed it: the stamp, CONTROL's reveal line, the
+      // report's row. The pods there landed hard; the checks above read the points from the page.
+      const poor = await st(() => ({
+        reveals: window.__ap.survey().reveals, stamps: window.__e2eStamps ?? [],
+        control: window.__ap.log().filter((entry) => entry.speaker === 'control' && /landing sites|rocky|lake/.test(entry.text)).map((entry) => entry.text),
+      }));
+      check(`${tag}: …the first pod down on LZ-B showed its ROCKY guess: the stamp \`LZ-B · ROCKY ✕\`, CONTROL's reveal line, the row's \`· ROCKY · n HARD\` (slice 6)`,
+        JSON.stringify(poor.reveals) === '[{"site":"guess-B","by":"touchdown"}]' && poor.stamps.includes('LZ-B · ROCKY ✕')
+        && poor.control.includes('LZ-B is a little rocky :)')
+        && rows.rows.some((row) => /^LZ-B .* · ROCKY · \d+ HARD$/.test(row)), JSON.stringify({ ...poor, rows: rows.rows }));
       // Silent until the capture closed the loop, then the bite, the kid's fight (REPAIR), `> ...047?`, and the naming.
       const story = await st(() => ({ named: window.__ap.store.getState().run.hollowNamed, owner: window.__ap.store.getState().memory.find((seg) => seg.type === 'hollow' && seg.root)?.owner ?? null }));
       const repairs = (mindByVerb.REPAIR ?? 0) - repairsBefore;
@@ -980,6 +1019,10 @@ for (const [index, name] of SHIPS.entries()) {
     if (next.name === 'CORMORANT') {
       check(`${tag}: …CORMORANT's card said HOLLOW WILL FIND YOU ON THIS BEAM (M3: the final ship is in range)`,
         deskPicked.card?.rows.includes('threat=HOLLOW WILL FIND YOU ON THIS BEAM') === true, JSON.stringify(deskPicked.card?.rows));
+      // Slice 6: CORMORANT is POOR on seed 7 (LZ-B on a ROCKY guess); the kid trains no SURVEY.
+      check(`${tag}: …and \`SITE DATA · POOR · ARRIVAL CONTROL GUESSED\`, \`LZ: 2 · SURVEY NEEDED\` (slice 6)`,
+        deskPicked.card?.rows.includes('site=POOR · ARRIVAL CONTROL GUESSED') === true && deskPicked.card.rows.includes('lzs=LZ: 2 · SURVEY NEEDED'),
+        JSON.stringify(deskPicked.card?.rows));
     }
     // Slice 2: on run 1, the first PACKET opens the LOG READER on entry 01 on top (it takes ESC and SPACE first); the kid
     // reads it and closes it with SPACE (the first SPACE finishes the typing, the next closes), and the PACKET under it

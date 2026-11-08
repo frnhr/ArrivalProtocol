@@ -33,12 +33,12 @@ async function openGame(contextOpts) {
   await kit.waitFor(() => ['boot', 'flight'].includes(window.__ap.store.getState().run.phase), 8000);
   await kit.st(() => window.__ap.skipBoot());
   await kit.waitFor(() => window.__ap.store.getState().run.phase === 'flight', 20000);
-  // Every stamp the page shows, kept (a later stamp replaces the one on screen).
+  // Every stamp the page shows, kept (a later stamp replaces the one on screen); only the stamp layer is watched.
   await kit.st(() => {
     window.__e2eStamps = [];
     new MutationObserver((records) => {
       for (const record of records) for (const node of record.addedNodes) if (node.classList?.contains('stamp')) window.__e2eStamps.push(node.textContent);
-    }).observe(document.body, { childList: true, subtree: true });
+    }).observe(document.getElementById('stampLayer'), { childList: true });
   });
   return { context, page, ...kit };
 }
