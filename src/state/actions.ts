@@ -116,10 +116,11 @@ function stateOf(seg: Segment): SegmentState | undefined {
 }
 
 // Sets (or clears, with undefined) a segment's state. Only the types that carry one are touched:
-// REPAIR CHARGE, free space, HOLLOW, a FIREWALL and 046.log have none, nor (slice 5) the sleeper's files, its lock or a note.
+// REPAIR CHARGE, free space, HOLLOW, a FIREWALL and 046.log have none, nor (slice 5) the sleeper's files, its lock or a note,
+// nor (slice 7d) the `▓▓░▓` signal file.
 function setState(seg: Segment, state: SegmentState | undefined): void {
   if (seg.type === 'free' || seg.type === 'redundancy' || seg.type === 'hollow' || seg.type === 'firewall' || seg.type === 'log') return;
-  if (seg.type === 'sleeper' || seg.type === 'sleep-lock' || seg.type === 'note') return;
+  if (seg.type === 'sleeper' || seg.type === 'sleep-lock' || seg.type === 'note' || seg.type === 'signal') return;
   if (state === undefined) delete seg.state;
   else seg.state = state;
 }

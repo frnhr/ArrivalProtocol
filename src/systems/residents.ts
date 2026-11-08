@@ -15,6 +15,7 @@ import {
 } from '@systems/resident-corrupted';
 import { mountResidentLeft, leftToolRule, leftShipEnd } from '@systems/resident-left';
 import { mountResidentSleeper, sleeperToolRule, sleeperShipEnd, sleeperController } from '@systems/resident-sleeper';
+import { mountUnknownEvents, signalToolRule } from '@systems/unknown-events';
 import { registerLandingController } from '@systems/landing-controller';
 import { DELETE_SEC } from '@data/tuning';
 
@@ -28,6 +29,8 @@ export function mountResidents(store: Store<GameState>): () => void {
   mounted = true;
   const offs = [
     mountResidentCorrupted(store), mountResidentLeft(store), mountResidentSleeper(store),
+    // Slice 7d: the `▓▓░▓` file's SCAN (a rack-A story file no resident wrote, dispatched here with theirs).
+    mountUnknownEvents(store),
     registerLandingController('resident', residentController),
   ];
   return () => {
@@ -60,6 +63,7 @@ export function residentToolRule(seg: Readonly<ResidentFileSegment>, ctx: Readon
     case 'leftover': return leftToolRule(seg, ctx);
     case 'sleeper':
     case 'sleep-lock': return sleeperToolRule(seg, ctx);
+    case 'signal': return signalToolRule(seg, ctx);
   }
 }
 

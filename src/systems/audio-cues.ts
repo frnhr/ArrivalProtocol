@@ -417,6 +417,12 @@ export function mountAudioCues(store: Store<GameState>): () => void {
     // Track LINEAGE's cue:
     on('root-face', () => play('nameGlitch')),
     // --- end of 7c NEXT RUN ---
+
+    // === Slice 7d (slice-7-plan §2.5). 'signal-found' already plays transmitIn (a key found); the file's own read adds the
+    // mind's op chirp under it, so a `▓▓░▓` sounds like a file the mind just opened.
+    // --- 7d SIGNALS ---
+    on('signal-event', () => play('opChirp')),
+    // --- end of 7d SIGNALS ---
   ];
   offs.push(onPostTick(() => playedThisTick.clear()));
 

@@ -56,7 +56,7 @@ withResidentsBuilt(['corrupted', 'left', 'sleeping'], () => {
       const want = fates[i] ?? null;
       check(`${label}, ${name} (slot ${currentSlot(state().run)}): ${def === null ? 'no resident, no RECEIVER CLOSED line' : `${def.name}'s files in rack A, the amber RECEIVER CLOSED line`}; ${FLY_AI_SEC} AI s of flight, memory whole`,
         (def === null ? flight.lines.length === 0 && rackA.length === 0
-          : flight.lines.length === 1 && flight.lines[0] === RESIDENT_TEXT.receiverClosed && rackA.length > 0 && rackA.every((seg) => seg.owner === def.name))
+          : flight.lines.length === 1 && flight.lines[0] === RESIDENT_TEXT.receiverClosed && rackA.length > 0 && rackA.every((seg) => 'owner' in seg && seg.owner === def.name))
         && flight.whole && flight.flew && (def === null) === (want === null), JSON.stringify({ def, ...flight }));
       const met = state().run.residents.met.length;
       toDesk(h.store);

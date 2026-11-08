@@ -2020,7 +2020,9 @@ export const RUN_SAVE_KEY = 'arrival-protocol/run/v1';
 // landing.lastLanding (7b's, always null), FeaturedColonist.line, run.lastUnit.ending (RUN_SAVE_MIGRATIONS[6]).
 // 8 (slice 7c, one bump for its three tracks: slice-7-plan R2, §2.2): run.traces, run.log.book, arrival.traceLines
 // (RUN_SAVE_MIGRATIONS[7]).
-export const RUN_SAVE_VERSION = 8;
+// 9 (slice 7d, one bump: slice-7-plan R2, §2.2 7d): SignalRecord.source and .n (signals beyond the notes), the `▓▓░▓`
+// signal file (SegmentType 'signal') (RUN_SAVE_MIGRATIONS[8]).
+export const RUN_SAVE_VERSION = 9;
 // The archive (§4.5; 02 §3.12: v2 holds the arm, the trail, colonies, routes, events and traces). From slice 3c the key
 // stays `meta/v2` and versions migrate in place (systems/meta.ts migrateMeta, META_VERSION the record's); a new key is
 // only ever a deliberate reset. v1's key (phase 2's archive) was the one such reset: never written, read only to detect it
@@ -2571,3 +2573,26 @@ export const CHART_TRACE_MARK_PX = 4;
 export const CHART_TRACE_MARK_GAP_PX = 6;
 
 // --- end of 7c CHART -------------------------------------------------------------------------------------------------
+
+
+// =====================================================================================================================
+// --- Phase 3 slice 7d, SIGNALS (docs/phase3/impl/slice-7-plan.md §2.6, R39–R41; 02-map §3.5, 05-story §3.7, §3.8). One
+// agent built 7d's FOUNDATION and both its tracks in sequence; every number is in this block. RUN_SAVE_VERSION (9) stays
+// with the save's keys above (3c SAVE).
+// =====================================================================================================================
+
+// --- 7d lead -----------------------------------------------------------------------------------------------------------
+
+// The signal `?` ship's fragments (02 §3.5: 2 on the signal event, 1 on the gone-resident event, 1 in each of two departed
+// residents' notes), asserted at load against the generator's reservation (systems/unknown-events.ts).
+export const SIGNAL_EVENT_FRAGMENTS = 2;
+// CONTACT's trace (R41): two signal stops in layers 5–7 (TRACE_LAYERS.contact), each this much REPAIR CHARGE on arrival
+// (through the arrival path, as every gift: carry.ts arrivalCharge's giftCharge) and one fragment, found as a SCAN of its
+// `▓▓░▓` file. WHY 8: two stops give +16, against every other gift's +15 (05 §3.8's comparability).
+export const CONTACT_GIFT_CHARGE = 8;
+export const CONTACT_STOP_FRAGMENTS = 1;
+// The `▓▓░▓` file (R39): one block in rack A, after a resident's files when the ship has one (data/memory.ts checks at
+// load that the largest resident's files and it still leave a WALL's width free there).
+export const SIGNAL_FILE_BLOCKS = 1;
+
+// --- end of 7d lead ----------------------------------------------------------------------------------------------------

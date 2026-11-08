@@ -101,7 +101,7 @@ const deal = (): ReturnType<typeof dealDraft> => dealDraft(st(), hopBetween(st()
   check('SCAN on farewell.txt reads it: its lines, signed `— HELM`', st().resident.left?.noteRead === true
     && seg(RESIDENT_SEG_IDS.note)?.desc === `${lines.join(' ')} — HELM` && lines.length >= 2, seg(RESIDENT_SEG_IDS.note)?.desc);
   check('…its fragment is a signal: run.residents.signals +1 (slot 4, its depth), \'signal-found\' (1 of 3)',
-    JSON.stringify(st().run.residents.signals) === JSON.stringify([{ slot: HERON, depth }])
+    JSON.stringify(st().run.residents.signals) === JSON.stringify([{ slot: HERON, depth, source: 'note', n: 1 }])
     && JSON.stringify(signalsHeard) === JSON.stringify([{ slot: HERON, count: 1 }]), JSON.stringify({ signals: st().run.residents.signals, signalsHeard }));
   actionScan(h.store, seg(RESIDENT_SEG_IDS.note)!);
   const t0 = st().clock.aiSec;

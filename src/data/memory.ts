@@ -12,7 +12,7 @@ import { rollRoster, rollChildAge, type ScriptedRoster } from '@data/souls';
 import {
   SEG_NAME_MAX_CHARS, RACK_BLOCKS, DRIVER_BLOCKS, COLONISTS_PER_POD, INTEGRITY_MAX, LAST_BLOCK_SIZE,
   POD_RACK_MIN_FREE, UNIT_TAIL_BLOCKS, WALL_MIN_BLOCKS, PRE_FINAL_ROOT_CAP, FINAL_ROOT_MAX_BLOCKS, CHARGE_ARRIVAL_FLOOR,
-  SEED_BLOCKS, SEED_GAP_TO_TARGET_BLOCKS, RESIDENT_RACK_A_MIN_FREE,
+  SEED_BLOCKS, SEED_GAP_TO_TARGET_BLOCKS, RESIDENT_RACK_A_MIN_FREE, SIGNAL_FILE_BLOCKS,
 } from '@data/tuning';
 import { RESIDENT_KIND_MAX_BLOCKS } from '@data/residents';
 import { integrityState } from '@state/selectors';
@@ -199,11 +199,12 @@ export const RACK_A: readonly RackItem<ShipFileSpec>[] = [
 
 // Slice 5 (04 §3.11's L6, plan R16): a resident's files take the head of rack A's trailing free run, so RACK_A keeps at least
 // RESIDENT_RACK_A_MIN_FREE free there, and the largest kind still leaves a WALL's width behind it (the free run that always
-// separates them from the pods). Checked at load.
+// separates them from the pods). Checked at load. Slice 7d: a CONTACT stop may hold a resident and the `▓▓░▓` file both, so
+// the largest kind counts with SIGNAL_FILE_BLOCKS.
 (function validateRackAForResidents(): void {
   const last = RACK_A[RACK_A.length - 1];
   const free = last !== undefined && 'free' in last ? last.free : 0;
-  const largest = Math.max(...Object.values(RESIDENT_KIND_MAX_BLOCKS));
+  const largest = Math.max(...Object.values(RESIDENT_KIND_MAX_BLOCKS)) + SIGNAL_FILE_BLOCKS;
   if (free < RESIDENT_RACK_A_MIN_FREE || free - largest < WALL_MIN_BLOCKS) {
     throw new Error(`memory: rack A ends in ${free} free blocks: residents need ${RESIDENT_RACK_A_MIN_FREE}, and ${largest} + ${WALL_MIN_BLOCKS} for the largest kind`);
   }

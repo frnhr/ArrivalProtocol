@@ -86,7 +86,7 @@ withResidentsBuilt(ALL, () => {
   const desk = deskAt([0, 2]);
   check('glyph: none before the run holds a signal (PLOVER and SKYLARK carry one)', !signalGlyph(desk, 10) && !signalGlyph(desk, 12));
   const found = deskAt([0, 2, 4]);
-  found.run.residents.signals.push({ slot: 4, depth: 3 });
+  found.run.residents.signals.push({ slot: 4, depth: 3, source: 'note', n: 1 });
   // Review D4: never where the card says `unknown` (it would tell a departed resident from a sleeper or a surprise), and in
   // slice 5 every card ahead does: the glyph shows nowhere yet.
   check('glyph (review D4): once one is found (HERON\'s), still none on PLOVER and SKYLARK: their cards say `unknown`',

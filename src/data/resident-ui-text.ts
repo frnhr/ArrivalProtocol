@@ -41,6 +41,8 @@ export const RESIDENT_UI_TEXT = {
     cured: 'RESIDENT CURED',
     awake: 'THE SHIP\'S OWN AI IS AWAKE · RACK A',
     signal: (count: number, of: number): string => `SIGNAL · ${count}/${of}`,
+    // Slice 7d: past CONTACT's price.
+    signalMore: (count: number): string => `SIGNAL · ${count}`,
   },
   // The MIND strip's chips (SegmentBlock): a file nobody has scanned reads `?` where its health would be; the sleeper reads as
   // any inactive backup (IDLE, the strip's own word for one) until it wakes; a read note shows its fragment's noise.

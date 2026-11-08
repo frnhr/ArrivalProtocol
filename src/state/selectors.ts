@@ -96,8 +96,8 @@ export function swapAboard(state: Readonly<Pick<GameState, 'memory'>>): boolean 
 // A segment that carries a health number (everything but free space, HOLLOW, REPAIR CHARGE and a
 // FIREWALL, which is a wall, not something with health).
 // Slice 5: the sleeper (its mind and its wall), its lock and a departed resident's note have no health either; a corrupted
-// resident's file and a leftover do.
-export type HealthSegment = Exclude<Segment, { type: 'free' | 'hollow' | 'redundancy' | 'firewall' | 'log' | 'sleeper' | 'sleep-lock' | 'note' }>;
+// resident's file and a leftover do. Slice 7d: nor the `▓▓░▓` signal file.
+export type HealthSegment = Exclude<Segment, { type: 'free' | 'hollow' | 'redundancy' | 'firewall' | 'log' | 'sleeper' | 'sleep-lock' | 'note' | 'signal' }>;
 
 export function hasIntegrity(seg: Segment): seg is HealthSegment {
   return 'integrity' in seg;
@@ -118,8 +118,9 @@ export function isInfectable(seg: Segment): seg is HealthSegment {
 }
 
 // One of a resident's rack-A files (slice 5, plan R15): WARDEN.sys, the sleeper's files, its lock, a note or a leftover.
-// systems/residents.ts sends each type to its kind's module (the tool rules, DELETE's time and confirm).
-const RESIDENT_FILE_TYPES: ReadonlySet<SegmentType> = new Set<SegmentType>(['resident', 'sleeper', 'sleep-lock', 'note', 'leftover']);
+// systems/residents.ts sends each type to its kind's module (the tool rules, DELETE's time and confirm). Slice 7d: and the
+// `▓▓░▓` signal file, a rack-A story file no resident wrote (systems/unknown-events.ts's rules).
+const RESIDENT_FILE_TYPES: ReadonlySet<SegmentType> = new Set<SegmentType>(['resident', 'sleeper', 'sleep-lock', 'note', 'leftover', 'signal']);
 
 export function isResidentFile(seg: Readonly<Segment>): seg is ResidentFileSegment {
   return RESIDENT_FILE_TYPES.has(seg.type);

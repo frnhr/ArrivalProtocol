@@ -120,10 +120,19 @@ export interface ResidentRecord {
   leftoversEaten: number;            // a departed resident's leftovers HOLLOW ate (0 otherwise)
 }
 
-// A signal fragment found in a departed resident's note (05 §3.7; slice 7's CONTACT counts them, SIGNALS_FOR_CONTACT).
+// Where a run's signal fragments were found (05 §3.7; CONTACT counts them, SIGNALS_FOR_CONTACT): a departed resident's note
+// (slice 5: 1 fragment), the signal `?` ship's `▓▓░▓` file (7d: SIGNAL_EVENT_FRAGMENTS), or a CONTACT trace's signal stop's
+// file (7d: CONTACT_STOP_FRAGMENTS). A contact stop may also be a departed resident's ship whose note carries one, so a slot
+// can hold two records, one per source.
+export type SignalSource = 'note' | 'signal-event' | 'contact-stop';
+
+// One SCAN that found fragments (RUN_SAVE_VERSION 9: `source` and `n`; a v8 record was a note's, 1). `n` is how many it
+// found there; the run's count is the sum (state/resident-selectors.ts signalCount).
 export interface SignalRecord {
   slot: number;
   depth: number;
+  source: SignalSource;
+  n: number;
 }
 
 export interface RunResidentState {
