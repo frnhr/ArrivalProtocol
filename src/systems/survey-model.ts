@@ -11,7 +11,7 @@ import { isLivePhase } from '@systems/clock';
 import { pendingTouchdowns } from '@systems/landing-rules';
 import { surveyVersion, groundKnownAt } from '@state/survey-selectors';
 import {
-  SURVEY_CELL_DEG, SURVEY_CELLS, SURVEY_SWATH_DEG, SURVEY_SWEEP_FACTOR, SURVEY_SWEEP_VERSION,
+  SURVEY_CELL_DEG, SURVEY_CELLS, SURVEY_SWATH_DEG, SURVEY_SWEEP_FACTOR, SURVEY_SWEEP_VERSION, SURVEY_RATE_VERSION,
 } from '@data/tuning';
 
 const TWO_PI = 2 * Math.PI;
@@ -63,6 +63,13 @@ export function siteStars(site: Readonly<Pick<SurveySite, 'kind' | 'ground' | 'w
 export function swathHalfRad(version: EffectiveVersion): number {
   if (version === 0) return 0;
   return (SURVEY_SWATH_DEG * (version >= SURVEY_SWEEP_VERSION ? SURVEY_SWEEP_FACTOR : 1) * Math.PI) / 180;
+}
+
+// Whether SURVEY also maps a swath around the drop dot now (OPEN-DECISIONS 52, deviating from 01 §3.13): in the LANDING, at
+// SURVEY_RATE_VERSION or better, while it runs. The dot itself is the drop cache's (systems/drop-cache.ts getDropSolution):
+// SITES's wedge reads it there.
+export function dropSwathOn(state: Readonly<GameState>): boolean {
+  return state.run.phase === 'landing' && surveyVersion(state) >= SURVEY_RATE_VERSION && surveyRunning(state) === 'running';
 }
 
 // Whether the ship is where SURVEY maps (plan §2.8 step 1): a live flight, or the landing until it ends, with the clock running.
