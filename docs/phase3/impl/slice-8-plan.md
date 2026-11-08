@@ -1131,3 +1131,143 @@ HIGH §2.6 moth.wall.Δeaten: MOTH.wall a 2-block blocker in a GAP (§2.6)
 sweeps (quick): playthrough 584 s · playthrough-no-autoburn-v2 255 s · playthrough-no-autoburn-v3 206 s · playthrough-no-autodrop 153 s · playthrough-no-sentry 154 s · sleeper-sweep 141 s · survey-sweep 232 s · last-landing-sweep 133 s · v3-sweep 337 s · traces-sweep 364 s · full-run 134 s · decoy-stats 13 s · signal-stats 6 s · survey-busy 66 s · corrupted-sweep 40 s · autodrop-sweep 140 s
 their own checks failed (numbers kept): full-run (exit 1), survey-busy (exit 1), corrupted-sweep (exit 1)
 ```
+
+## Deviations (Track ENDINGS)
+
+Branch `endings-8` from af1e1d4 (Step 0 HARNESS merged), not pushed. Its OPEN-DECISIONS items are 105–112, and items 70,
+84 and 88 are marked BUILT with pointers to them. Every measurement ran on a shared machine at a load average of 11–27 on
+4 cores, so the times below are 2–3× an idle machine's.
+
+**What changed** (before → after; traces-sweep 20 seeds, seeds 1–20, against no trace on the same seed and route):
+
+| Item | Change | Before | After |
+|---|---|---|---|
+| §2.8, OD 70 → 105 | `TRACE_ALLOWANCE_CHARGE` 8 (new; was `TRACE_GIFT_CHARGE` 15) [FRAN] confirm | REASSIGNMENT / PURGE+ / MERGE+ / SPARE+ +1.5 / +1.6 / +1.6 / +1.2 | +1.0 / +1.6 / +1.0 / +0.5 |
+| §2.9, OD 84 → 107 | `SIGNALS_FOR_CONTACT` 3 → 2 [FRAN] | route can collect them 17.9%; worked, 5-ship, TIGHT 0 of 200 arms, 8-ship 21 | 43.3%; worked 28, 5-ship 28, TIGHT 29, 8-ship 75 of 200 |
+| §2.10, OD 88 → 108 | `MERGE_COST_CHARGE` 20 → 16 [FRAN] confirm | four routes, 16 seeds: COMPETENT 36%, LITERAL 32% | 46%, 36% |
+| §2.10 → 109 | `wp11/full-run`: quick seed 4 → 6; its MERGE share is INFO | quick seed's MERGE check failed (13 at the choice) | seed 6 MERGEs with 19 |
+| §2.14 → 110 | every other trace number kept | — | — |
+
+**How each was decided.**
+1. **The allowance (§2.8).** Measured by A/B copies (R2) at 0, 3, 5, 8 and 15, with `HUNT_PREFER_WEIGHT` 0 at 8, and
+   `TRACE_PURGE_BITE_MULT` 0.7 at 8 (PURGE+ only).
+   - REASSIGNMENT: 0.0 at 0, +1.1 at 3, +1.0 at 5, +1.0 at 8, +1.5 at 15. MERGE+: +1.3 at 3, +1.3 at 5, +1.0 at 8.
+   - It is a step, not a slope: the no-trace kid reaches the duel with about 3 charge, and the first few extra charge buy
+     the REPAIR that saves a cluster. §2.8's "0.09 pod per charge" holds only above 8. So 8 stays, the plan's number; going
+     lower takes the gift away and moves nothing until 0.
+   - The hunt is not the gain: weight 0 also gives +1.0.
+   - Read with care: 20 seeds carry about ±0.4. Seeds 21–40 read +2.4 to +3.0 at 8 (+2.9 at 15, +1.8 at 0). That is
+     because two no-trace runs lose the final ship in flight, 16 pods each.
+2. **PURGE + REASSIGNMENT stays +1.6** (item 106), so §2.8's acceptance is met for three of the four rows.
+   - PURGE's wipe removes the final boot's two beam seeds, and they are what eat the drivers there.
+   - PURGE's cost, ×0.85 bites, never reaches a driver while the WP11 defender blocks every verb: at 0.7 the row reads +1.7.
+   - PURGE's own effect by difference is +0.6 at 8 (+0.1 at 15, when the allowance saved the same drivers).
+   - The lever is a rule ([FRAN]), not a number in ENDINGS' blocks.
+3. **CONTACT (§2.9).** The plan's lever order put `CONTACT_GIFT_CHARGE` first. CONTACT's Δpods were already inside ±1
+   (−0.5 / −0.3 / −0.8), so the price came next.
+   - HARNESS's finding holds: 3 signals are out of reach of the pinned routes on every arm but some 8-ship ones.
+   - At 2, every pinned route reaches them when it passes the signal `?` ship: 20% across the four routes, inside 15–35%.
+     Any route reaches them in 43%, so CONTACT stays a found ending.
+   - The rejected levers (generator reservations, a note worth 2, a stop that counts) are in item 107.
+4. **`contact.open` with the kid** is 9% at 2 on the four routes (2% at 3), short of the routes' 20%. That is because the kid
+   loses the signal ship in 10 of 14 runs that meet it (item 111: SPACE held through `PATH UNCERTAIN` on an arrival with
+   Sensor Interp hit). This is HARNESS's kid (`wp12/playthrough.ts`) or the guidance's, not ENDINGS' files, so it is
+   reported, not fixed here.
+5. **MERGE (§2.10).** Read both, as asked.
+   - The quick report's worked route said 64% / 55% at 20, in band.
+   - The full profile's four routes (R5) are the acceptance, and on them (16 seeds × 4 routes × COMPETENT and LITERAL, strip
+     landings) 20 gives 36% / 32%. The ladder is in item 108.
+   - No price on the ladder brings LITERAL to 50%. Its short runs hold 0–13: TIGHT is 0% at every price, and 5-ship is 29%.
+   - So 16 takes most of what the ladder gives (COMPETENT +10 points) and keeps MERGE 4 over the FULL floor; 14 would add one
+     run of 28 for each kid.
+   - One run gives every price: no kid reads the price before the choice.
+   - Why full-run differs (10%, median 13): its kid trains nothing past the first pick and takes the first card dealt. It
+     is not one of G6b's kids, so its share is now information (item 109).
+6. **§2.14.** Every other trace number was read from the same runs and kept (item 110).
+
+**Files outside §4.2's ENDINGS list** (each one hunk, for the lead):
+- `src/data/tuning.ts` 5 KIN block: `SIGNALS_FOR_CONTACT` lives there (KIN wrote it for 05 §3.7), and §2.9 names it as
+  ENDINGS' lever. THREAT owns the block for slice 8, so this one line may conflict at the merge.
+- `tests/unit/residents/left.test.ts` (a comment) and `residents/ui-models.test.ts` (the stamp check now reads the
+  constant): THREAT's suites, moved by the price's stamp text.
+- `tests/e2e/scenarios/residents.mjs` (POLISH's): three `SIGNAL · 1/3` strings → `1/2`. Not run here (§ Tests below).
+- `tests/unit/map/arm-parity.test.ts`: the played run's digest is re-recorded (de4d1e6da04d568e → 8ceb50b18060dcb5).
+  - The comment there says to find a moved digest, and this one was found: it is HOLLOW's `> keep 16 charge for me` line.
+  - The first moment that moves is CORMORANT's desk, every outcome and the end (won-purge) are unchanged, and an A/B copy at
+    20 gives the old digest.
+- `tests/unit/balance/targets.ts` (HARNESS's): the two CONTACT labels no longer say "3 signals"; the lever names the new price.
+- `tests/unit/traces/traces-sweep.test.ts` gains `TS_CASES` (item 112; ENDINGS' file).
+
+**Other deviations.**
+- `traces/final-ship`'s near-skill "no gap" case assumed a full receiver. At +8 seed 4's receiver keeps a 7-block run
+  before AUTOBURN.skl, so the case now closes the hunted skill's free neighbours itself, on the same memory as the
+  "opened" case beside it. The behaviour it checks is unchanged.
+- The "keep 20" wording in comments of files ENDINGS does not own (`hollow.ts`, `boot.ts`, `script.ts`, `types/threat.ts`,
+  `MergeTick.ts`) is left. The words on screen read the constant.
+
+**Spec text for the lead (R10).**
+- 05 §3.7, the step 1 table: MERGE's price `16 REPAIR CHARGE (MERGE_COST_CHARGE)`; the prices line `phase 2's MERGE 20
+  tick` → `the MERGE tick`; the sample card `COSTS 16 REPAIR CHARGE · you have 26`.
+- 05 §3.7, the step 2 table: CONTACT `2 signal fragments (of 5 on the arm)`; the sample `COLLECT 2 SIGNALS · you have 1`.
+- 05 §3.8's trace table and its closing list: REASSIGNMENT `+8 REPAIR CHARGE at the final ship's boot`. The caches keep +15.
+- 04 §5's table and its §5 note: REASSIGNMENT `+8 charge`.
+- 02 §3.5's fragment row: `CONTACT needs 2`.
+- `tests/e2e/run.mjs`: the signals scenario's one-line summary names `SIGNAL · 1/2` and `SIGNAL · 3`.
+- `tests/unit/ui/title-resume.test.ts`: the title's NEXT RUN: line reads `+ 8 charge at the final ship`.
+
+**After: `npm run balance:report -- --only trace.,merge.,contact.`** (6de65ac, quick profile, 15 min at a load average of
+8–14). Its traces-sweep is seeds 1–6. On those seeds REASSIGNMENT reads no better at 8 than at 15 (+1.7 against +1.5), while
+seeds 1–20 read +1.0 against +1.5. A 20-seed Δ has a standard error of about 0.4 (0.34–0.43 by row), so the 6-seed rows
+say little. The playthrough rows are the worked route, as before: the four routes are item 108's table.
+
+```
+| #   | Goal                                               | Target  | Now  | Before | Status | Seeds | Source       | OD |
+|-----|----------------------------------------------------|---------|------|--------|--------|-------|--------------|----|
+| G6  | REASSIGNMENT Δpods (next run)                      | ±1      | +1.7 | +1.5   | HIGH   | 6     | traces-sweep | 70 |
+| G6  | PURGE+REASSIGN Δpods (next run)                    | ±1      | +1.5 | +1.5   | HIGH   | 6     | traces-sweep | 70 |
+| G6  | MERGE+REASSIGN Δpods (next run)                    | ±1      | +1.7 | +1.7   | HIGH   | 6     | traces-sweep | 70 |
+| G6  | SPARE+REASSIGN Δpods (next run)                    | ±1      | +1.2 | +1.3   | HIGH   | 6     | traces-sweep | 70 |
+| G6  | SUNSET / STAY Δpods (next run)                     | ±1      | +0.2 / 0.0 | same | OK | 6   | traces-sweep | 45 |
+| G6  | CONTACT / PURGE+C / MERGE+C Δpods (next run)       | ±1      | -0.5 / -0.3 / -0.8 | same | OK | 6 | traces-sweep | 84 |
+| G6  | PURGE's own effect                                 | ±0.5    | -0.2 | 0.0    | OK     | 6     | traces-sweep | 70 |
+| G6  | MERGE's own effect                                 | ±0.5    | 0.0  | +0.2   | OK     | 6     | traces-sweep | 70 |
+| G6  | duel won, worst ending against no trace            | ±5%     | 0%   | 0%     | OK     | 6     | traces-sweep | 70 |
+| G6  | every gift at its ship (SPARE, SUNSET, STAY / CONTACT's stops) | 0–15 | 15.0 / 7.8 | same | OK | 6 | traces-sweep | 45, 84 |
+| G6b | MERGE affordable, COMPETENT                        | 50%–85% | 64%  | 64%    | OK     | 24    | playthrough  | 88 |
+| G6b | MERGE affordable, LITERAL                          | 50%–85% | 55%  | 55%    | OK     | 24    | playthrough  | 88 |
+| G6b | COMPETENT charge at the choice, median             | info    | 17.0 | 17.0   | INFO   | 24    | playthrough  | 88 |
+| G6b | full-run: MERGE affordable                         | info    | 30%  | 10%    | INFO   | 10    | full-run     | 88 |
+| G6b | full-run: charge at the choice p25 / median / p75  | info    | 9 / 13 / 16 | same | INFO | 10 | full-run   | 88 |
+| G6b | CONTACT open (its signals at the final ship)       | 15%–35% | 13%  | 0%     | LOW    | 24    | playthrough  | 84 |
+| G6b | a route can collect CONTACT's signals (run-1 arms) | info    | 43%  | 18%    | INFO   | 200   | signal-stats | 84 |
+
+sweeps: playthrough 603 s · traces-sweep 276 s · full-run 87 s · signal-stats 3 s
+```
+
+("Before" is HARNESS's quick report above, at 1546a2b.)
+
+**And the 20-seed traces-sweep on 6de65ac** (seeds 1–20, the four REASSIGNMENT cases, `TS_CASES`): +1.0 / +1.6 / +1.0 /
++0.5 (standard errors 0.41 / 0.42 / 0.43 / 0.34). The duel is won in every run. It is identical to the A/B copy's run,
+so the MERGE and CONTACT changes moved nothing here.
+
+**What stays off target, and why.**
+- **PURGE + REASSIGNMENT +1.6** (item 106): PURGE's wipe is the gain, and its cost does not reach drivers under the WP11
+  defender. The lever is a rule, for Fran.
+- **REASSIGNMENT and MERGE + REASSIGNMENT at +1.0** on 20 seeds: on the edge, inside the noise. The quick profile's 6 seeds
+  read HIGH. No allowance between 3 and 8 does better, and 0 takes the gift away (item 105).
+- **MERGE affordable, LITERAL**: 36% on the four routes at 16; no ladder price reaches 50% (item 108). Next: POLISH's
+  PACKET hint, then the link slope (R3).
+- **`contact.open`**: 13% on the worked route's 24 seeds and 9% on the four routes, against 15–35%. The cause is the kid
+  losing the signal `?` ship (item 111); the routes' own reach is 20%.
+
+**Tests.**
+- `npm run typecheck` is clean, and so is the tests' strict tsc.
+- e2e, each run alone (E2E_CHROMIUM=/opt/pw-browsers/chromium): `signals` 12/12 in 138 s and `ending` 30/30 in 294 s.
+- `traces.mjs` (the allowance's +8 lines) and `residents.mjs` (`SIGNAL · 1/2`) are edited and not run; they are for CLOSE's
+  e2e run.
+- The quick unit tier (`npm test`, 4 workers), with the load average 7.5 at the start and 14.9 at the end: 226 passed and 1
+  failed, with 15 balance-only skipped, in 381 s.
+  - The failure was `ui/title-resume`, whose `+ 15 charge` NEXT RUN: line I had missed. It is fixed, and the suite passes
+    24/24 alone.
+  - 381 s is over the 300 s runner budget and the slice's 265 s cap only because the cores were shared, as in HARNESS's
+    378 s under the same load. The lead should re-time the tier on a quiet machine.
