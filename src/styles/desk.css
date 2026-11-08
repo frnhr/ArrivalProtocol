@@ -852,3 +852,6 @@ body.reduced-motion .desk-tab.pulse .desk-tab-badge { animation: none; }
 .desk-legend-item.kind-trace .desk-legend-glyph { background: var(--desk-bright); transform: rotate(45deg) scale(0.8); }
 .dc-row.key-trace .dc-v, .dc-rest .dc-row.key-trace .dc-v { color: var(--desk-bright); }
 .dc-row.key-trace.tone-good .dc-v::before { content: '◆ '; }
+/* The FINAL CARD's NEXT RUN lines (components/run/FinalCard.ts, CHART's marked rows; the night's own rules are night.css's
+   .nf-next): each line's gain and cost are unbreakable parts, so a phone wraps between them, never inside one. */
+.nf-next-part { display: inline-block; }
