@@ -6,6 +6,8 @@
 //   ships made it home.`), still the victory tone (the flagship's colonists landed); (WP11 fix round 1: the title was
 //   `… 4 OF 5 CLASSIC_FIVE MADE IT`, which broke onto two lines; and the title's lineage after it never claims the fleet);
 // • the words fit one line with the worst numbers; a fleet that all made it keeps the full claim (the model alone).
+// Slice 7a (R6, R13): PURGE is taken on the two-step card once the landing has settled, and its typed ending is the short
+// verdict: it makes no fleet claim at all (the count is RUN END's, below, and the epilogue's).
 import { check, finish } from '../../wp1/harness';
 import { createHarness11 } from '../harness11';
 import { receiveTransmission } from '@systems/boot';
@@ -18,11 +20,11 @@ import { theRoot } from '@systems/hollow';
 
 import { actionDelete } from '@state/actions';
 import { RUN_END_PURGE_SHORT, RUN_END_TITLE, RUN_END_WHY, lineageLine } from '@data/script';
-import { HOLLOW_FINALE } from '@data/hollow-text';
+import { FINALE_TEXT } from '@data/finale-text';
 import { ROOT_DELETE_SEC, MAX_LINE_CHARS } from '@data/tuning';
 import { CLASSIC_FIVE } from '@data/classic-five';
 import type { GameState, ShipResult } from '@state/schema';
-import { chooseEnding, finaleAtStep1 } from '../../support/finale';
+import { chooseEnding, decidedAs } from '../../support/finale';
 
 const SEED = 19;
 const h = createHarness11(SEED, { soulsFound: false });
@@ -41,7 +43,7 @@ function result(index: number, outcome: ShipResult['outcome']): ShipResult {
 {
   const worst = [
     RUN_END_PURGE_SHORT.title(99, 99), RUN_END_PURGE_SHORT.why(99, 99),
-    ...HOLLOW_FINALE.purgeEnding({ shipName: 'LAST LIGHT', inOrbit: '3,200', anyoneHome: true, eaten: '3,200', hollowWord: 'unit_999998', unit: 999, shipsHome: 99, fleetSize: 99 }).map((line) => line.text),
+    FINALE_TEXT.echo(FINALE_TEXT.command.purge('unit_999998')), FINALE_TEXT.echo(FINALE_TEXT.command.reassignment), FINALE_TEXT.verdict.compliant(999),
   ];
   check(`PURGE's short-fleet words fit one line (≤ ${MAX_LINE_CHARS})`, worst.every((text) => text.length <= MAX_LINE_CHARS), worst.map((text) => text.length).join(' '));
   const home = (outcomes: ShipResult['outcome'][]): ReturnType<typeof fleetHome> => fleetHome(outcomes.map((outcome, i) => result(i, outcome)), CLASSIC_FIVE.length);
@@ -92,11 +94,12 @@ const root = theRoot(state().memory);
 check('…its ORBIT LOCK opens the root', root !== null && !root.locked && state().hollow.finale.phase === 'duel');
 if (root) actionDelete(h.store, root);
 h.stepFor(ROOT_DELETE_SEC + 0.5);
-check('…its DELETE leaves the choice, PURGE is taken', finaleAtStep1(state()) && chooseEnding(h.store, 'purge') === null);
+check('…its DELETE puts HOLLOW to sleep; once the landing settles the choice is up, PURGE is taken', state().hollow.finale.phase === 'asleep'
+  && chooseEnding(h.store, 'purge', 'reassignment', { step: () => h.step() }) === null && decidedAs(state()) === 'purge');
 {
   const lines = state().hollow.finale.ending?.lines.map((line) => line.text) ?? [];
-  check('the typed ending says how many ships made it, not that the fleet is home', lines.includes('4 of 5 ships made it home.')
-    && !lines.includes('the fleet is home.'), JSON.stringify(lines));
+  check('the typed verdict claims nothing of the fleet (never `the fleet is home.`, R13)', lines.length === 3
+    && !lines.some((text) => /fleet|ships made it/.test(text)), JSON.stringify(lines));
 }
 check('LAST LIGHT reaches its LANDING REPORT', h.untilPhase('report', 400), state().run.phase);
 continueAfterReport(h.store);

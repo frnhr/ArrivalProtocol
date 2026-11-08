@@ -35,7 +35,7 @@ import { MERGE_COST_CHARGE, DEAL_PAUSE_SEC } from '@data/tuning';
 import { classicShip } from '@data/classic-five';
 import type { GameState, LogEntry } from '@state/schema';
 import type { DriverSegment } from '@/types/segment';
-import { finaleAtStep1 } from '../support/finale';
+import { finaleAtStep1, settleFinale } from '../support/finale';
 
 const VESPER = 3;
 const LAST_LIGHT = 4;
@@ -257,6 +257,11 @@ check('REFUSE: `> ok.`, and nothing of the deal holds the verbs any more', s().r
     h.step();
     if (openChoiceEntry(s()) !== null || s().hollow.deal.phase === 'offered') coexisted = true;
   }
+  // Slice 7a (R6): the root's fall puts HOLLOW to sleep and the landing goes on; the card comes up once it has settled.
+  settleFinale(h.store, () => {
+    h.step();
+    if (openChoiceEntry(s()) !== null || s().hollow.deal.phase === 'offered') coexisted = true;
+  });
   check('…and the duel runs to FinaleChoice with no deal UI beside it', finaleAtStep1(s()) && !coexisted
     && openChoiceEntry(s()) === null && s().hollow.deal.phase === 'done', `${s().hollow.finale.phase}`);
 }

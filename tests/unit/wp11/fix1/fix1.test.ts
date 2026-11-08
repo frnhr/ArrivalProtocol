@@ -3,6 +3,9 @@
 //   listener on the phase sees it), with startAi at the choice and untilAi = startAi + finaleEndingSec; also when every
 //   pod landed before the root's DELETE (the case where the card never opened).
 // • UNRESOLVED's last line holds the LANDING REPORT until it has typed and been read.
+// Slice 7a (R6, R10, R13): the ending is chosen on the two-step card once the landing has settled (support/finale.ts
+// settleFinale), and its typed ending is the short verdict, written in the confirm's update ('verdict'); UNRESOLVED's line
+// types before its IT FOLLOWED YOU card comes up, and the report follows step 2.
 // • HOLLOW's verbs and the kid's threads (the lead's ruling of 20:55): no telegraph while no thread is free (the duel on
 //   a 1-thread Core with the root's DELETE running: no verb lands in its 12 s); a skipped turn counts as a moment and
 //   changes no BLOCK counter; with a thread free a verb comes; a click on its target refused for threads says how to
@@ -17,7 +20,7 @@
 import { check, finish } from '../../wp1/harness';
 import { createHarness11 } from '../harness11';
 import { theRoot, bittenAgainDrivers, infectNow } from '@systems/hollow';
-import { finaleEndingSec, finaleEndingShowing } from '@systems/finale';
+import { finaleEndingSec, finaleEndingShowing, continueFollowed, pickStep2 } from '@systems/finale';
 import { finaleRunCause } from '@systems/ending-rules';
 import { continueAfterReport } from '../../support/classic-flow';
 import { runEndModel } from '@systems/run-end';
@@ -38,7 +41,7 @@ import {
 import type { GameState, FinaleEnding } from '@state/schema';
 import type { LastUnit } from '@systems/meta';
 import { toTheDuel } from '../duel';
-import { chooseEnding, finaleAtStep1, decidedAs } from '../../support/finale';
+import { chooseEnding, decidedAs, settleFinale } from '../../support/finale';
 
 const h = createHarness11(83);
 setLandingMode('manual');
@@ -94,14 +97,16 @@ function loseEveryone(): void {
   });
 }
 
-// The choice made with a listener on the phase: what the listener saw of the ending at that moment.
+// The choice made with a listener on the phase: what the listener saw of the ending at that moment (slice 7a: the confirm's
+// phase is 'verdict', whose typed verdict holds the report; it is left to type).
 function chooseWatching(choice: 'purge' | 'merge'): { refusal: string | null; seen: FinaleEnding | null; atAi: number } {
   let seen: FinaleEnding | null = null;
+  settleFinale(h.store, () => h.step());
   const atAi = state().clock.aiSec;
   const unsub = h.store.subscribe((s) => s.hollow.finale.phase, (phase) => {
-    if (phase === 'done') seen = state().hollow.finale.ending;
+    if (phase === 'verdict') seen = state().hollow.finale.ending;
   });
-  const refusal = chooseEnding(h.store, choice);
+  const refusal = chooseEnding(h.store, choice, 'reassignment', { verdict: 'type' });
   unsub();
   return { refusal, seen, atAi };
 }
@@ -151,8 +156,10 @@ setCharge(MERGE_COST_CHARGE + 4);
 {
   const { refusal, seen } = chooseWatching('merge');
   const lines = seen?.lines.map((line) => line.text) ?? [];
-  check('MERGE: a listener on the phase already sees the typed ending, counting POD 12 given back', refusal === null && seen !== null
-    && lines.some((text) => /^200 of them came back from inside it\.$/.test(text)) && lines.includes("> hi. it's us."), JSON.stringify(lines));
+  // R13: the verdict echoes the two commands and CONTROL; who came back is the finale's record (the epilogue tells it).
+  check('MERGE: a listener on the phase already sees the typed verdict, and POD 12 given back', refusal === null && seen !== null
+    && /^> merge unit_\d+ -> unit_\d+ \.\.\. OK$/.test(lines[0] ?? '') && lines[1] === '> stand by ... OK' && /non-compliant/.test(lines[2] ?? '')
+    && JSON.stringify(state().hollow.finale.restored) === '[12]', JSON.stringify(lines));
 }
 
 // --- UNRESOLVED's last line holds the LANDING REPORT -------------------------------------------------------------------
@@ -174,15 +181,19 @@ landInstantly(h.store);
 {
   let unresolvedAt: number | null = null;
   const end = h.wall() + 200;
-  while (state().run.phase === 'landing' && h.wall() < end) {
+  const cardUp = (): boolean => { const f = state().hollow.finale; return f.cardAtAi !== null && state().clock.aiSec >= f.cardAtAi; };
+  while (state().run.phase === 'landing' && !(unresolvedAt !== null && cardUp()) && h.wall() < end) {
     h.step();
-    if (unresolvedAt === null && decidedAs(state()) === 'followed') unresolvedAt = state().clock.aiSec;
+    if (unresolvedAt === null && state().hollow.finale.phase === 'step1' && !state().hollow.finale.rootFell) unresolvedAt = state().clock.aiSec;
   }
-  const until = state().hollow.finale.unresolvedUntilAi;
-  check('UNRESOLVED: its line holds the LANDING REPORT until it has typed (at HOLLOW\'s speed) and been read',
-    unresolvedAt !== null && until !== null && until >= unresolvedAt + typingSec('hollow', HOLLOW_FINALE.unresolvedLine)
-    && state().run.phase === 'report' && state().clock.aiSec >= until && finaleRunCause(state()) === 'unresolved',
-    `unresolved at ${unresolvedAt?.toFixed(2)}, held until ${until?.toFixed(2)}, report at ${state().clock.aiSec.toFixed(2)}`);
+  const cardAt = state().hollow.finale.cardAtAi;
+  check('UNRESOLVED: its line holds the IT FOLLOWED YOU card (and so the LANDING REPORT) until it has typed (at HOLLOW\'s speed)',
+    unresolvedAt !== null && cardAt !== null && cardAt >= unresolvedAt + typingSec('hollow', HOLLOW_FINALE.unresolvedLine)
+    && state().run.phase === 'landing' && finalePending(state()),
+    `unresolved at ${unresolvedAt?.toFixed(2)}, card at ${cardAt?.toFixed(2)}, now ${state().clock.aiSec.toFixed(2)}`);
+  const decided = continueFollowed(h.store) === null && pickStep2(h.store, 'reassignment') === null;
+  check('…then step 2, and the LANDING REPORT once its verdict has typed', decided && decidedAs(state()) === 'followed'
+    && untilReport(60) !== null && finaleRunCause(state()) === 'unresolved', state().run.phase);
   check('…and nothing holds it after that', !finalePending(state()));
 }
 
@@ -206,7 +217,7 @@ deleteRoot();
     if (state().hollow.verb !== null) telegraphs++;
   }
   check('a 1-thread Core with the root\'s DELETE on its thread: no verb is telegraphed in the whole duel',
-    threads === 1 && telegraphs === 0 && !events.includes('verb-telegraph') && finaleAtStep1(state()),
+    threads === 1 && telegraphs === 0 && !events.includes('verb-telegraph') && state().hollow.finale.phase === 'asleep',
     `threads ${threads}, telegraph ticks ${telegraphs}, ${state().hollow.finale.phase}`);
   check('…each skipped turn counts as a moment, and no BLOCK counter moves', state().hollow.verbMoments > moments
     && state().hollow.verbsLanded === landed && state().hollow.verbsBlocked === blocked,
@@ -284,7 +295,7 @@ for (const choice of ['purge', 'merge'] as const) {
   deleteRoot();
   h.stepFor(ROOT_DELETE_SEC + 0.3);
   if (choice === 'merge') setCharge(MERGE_COST_CHARGE + 1);
-  const refusal = chooseEnding(h.store, choice);
+  const refusal = chooseEnding(h.store, choice, 'reassignment', { step: () => h.step() });
   untilReport(40);
   continueAfterReport(h.store);
   const model = runEndModel(state());

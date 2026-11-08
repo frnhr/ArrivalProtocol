@@ -94,12 +94,11 @@ import { infectNow, cureNow, hollowReach, nameHollow, chooseVerb, verbWeights, t
 import { verbNow } from '@systems/hollow-verbs';
 import {
   chooseFinale, finaleChoiceRefusal, rootDeletable, skipFinaleEnding, finaleEndingShowing, finaleEndingLines, type FinaleChoice,
-  pickStep1, pickStep2, pickStay, backToStep1, continueFollowed,
+  pickStep1, pickStep2, pickStay, backToStep1, continueFollowed, decideFinaleNow,
 } from '@systems/finale';
 import { optionState, type OptionState } from '@systems/ending-rules';
 import { epilogueModel, finalCardModel, type EpilogueModel, type FinalCardModel } from '@systems/epilogue';
 import { parseEnding } from '@systems/meta-parse';
-import { notBuilt } from '@systems/not-built';
 import { STEP1_OPTIONS, step2Options } from '@data/endings';
 import type { EndingPiece, EndingRecord, HollowChoice, HollowFate, YouChoice, RunEndStage } from '@/types/ending';
 import { glitchBurst } from '@systems/glitch';
@@ -1185,7 +1184,12 @@ export function mountDebug(store: Store<GameState>): void {
       back: () => backToStep1(store),
       cont: () => continueFollowed(store),
     }),
-    ending: (hollow, you, opts) => notBuilt('__ap.ending', 'FINALE', store, hollow, you, opts),
+    ending: (hollow, you, opts) => {
+      // Track FINALE's body: the landing landed (as landAll does), then the FINALE decided through the real picks.
+      if (store.getState().landing.ended === null) forceLandAll(store);
+      decideFinaleNow(store, hollow, you, opts?.stay);
+      if (store.getState().hollow.finale.phase === 'last-landing') forceLandAll(store);
+    },
     night: () => {
       const state = store.getState();
       const meta = state.archive.status === 'ok' ? archiveMeta() : null;

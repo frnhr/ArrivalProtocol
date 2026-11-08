@@ -25,7 +25,7 @@ import { optionState, emptyShip, stayCandidates, endingRecordOf, finaleRunCause,
 import { pickStay, continueFollowed, pickStep1, pickStep2 } from '@systems/finale';
 import { isDeepStrictEqual } from 'node:util';
 import { chargeLeft } from '@state/selectors';
-import { HOLLOW_FINALE } from '@data/hollow-text';
+import { FINALE_TEXT } from '@data/finale-text';
 import { epilogueModel, finalCardModel } from '@systems/epilogue';
 import { choiceMayOpen, sayChoice, withdrawUntimedChoices, mountSay, openChoiceEntry } from '@systems/say';
 import { finaleCardUp, finalePending } from '@state/selectors';
@@ -53,7 +53,7 @@ const threw = (fn: () => unknown): string => {
 // --- The gates, the tables ------------------------------------------------------------------------------------------------
 // One gate a line (each track edits its own: FINALE `twoStep`, NIGHT `night`, 7d's CONTACT `contact`), a spacer between
 // them (review M1: the tracks' hunks never touch).
-check('built: the two steps not yet (Track FINALE)', !ENDINGS_BUILT.twoStep);
+check('built: the two steps (Track FINALE)', ENDINGS_BUILT.twoStep);
 // (Track NIGHT's gate line:)
 check('built: the night not yet (Track NIGHT)', !ENDINGS_BUILT.night);
 // (7d's gate line:)
@@ -75,14 +75,17 @@ check('a title is keyed by step 2, then step 1; SPARE + SUNSET has none (R8, R23
 {
   const store = createStore<GameState>(createInitialState({ seed: 7 }));
   const state = store.getState();
-  check('the neutral stubs: PURGE and REASSIGNMENT open and free, MERGE by its charge meter, every other row hidden; no empty ship, no STAY ship, no report line',
+  // As built by Track FINALE (ending/rules has the rest): a fresh world is no final ship in orbit, has no ★ ON TARGET ship
+  // and no decided FINALE, so the rows that need them are out of reach (`???` before they were ever chosen).
+  check('the built rules on a fresh world: PURGE and REASSIGNMENT open and free, MERGE by its charge meter, SPARE/SUNSET/STAY out of reach and unnamed, CONTACT hidden; no empty ship, no STAY ship, no report line',
     isDeepStrictEqual(optionState(state, 'purge', []), { kind: 'open', price: null, now: null })
     && isDeepStrictEqual(optionState(state, 'reassignment', []), { kind: 'open', price: null, now: null })
     && isDeepStrictEqual(optionState(state, 'merge', []), { kind: 'open', price: { kind: 'charge', have: chargeLeft(state), need: MERGE_COST_CHARGE }, now: null })
-    && ['spare', 'sunset', 'stay', 'contact'].every((piece) => optionState(state, piece as never, []).kind === 'hidden')
+    && ['spare', 'sunset', 'stay'].every((piece) => { const option = optionState(state, piece as never, []); return option.kind === 'needs' && !option.named; })
+    && optionState(state, 'contact', []).kind === 'hidden'
     && !emptyShip(state).ok && stayCandidates(state).length === 0 && reportEndingLine(state) === null);
-  check('the throwing stubs: pickStay and continueFollowed (Track FINALE)',
-    /not built \(Track FINALE/.test(threw(() => pickStay(store, 0))) && /not built \(Track FINALE/.test(threw(() => continueFollowed(store))));
+  check('the card\'s other ways on, as built: pickStay and continueFollowed refuse off the card (NOT NOW), never throw',
+    pickStay(store, 0) === 'NOT NOW' && continueFollowed(store) === 'NOT NOW');
   check('a fresh world: no ending (no record), nothing pending, no card', state.hollow.finale.record === null && endingRecordOf(state) === null && !finalePending(state) && !finaleCardUp(state)
     && /not decided/.test(threw(() => finaleRunCause(state))));
   store.update((draft) => {
@@ -127,7 +130,7 @@ check('a title is keyed by step 2, then step 1; SPARE + SUNSET has none (R8, R23
   const thrown = threw(() => { confirmed = pickStep2(store, 'reassignment'); });
   const after = store.getState().hollow.finale;
   check('the confirm re-checks step 1\'s price: MERGE short at the confirm goes back to step 1 with its need, the pick kept, nothing applied',
-    picked === null && thrown === '' && confirmed === HOLLOW_FINALE.mergeNeeds(19) && after.phase === 'step1' && after.hollow === 'merge'
+    picked === null && thrown === '' && confirmed === FINALE_TEXT.needs.charge(19) && after.phase === 'step1' && after.hollow === 'merge'
     && after.you === null && after.record === null && chargeLeft(store.getState()) === 19,
     `${picked} ${String(confirmed)} ${thrown} ${after.phase}`);
   unmount();

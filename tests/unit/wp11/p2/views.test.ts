@@ -13,13 +13,16 @@
 //   skipFinaleEnding lets it come at once; MERGE's glitch.
 // • The MERGE tick (mergeTickCharge) from LAST LIGHT's boot to the choice, never on another ship.
 // • RUN END: the ending and MERGE's carry line; endingsLine (`ENDINGS 1/2 · MERGE · ???`).
+// Slice 7a (R6, R13): the root's end puts HOLLOW to sleep while the landing goes on, the card comes up once it has settled
+// (support/finale.ts settleFinale), and the typed ending is the short verdict (≤ FINALE_VERDICT_MAX_LINES: the two commands
+// echoed and CONTROL's line; the story moved to the epilogue). Its worst-case words are checked for every ending.
 // Slice 1a: the landing stands while a scenario sets up ('manual' landing mode) and lands at once when it lets it go;
 // POD 11 and POD 12 (either side of LAST LIGHT's root) are the drivers MERGE gives back.
 import { check, finish } from '../../wp1/harness';
 import { createHarness11 } from '../harness11';
 import { theRoot, infectNow } from '@systems/hollow';
 import { verbNow } from '@systems/hollow-verbs';
-import { finaleEndingSec, finaleEndingLineStartsSec, skipFinaleEnding, finaleEndingShowing, mergeTickCharge } from '@systems/finale';
+import { finaleEndingSec, finaleEndingLineStartsSec, skipFinaleEnding, finaleEndingShowing, mergeTickCharge, finaleVerdictLines } from '@systems/finale';
 import { runEndModel, type RunEndModel } from '@systems/run-end';
 import { continueAfterReport } from '../../support/classic-flow';
 import { say } from '@systems/say';
@@ -30,7 +33,7 @@ import { echoWord } from '@data/tool-text';
 import { endingsLine } from '@data/script';
 import { CLASSIC_FIVE } from '@data/classic-five';
 import {
-  MAX_LINE_CHARS, FINALE_ENDING_MAX_LINES, GLITCH_BURST_LEVEL, DUEL_SPIKE_LEVEL_START, DUEL_SPIKE_LEVEL_END, ROOT_DELETE_SEC,
+  MAX_LINE_CHARS, FINALE_VERDICT_MAX_LINES, GLITCH_BURST_LEVEL, DUEL_SPIKE_LEVEL_START, DUEL_SPIKE_LEVEL_END, ROOT_DELETE_SEC,
   ROOT_GONE_GLITCH_LEVEL, MERGE_GLITCH_LEVEL, MERGE_COST_CHARGE, DUEL_SPIKE_EVERY_END_SEC, DUEL_SPIKE_EVERY_START_SEC,
   SEG_NAME_MAX_CHARS, VERB_FIRST_TELEGRAPH_SEC,
 } from '@data/tuning';
@@ -39,7 +42,7 @@ import type { DriverSegment } from '@/types/segment';
 import type { ShipResult } from '@state/schema';
 import { isPodCode } from '../../support/pod-code';
 import { setLandingMode, landInstantly } from '../../support/landing-instant';
-import { chooseEnding, finaleAtStep1 } from '../../support/finale';
+import { chooseEnding, finaleAtStep1, settleFinale } from '../../support/finale';
 
 const h = createHarness11(23);
 setLandingMode('manual');
@@ -52,15 +55,32 @@ const eventsSince = (from: number, name: string): { payload: unknown; wall: numb
 {
   const worstHollow = echoWord(hollowUnitName([999, 998]));
   const ours = echoWord('UNIT-999');
-  const purge = HOLLOW_FINALE.purgeEnding({
-    shipName: 'LAST LIGHT', inOrbit: '3,200', anyoneHome: true, eaten: '3,200', hollowWord: worstHollow, unit: 999, shipsHome: 99, fleetSize: 99,
-  });
-  const merge = HOLLOW_FINALE.mergeEnding({ shipName: 'LAST LIGHT', inOrbit: '3,200', restored: '3,200', hollowWord: worstHollow, ours, unit: 999 });
-  const fits = (lines: EndingLine[]): boolean => lines.length <= FINALE_ENDING_MAX_LINES && lines.every((line) => line.text.length <= MAX_LINE_CHARS);
-  check(`both endings fit: ≤ ${FINALE_ENDING_MAX_LINES} lines of ≤ ${MAX_LINE_CHARS} characters with worst-case names`, fits(purge) && fits(merge),
-    JSON.stringify([...purge, ...merge].map((line) => line.text.length)));
-  check('…PURGE says nothing in HOLLOW\'s voice; MERGE\'s merged voice says hello', !purge.some((line) => line.voice === 'us')
-    && merge.some((line) => line.voice === 'us' && line.text === "> hi. it's us."));
+  // Slice 7a (R13): every ending's verdict at its worst-case names (two units in the root, unit 999, a 12-letter ship, the
+  // longest colony STAY can mount).
+  const worst = structuredClone(state()) as GameState;
+  worst.run.hollowUnits = [999, 998];
+  worst.run.hollowNamed = true;
+  worst.run.unitNumber = 999;
+  worst.mission.transmissionNum = 999;
+  worst.level.shipName = 'MORNING STAR';
+  worst.run.ships = [{
+    shipId: 'worst', shipName: 'WORST', slot: 0, depth: 1, outcome: 'locked', colonistsAboard: 200, lzs: [], offSite: 0, noGo: 0, restored: 0,
+    parked: [], notLaunched: 0, landedInLz: 200, points: 0, stars: 0, fuelLeftPct: 0, ringMiss: null, survey: null, colony: 'MONTGOMERY LANDING',
+    pods: [{ pod: 1, family: 'MONTGOMERY', colonists: 200, fate: 'down', place: 'lz', lz: 'LZ-A', touch: 'soft', points: 0, parkedWhy: null, restored: false, featured: [] }],
+  }];
+  const verdicts: EndingLine[][] = [];
+  for (const hollow of ['purge', 'merge', 'spare', 'followed'] as const) {
+    for (const you of ['sunset', 'stay', 'reassignment'] as const) {
+      if (hollow === 'spare' && you === 'sunset') continue;
+      verdicts.push(finaleVerdictLines(worst, hollow, you, you === 'stay' ? 0 : null));
+    }
+  }
+  const fits = (lines: EndingLine[]): boolean => lines.length <= FINALE_VERDICT_MAX_LINES && lines.every((line) => line.text.length <= MAX_LINE_CHARS);
+  check(`every verdict fits: ≤ ${FINALE_VERDICT_MAX_LINES} lines of ≤ ${MAX_LINE_CHARS} characters with worst-case names`, verdicts.length === 11 && verdicts.every(fits),
+    JSON.stringify(verdicts.map((lines) => lines.map((line) => line.text.length))));
+  check('…each speaks as the TERMINAL\'s echoes, then CONTROL (UNRESOLVED has no step-1 echo)', verdicts.every((lines) => lines.at(-1)!.voice === 'control'
+    && lines.slice(0, -1).every((line) => line.voice === 'cmd' && line.text.endsWith(' ... OK')))
+    && verdicts[0]!.length === 3 && verdicts.at(-1)!.length === 2, JSON.stringify(verdicts.map((lines) => lines.map((line) => line.text))));
   // MERGE's line with a whole rack of eaten pods (16, the most a ship carries): it names a few and counts the rest.
   const sixteenPods = Array.from({ length: 16 }, (_, i) => `POD ${String(i + 1).padStart(2, '0')}`);
   const cardWords = [
@@ -170,7 +190,7 @@ check('say: a line with a look must be critical (a queued one would count down a
     && spikeLevels[0]! <= quantizeCorruption(DUEL_SPIKE_LEVEL_START) + 0.05 && spikeLevels[spikeLevels.length - 1]! >= quantizeCorruption(DUEL_SPIKE_LEVEL_END) - 0.1
     && spikeLevels[spikeLevels.length - 1]! > spikeLevels[0]!, spikeLevels.join(' '));
   const gone = bursts[bursts.length - 1];
-  check('…and the root\'s end is the biggest tear (ROOT_GONE_GLITCH_LEVEL), with no spike after it', finaleAtStep1(state())
+  check('…and the root\'s end is the biggest tear (ROOT_GONE_GLITCH_LEVEL), with no spike after it; HOLLOW sleeps (R6)', state().hollow.finale.phase === 'asleep'
     && gone?.level === quantizeCorruption(ROOT_GONE_GLITCH_LEVEL) && spikes.every((spike) => spike.wall <= gone.wall), JSON.stringify(gone));
   const after = h.events.length;
   h.stepFor(3);
@@ -185,6 +205,7 @@ check('say: a line with a look must be critical (a queued one would count down a
   landInstantly(h.store);
   const landEnd = h.wall() + 150;
   while (driversInMemory(state()).length > 0 && h.wall() < landEnd) h.step();
+  settleFinale(h.store, () => h.step());
   check('every pod down while the choice stood (the report waits for the choice)', driversInMemory(state()).length === 0
     && state().run.phase === 'landing' && finaleAtStep1(state()));
   h.stepFor(3);
@@ -196,14 +217,14 @@ check('say: a line with a look must be critical (a queued one would count down a
       restored: 0, parked: [], notLaunched: 0, landedInLz: 0, points: 0, stars: 0, fuelLeftPct: 0, ringMiss: null, survey: null, colony: null, pods: [],
     }));
   });
-  const refusal = chooseEnding(h.store, 'purge');
+  const refusal = chooseEnding(h.store, 'purge', 'reassignment', { verdict: 'type' });
   const ending = state().hollow.finale.ending;
   check('PURGE writes its typed ending', refusal === null && ending !== null && ending.choice.hollow === 'purge', String(refusal));
   if (!ending) throw new Error('views-test: no ending');
   const lines = ending.lines.map((line) => line.text);
-  check('…the design\'s words, from live numbers', /^> rm unit_\d+ \.\.\. OK$/.test(lines[0]!) && /^LAST LIGHT · [\d,]+ colonists reached orbit\.$/.test(lines[1]!)
-    && lines.includes('the fleet is home.') && /^Thank you, Unit \d+\. Please stand by for reassignment\. :\)$/.test(lines[lines.length - 1]!)
-    && ending.lines[ending.lines.length - 1]!.voice === 'control', JSON.stringify(lines));
+  // R13: the verdict, no narration (the fleet's count is RUN END's and the epilogue's).
+  check('…the design\'s words', lines.length === 3 && /^> rm unit_\d+ \.\.\. OK$/.test(lines[0]!) && lines[1] === '> stand by ... OK'
+    && /^Thank you, Unit \d+\. Your next post is RELAY 20\. :\)$/.test(lines[2]!) && ending.lines[2]!.voice === 'control', JSON.stringify(lines));
   check('…its time on screen is its lines typed in turn plus the hold', Math.abs(ending.untilAi - state().clock.aiSec - finaleEndingSec(ending.lines)) < 1e-6
     && finaleEndingLineStartsSec(ending.lines).every((at, i, all) => i === 0 || at > all[i - 1]!));
   check('the MERGE tick is gone once the choice is made', mergeTickCharge(state()) === null);
@@ -241,6 +262,7 @@ check('say: a line with a look must be critical (a queued one would count down a
   actionDelete(h.store, root);
   const end = h.wall() + ROOT_DELETE_SEC + 2;
   while (state().hollow.finale.phase === 'duel' && h.wall() < end) h.step();
+  settleFinale(h.store, () => h.step());
   h.store.update((d) => {
     const pool = d.memory.find((seg) => seg.type === 'redundancy');
     if (!pool || pool.type !== 'redundancy') throw new Error('views-test: no REPAIR CHARGE');
@@ -249,13 +271,14 @@ check('say: a line with a look must be critical (a queued one would count down a
     d.ui.memoryRev++;
   });
   const from = h.events.length;
-  const refusal = chooseEnding(h.store, 'merge');
+  const refusal = chooseEnding(h.store, 'merge', 'reassignment', { verdict: 'type' });
   const ending = state().hollow.finale.ending;
   const lines = ending?.lines.map((line) => line.text) ?? [];
-  check('MERGE writes its typed ending: the echo, `> hi. it\'s us.`, the colonists in orbit, the 400 it gave back, `we arrive together.`, CONTROL',
-    refusal === null && ending?.choice.hollow === 'merge' && /^> merge unit_\d+ -> unit_\d+ \.\.\. OK$/.test(lines[0]!) && lines[1] === "> hi. it's us."
-    && /^LAST LIGHT · [\d,]+ colonists reached orbit\.$/.test(lines[2]!) && lines[3] === '400 of them came back from inside it.'
-    && lines[4] === 'we arrive together.' && /^Unit \d+ is non-compliant\. :\)$/.test(lines[5]!), JSON.stringify(lines));
+  // R13: the verdict; the 400 it gave back are the finale's record (the epilogue tells them).
+  check('MERGE writes its typed ending: the echo, step 2\'s, CONTROL; POD 11 and POD 12 given back',
+    refusal === null && ending?.choice.hollow === 'merge' && /^> merge unit_\d+ -> unit_\d+ \.\.\. OK$/.test(lines[0]!) && lines[1] === '> stand by ... OK'
+    && /^Unit \d+ is non-compliant\. :\)$/.test(lines[2]!) && JSON.stringify([...state().hollow.finale.restored].sort((a, b) => a - b)) === '[11,12]',
+    JSON.stringify(lines));
   const bursts = eventsSince(from, 'glitch-burst').map((event) => (event.payload as { level: number }).level);
   check('…and it comes into you: a glitch burst at MERGE_GLITCH_LEVEL', bursts.includes(quantizeCorruption(MERGE_GLITCH_LEVEL)), bursts.join(' '));
   check('…the LANDING REPORT waits for it', finalePending(state()) && finaleEndingShowing(state()));

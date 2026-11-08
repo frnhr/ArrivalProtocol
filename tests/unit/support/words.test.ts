@@ -156,11 +156,15 @@ check(`MERGE's line names its pods and stays one line (≤ ${MAX_LINE_CHARS}) up
   && gains[5]!.includes('+13') && !gains[5]!.includes('POD 04') && !gains.some((text) => /missing memories/i.test(text)),
   JSON.stringify(gains));
 check('MERGE over nobody says so', HOLLOW_FINALE.mergeGain([]) === 'It ate nobody here to give back.');
+// Slice 7a (R13): the typed endings became the short verdict (the commands echoed, CONTROL's line); the colonists' count moved
+// to the epilogue (NIGHT's block). What the FINALE's card still counts, it counts as drivers (MERGE's NOW:), never souls.
 const endings = [
-  ...HOLLOW_FINALE.purgeEnding({ shipName: 'LAST LIGHT', inOrbit: '3,200', anyoneHome: true, eaten: '400', hollowWord: 'unit_046', unit: 47, shipsHome: 5, fleetSize: 5 }),
-  ...HOLLOW_FINALE.mergeEnding({ shipName: 'LAST LIGHT', inOrbit: '3,200', restored: '400', hollowWord: 'unit_046', ours: 'unit_047', unit: 47 }),
-].map((line) => line.text);
-check('the typed endings count colonists, never souls', endings.some((text) => text.includes('3,200 colonists')) && !endings.some((text) => /souls/i.test(text)),
+  FINALE_TEXT.echo(FINALE_TEXT.command.purge('unit_046')), FINALE_TEXT.echo(FINALE_TEXT.command.merge('unit_046', 'unit_047')),
+  FINALE_TEXT.echo(FINALE_TEXT.command.reassignment), FINALE_TEXT.verdict.compliant(47), FINALE_TEXT.verdict.nonCompliant(47),
+  FINALE_TEXT.nowInterim(2), FINALE_TEXT.now(2),
+];
+check('the verdict echoes the commands (`> rm unit_046 ... OK`), the card counts drivers, and nothing says souls',
+  endings[0] === '> rm unit_046 ... OK' && endings.slice(5).every((text) => text.includes('2 eaten drivers')) && !endings.some((text) => /souls/i.test(text)),
   JSON.stringify(endings));
 check('RUN END over an empty flagship: nobody LANDED', /LANDED/.test(RUN_END_NOBODY_LANDED.title)
   && Object.values(RUN_END_NOBODY_LANDED.why).every((text) => /landed/.test(text) && !/woke/i.test(text)));
@@ -431,6 +435,8 @@ const SLICE7_BASE: Readonly<Record<string, unknown>> = {
 {
   const FINALE_WORST: Readonly<Record<string, unknown>> = {
     have: 100, need: 3, drivers: 16, unit: 147, fate: 'FOLLOWED', title: 'A SHIP FOR 046·047, A HOME FOR ME',
+    // The longest command a verdict echoes: SPARE's with two units and a 12-letter ship.
+    command: '> mv unit_046·047 -> morning_star',
   };
   const lines = renderSlice6(FINALE_TEXT, [], 'FINALE_TEXT', { ...SLICE7_BASE, ...FINALE_WORST });
   const bad = lines.filter((text) => text.length > MAX_LINE_CHARS || RULES.some((rule) => rule.re.test(text)));

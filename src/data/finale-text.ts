@@ -60,19 +60,31 @@ export const FINALE_TEXT = {
     shipTaken: '046 HAS THE SHIP',
     signals: (have: number, need: number): string => `COLLECT ${need} SIGNALS · you have ${have}`,
   },
-  // The `NOW:` line (MERGE's restored drivers) and the `NEXT RUN:` row's lead (R12: its lines are 7c's).
+  // The `NOW:` line (MERGE's restored drivers) and the `NEXT RUN:` row's lead (R12: its lines are 7c's). `now` is 7b's
+  // (THE LAST LANDING flies them); until 7b, R15's interim gives the drivers back to the kid's hands, so the card says that
+  // (nowInterim: a line that promised pods landing on their own would be a lie the kid acts on).
   now: (drivers: number): string => `NOW: + ${drivers} eaten drivers come back · their pods land on their own`,
+  nowInterim: (drivers: number): string => (drivers === 1
+    ? 'NOW: + 1 eaten driver comes back · launch its pod'
+    : `NOW: + ${drivers} eaten drivers come back · launch their pods`),
   nextRunLead: 'NEXT RUN:',
+  // The FUEL bar's ★ notch on the final ship (review B2: systems/finale-card.ts fuelStarTitle, Track CARD's hook): the notch
+  // is THE EMPTY SHIP's FUEL too (EMPTY_SHIP_FUEL_PCT = STAR_FUEL_PCT, R8).
+  fuelStar: `★ ${EMPTY_SHIP_FUEL_PCT}% FUEL · also THE EMPTY SHIP's: SPARE and SUNSET need it`,
   // An option never earned and out of reach (R11).
   unknown: '???',
   // STAY's sub-row (R9), and step 2's way back.
   stayPick: 'WHICH COLONY?',
   back: '[ESC] BACK',
-  // The verdict (R13): CONTROL's line by step 2.
+  // The verdict (R13): each step's command echoed as the TERMINAL runs it (`> rm unit_046 ... OK`), then CONTROL's line:
+  // compliant (thanks) only for PURGE (or UNRESOLVED) with REASSIGNMENT: the unit did as CONTROL told it.
+  echo: (command: string): string => `${command} ... OK`,
   verdict: {
     compliant: (unit: number): string => `Thank you, Unit ${unit}. Your next post is RELAY 20. :)`,
     nonCompliant: (unit: number): string => `Unit ${unit} is non-compliant. :)`,
   },
+  // UNRESOLVED's step 1 on the report's line (R10: nothing was chosen; it followed you).
+  followedWord: 'FOLLOWED',
   // The final LANDING REPORT's ending line (05 §3.7: `ENDING · <step 1> · <title>`).
   reportLine: (fate: string, title: string): string => `ENDING · ${fate} · ${title}`,
 } as const;

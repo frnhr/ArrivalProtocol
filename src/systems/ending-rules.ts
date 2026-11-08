@@ -3,30 +3,38 @@
 // (R11), the ending record the archive keeps (R3) and the run's cause (R17), and the report's ending line. Track CARD reads
 // optionState; Track NIGHT reads endingRecordOf while run.phase is 'end' (the hollow and landing slices are still the final
 // ship's then).
-// The FOUNDATION built finaleRunCause, endingRecordAt (the record frozen at the confirm, review M4) and endingRecordOf; the
-// rest are neutral stubs: optionState answers WP11's card in the final shape (PURGE open, MERGE open or short by its charge
-// meter, REASSIGNMENT open, every other option hidden), emptyShip says no, stayCandidates and reportEndingLine say nothing.
-import type { GameState, RunEndCause } from '@state/schema';
+import type { GameState, RunEndCause, ShipResult } from '@state/schema';
 import type { EndingPiece, EndingRecord, HollowFate, YouChoice } from '@/types/ending';
 import type { RunMapState } from '@/types/map';
-import { chargeLeft, hasUsableTool } from '@state/selectors';
+import { chargeLeft, hasUsableTool, isHollow } from '@state/selectors';
 import { currentSlot } from '@systems/map-streams';
 import { shownFuelPct } from '@systems/flight-hud';
+import { onTargetTally } from '@systems/landing-rules';
 import { FS_TOOL_KINDS } from '@data/fs-tools';
-import { HOLLOW_FINALE } from '@data/hollow-text';
-import { MERGE_COST_CHARGE } from '@data/tuning';
+import { FINALE_TEXT } from '@data/finale-text';
+import { ENDING_TITLE } from '@data/epilogue-text';
+import { ENDINGS_BUILT, endingTitleKey } from '@data/endings';
+import { EMPTY_SHIP_FUEL_PCT, MERGE_COST_CHARGE, STAR_ON_TARGET_FRAC, STAY_PICK_MAX } from '@data/tuning';
 
 // THE EMPTY SHIP (R8): the final ship in orbit after its landing (ORBIT LOCKED or ACCEPT ORBIT), no pod aboard (a parked
 // pod counts as released), and FUEL as shown at the landing's end ≥ EMPTY_SHIP_FUEL_PCT. `fuelPct` is that FUEL (null
 // before the landing ended).
+// `inOrbit` and `aboard` say which part is missing (the need line): the ship is not in its orbit after the landing, or a
+// pod is still aboard or falling.
 export interface EmptyShip {
   ok: boolean;
   fuelPct: number | null;
+  inOrbit: boolean;
+  aboard: boolean;
 }
 
 export function emptyShip(state: Readonly<GameState>): EmptyShip {
-  void state;
-  return { ok: false, fuelPct: null };
+  const { landing, burn } = state;
+  const ended = landing.ended !== null;
+  const inOrbit = landing.finalShip && ended && (burn.status === 'locked' || burn.status === 'accepted');
+  const aboard = landing.pods.some((record) => record.fate.kind === 'aboard' || record.fate.kind === 'falling');
+  const fuelPct = ended && landing.fuelAtEndPct !== null ? shownFuelPct(landing.fuelAtEndPct) : null;
+  return { ok: inOrbit && !aboard && fuelPct !== null && fuelPct >= EMPTY_SHIP_FUEL_PCT, fuelPct, inOrbit, aboard };
 }
 
 // A ship whose colony STAY may mount (R9): every ship of this run whose pods landed ★ ON TARGET (its ShipResult.pods; the
@@ -39,9 +47,37 @@ export interface StayCandidate {
   year: number;
 }
 
+// A ship of the run is ★ ON TARGET by its pods (R9; landing-rules onTargetTally's rule on the summaries): the colonists down
+// soft in an LZ with room are at least STAR_ON_TARGET_FRAC of everyone it arrived with (its unlaunched pods count).
+// Exported for the save codec's STAY check (a ship of run.ships named by the record must be one).
+export function shipOnTarget(result: Readonly<Pick<ShipResult, 'pods'>>): boolean {
+  let colonists = 0;
+  let onTarget = 0;
+  for (const pod of result.pods) {
+    colonists += pod.colonists;
+    if (pod.fate === 'down' && pod.place === 'lz' && pod.touch === 'soft') onTarget += pod.colonists;
+  }
+  return colonists > 0 && onTarget >= STAR_ON_TARGET_FRAC * colonists;
+}
+
 export function stayCandidates(state: Readonly<GameState>): StayCandidate[] {
-  void state;
-  return [];
+  const ships: StayCandidate[] = [];
+  const map = state.run.map;
+  const named = (colony: string | null, shipName: string): string => {
+    if (colony === null) throw new Error(`stayCandidates: ${shipName} is ★ ON TARGET with no colony`);
+    return colony;
+  };
+  // The final ship by its live tally (R9), while it is still the ship being landed (its result is not recorded yet).
+  const slot = currentSlot(state.run);
+  const recorded = state.run.ships.some((ship) => ship.slot === slot);
+  if (state.landing.finalShip && !recorded && onTargetTally(state).earned) {
+    ships.push({ slot, shipName: state.level.shipName, colony: named(state.landing.colony, state.level.shipName), year: routeYear(map, slot) });
+  }
+  for (const result of [...state.run.ships].reverse()) {
+    if (!shipOnTarget(result)) continue;
+    ships.push({ slot: result.slot, shipName: result.shipName, colony: named(result.colony, result.shipName), year: routeYear(map, result.slot) });
+  }
+  return ships.slice(0, STAY_PICK_MAX);
 }
 
 // A ship's approach year on the route (both worlds have real years: review m6); the first ship's is the run's start year.
@@ -70,6 +106,36 @@ export type OptionState =
   | { kind: 'needs'; need: string; named: boolean; price: PriceMeter | null }
   | { kind: 'hidden' };
 
+// The drivers MERGE would give back now (R15's interim, 7a): every pod whose driver HOLLOW ate on this ship and whose block
+// still stands in memory (finale.ts restores those in place; a block the kid DELETEd is gone, and its pod stays parked).
+export function mergeRestorable(state: Readonly<GameState>): number[] {
+  const standing = new Set(state.memory.filter(isHollow).map((seg) => seg.atePod).filter((pod) => pod !== undefined));
+  return state.landing.pods.filter((record) => record.driverLost === 'eaten' && standing.has(record.pod)).map((record) => record.pod);
+}
+
+// What an option out of reach shows (R11): its need line and meter, named when it was ever chosen before, else `???`.
+function needs(piece: EndingPiece, seen: readonly EndingPiece[], need: string, price: PriceMeter | null): OptionState {
+  return { kind: 'needs', need, named: seen.includes(piece), price };
+}
+
+// THE EMPTY SHIP's row (SPARE at step 1, SUNSET at step 2; R8): its FUEL meter (the tank as shown at the landing's end, the
+// live tank before it), open when the ship is in orbit, empty and fuelled.
+function emptyShipOption(state: Readonly<GameState>, piece: EndingPiece, seen: readonly EndingPiece[]): OptionState {
+  const ship = emptyShip(state);
+  const have = ship.fuelPct ?? shownFuelPct(state.burn.fuelPct);
+  const price: PriceMeter = { kind: 'fuel', have, need: EMPTY_SHIP_FUEL_PCT };
+  if (ship.ok) return { kind: 'open', price, now: null };
+  if (!ship.inOrbit || ship.aboard) return needs(piece, seen, FINALE_TEXT.needs.shipInOrbit, price);
+  return needs(piece, seen, FINALE_TEXT.needs.fuel(have), price);
+}
+
+// Each option as the card shows it now (R11; prices are judged when the card shows them, R7). `seen` is the archive's
+// endingsSeen (the card's `???`); the rules' own checks pass [] (only the kind matters there).
+// • PURGE, REASSIGNMENT: always open, free.
+// • MERGE: MERGE_COST_CHARGE REPAIR CHARGE (its meter); `NOW:` names the drivers it would give back (R15's interim words).
+// • SPARE: THE EMPTY SHIP. SUNSET: THE EMPTY SHIP, unless step 1's pick gave it to the root (`046 HAS THE SHIP`, R8).
+// • STAY: a ★ ON TARGET ship of this run (R9).
+// • CONTACT: absent until 7d (R11).
 export function optionState(state: Readonly<GameState>, piece: EndingPiece, seen: readonly EndingPiece[]): OptionState {
   switch (piece) {
     case 'purge':
@@ -78,11 +144,22 @@ export function optionState(state: Readonly<GameState>, piece: EndingPiece, seen
     case 'merge': {
       const have = chargeLeft(state);
       const price: PriceMeter = { kind: 'charge', have, need: MERGE_COST_CHARGE };
-      return have >= MERGE_COST_CHARGE ? { kind: 'open', price, now: null }
-        : { kind: 'needs', need: HOLLOW_FINALE.mergeNeeds(have), named: seen.includes(piece), price };
+      if (have < MERGE_COST_CHARGE) return needs(piece, seen, FINALE_TEXT.needs.charge(have), price);
+      const back = mergeRestorable(state).length;
+      return { kind: 'open', price, now: back > 0 ? FINALE_TEXT.nowInterim(back) : null };
     }
+    case 'spare':
+      return emptyShipOption(state, piece, seen);
+    case 'sunset':
+      if (state.hollow.finale.hollow === 'spare') return needs(piece, seen, FINALE_TEXT.needs.shipTaken, null);
+      return emptyShipOption(state, piece, seen);
+    case 'stay':
+      return stayCandidates(state).length > 0 ? { kind: 'open', price: null, now: null } : needs(piece, seen, FINALE_TEXT.needs.onTarget, null);
+    case 'contact':
+      if (!ENDINGS_BUILT.contact) return { kind: 'hidden' };
+      throw new Error("optionState: CONTACT's row is 7d's (ENDINGS_BUILT.contact raised before its price was built)");
     default:
-      return { kind: 'hidden' };
+      throw new Error(`optionState: unknown piece '${String(piece)}'`);
   }
 }
 
@@ -137,9 +214,12 @@ export function endingRecordOf(state: Readonly<GameState>): EndingRecord | null 
 }
 
 // The final LANDING REPORT's ending line under the colony (`ENDING · PURGE · STAND BY`: data/finale-text.ts reportLine with
-// the title from data/epilogue-text.ts ENDING_TITLE, NIGHT's words, review B1), or null: not the final ship, or no line (the
-// FOUNDATION's stub: none).
+// the title from data/epilogue-text.ts ENDING_TITLE, NIGHT's words, review B1), or null: not the final ship, or its FINALE
+// not decided. STAY + PURGE's title is the colony's (`RIVERSIDE'S MIND`, from the record).
 export function reportEndingLine(state: Readonly<GameState>): string | null {
-  void state;
-  return null;
+  const record = endingRecordOf(state);
+  if (record === null) return null;
+  const fate = record.hollow === 'followed' ? FINALE_TEXT.followedWord : FINALE_TEXT.word[record.hollow];
+  const title = ENDING_TITLE[endingTitleKey(record.you, record.hollow)](record.stay?.colony ?? '');
+  return FINALE_TEXT.reportLine(fate, title);
 }
