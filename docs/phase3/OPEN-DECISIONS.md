@@ -72,8 +72,9 @@ Status words:
 18. **HOLD A WALL and MEND DRIVERS** (R13). BUILT.
     - HOLD A WALL places a 4-block wall once, and only when something hostile is in memory.
     - MEND DRIVERS heals at REPAIR v1's rate, costs no thread and no charge, and leaves the driver launchable.
-19. **The `?` ship cards and the old-colony and signal events wait for slice 7** (R18). DEFERRED. Only the notes
-    collect signals now, at most 3 on an arm.
+19. **The `?` ship cards and the old-colony and signal events wait for slice 7** (R18). BUILT in slice 7d (items 75–78):
+    the three `?` cards read `??? · NO TRANSPONDER`, the old colony sends a letter, the signal ship holds a `▓▓░▓` file worth
+    2, and signals are found in notes, that file and CONTACT's stops.
 20. **The receiver bypass animation is deferred to slice 8** (R19). DEFERRED. The line is in slice 5.
 21. **A departed resident's leftover skill card takes no link room.** BUILT. It is granted and installs at the next
     boot, the same way the +2 CYCLES card does. This keeps the leftover deck a pure bonus. To change: route it through
@@ -188,9 +189,12 @@ Status words:
 48. **The strangers' logs have 6 entries; `047.log` has 7** (R37). BUILT (Track LINEAGE).
     - The segment id stays `log046`; every screen that names the file (the key line, SCAN, the PACKET lock, INSPECT, READ)
       names the book since the review.
-49. **The `▓░` glyph shows on `?` ships that carry fragments** (R40).
-50. **CONTACT's trace** is two signal stops, each worth +8 charge and a fragment (R41).
-    - It is behind its own gate and may ship dark.
+49. **The `▓░` glyph shows on `?` ships that carry fragments** (R40). BUILT (7d, `resident-hud.ts signalGlyph`): on the signal
+    ship and the gone-resident ship once a fragment is held (item 31 holds: a `?` card names no kind), and on a CONTACT stop
+    whose file waits (item 77).
+50. **CONTACT's trace** is two signal stops, each worth +8 charge and a fragment (R41). BUILT (7d), and
+    `ENDINGS_BUILT.contact` is raised: CONTACT is on the card, priced at 3 signals, with its trace on the next run (items
+    79–82).
 51. **ENDING CHOSEN stays at the final report's open, not at step 2** (R14). This deviates from 02 §4.
     - A reload during the FINALE replays the final ship, because the save can't hold a mid-landing state.
 
@@ -321,5 +325,57 @@ own items from 67 too; renumber at the merge.
 73. **A given gift's `· FOUND` row is never on screen.** NOTED: the DESK only shows reachable ships' cards
     (`desk.ts selectShip`), and a gift's ship is behind the unit once it is given. The row stays (it is free) for a later
     card that shows passed ships. To use it: let the card open on a passed ship.
-74. **`LINEAGE_BUILT` stays until 7d** (review m). DEFERRED: the gate-down paths (`hollowUnitsAfter`, the won ghost lines,
-    046.log on every book) retire with `TRACES_BUILT`'s CONTACT line in 7d's fix pass, as 59 did for 7a's gates.
+74. **`LINEAGE_BUILT` stays until 7d** (review m). BUILT (resolved in 7d, with `TRACES_BUILT.contact` raised): the gate is
+    gone with its gate-down paths, as 59 did for 7a's gates: `meta.ts hollowUnitsAfter` and `hollowName` (mid-run HOLLOW is
+    always `midRunHollowUnits`), the won and UNRESOLVED ghost lines (`GHOST_LINE` is null for them, `GhostWords.hollow`
+    dropped), `logBookOf`'s 046.log-on-every-book branch, and `lineage-boot.ts`'s gate. `TRACES_BUILT` stays as a per-kind
+    table, every kind raised (item 83).
+
+## Slice 7d, built
+
+The calls one agent made building 7d's FOUNDATION and both its tracks (`docs/phase3/impl/slice-7-plan.md`, "Deviations
+(7d)"; the self-review is `docs/phase3/impl/slice-7d-review.md`). Renumber at the merge if another branch took these numbers.
+
+75. **What a `?` card shows** (R39). BUILT (`unknown-events.ts unknownCard`): until the ship is visited, the card keeps its
+    public schedule and the unit's own rows (the years and TIMELINE, the trip's cost, the fit, MEMORY, BEAM and NOISE or
+    OUT OF RANGE, DELIVERIES, HOLLOW's boarding warning, ONLY FROM HERE, the run's count, its history and trail rows). KNOWN
+    PROBLEMS, RESIDENT, PLANET, SITE DATA and LANDING read `??? · NO TRANSPONDER`; the colonists and pods read `???`, the ARK
+    tag goes, and the rows whose presence alone would tell (no Swap for an ENGINE FAULT, the no-go sites) are dropped. The
+    chart labels it `NAME · ???` and draws an ark as a standard ship. The PACKET's headline, after SET COURSE, still names its
+    colonists. To reverse: `UNKNOWN_EVENTS_BUILT` down, or widen `PUBLIC_ROWS`.
+76. **The old colony's letter** (R39). BUILT (`signals.ts unknownMessages`): one letter in the `?` ship's boot INBOX, from
+    OLDWELL (UNIT-009), SUNDIAL (UNIT-017) or CANDLEWICK (UNIT-024), picked by the ship's own key stream (the same ship holds
+    the same letter on any route and run), `SENT ????`, four lines each. The units are older than the relay strangers (031,
+    038), so no unit the kid meets is older. The words are drafts (05 names the colonies, not their mail): `TODO(05)` in
+    `data/unknown-text.ts`.
+77. **Signals beyond the notes** (R39, R41). BUILT: the signal ship's `▓▓░▓` file (1 block in rack A after Cargo Ctrl, SCAN
+    only, no health, a blocker) gives 2 fragments; a CONTACT stop's file gives 1; a note still gives 1. A slot can hold one
+    record per source (a CONTACT stop may also be a departed resident's ship with a note). The stamp says `SIGNAL · n/3` up
+    to 3, then `SIGNAL · n` (a run can find up to 7). A file not SCANned before the ship ends is missed, as a note is.
+    To reverse a source: drop it from `signals.ts signalSourceAt`.
+78. **The glyph on a CONTACT stop** (02 §3.5's "every other fragment ship"; beyond R40). BUILT: a CONTACT stop whose file
+    waits wears `▓░` once a fragment is held, beside its `◆`. Its card's TRACE row names it already, so nothing is narrowed.
+    To reverse: drop the `contact-stop` line in `signalGlyph`.
+79. **CONTACT's row** (R41, R11). BUILT: out of reach it reads `COLLECT 3 SIGNALS · you have n` (`???` until CONTACT was
+    ever chosen), open it reads `SIGNALS 3 ✓ · needs 3` (`FINALE_TEXT.price.signals`, the 7a review's suggestion) with its
+    meter. The signals are held, never spent, so the next run's count starts from zero anyway. The codec refuses a CONTACT
+    ending that holds fewer than 3.
+80. **CONTACT's epilogue piece fills the "two minds" gap.** BUILT: as REASSIGNMENT's and STAY's, MERGE + CONTACT has its own
+    second line (`It took two minds to listen. Neither one is hungry now.`) and UNRESOLVED + CONTACT a third
+    (`UNIT-046 went too. It listens better than it talks.`). Drafts against 05 (`TODO(05)` in spirit: 05 writes two
+    epilogues only).
+81. **CONTACT's stops on the next arm** (R41, R31). BUILT as 7c placed them: two ordinary ships in layers 5–7 (never
+    authored, `?`, TIGHT, first or final), one place a ship; 40 of 40 run-2 arms in `signals/contact` get both. An arm with
+    fewer open ships gets fewer stops (the codec allows 0–2), and CONTACT's gain shrinks with it. Each stop is +8 through the
+    arrival path (`> A SIGNAL STOP · +8 REPAIR CHARGE · ▓▓░▓ IN RACK A`), given as the line is said, and its file waits in
+    rack A until the ship ends.
+82. **CONTACT's NEXT RUN: line** is `+ 2 signal stops on the map · − 1 more seed at the end` (`− that same seed` after a
+    non-compliant step 1), in 05 §3.12's style. The stop count is templated from `TRACE_PLACE_COUNT.contact`.
+83. **`TRACES_BUILT` stays, every kind raised** (with item 74). NOTED: item 74 names only LINEAGE's gate-down paths. Retiring
+    `TRACES_BUILT` would also drop `trace-hud.ts`'s `built` rule that `traces/ui-models` and `traces/lineage` use to paint
+    and fly each kind both ways. To finish it: delete `TRACES_BUILT` and `traceBuilt`, and move those suites to hand-built
+    traces only.
+84. **CONTACT is built and its gate raised**, not shipped dark. BUILT: its row, price, words, title, epilogue piece, trace
+    and stops are complete and tested (`signals/contact`, `ending/*`, `traces/*`, the e2e `signals.mjs`). Balance is slice
+    8's: the sweep of 7c (`traces/traces-sweep`) does not fly CONTACT yet.
+

@@ -3118,3 +3118,100 @@ commit.
   An earlier run after the code fixes (198 s, load 0.87 → 7.73) had one mover, `opening/ghost-placement` (M4), re-baselined.
 - **Changed suites:** `ending/epilogue` (B2), `ending/card-models` (M3), `traces/final-ship` (M1, m4), `traces/gifts` (m1),
   `traces/logs` (M2), `traces/lineage` (M4, m3), `ui/title-resume` (m6), `support/words` (B1), `opening/ghost-placement` (M4).
+
+## Deviations (7d)
+
+Recorded by the one agent that built 7d (branch `signals-7d`, from 5e97825, the head of `claude/modest-hawking-209t0f` with
+7a–7c merged and reviewed): the FOUNDATION, then Track EVENTS's and Track CONTACT's work in sequence, then a self-review
+(`slice-7d-review.md`). R39–R41 are built, `UNKNOWN_EVENTS_BUILT` and `ENDINGS_BUILT.contact` (with `TRACES_BUILT.contact`)
+are raised, and OPEN-DECISIONS 74 is resolved. The gameplay calls are OPEN-DECISIONS 75–84 ("Slice 7d, built"); 19, 49 and
+50 are marked BUILT.
+
+**CONTACT ships lit, not dark.** Its row, price, words, title, epilogue piece, trace (two stops, +8 and a fragment each) and
+`ENDINGS n/7` are complete, each with unit checks (`signals/contact`, `ending/*`, `traces/*`) and the e2e `signals.mjs`
+(PURGE + CONTACT through the real FINALE to `OUTWARD, ALONE`, `ENDINGS 2/7`). What it lacks is a balance measurement, which is
+slice 8's for every trace (the 7c sweep does not fly CONTACT yet; OPEN-DECISIONS 84).
+
+### What is built
+
+- **Save v9** (one bump): `SignalRecord` gains `source` (`'note' | 'signal-event' | 'contact-stop'`) and `n`;
+  `RUN_SAVE_MIGRATIONS[8]` makes every v8 record a note's with 1 fragment; the shape pin holds v9 with v8's keys; the codec's
+  signal check is `systems/signals.ts signalRefusal`, and `finaleRefusal` refuses a CONTACT that holds fewer than 3 signals.
+  The fixture `run-save-v8-ship-done-heron.json` (seed 7, HERON's desk, HELM's note read) was dumped by the game's own save
+  path before any change (d74e672).
+- **`SegmentType 'signal'`**: the 1-block `▓▓░▓` file (`SignalSegment { scanned, source, fragments }`), a rack-A story file
+  routed with the residents' (`isResidentFile`, `residents.ts residentToolRule`), SCAN only, no health, never food.
+- **`systems/signals.ts`** (pure, the lead's): `signalCount`, `contactPaid`, `signalSourceAt` / `signalFileAt`,
+  `unknownShown`, `oldColonyOf`, `unknownMessages`, `signalRefusal`.
+- **`systems/unknown-events.ts`**: the file's SCAN (the record, `'signal-found'`, `'signal-event'`, the TERMINAL's line),
+  its tool rule, and the `?` card (`unknownCard`), mounted by `residents.ts mountResidents`.
+- **`data/unknown.ts`** (`UNKNOWN_EVENTS_BUILT`, `OLD_COLONIES`, `SIGNAL_SEG_ID`), **`data/unknown-text.ts`**,
+  **`data/contact-text.ts`**; `FINALE_TEXT.price.signals`; `EPILOGUE_TEXT.step2.contactUs` / `contactTwo`;
+  `RESIDENT_UI_TEXT.stamp.signalMore`.
+- **Tuning**, the 7d lead block: `SIGNAL_EVENT_FRAGMENTS` 2, `CONTACT_GIFT_CHARGE` 8, `CONTACT_STOP_FRAGMENTS` 1,
+  `SIGNAL_FILE_BLOCKS` 1; `RUN_SAVE_VERSION` 9.
+- **Events**: `'signal-event' { slot, n }` (cue `opChirp`, under `'signal-found'`'s `transmitIn`).
+- **Debug**: `__ap.signals()` (records, as slice 5's), `.count()`, `.give(n)`; `__ap.unknown(slot?)`; `__ap.traces.as('contact')`.
+- **The seams**: `desk.ts cardModel` passes its model through `unknownCard`, and `chartModel` labels a `?` node `NAME · ???`;
+  `inbox.ts deriveMessages` adds `unknownMessages`; `state/initial.ts createShipSlices` lays the file after the resident's;
+  `resident-hud.ts` draws and inspects it, widens `signalGlyph` (R40) and caps the stamp; `ending-rules.ts optionState` prices
+  CONTACT; `trace-gifts.ts` gives a stop's charge, line and `given`; `trace-hud.ts` words a stop's row and CONTACT's NEXT RUN:.
+- **Tests**: `signals/foundation` (the save and the pure rules on 60 arms, 25 checks), `signals/events` (the three `?` ships
+  flown on seed 7, 24), `signals/contact` (the row, the words, the trace on 40 arms, a stop by the real TRANSMIT, a stop on a
+  resident's ship, 13); the 7d block of `support/words`; e2e `signals.mjs` (registered).
+
+### Deviations
+
+1. **One agent, no tracks or contract review.** The plan's §5.4 had a FOUNDATION, a contract review and Tracks EVENTS and
+   CONTACT. The lead gave 7d to one agent in sequence; the review is a self-review.
+2. **`SignalSegment.scanned`, not §2.2's `read`.** SCAN's generic path (`actions.ts actionScan`, INSPECT, the strip's `?`)
+   keys on a `scanned` field, so the file has one.
+3. **A third source, `'contact-stop'`** (§2.2 named `'note' | 'signal-event'`). A CONTACT stop's file is the third place a
+   fragment is found, and a stop may be a departed resident's ship whose note carries one, so the record says which.
+4. **The old colony's letter is SENT ????** and its colony is picked by the ship's own key stream (`shipRng(…, 'old-colony')`),
+   with founding units 009, 017 and 024 (OPEN-DECISIONS 76). No year before run 1's start contradicts the arm's history.
+5. **The `?` card is a pass-through, `unknownCard(state, slot, model, world)`**, not §2.4's `unknownCardRows(state, slot)`
+   stub: it rewrites the finished model (rows, colonists, pods, tags), so every row's own rule stays where it is.
+6. **The glyph also marks a waiting CONTACT stop** (OPEN-DECISIONS 78), beyond R40's two `?` ships.
+7. **The stamp past the price** reads `SIGNAL · n` (OPEN-DECISIONS 77): with CONTACT's stops a run can find up to 7.
+8. **CONTACT's epilogue fills the two-minds gap** (OPEN-DECISIONS 80): MERGE + CONTACT's second line and UNRESOLVED +
+   CONTACT's third, in NIGHT's marked CONTACT block.
+9. **Item 74 retires `LINEAGE_BUILT` only** (OPEN-DECISIONS 74, 83). `TRACES_BUILT` stays, every kind raised.
+10. **`wp8/ghost` re-baselined for item 74**: §4.5's `hollowName` table became R34's stranger for every cause, and the merge
+    block R35's `lastUnitRoot` pair.
+11. **e2e `map-desk.mjs` reads KITTIWAKE's POOR card**, not CORMORANT's (seed 4's gone-resident `?` ship), and the three
+    scenarios that pinned `ENDINGS 2/6` read `2/7`. Not run here; the lead's batch runs them.
+
+### The movers
+
+- With `UNKNOWN_EVENTS_BUILT` raised alone: `residents/ui-models` only (the glyph now shows on the `?` PLOVER and KITTIWAKE
+  once HERON's fragment is held; SKYLARK's `unknown` card still none).
+- With CONTACT raised: `ending/foundation`, `ending/rules`, `ending/card-models`, `ending/epilogue` (n/7, CONTACT's row and
+  its NEXT RUN: line), `traces/foundation` and `traces/ui-models` (CONTACT built, its words).
+- With item 74: `wp8/ghost`, `traces/lineage` and `traces/foundation` (the gate's lines).
+- Type churn only: `residents/foundation`, `residents/foundation-flight`, `residents/left`, `residents/ui-models` (the record's
+  new fields; a rack-A file with no `owner`), `save/codec` (eight steps), `save/shape-pin` (v9), `support/words` (the stamp).
+
+### The self-review's probe
+
+RUN START of runs 2, 3 and 4 after each of the 15 endings on 30 seeds (1,350 starts): no throw; every run's traces and signal
+records pass `traceRefusal` and `signalRefusal`; a ship holds a `▓▓░▓` file exactly when it is the signal `?` ship (1,350) or
+a CONTACT stop (720: two on every one of the 360 CONTACT runs), 293 of those stops on a resident's ship.
+
+### e2e (Chromium, alone)
+
+- `signals` (new, registered): **12/12, 134 s**, on seed 7 by `__ap.route` along ARES-VII → HALCYON → LAPWING → PLOVER →
+  KITTIWAKE → WAYFARER → LAST LIGHT. Two first runs failed on the scenario's own waits (a source edit mid-run reloaded the
+  page; then the TERMINAL's queued line and step 1 under load), not on the game.
+- Not run here (the lead's batch): `map-desk` (its POOR card moved), `playthrough`, `ending`, `run-flow` (`ENDINGS 2/7`),
+  `phone` (the FINALE's step 2 has four rows), and any scenario reading a `?` ship's card on its seed.
+
+### Tests
+
+- `npm run typecheck` and the tests' tsc are clean.
+- **The quick tier, once at the end:** see the final report's numbers (the last run is after the docs commit).
+- With UNKNOWN_EVENTS_BUILT raised alone: 218 passed, 3 failed (`residents/ui-models`, the glyph; and the not-yet-built
+  CONTACT lines of `signals/foundation` and its tsc), 471 s under a load of 13 (the lead's e2e beside it).
+- With every 7d change in: 223 passed, 0 failed, 13 balance-only skipped, 292 s, then 287 s (load 3.0 at the start, 10.5 at
+  the end, the lead's e2e running in the main checkout). Both are over the 265 s budget and under the 300 s cap; the new
+  suites add about 4 s of CPU after `signals/foundation` was cut to 60 arms (7d's R42 share was +1 s).

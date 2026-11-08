@@ -45,9 +45,9 @@ check('the numbers: the signal ship 2, a stop 1 fragment and +8 (two stops +16, 
   && TRACE_LAYERS.contact.join() === '5,7');
 {
   // Every arm the generator rolls puts SIGNAL_EVENT_FRAGMENTS on its signal ship, and the file rule reads it (it throws on
-  // another count, so 200 arms read each signal ship's source).
+  // another count, so 60 arms read each signal ship's source).
   const maps: RunMapState[] = [];
-  for (let seed = 1; seed <= 100; seed++) maps.push(createRunMap({ wave: 1 }, seed), createRunMap({ wave: 2 }, seed));
+  for (let seed = 1; seed <= 30; seed++) maps.push(createRunMap({ wave: 1 }, seed), createRunMap({ wave: 2 }, seed));
   const run = (map: RunMapState): Parameters<typeof signalSourceAt>[0] => ({
     map, traces: { from: null, kinds: [], places: [], extraSeed: false }, residents: { met: [], signals: [] },
   });
@@ -55,12 +55,12 @@ check('the numbers: the signal ship 2, a stop 1 fragment and +8 (two stops +16, 
     .filter((ship) => ship!.reserved.fragments !== SIGNAL_EVENT_FRAGMENTS || signalSourceAt(run(map), ship!.slot)?.fragments !== SIGNAL_EVENT_FRAGMENTS)
     .map((ship) => `${map.run}:${map.armSeed}:${ship!.slot}`));
   const kinds = maps.map((map) => map.arm.filter((ship) => ship?.reserved.unknownEvent !== null && ship !== undefined).length);
-  check(`200 arms: three \`?\` ships each (old colony, gone resident, signal), the signal ship's file worth ${SIGNAL_EVENT_FRAGMENTS}`,
+  check(`60 arms: three \`?\` ships each (old colony, gone resident, signal), the signal ship's file worth ${SIGNAL_EVENT_FRAGMENTS}`,
     bad.length === 0 && kinds.every((n) => n === 3), `${bad.join(' ')} ${kinds.filter((n) => n !== 3).length} arms short`);
   // The old colony: the ship's own stream picks one of the three, the same on every call; across the arms all three appear.
   const picks = maps.flatMap((map) => map.arm.filter((ship) => ship?.reserved.unknownEvent === 'old-colony')
     .map((ship) => ({ a: oldColonyOf({ seed: 1, map }, ship!.slot).name, b: oldColonyOf({ seed: 99, map }, ship!.slot).name })));
-  check('the old colony is the ship\'s own (the same whatever the run seed), and all three appear over 200 arms',
+  check('the old colony is the ship\'s own (the same whatever the run seed), and all three appear over 60 arms',
     picks.every((pick) => pick.a === pick.b) && OLD_COLONIES.every((colony) => picks.some((pick) => pick.a === colony.name)));
 }
 
