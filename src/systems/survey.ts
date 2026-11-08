@@ -9,7 +9,8 @@ import { on, emit } from '@systems/events';
 import { say } from '@systems/say';
 import { releaseThread, reserveThread, holdsThread, threadsTotal, threadsBusy } from '@systems/ops-core';
 import { surveyRecordOf, surveyVersion, mappedPct, foundSites, lzSiteOf } from '@state/survey-selectors';
-import { sweptCells, swathHalfRad, surveyRunning, surveyWantsThread, cellOf, assignRefusal } from '@systems/survey-model';
+import { sweptCells, swathHalfRad, surveyRunning, surveyWantsThread, cellOf, assignRefusal, dropSwathOn } from '@systems/survey-model';
+import { getDropSolution } from '@systems/drop-cache';
 import { SWATH_TEXT, WIDTH_WORD } from '@data/swath-text';
 import { SURVEY_TEXT, siteLabel } from '@data/survey-text';
 import { SURVEY_RATE_VERSION, SURVEY_SWEEP_VERSION, SURVEY_KEEP_FREE_THREADS, SURVEY_CELLS } from '@data/tuning';
@@ -21,6 +22,8 @@ import { SURVEY_RATE_VERSION, SURVEY_SWEEP_VERSION, SURVEY_KEEP_FREE_THREADS, SU
 //   holdsThread(SURVEY_THREAD_OWNER): AUTOBURN's and AUTODROP's preempting claims may take it (R8), and then it claims again
 //   once a spare one frees. Its one module variable (plan §2.3, review m3) is `lastRunning`, the last 'survey-state' it
 //   emitted, reset with the world: an emit "on a change" needs the last state, and a saved field for it would be a save change.
+// • In the LANDING, v2+ also maps a swath around the drop dot (OPEN-DECISIONS 52, a deviation from 01 §3.13: "the
+//   sensors look where the pods will go"), as wide as the ship's; v1 maps under the ship only. The thread rules are the same.
 // • Two tick hooks: the game tick maps (it knows the game time the tick covered: a step of a period or more, a long SKIP,
 //   maps the whole rim); the post tick, which runs in every phase, reconciles the thread, puts the machine at rest outside a
 //   mapping tick (`lastRad` null), says CONTROL's boot quip at the first flight tick and emits 'survey-state' on a change.
@@ -85,7 +88,19 @@ function mapTick(store: Store<GameState>, dtWorld: number): void {
   const version = surveyVersion(state);
   const { survey } = state.landing;
   const { rad, dir, fullTurn } = overhead(state, dtWorld);
-  const cells = sweptCells(survey.lastRad ?? rad, rad, dir, swathHalfRad(version), fullTurn).filter((cell) => !survey.mapped[cell]);
+  const swath = swathHalfRad(version);
+  const from = survey.lastRad ?? rad;
+  const swept = new Set(sweptCells(from, rad, dir, swath, fullTurn));
+  // OPEN-DECISIONS 52: in the LANDING, v2+ also maps the same swath around the drop dot ("the sensors look where the pods will
+  // go"): the dot leads the ship by about 80° in a landing orbit, so an LZ the approach missed is rated before its first
+  // window, not after it. The dot's sweep this tick is the ship's, shifted by the dot's lead now (it changes slowly), so no
+  // second angle is kept.
+  const dotRad = dropSwathOn(state) ? getDropSolution()?.dot?.rad ?? null : null;
+  if (dotRad !== null) {
+    const lead = dotRad - rad;
+    for (const cell of sweptCells(from + lead, dotRad, dir, swath, fullTurn)) swept.add(cell);
+  }
+  const cells = [...swept].filter((cell) => !survey.mapped[cell]);
   if (cells.length === 0 && survey.ranAt >= version) {
     store.mutate((draft) => { draft.landing.survey.lastRad = rad; });
     return;

@@ -15,6 +15,8 @@
 //   MAPPED, the thread released at 100%, SHIP DONE at rest in a save that decodes, the record (moved off ROCKY, unknown).
 // • v2: the bad guess revealed as the swath passes it (`> SURVEY: LZ-B IS ROCKY ✕`, CONTROL's line), every found site rated,
 //   the strip's `survey-swap` row naming SITE 5, gone once the kid moves LZ-B there.
+// • OPEN-DECISIONS 52: in the LANDING v2 also maps around the drop dot: LZ-B, unmapped at the lock and met blind by v1's
+//   first window, is revealed before its window with the ship beyond its own swath, and the kid's swap lands its pods soft.
 // • R11: sites found at v1 are rated once v2 works, even with the rim mapped.
 // • v3: no thread, `NO THREAD (v3)`, mapped % at the capture inside 46–56%; bitten to DAMAGED it works as v2: it claims a
 //   thread; REPAIRed back to OK it lets the thread go.
@@ -38,7 +40,8 @@ import { freeSegment, mergeAdjacentFree } from '@systems/memory-ops';
 import { threadsBusy, threadsTotal, holdsThread, reserveThread, releaseThread, canStartOp } from '@systems/ops-core';
 import { capabilitiesNow } from '@systems/capabilities';
 import { assignSite, toggleSurveyPause, surveyStatus, mapNow, SURVEY_THREAD_OWNER } from '@systems/survey';
-import { surveyRunning, swathHalfRad } from '@systems/survey-model';
+import { surveyRunning, swathHalfRad, cellOf, bestSwap } from '@systems/survey-model';
+import { angleDelta } from '@systems/landing-solve';
 import { openBranchesAt } from '@systems/skill-tree';
 import { visitNow } from '@systems/skill-levels';
 import { buildDirectorCtx } from '@systems/director';
@@ -229,6 +232,46 @@ withSurveyBuilt(() => {
     const moved = assignSite(h.store, 'LZ-B', siteId(5));
     check(`…with no window open the strip offers the swap (\`${strip}\`), and drops it once LZ-B is moved there`,
       strip === SWATH_TEXT.strip.swap('LZ-B', 'rocky', 'SITE 5') && moved === null && ruleLine('survey-swap') === null, String(strip));
+  }
+
+  // --- OPEN-DECISIONS 52: in the LANDING, v2+ also maps around the drop dot ---------------------------------------------------
+  // On CORMORANT LZ-B (346°) is past the capture: the approach leaves it unmapped, and the dot leads the ship by about 80°, so
+  // LZ-B's first window opens before the ship's own swath reaches it. v1 (the ship's swath only) meets that window blind; v2
+  // rates the guess from the dot's swath before the window, and the strip's kid (who moves LZ-B by bestSwap) lands soft.
+  {
+    const lzBRad = (): number => survey().sites.find((site) => site.id === 'guess-B')!.centreRad;
+    const fromShip = (): number => Math.abs(angleDelta(Math.atan2(s().orbit.y, s().orbit.x), lzBRad()));
+    const firstLzBWindow = (from: number): number => h.events.slice(from).findIndex((event) => event.name === 'window-open' && (event.payload as { lz: string }).lz === 'LZ-B');
+    const revealAt = (from: number): number => h.events.slice(from).findIndex((event) => event.name === 'site-revealed');
+    // v1: the gap.
+    fromStart(1);
+    flyApproach();
+    const unmappedAtLock = !survey().mapped[cellOf(lzBRad())];
+    let mappedAtWindow: boolean | null = null;
+    followLanding(h, { maxWall: 900, onTick: () => { if (mappedAtWindow === null && s().landing.window?.lz === 'LZ-B') mappedAtWindow = survey().mapped[cellOf(lzBRad())] === true; } });
+    check('v1 (the ship\'s swath only): LZ-B unmapped at ORBIT LOCK, still unmapped when its first window opens; the first touchdown shows it',
+      unmappedAtLock && mappedAtWindow === false && JSON.stringify(survey().reveals) === '[{"site":"guess-B","by":"touchdown"}]', `${unmappedAtLock} ${mappedAtWindow}`);
+    // v2: the dot's swath.
+    fromStart(2);
+    flyApproach();
+    const fromV2 = h.events.length;
+    const unmappedV2 = !survey().mapped[cellOf(lzBRad())];
+    let shipOffAtReveal: number | null = null;
+    followLanding(h, {
+      maxWall: 900,
+      onTick: () => {
+        if (shipOffAtReveal === null && survey().reveals.length > 0) shipOffAtReveal = fromShip();
+        const to = bestSwap(s(), 'LZ-B');
+        if (to !== null) assignSite(h.store, 'LZ-B', to);
+      },
+    });
+    const downB = s().landing.pods.flatMap((record) => (record.fate.kind === 'down' && record.fate.touchdown.lz === 'LZ-B' ? [record.fate.touchdown.touch] : []));
+    check(`v2: LZ-B unmapped at ORBIT LOCK, revealed by SURVEY with the ship ${((shipOffAtReveal ?? NaN) * 180 / Math.PI).toFixed(0)}° from it (beyond its own ±20°), before LZ-B's first window`,
+      unmappedV2 && shipOffAtReveal !== null && shipOffAtReveal > swathHalfRad(2) && revealAt(fromV2) >= 0
+      && (firstLzBWindow(fromV2) < 0 || revealAt(fromV2) < firstLzBWindow(fromV2)) && JSON.stringify(survey().reveals) === '[{"site":"guess-B","by":"survey"}]',
+      `${revealAt(fromV2)} < ${firstLzBWindow(fromV2)}`);
+    check(`…the kid moves LZ-B by bestSwap and every LZ-B pod lands soft (${downB.join()})`,
+      survey().moves.length === 1 && survey().moves[0]!.from === 'guess-B' && downB.length === 4 && downB.every((touch) => touch === 'soft'));
   }
 
   // --- R11 latched: a site found at v1 is rated once v2 works, with nothing left to map --------------------------------------
