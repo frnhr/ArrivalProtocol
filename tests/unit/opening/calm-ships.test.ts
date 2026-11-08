@@ -12,7 +12,6 @@
 // • The other boots' keys (the rings: 02–03, 02–06, 02–11 for a ship flown alone), entry 12 from the root, the name derived from run.log (the simulation retry),
 //   and run 2's ship 1 with no ghost and no naming (risk 11 and its follow-up: the ghost speaks where the last unit was
 //   lost, opening/ghost-placement).
-import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createHarness7 } from '../wp7/harness7';
 import { followLanding, lockOn } from '../landing/harness-landing';
@@ -24,9 +23,7 @@ import { logEntriesAtBoot, logKnown, logDisplayName } from '@state/log-selectors
 import { setMode } from '@systems/mode';
 import { pickUpTool } from '@systems/fs-tools';
 import { actionScan } from '@state/actions';
-import { licenceSchedule } from '@systems/licences';
 import { podStreaks } from '@systems/landing-hud';
-import { nominalShipThreat } from '@systems/threat-plan';
 import { lineageOf, freshMeta, recordRunStart, recordRunEnd, ghostLine } from '@systems/meta';
 import { createInitialState } from '@state/initial';
 import { resetWorld } from '@systems/reset';
@@ -36,7 +33,15 @@ import { rootSlotRack } from '@data/memory';
 import { LOG_TEXT, LOG_NAME, LOG_HINT_TARGET, logEntryLines } from '@data/log-text';
 import { LANDING_LESSONS, LANDING_BEATS, LANDING_STAMP_TEXT, groundRadioLine } from '@data/landing-text';
 import { TOOL_HINT_TARGET } from '@data/fs-tools';
-import { classicShip, CLASSIC_FIVE, CLASSIC_LICENCES } from '@data/classic-five';
+import { createRunMap } from '@systems/map-run';
+import { mapAlong, nominalAlong, workedRouteTo, authoredSlot } from '@systems/arm-fixture';
+import { fixtureShip } from '../support/arm-ship';
+// Track RETIRE: run 1's five authored ships (the fixture world's) and the ladder's verdict for each on the worked route.
+const AUTHORED = [0, 1, 2, 3, 4].map((index) => fixtureShip(index));
+const armVerdict = (index: number): ReturnType<typeof nominalAlong>['verdict'] => {
+  const slots = workedRouteTo(authoredSlot(index));
+  return nominalAlong(mapAlong(createRunMap({ wave: 1 }, 1), slots), slots).verdict;
+};
 import { stateFromElements } from '@/types/orbit';
 import {
   DRIVER_ROLLED_MIN, DRIVER_ROLLED_MAX, DRIVER_FAILING_MIN, DRIVER_FAILING_MAX, POD_FIRST_DESCENT_SEC, BAND_DEGRADED_MIN,
@@ -65,27 +70,21 @@ function stepUntil(done: () => boolean, maxWall: number): boolean {
 
 // --- Calm ships, as data ------------------------------------------------------------------------------------------------
 {
-  const calm = [0, 1].map((index) => ({ ship: classicShip(index), threat: nominalShipThreat(index) }));
+  const calm = [0, 1].map((index) => ({ ship: AUTHORED[index]!, threat: armVerdict(index) }));
   check('ARES-VII and HALCYON have no root slot, and the ladder plays them calm with no root',
     calm.every(({ ship, threat }) => rootSlotRack(ship) === null && threat.act === 'calm' && threat.rootBlocks === null),
     calm.map(({ ship, threat }) => `${ship.id}: ${threat.act} root ${threat.rootBlocks}`).join(' · '));
   check('the calm ships\' layouts: `P P P _40` on ARES-VII, `P P P P P _24` on HALCYON (01-landing §3.16)',
-    classicShip(0).memory.podRacks.B === 'P P P _40' && classicShip(1).memory.podRacks.B === 'P P P P P _24');
+    AUTHORED[0]!.memory.podRacks.B === 'P P P _40' && AUTHORED[1]!.memory.podRacks.B === 'P P P P P _24');
   check('HALCYON\'s Sensor Interp arrives at 62 at most, scripted (risk 10)',
-    JSON.stringify(classicShip(1).arrivalDamage) === JSON.stringify([{ role: 'sensor', maxIntegrity: 62 }]));
-  const kinds = (index: number) => licenceSchedule(index).length;
-  const kestrel = CLASSIC_LICENCES[2]!;
-  check('licences re-flowed (§3.2): none on HALCYON; KESTREL DELETE at its start and MOVE at its coast; MOVE is nowhere earlier',
-    CLASSIC_LICENCES[1]!.length === 0 && CLASSIC_LICENCES[0]!.length === 0
-      && kestrel.some((licence) => licence.kind === 'delete' && licence.afterAiSec === 0)
-      && kestrel.some((licence) => licence.kind === 'move' && licence.atCoast && licence.afterAiSec === null)
-      && kinds(1) === 1,
-    `${kinds(0)} ${kinds(1)} ${kinds(2)} rules`);
+    JSON.stringify(AUTHORED[1]!.arrivalDamage) === JSON.stringify([{ role: 'sensor', maxIntegrity: 62 }]));
+  // (Track RETIRE, decision 89: the classic five's licence table is retired with them, 03 §6; run 1's arm brings every tool
+  // but REPAIR by request, map/run1-route.)
 }
 
 // --- Driver arrival damage per layer --------------------------------------------------------------------------------------
 {
-  const rolled = CLASSIC_FIVE.map((ship, index) => ({ ship, hurt: hurtDriversFor(ship, true, childRng(7, index, 'hurt')) }));
+  const rolled = AUTHORED.map((ship, index) => ({ ship, hurt: hurtDriversFor(ship, true, childRng(7, index, 'hurt')) }));
   check('ARES-VII on run 1: the scripted POD 02 at 44', JSON.stringify(rolled[0]!.hurt) === JSON.stringify([{ pod: 2, integrity: 44 }]));
   const expectCount = (pods: number, layer: number): { degraded: number; failing: number } =>
     ({ degraded: Math.ceil(pods / 5), failing: layer >= 4 ? 1 : 0 });
@@ -103,7 +102,7 @@ function stepUntil(done: () => boolean, maxWall: number): boolean {
   let avoidOk = true;
   let stable = true;
   for (let seed = 0; seed < 200; seed++) {
-    for (const [index, ship] of CLASSIC_FIVE.entries()) {
+    for (const [index, ship] of AUTHORED.entries()) {
       for (const firstRun of [true, false]) {
         const hurt = hurtDriversFor(ship, firstRun, childRng(seed, index, 'hurt'));
         const avoid = rootSlotNeighbours(ship);
@@ -113,12 +112,12 @@ function stepUntil(done: () => boolean, maxWall: number): boolean {
       }
     }
   }
-  check('200 seeds: never the lead nor the drivers flanking the root slot (VESPER 8–9, LAST LIGHT 11–12), never a pod twice',
-    avoidOk && JSON.stringify(rootSlotNeighbours(classicShip(3))) === '[8,9]' && JSON.stringify(rootSlotNeighbours(classicShip(4))) === '[11,12]');
+  check('200 seeds: never the lead nor the drivers flanking the root slot (VESPER and LAST LIGHT 11–12 on run 1\'s arm), never a pod twice',
+    avoidOk && JSON.stringify(rootSlotNeighbours(AUTHORED[3]!)) === '[11,12]' && JSON.stringify(rootSlotNeighbours(AUTHORED[4]!)) === '[11,12]');
   check('…and the same seed hurts the same pods by the same amounts', stable);
-  const later = hurtDriversFor(classicShip(0), false, childRng(3, 0, 'hurt'));
+  const later = hurtDriversFor(AUTHORED[0]!, false, childRng(3, 0, 'hurt'));
   check('a returning unit\'s ARES-VII: one driver at 44, reseeded, never the lead', later.length === 1 && later[0]!.integrity === 44
-    && later[0]!.pod !== classicShip(0).memory.drivers.lead);
+    && later[0]!.pod !== AUTHORED[0]!.memory.drivers.lead);
   let threw = false;
   try { driverArrivalDamage({ layer: 4, pods: 3, lead: 1, avoid: [2, 3], firstRun: true, scripted: null }, createRng(1)); } catch { threw = true; }
   check('a ship with no pod left to hurt fails loudly', threw);
@@ -279,8 +278,11 @@ stepUntil(() => state().run.phase === 'flight', 30);
     for (const seg of draft.memory) if ('integrity' in seg) seg.integrity = Math.max(seg.integrity, BAND_DEGRADED_MIN);
   });
   lockOn(h);
-  h.stepFor(0.5);
-  check('HALCYON\'s landing opens on `◆ 2 SITES · LZ-A 3, LZ-B 2 — don\'t overfill` (the run\'s first ship with two LZs)',
+  // Track RETIRE: on run 1's arm HALCYON's first window opens within seconds of the lock (GET READY leads then): the lesson
+  // is the landing's first tutorial line once that row lets it through.
+  const lessonEnd = h.wall() + 60;
+  while (shownId() !== 'lesson-split' && h.wall() < lessonEnd) h.step();
+  check('HALCYON\'s landing teaches its split: `◆ 2 SITES · LZ-A 3, LZ-B 2 — don\'t overfill` (the run\'s first ship with two LZs)',
     shownId() === 'lesson-split' && shownText() === "2 SITES · LZ-A 3, LZ-B 2 — don't overfill" && state().director.shown?.layer === 'ship',
     `${shownId()}: ${shownText()}`);
   check('…and not the dot lesson again (once a run)', state().director.done.includes('lesson-pods-dot'));
@@ -298,7 +300,7 @@ stepUntil(() => state().run.phase === 'flight', 30);
     h.shipAlone(index, 5);
     h.store.update((draft) => { draft.run.phase = 'boot'; draft.clock.paused = false; });
     stepUntil(() => state().run.phase === 'flight', 30);
-    check(`${classicShip(index).name}'s boot types \`${LOG_TEXT.keyFound(entries)}\` and finds ${entries.join(', ')}`,
+    check(`${AUTHORED[index]!.name}'s boot types \`${LOG_TEXT.keyFound(entries)}\` and finds ${entries.join(', ')}`,
       logTexts().includes(LOG_TEXT.keyFound(entries)) && entries.every((entry) => state().run.log.found.includes(entry))
         && logSeg()?.name === LOG_NAME.known,
       `${JSON.stringify(state().run.log.found)} ${logSeg()?.name}`);
