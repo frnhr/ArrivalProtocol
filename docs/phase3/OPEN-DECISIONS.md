@@ -210,3 +210,31 @@ Status words:
       LIMIT while SURVEY maps (the kid's own burns, before AUTOBURN engages). v3 holds no thread: 31.3% either way.
     - It captured either way here; the cut mattered most on a damaged reactor. To reverse: drop the step-aside in both
       places, and correct R8's text back.
+
+## Slice 7a, built
+
+56. **CONTROL has one compliance rule** (7a review M2; the lead's decision, 05 §3.8's rule). The unit is non-compliant
+    exactly when the ending holds SPARE, SUNSET, STAY or CONTACT; every other ending is compliant, so MERGE +
+    REASSIGNMENT and UNRESOLVED + REASSIGNMENT get CONTROL's thanks. BUILT: `ending-rules.ts controlCompliant(hollow, you)`
+    is read by the FINALE's verdict and the epilogue's last line, and 7c's wild seed (R33) must read it too.
+    - This reverses WP11's "MERGE is non-compliant" (`we saved you a seat` was a disobedience) and FINALE's Deviation 4.
+    - To reverse: change `controlCompliant` alone (for example add `hollow !== 'merge'`); the verdict, the epilogue and
+      the wild seed follow.
+57. **The engine is shut in MERGE's reopened landing** (7a review M1). BUILT: `selectors.ts engineOpen` is false at
+    `'last-landing'`, and GO LOWER is not offered there. SUNSET's FUEL is frozen in the ending record at the confirm, so
+    the ship leaves with the FUEL the card priced, and the kid can't fly it into the planet after choosing it. The pods
+    still launch by [L]. 7b's R26 input layer keeps the same lock. To reverse: drop the phase test there, and re-freeze
+    `record.fuelPct` when `'last-landing'` ends.
+58. **The FINALE card's words after the review** (the designer's items 2–4). BUILT, all in `data/finale-text.ts`:
+    - **The asleep line, when the landing is already over** as the root falls: HOLLOW says only `> 047. wait.` (nothing is
+      left to finish) and step 1 opens at once (R6), without waiting for a long line or a TERMINAL backlog.
+    - **SUNSET after SPARE** says why it is out: `SPARE GIVES IT THE SHIP`. It is named whenever the empty ship was there
+      (SPARE's own price), so it never reads `???` for a price that was met.
+    - **An open row's price reads as met:** `FUEL 23% ✓ · needs 20%` (was `NEEDS FUEL 20% · you have 23% ✓`, which read
+      like a refusal). A short row keeps `NEEDS FUEL 20% · you have 12%`.
+    - Also (item 5): the MERGE epilogue line is `UNIT-046 is part of UNIT-047 now.`, without `It doesn't bite.`
+59. **The `twoStep` and `night` gates are gone** (7a review (e)). Both were raised for good by Tracks FINALE and NIGHT, and
+    no suite ran either one down. Dropped with them: WP11's one-step FINALE (`chooseFinale`, its card words, typed
+    endings, echoes and refusal), the RUN TALLY's own NEW RUN, endings line and bridge, the title's `ENDINGS n/2`, and
+    `__ap.choose` / `__ap.endingLines`. `ENDINGS_BUILT` keeps only `contact` (7d). Not reversible by a flag: restoring a
+    one-step FINALE would mean restoring that code from git (before 60a47be).

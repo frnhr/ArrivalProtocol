@@ -1816,3 +1816,110 @@ CPU; R42's +4 s for 7a holds). No e2e was run (the lead's, §6.4).
 the epilogue typing and whole (8 colonies with 3 folded; the worked route's MERGE + SUNSET; a lost run), the final card
 (STAND BY, WE TOOK THE SHIP, UNIT-047 OVERWRITTEN), NEW RUN to the title, and the title's `ENDINGS 2/6`. No sideways scroll on
 the phone.
+
+## Deviations (7a review fixes)
+
+Recorded by the 7a fix agent (branch `int-7a`, from 2672e26; slice 6's fix pass merged in at c5d5e70). Every finding of
+`slice-7a-review.md` is marked there. Commits: a404130 (B1), 4e4db09 (M3), 33d4c7d (M1), 1d7f9c0 (M2), 60a47be (e, with
+m3 and m4), e064b5d (f), 6fd832c (m1, m2), 209d905 (m5, m7), 4acb5a9 (the review's duplicates), b908c1e (the designer's
+items 2–5), 9f448ea (e2e), c5d5e70 (the merge).
+
+### How each finding was fixed
+
+- **B1.** The stale check ran under `withEndings({ twoStep: false }, …)`, and `card-models` borrowed `support/finale.ts
+  withEndings` for its own `withGates`. Item (e) then deleted the check with the gate.
+- **M1 (lead: the lock).** `selectors.ts engineOpen` is false at `'last-landing'`, and `landing.ts goLowAimNow` offers no
+  GO LOWER there. `finale-flow` flies MERGE + SUNSET at FUEL 22% with an eaten driver: the throttle is refused, a throttle
+  forced on in the store burns nothing, and the report's FUEL equals the record's. OPEN-DECISIONS 57.
+  - The refusal word in `'last-landing'` is the existing `FLIGHT OVER` (no new word).
+  - A decaying orbit can't be lifted during the interim last landing. It lasts a few windows, and 7b replaces it.
+- **M2 (lead: 05's rule).** `ending-rules.ts controlCompliant(hollow, you)`: non-compliant exactly for SPARE, SUNSET, STAY or
+  CONTACT. The verdict (`finale.ts finaleVerdictLines`) and the epilogue's last line read it. `ending/epilogue` checks the
+  two lines agree for all 15 endings (CONTACT's included). This reverses FINALE's Deviation 4 and NIGHT's Deviation 6: MERGE
+  + REASSIGNMENT is now compliant. `fix1`, `wp11/p2/views` and `merge-test` were re-baselined. OPEN-DECISIONS 56.
+- **M3.** STAY's sub-row container is `#fcStayPick`.
+- **m1.** The codec takes the record at `'verdict'`, `'last-landing'` and `'done'`, and refuses one before the confirm. The
+  comments in `save-codec.ts` and `ending-rules.ts endingRecordAt` say so. `finaleRefusal` is exported, because no save
+  point reaches `'verdict'`: `ending/foundation` calls it at each phase.
+- **m2.** The one ★ ON TARGET rule is in `landing-rules.ts`: `onTargetEarned(onTarget, colonists)` (the threshold),
+  `podOnTarget(record)` and `podsOnTarget(pods)`.
+  - `onTargetTally` and `ending-rules.ts shipOnTarget` read the threshold. `shipOnTarget` keeps its own pod test, because a
+    `PodSummary` is not a `PodRecord`.
+  - The codec refuses a STAY whose ship is not ★: an ended ship by `shipOnTarget`, the final ship by `podsOnTarget(landing.pods)`.
+  - Two new codec cases. No import cycle.
+- **m3.** The strip has a separate rule, `'finale-verdict'`, with `FINALE_TEXT.stripVerdict` (`THE FINALE — click or [SPACE]
+  to go on`). It is a rule of its own because a rule's `text` sees only `vars`, not the state.
+- **m4.** `FINALE_TEXT.fuelStar(have)` returns the notch's two lines, and `fuelStarTitle` returns it. `verdictTag` and
+  `verdictHint` are FINALE_TEXT's. `support/words.test` splits multi-line words before measuring them.
+- **m5.** `unresolve` leaves `cardAtAi` null while a pod falls. The tick sets it FINALE_OPEN_DELAY_SEC after the
+  touchdown (and after HOLLOW's line). `finale-flow` flies it: no card while the pod falls, the card after it lands.
+- **m6.** No trim was needed; this pass's tier time is below. `finale-flow` grew by three blocks (M1, m5, designer item 2)
+  and runs about 9–11 s.
+- **m7.** The RUN TALLY, the EPILOGUE and the FINAL CARD take NumpadEnter.
+- **(e).** Both gates are gone, with every path they switched (OPEN-DECISIONS 59):
+  - finale.ts: `chooseFinale`, `finaleChoiceRefusal`, `FinaleChoice`, `finaleEndingLines` and its helpers, every one-step
+    branch. `podsEatenHere` is internal; `finaleEndingShowing` stays.
+  - HOLLOW_FINALE: every key the review listed, `stripWaits` included (`fix1` reads `LANDING_LINES.L0`).
+  - The night: `meta.ts ENDINGS`, `script.ts endingsLine`, the tally's endings line (with its `#reEndings` element and CSS),
+    its bridge (and `.re-bridge` CSS), its own NEW RUN (`RUN_END_TEXT.newRun`), TitleCard's WP11 count.
+  - `debug.ts`: `__ap.choose`, `__ap.endingLines`, `finale().mergeRefusal` and `.purgeRefusal`.
+  - Also dead with them and deleted: `not-built.ts` and `FINALE_ENDING_MAX_LINES`.
+  - `ENDINGS_BUILT` is `{ contact }`. `ending/foundation` checks that it is the only gate.
+- **(f).** The four UNRESOLVED titles carry `// R23 (the plan's draft; 05 to adopt)`. The file comment names CONTACT's three
+  titles as 05's own.
+- **The review's duplicates.** `endingTitle(record)` moved to `ending-rules.ts`, where the report's line and the final card
+  read it. `finale-card.ts pieceCommand(piece, names, stayColony)` builds every command, for the card's rows and the
+  verdict's echoes.
+
+### The designer's items (lead's decisions; OPEN-DECISIONS 58)
+
+- **(2)** When the landing is over and nothing is falling at the root's fall, HOLLOW says `FINALE_TEXT.asleepLanded` (`> 047.
+  wait.`), and step 1 opens in the same tick (the card at FINALE_OPEN_DELAY_SEC). It no longer waits for the TERMINAL to
+  type. `wp11/p2/purge-fleet` takes step 1 at the fall; `finale-flow` checks the short line and the open.
+- **(3)** `FINALE_TEXT.needs.shipTaken` is `SPARE GIVES IT THE SHIP`, not `046 HAS THE SHIP`. The lead's example was `SPARE
+  KEEPS THE SHIP`, but SPARE gives the ship away; "gives" says what it does. After SPARE, SUNSET's row is named whenever
+  `emptyShip(state).ok` (or SUNSET was seen before), so it never reads `???`.
+- **(4)** `FINALE_TEXT.price.fuel(have)` is `FUEL 23% ✓ · needs 20%`. The need line out of reach is unchanged.
+- **(5)** `EPILOGUE_TEXT.step1.mergeNone` drops `It doesn't bite.`.
+- Not built: item 8 (a dim `IT FOLLOWED YOU` label on the final card's HOLLOW row), and CARD's optional `price.signals` for 7d.
+
+### e2e (§6.4; the review's (b))
+
+- `tests/e2e/lib.mjs runKit` gains the helpers:
+  - `finaleTwoSteps(hollow, you)` returns null, or the step that didn't come up. `'followed'` taps `#fcCont`.
+  - `throughTheNight(key)` returns the epilogue's lines and the final card's title, endings line and kicker.
+- **run-flow and resume:** both FINALE steps; the night before the title; the FINAL CARD read (`STAND BY`, `ENDINGS 2/6`,
+  and `FINAL SHIP LOST` after the BEAM OUT).
+- **playthrough:** the card is tapped by phase. It checks the EPILOGUE's header, CONTROL's line and ≤ 16 lines, and the
+  FINAL CARD.
+- **phone:** the tally's tap goes through the EPILOGUE and the FINAL CARD, with overflow checked on both, to NEW RUN. It adds
+  the FINALE sheet at 390×844:
+  - the card fills the screen, its rows are ≥ 44 px, and there are no digit caps;
+  - BACK and CONTINUE are on-screen buttons.
+  - Step 1 is hand-opened over a real LAST LIGHT (rootFell, the card up now), as the review offered. The root stays in
+    memory under the card.
+- **`ending.mjs` (new, seed 7, registered):**
+  - PURGE + REASSIGNMENT by keys, with [ESC] BACK; the night; the title's `ENDINGS 2/6`;
+  - a reload at step 2 and RESUME (R14). The resumed LAST LIGHT then plays MERGE + SUNSET with a hand-eaten driver and FUEL
+    22%: `'last-landing'`, a held [SPACE] burns nothing, `ENDING · MERGE · WE TOOK THE SHIP`;
+  - UNRESOLVED: no rm, IT FOLLOWED YOU by [ENTER], REASSIGNMENT, two lines.
+  - The reload check lives here, not in resume.
+  - It takes about 4.5 minutes: three LAST LIGHTs, each with the root's real DELETE.
+
+### Tests
+
+- `npm run typecheck` and the tests' tsc are clean.
+- **The quick tier, once after the merge:** 212 passed, 0 failed, 11 balance-only skipped, **158 s** on 4 workers (budget
+  265 s). Load average 1.81 / 1.38 / 1.23 at the start; the 1-minute load climbed to 6.9 while it ran (samples every 15 s;
+  the machine was otherwise quiet after a container restart).
+  - The 7a suites: `ending/finale-flow` 7.9 s, `ending/epilogue` 1.1 s, `ending/foundation` 1.1 s, `ending/card-models`
+    0.7 s, `ending/rules` 0.6 s.
+- **e2e, each scenario alone, after the merge:**
+  - `ending` (new): 28/28, 274 s;
+  - `run-flow`: 83/83, 389 s;
+  - `resume`: 59/59, 331 s;
+  - `phone`: 126/126, 159 s;
+  - `playthrough`: 280/280, 1510 s.
+- No "Execution context was destroyed" in any of them.
+- **For slice 8:** playthrough's CORMORANT flight took **359 s** against its 6-minute check (slice 6 measured 315–342 s). 7a
+  changes nothing before LAST LIGHT, so this is that flight's own spread, but the margin is now 1 s.
