@@ -549,3 +549,17 @@ POLISH's calls (`docs/phase3/impl/slice-8-plan.md` §2.11, §2.12 and "Deviation
        whose boot is still to come keeps its letter unread.
      - To reverse the last two: `transmit.ts` passes `ship.colonists`, and `save-codec.ts migrateRunSave8` drops its
        `inbox.read` loop.
+
+## Slice 8, lead notes
+
+120. **AUTODROP's loss on CORMORANT is in its rules, not its prices.** ECONOMY read seed 19's trace: AUTODROP v2 landed
+     5 of 9 pods there, against 9 of 9 by hand. Two rules cause it:
+     - **v2's pass times LZ-B's two pods to the window's centre.** The hand kid gets 3 pods in from `LAUNCH NOW`, 4.5 s
+       earlier.
+     - **The strip still offers a WIDE [L] while AUTODROP is armed,** so an obedient kid throws pods off-site.
+
+     DEFERRED to a follow-up after slice 8 CLOSE. The fixes: time v2 from the cue, as AIM is measured (item 6), and
+     hide the WIDE [L] prompt while armed.
+121. **SURVEY's "busy CORMORANT" sweep row is not a valid number** (item 54). On seed 7's busy CORMORANT, the Core dies
+     before the report with any SURVEY version aboard, v3 included, so the thread isn't the cause. THREAT's look at
+     COMPETENT's Core deaths should cover this case.
