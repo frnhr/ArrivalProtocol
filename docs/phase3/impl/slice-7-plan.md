@@ -2660,3 +2660,85 @@ opens with its track's banner.
     gate.
 - **CHART:** read `traceAt`, `run.traces.from`, `finalTraces` and `traceBuilt`. The card row goes after the trail row.
 - **The lead:** the contract review is next. §6.4's `traces.mjs` and `run2.mjs`'s stranger check are for the batch end.
+
+## Deviations (Track CHART)
+
+Recorded by the Track CHART agent (branch `chart-7c`, from 3a96ad3, the head of `claude/modest-hawking-209t0f` with the 7c
+FOUNDATION merged). R38's card rows and `◆`, and R12's `NEXT RUN:` lines on the final card, are built over the lead's rules
+(`traceAt`, `run.traces.from`, `traceKindsOf`, `TRACE_RULES`, `traceBuilt`). Every one shows only for a built kind, so with
+`TRACES_BUILT` down (as on this branch) nothing a player sees changes; once TRACE raises a kind, its row, its `◆` and its
+line turn on with it. The visual check raised the six gates locally (never committed); the shots are in
+`tests/.out/chart-7c/` (1440 × 900 `desk-*`, 390 × 844 `phone-*`).
+
+### What is built
+
+- `systems/trace-hud.ts`:
+  - `traceCardRow(state, slot, built?)`: on the final ship `THE LAST UNIT ENDED HERE · PURGE · REASSIGNMENT`, every built
+    piece of the last ending in its order (each acts there: PURGE, MERGE and REASSIGNMENT by their rule, the others by the
+    wild seed); on a gift ship `046'S CACHE IS HERE` (the spared root's digits, `046·047` for two), `UNIT-047 LEFT A CACHE
+    HERE`, `RIVERSIDE · FOUNDED BY UNIT-047` (tone `good`), and `… · FOUND` (tone `plain`) once `given`. None on the classic
+    world, with no ending, or for an unbuilt kind.
+  - `traceOnChart(state, slot, built?)`: a built placed kind's ship while its gift waits (not given).
+  - `traceNextLines(record, built?)`: one `NEXT RUN:` line per built trace of the ending, step 1 then step 2; none for
+    UNRESOLVED's step 1.
+  - `nextRunBody(kind, rootUnits, wildSaid, built?)`: one line's body without its lead, for the FINALE card's row (below).
+- `data/trace-text.ts` CHART block: `endedHere(pieces)`, `cacheHere`, `leftCacheHere`, `supplyHere(colony, unitName)`, `found`,
+  `next` (the bodies) and `nextRun`.
+- `components/desk/chart-draw.ts` (marked): the node group's ` trace` class, the `◆` (`cn-trace`, a path) centred above the
+  node, and a box in `placeLabels` so no label covers it.
+- `components/run/FinalCard.ts` (marked): each `NEXT RUN:` line is two unbreakable parts, the gain and `· − the cost`.
+- `desk.css` 7c CHART block: the `◆` and the legend's glyph in pale gold (`--desk-bright`), the card's TRACE row in the same
+  gold with a leading `◆` while the gift waits, and `.nf-next-part`.
+- `tuning.ts` 7c CHART block: `CHART_TRACE_MARK_PX` 4, `CHART_TRACE_MARK_GAP_PX` 6.
+
+### Deviations
+
+1. **The final ship's row names every built piece, not one** (`· PURGE · REASSIGNMENT`; 05's sample shows `· PURGE`). Every
+   piece changes that ship, and the row is there so the FINALE is never a surprise. When STAY's packet falls back to the
+   final ship, the one row holds it (STAY is among its pieces), and the beacon wears the `◆` too.
+2. **A given gift keeps its row with `· FOUND`, and loses its `◆`.** The `◆` means "a gift waits here". The card still says
+   what was there, for a kid who looks back along the route.
+3. **The `NEXT RUN:` words are 05 §3.12's, with three changes**, all for the 70-character rule at the worst case and R33:
+   - MERGE's cost is `− a root of 18 blocks` (05: `− an 18-block root`). The number is templated from
+     `FINAL_ROOT_MAX_BLOCKS`, and an article cannot follow it.
+   - Every wild-seed cost reads `− 1 more seed at the end`. SPARE's `at the final ship` passes 70 with a two-unit root
+     (`046·047's cache`).
+   - A second non-compliant line (SPARE + STAY) says `− that same seed`: the seed lands once a run (R33), and two lines
+     that each said `1 more seed` would read as two.
+   - STAY's gain stays `+ a packet from your colony`: the colony's name would pass 70 at its worst (`MONTGOMERY LANDING`).
+4. **`supplyHere` names the last unit** (it was `UNIT-047`, written in), and `endedHere`'s parameter is the joined pieces.
+5. **Each function takes an optional `built` rule** (default `traceBuilt`), so the suite paints every kind while the gates
+   are down. The seams in `desk.ts` and `epilogue.ts` call them as the FOUNDATION wrote them, under the gates.
+6. **CONTACT throws** in `traceCardRow` and `nextRunBody` if its gate rises before 7d writes its words. Its row, its stops and
+   its line are 7d's (`contact-text.ts`).
+7. **The `◆` sits above the node, not at a corner.** The upper-left corner is REPORTED HOME's green diamond, and the
+   lower-left is the signal's `▓░`. The right side is where the label goes most often. The gap clears the selection
+   bracket, which the card's own ship always wears. `placeLabels` gains one marked box, so a label never covers the `◆`
+   (the same rule as the trail's marks).
+8. **`.nf-next-part` lives in `desk.css`**, not `night.css`, which is NIGHT's. On the phone, a line wraps between its gain and
+   its cost (at 390 px each line takes two rows). The night's own `.nf-next` room is unchanged.
+9. **The legend's TRACE is hidden on the phone**, as every legend item is (desk.css, slice 3c). The phone reads the card's
+   TRACE row.
+10. **`traces/foundation`'s CHART block** now checks the models under the gates: no row and no `◆` on the classic world, and
+    one `NEXT RUN:` line per built kind.
+
+### Patches requested
+
+- **The FINALE card's `NEXT RUN:` row (R12; `systems/finale-card.ts rowOf`, CARD's file, now the lead's)**: `nextRun` is
+  `null` for every row. Fill it with `nextRunBody(piece, rootUnits(state), wildSaid)` for an open or needs row (still `null`
+  for `unknown`). `wildSaid` is true on step 2 when step 1's pick is SPARE and SPARE is built. `FinaleChoice.ts` already
+  prepends `FINALE_TEXT.nextRunLead`, and the body fits after it at its worst.
+- **The title's traces** (02 §3.12: "shown on the title and the final card") are in no 7c track's scope. If the lead wants
+  them, `traceNextLines(lastUnit.ending)` gives the lines.
+
+### Tests
+
+- New `tests/unit/traces/ui-models.test.ts` (19 checks, about 3 s). It covers the final ship's row (every ending shape,
+  built subsets) and every gift ship's row and `◆` on 40 run-2 arms × 5 endings, through the lead's `runTracesOf`: waiting,
+  given, unbuilt, and STAY on the arm and on its final-ship fallback. It also checks hand-built `RunTraces` (a three-digit
+  unit and the widest colony), no ending, and the classic world. The `NEXT RUN:` lines are checked as 05's words, the wild
+  seed once, UNRESOLVED, and all 19 lines of every ending at ≤ 70 with a two-unit root. Last, the seams follow the build's
+  gates: `cardModel`'s TRACE row after the trail row, `node.trace`, the legend's TRACE and `finalCardOf`'s `next`.
+- `support/words.test.ts` 7c CHART block: every CHART template at its worst, and every `NEXT RUN:` body behind its lead.
+- Note for the lead: in a worktree under `.claude/`, Vite's watcher missed edits. Restart the dev server after a change
+  before trusting a shot.
