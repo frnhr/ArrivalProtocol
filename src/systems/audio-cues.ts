@@ -365,12 +365,13 @@ export function mountAudioCues(store: Store<GameState>): () => void {
     // === Slice 6 (slice-6-plan §2.5): existing cues only; Track SITES may change the cue on these lines (its surveyPing,
     // siteSting and siteSet, audio.ts) and add per-tick entries inside this block.
 
-    // --- 6 survey: the planet mapped and an LZ moved sound as a finished op; a find chirps as an op's progress does; a bad
-    // ground made known warns as a seed does. A rating plays nothing.
+    // --- 6 survey (Track SITES's cues, audio.ts): the planet mapped sounds as a finished op; a find pings soft sonar (seven
+    // never read as alarms); a bad ground made known stings a falling minor third under its stamp; an LZ moved resolves the op
+    // chirp. A rating plays nothing (the window's ★ say it).
     on('survey-state', ({ running }) => { if (running === 'done') play('opDone'); }),
-    on('site-found', () => play('opChirp')),
-    on('site-revealed', () => play('seedWarn')),
-    on('lz-moved', () => play('opDone')),
+    on('site-found', () => play('surveyPing')),
+    on('site-revealed', () => play('siteSting')),
+    on('lz-moved', () => play('siteSet')),
     // --- end of 6 survey ---
   ];
   offs.push(onPostTick(() => playedThisTick.clear()));

@@ -1421,7 +1421,6 @@ save bump. No tuning value moved.
   the FINALE's only (`data/threats.ts`) and a final ship is GOOD, so SURVEY never holds a thread where a verb could be
   skipped; no corrupted resident's due lock met a Core SURVEY had filled.
 - **R16:** 0 SURVEY/SENTRY ties at the 58 desks of these routes.
-
 ### OPEN-DECISIONS 52: the drop-dot swath (after the merge at 2dcfb7c)
 
 15. **In the LANDING, SURVEY v2+ also maps a swath around the drop dot** (the lead's decision, OPEN-DECISIONS 52; a deviation
@@ -1446,3 +1445,48 @@ save bump. No tuning value moved.
 | v3 | 93.9% | +0.0 | 94.4% | 0.24 | 5.57 | 42 of 42 (was 21) |
 
 v2 is now within 3% of GOOD, as §7.3 expected. FUEL at lock, m6 (0 and 0) and R16 (0 ties) are unchanged.
+
+## Deviations (Track SITES)
+
+Recorded by Track SITES (branch `sites-6`, from 0b93e6e). §2.14 is built in SITES's own files and marked spots; no lead file
+beyond those was touched and the save is untouched.
+
+1. **The SITES window sits at the foot of the left column**, under COMMS, which gives it the room (`survey.css`, as SKILLS
+   docked left takes it); with SKILLS docked there too it stacks above SKILLS. Its header reads `POOR DATA · MAPPED 46%`
+   (the title bar already says SITES, and the plan's `SITES · …` wrapped beside `[ PAUSE ]`), then a rim strip (`▓▓░░`, one
+   glyph per 10°: `SITES_RIM_BAR_CELLS 36`), then SURVEY's state in SITES's words from `surveyRunning` and the version
+   (`SURVEY v2 · MAPPING · HOLDS A THREAD`, `… · NO THREAD` at v3, `WAITS FOR A SPARE THREAD`, `PAUSED · ITS THREAD IS FREE`,
+   `PLANET MAPPED · 5 SITES`, `IDLE`, `NO SURVEY · ARRIVAL CONTROL'S GUESSES`), not SWATH's `surveyStatus` (that is the Skills
+   row's).
+2. **Rows.** An LZ reads `LZ-B · GUESS · 4 PODS · WIDE · ROCKY ✕` (where it stands, its count, its width, its ground); a guess
+   no SURVEY ever looked at reads `UNSURVEYED` (01 §3.13's flag), `GROUND ?` once SURVEY is aboard. The free sites follow in
+   rim order: candidates and the wreck once found, and a guess an LZ moved off (R10: it stays a site). A known-bad site shows
+   `WET ✕` (its one ★ is in the model, not shown: the ✕ says more). The wreck reads `SITE 4 · WRECKAGE · AN OLD POD. NOT
+   OURS.` and can't be selected.
+3. **Selection is shared:** `SitesWindow.ts selectSite` / `selectedSite`, and one document handler for every
+   `[data-site]` node (a row, the plot's site brackets, the GROUND TRACK's brackets: B1). A click on the plot or the GROUND
+   TRACK opens the window, a phone's tab included. A refused pill is drawn dimmed with the lead's words: `LZ-B ✕ LZ-B HAS
+   PODS DOWN`.
+4. **The plot layer** also draws, in FLIGHT only, each LZ's thin outline and name (`LZ-B ?`, `LZ-B ✕`), since the landing
+   layer draws LZs only in LANDING; in LANDING it adds just the glyph inside the planet. The wedge reaches
+   `SURVEY_WEDGE_REACH` (0.9) of the planet's radius past the rim, with the swath's footprint lit on the rim. Site names
+   are dropped when the planet is under 18 viewBox units (zoomed far out) or when two would overlap. The model's
+   `wedges` is a list (`{ at: 'ship' | 'dot', centreRad, halfRad }`): in the LANDING at v2+ (`dropSwathOn`, OPEN-DECISIONS
+   52) a second wedge sits at the drop dot. `surveyPlotModel(state, dotRad)` reads the dot from `getDropSolution()` by
+   default in the LANDING; the suite passes it.
+5. **The card's SITE DATA row waits on `SURVEY_BUILT.poor`** (R19 puts the card rows under that gate): with the gate down no
+   card gains a row. On the arm with it up every ship has the row (`GOOD` plain, `POOR · ARRIVAL CONTROL GUESSED` warn).
+6. **The AHEAD line's "open"** is SURVEY's branch open at this desk (`openBranchesAt`), a SURVEY file held, or a SURVEY
+   purchase pending.
+7. **The report suffix** adds ` · ROCKY` alone for a known-bad LZ no pod landed in (the kid steered clear); an unknown bad
+   guess nobody landed on says nothing.
+8. **`SURVEY_PING_GAIN` is 0.04, not 0.12** (measured: at 0.12 the sine ping rang within 5 dB of the op-done ding; at 0.04
+   its peak matches the op chirp's). `siteSting` is G5 → E5; `siteSet` G6 → A6 → C7. The survey block of `audio-cues.ts`
+   maps `'site-found'` → `surveyPing`, `'site-revealed'` → `siteSting`, `'lz-moved'` → `siteSet`.
+9. **Words added** to `sites-text.ts` (all in `SITES_WORST`): `width.*`, `window.status.*`, `rimMapped` / `rimUnmapped`,
+   `pauseTitle`, the section heads, the empty lines and the hint, `row.guess`, `row.wreck`, `row.unsurveyed`, `row.flat`,
+   `row.bad`, `pillRefused`, `plot.*`, `track.*`, `report.bad`.
+
+### Patches requested
+
+None. SITES needed no change outside its files and marked spots.

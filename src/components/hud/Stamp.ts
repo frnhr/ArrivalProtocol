@@ -1,4 +1,5 @@
 // Slice 5: Track FACE owns the resident stamps' wiring here (docs/phase3/impl/slice-5-plan.md §6.2).
+// Slice 6: Track SITES owns the survey stamps' wiring here (docs/phase3/impl/slice-6-plan.md §2.14, §6.2).
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import { on } from '@systems/events';
@@ -15,6 +16,8 @@ import { podCode, LANDING_STAMP_TEXT } from '@data/landing-text';
 import { THREAT_TEXT } from '@data/threat-text';
 import { glitchBurst } from '@systems/glitch';
 import { wakeStamp, deletedStamp, curedStamp, signalStamp, type ResidentStamp } from '@systems/resident-hud';
+import { SITES_TEXT } from '@data/sites-text';
+import { siteLabel } from '@data/survey-text';
 import { STAMP_DEBOUNCE_MS, STAMP_IN_MS, STAMP_SHOW_MS, STAMP_MAX_WIDTH_FRAC, SKILL_FLICKER_MS, SURPRISE_GLITCH_LEVEL, SURPRISE_GLITCH_MS } from '@data/tuning';
 
 // Stamps (§7.3): two or three words in VT323 slammed over the middle of the screen on a moment
@@ -147,6 +150,14 @@ export function mountStamps(store: Store<GameState>): () => void {
     on('resident-deleted', () => showResidentStamp(deletedStamp(), 'resident-deleted')),
     on('resident-cured', () => showResidentStamp(curedStamp(), 'resident-cured')),
     on('signal-found', ({ count }) => showResidentStamp(signalStamp(count), 'signal-found')),
+    // Slice 6 (plan §2.14, R5): a bad ground an LZ stands on made known, by SURVEY's swath or the first pod down there
+    // (`LZ-B · WET ✕`); an LZ moved onto a site (`LZ-B → SITE 4`).
+    on('site-revealed', ({ lz, ground }) => { showStamp(SITES_TEXT.stamp.bad(lz, ground), 'danger', `site-revealed-${lz}`); }),
+    on('lz-moved', ({ lz, to }) => {
+      const site = store.getState().landing.survey.sites.find((candidate) => candidate.id === to);
+      if (site === undefined) throw new Error(`Stamp: ${lz} moved to '${to}', which the survey does not have`);
+      showStamp(SITES_TEXT.stamp.moved(lz, siteLabel(site)), 'good', `lz-moved-${lz}`);
+    }),
   ];
 
   return () => {

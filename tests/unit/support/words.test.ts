@@ -402,7 +402,12 @@ function renderSlice6(value: unknown, out: string[], owner: string, extra: Reado
 // --- 6 SITES (data/sites-text.ts): Track SITES adds its checks here ----------------------------------------------------------
 {
   // SITES's own worst cases, beside the shared base (review M5, m10: the ground's display word).
-  const SITES_WORST: Readonly<Record<string, unknown>> = { groundWord: 'FLAT ★★★' };
+  // `where`: where an LZ stands (`GUESS`, `SITE 12`); `why`: the lead's longest refusal (survey-text.ts, 46 at its worst);
+  // `stars`: ★★★; `glyph`: an LZ's plot mark; `lzs`: every LZ of a 4-LZ ship moved.
+  const SITES_WORST: Readonly<Record<string, unknown>> = {
+    groundWord: 'FLAT ★★★', where: 'SITE 12', why: 'SITE 12 HOLDS 3,200 · LZ-D NEEDS 3,200 · LZ-D!!', stars: 3, glyph: '✕',
+    lzs: 'LZ-A, LZ-B, LZ-C, LZ-D',
+  };
   const lines = renderSlice6(SITES_TEXT, [], 'SITES_TEXT', SITES_WORST);
   const bad = lines.filter((text) => text.length > MAX_LINE_CHARS || RULES.some((rule) => rule.re.test(text)));
   check(`6 SITES words: every line (${lines.length}) fits the strip (≤ ${MAX_LINE_CHARS}) at its worst case and says no never-say word`,
