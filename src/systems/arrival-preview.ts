@@ -62,7 +62,7 @@ export function arrivalPreview(fit: Readonly<RoomFit>, credit: Readonly<ArrivalC
   }
   const sum = fit.roomLost > 0 || fit.chargeArrives < fit.wanted
     ? MAP_TEXT.packet.roomFor(parts, fit.wanted, fit.chargeArrives)
-    : TRANSMIT_TEXT.arrival(fit.carried, credit.starCredit, credit.stars, fit.floorAdded, fit.wanted, credit.card);
+    : TRANSMIT_TEXT.arrival(fit.carried, credit.starCredit, credit.stars, fit.floorAdded, fit.wanted, credit.card, gift);
   const seedsBite = fit.chargeArrivesMin < fit.chargeArrives;
   let charge: string | null = null;
   if (fit.roomLost > 0) {
@@ -108,11 +108,12 @@ export function unitArrival(state: Readonly<GameState>, plan: Readonly<ArrivalPl
   const deliverySeedsMax = plan.deliveries.filter((chip) => !chip.sendOn && chip.seedChance > 0).length;
   // Slice 7c: the traces' seed rules (SPARE's seedless beam, PURGE's wipe, the wild seed) and their gift charge into this hop's
   // ship (Track TRACE's, neutral until built), as transmitNext applies them.
-  const beam = traceSeedAllowance(state, plan.hop.to, seedAllowance(plan.threat, playsTutorial(state.run)) ?? { min: 0, max: 0 });
+  // The deliveries' seeds go through the rule with the beam's (the 7c review: SPARE's seedless beam and PURGE's wipe take
+  // them too, so the preview's most never counts a seed that will not ride; the wild seed is added once).
+  const beam = seedAllowance(plan.threat, playsTutorial(state.run)) ?? { min: 0, max: 0 };
+  const allowed = traceSeedAllowance(state, plan.hop.to, { min: beam.min, max: beam.max + deliverySeedsMax });
   const gift = traceGiftCharge(state, plan.hop.to);
-  const seeds = seedsExact !== undefined
-    ? { min: seedsExact, max: seedsExact }
-    : { min: beam.min, max: beam.max + deliverySeedsMax };
+  const seeds = seedsExact !== undefined ? { min: seedsExact, max: seedsExact } : allowed;
   const card = pickCharge(plan.pick);
   const fit = roomFit({
     files: packedFiles(packet).map((seg) => ({ size: seg.size })),

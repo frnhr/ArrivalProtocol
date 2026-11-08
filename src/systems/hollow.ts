@@ -28,7 +28,7 @@ import { isOpenFree } from '@systems/tool-targets';
 import {
   isInfectable, isInfected, isHollow, infectedSegments, fileLabel, effectiveToolVersion, driversInMemory, isDriver,
   isFirewall, isUsableTool, hasUsableTool, hasIntegrity, integrityBand, spreadPaused, isShipFile, isAiFile, rootBlock, rootDeleteRunning, engineOpen,
-  toolFilesOf,
+  toolFilesOf, isSkillFile,
   type HealthSegment,
 } from '@state/selectors';
 import type { FsToolKind } from '@/types/fs-tool';
@@ -684,11 +684,19 @@ export function mvSpots(memory: readonly Segment[], block: Readonly<HollowSegmen
   return spots.map((spot) => spot.addr);
 }
 
+// A `.skl` RM may unlink whatever rmTargets' tier is: REASSIGNMENT's hunt (R33, "it knows what you value"). Never a file
+// the verbs spare (rmProtected). The caller passes only a skill with no op on it (hollow-verbs.ts startVerb): one running
+// would block the verb at once.
+export function huntable(seg: Readonly<Segment> | undefined): boolean {
+  return seg !== undefined && isSkillFile(seg as Segment) && !rmProtected(seg);
+}
+
 // The verb HOLLOW uses now (see the section's header), or null when it has none. `rng` rolls the verb by the weights,
 // then RM's file among its tier. `untried`: HollowState.untriedTools. Pure.
-// Slice 7c (R33, the lead's hook): `prefer`, a file RM takes first while it is a fair target (among rmTargets): REASSIGNMENT's
-// hunt for your best skill (systems/trace-hunt.ts huntTarget, Track TRACE's; null until built). The draws are the same with
-// or without it, so a null prefer is exactly today's verb.
+// Slice 7c (R33): `prefer`, the file RM takes first: REASSIGNMENT's hunt for your best skill (systems/trace-hunt.ts
+// huntTarget; null without the trace). RM takes it whenever it is huntable, whatever rmTargets' tier (the 7c review: the
+// spare tier holds Repair.bak on every final ship, so a hunt limited to the tier never reached a skill), and otherwise when
+// it is among rmTargets. The draws are the same with or without it, so a null prefer is exactly today's verb.
 export function chooseVerb(
   memory: readonly Segment[], rng: Rng, weights: Readonly<VerbWeights>, untried: readonly FsToolKind[], prefer: string | null = null,
 ): Verb | null {
@@ -703,7 +711,8 @@ export function chooseVerb(
     if (!hasUsableTool(memory, 'scan', 'counts') && !hasUsableTool(memory, 'delete', 'counts')) return null;
     const targets = rmTargets(memory, untried);
     const drawn = targets[Math.floor(rng() * targets.length)];
-    const pick = targets.find((seg) => seg.id === prefer) ?? drawn;
+    const hunted = prefer === null ? undefined : memory.find((seg) => seg.id === prefer);
+    const pick = (huntable(hunted) ? hunted : undefined) ?? targets.find((seg) => seg.id === prefer) ?? drawn;
     return pick === undefined ? null : { kind: 'rm', targetId: pick.id };
   };
   return mvFirst ? mv() ?? rm() : rm() ?? mv();
@@ -712,12 +721,15 @@ export function chooseVerb(
 // The verb lands (its countdown ran out with nobody touching its target), re-checked on memory as it is now, since the
 // countdown took seconds: an RM's file must still be a fair target, and an MV's block must still have the spot it
 // aimed at (else the best one now). Mutates `memory`; false (nothing changed) when the verb no longer can. The caller
-// runs the invariants and the store update. `untried`: HollowState.untriedTools.
-export function landVerb(memory: Segment[], verb: Readonly<Verb>, untried: readonly FsToolKind[]): boolean {
+// runs the invariants and the store update. `untried`: HollowState.untriedTools. Slice 7c (R33): `hunted`, the skill the
+// root hunts now (systems/trace-hunt.ts huntedSkill while the hunt is on, else null): an RM at it lands while it is huntable,
+// whatever rmTargets' tier, as chooseVerb picked it.
+export function landVerb(memory: Segment[], verb: Readonly<Verb>, untried: readonly FsToolKind[], hunted: string | null = null): boolean {
   const target = memory.find((seg) => seg.id === verb.targetId);
   if (target === undefined) return false;
   if (verb.kind === 'rm') {
-    if (!rmTargets(memory, untried).includes(target)) return false;
+    const hunt = target.id === hunted && huntable(target);
+    if (!hunt && !rmTargets(memory, untried).includes(target)) return false;
     const start = requireAddr(memory, target);
     // A deleted backup is no longer its primary's backup (as the kid's own DELETE, state/actions.ts).
     for (const primary of memory) if (primary.type === 'ship' && primary.backup === target.id) delete primary.backup;

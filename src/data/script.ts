@@ -725,9 +725,10 @@ export const TRANSMIT_TEXT = {
   // tool kind's last copy never drops under 60) can make a hit smaller than the roll's 15–TRANSIT_HIT_MAX (35), so only
   // the roll's upper end is always true; the ECC line says what each took.
   hits: (count: number): string => `ON THE WAY: ${count} TRANSIT HITS · UP TO −${TRANSIT_HIT_MAX}% EACH`,
-  // `cardCharge`: the +12 REPAIR CHARGE card, once picked (WP8; none for any other card).
-  arrival: (carried: number, starCredit: number, stars: number, floorAdded: number, total: number, cardCharge = 0): string =>
-    `ON ARRIVAL: ${arrivalParts(carried, starCredit, stars, floorAdded, cardCharge)} = ${total} REPAIR CHARGE`,
+  // `cardCharge`: the +12 REPAIR CHARGE card, once picked (WP8; none for any other card). `giftCharge`: a trace's gift on
+  // arrival (slice 7c, R32), named as its own part so the sum reads what the total counts (the 7c review).
+  arrival: (carried: number, starCredit: number, stars: number, floorAdded: number, total: number, cardCharge = 0, giftCharge = 0): string =>
+    `ON ARRIVAL: ${arrivalParts(carried, starCredit, stars, floorAdded, cardCharge, giftCharge)} = ${total} REPAIR CHARGE`,
   infected: (count: number): string => `⚠ ${count === 1 ? '1 FILE' : `${count} FILES`} WILL ARRIVE INFECTED`,
   chipInfected: '⚠ WILL ARRIVE INFECTED',
   // The files: when every block of REPAIR CHARGE already fits there is nothing to leave behind for.

@@ -22,7 +22,7 @@ import { podCode } from '@data/landing-text';
 import { IS_DEV } from '@/env';
 import { GLITCH_BURST_LEVEL, GLITCH_BURST_MS } from '@data/tuning';
 import { visitRng } from '@systems/map-streams';
-import { huntTarget } from '@systems/trace-hunt';
+import { huntTarget, huntsHere, huntedSkill } from '@systems/trace-hunt';
 
 // HOLLOW's verbs (§1 finale, §5.3 moment 13, §6.6, §9 WP11 item 2), DOM-free: on a ship whose HOLLOW has verbs (LAST
 // LIGHT) it fights with your own tools.
@@ -102,8 +102,11 @@ function unlinksLastRepairSpare(memory: readonly Segment[], telegraph: Readonly<
 // pace.ts), but not as a telegraph: the ship's first verb the kid sees is the one that counts from firstTelegraphSec.
 function startVerb(store: Store<GameState>, cfg: Readonly<VerbDef>): VerbTelegraph | null {
   const state = store.getState();
+  // Slice 7c (R33): the hunt's skill, unless an op already runs on it (the verb would be blocked at once: the tier draws).
+  const hunt = huntTarget(state);
+  const prefer = hunt !== null && getOpsBySeg(hunt).length === 0 ? hunt : null;
   const verb = canStartOp()
-    ? chooseVerb(state.memory, rngFor(state), verbWeights(state.run.lastUnit), state.hollow.untriedTools, huntTarget(state))
+    ? chooseVerb(state.memory, rngFor(state), verbWeights(state.run.lastUnit), state.hollow.untriedTools, prefer)
     : null;
   const target = verb === null ? undefined : state.memory.find((seg) => seg.id === verb.targetId);
   if (verb !== null && target === undefined) throw new Error(`hollow-verbs: chose ${verb.targetId}, which is not in memory`);
@@ -146,7 +149,9 @@ function land(store: Store<GameState>, telegraph: Readonly<VerbTelegraph>): void
     ? { kind: 'rm', targetId: telegraph.targetId }
     : { kind: 'mv', targetId: telegraph.targetId, toAddr: telegraph.toAddr };
   const memory = store.getState().memory;
-  const landed = landVerb(memory, verb, store.getState().hollow.untriedTools);
+  // Slice 7c (R33): an RM the hunt aimed at a skill lands on it while the hunt is on, whatever the tier.
+  const hunted = huntsHere(store.getState()) ? huntedSkill(memory)?.id ?? null : null;
+  const landed = landVerb(memory, verb, store.getState().hollow.untriedTools, hunted);
   if (IS_DEV) assertMemoryInvariants(memory, layoutOf(store.getState()).totalBlocks);
   if (landed) {
     store.update((draft) => {

@@ -8,25 +8,28 @@
 //   FINALE seeds 'near-skill', and its RM hunts the highest-version `.skl` (huntTarget: ties the larger file);
 // • non-compliant (SUNSET, SPARE): one wild seed at the final boot (`> THE DISH HERE RUNS WILD · 1 SEED CAME IN`), never behind
 //   a file another seed rides, never wiped by PURGE, one however many are held;
-// • the hunt itself, pure on the final ship's memory: RM takes the hunted skill while it is a fair target and landVerb unlinks
-//   it; a near-skill seed lands in a gap beside it, facing it, and with no such gap where the FINALE's own seed would.
+// • the hunt itself, pure on the final ship's memory: RM takes the hunted skill first whatever rmTargets' tier (a Repair.bak
+//   spare too: the 7c review) and landVerb unlinks it; the layout keeps a hunting gap before it; a near-skill seed lands in a gap beside it, facing it, and with no such gap where the FINALE's own seed would.
 import { check, finish } from '../wp1/harness';
 import { createHarness11 } from '../wp11/harness11';
 import type { GameState } from '@state/schema';
 import type { HollowFate, YouChoice } from '@/types/ending';
 import type { Segment } from '@/types/segment';
+import type { ShipThreat } from '@/types/threat';
 import { huntTarget, huntedSkill, nearSkillSeedSpot } from '@systems/trace-hunt';
 import { traceGiftCharge } from '@systems/trace-gifts';
 import { rootUnitsOf, finalTraces } from '@systems/traces';
 import { chooseVerb, landVerb, seedSpot, rmTargets } from '@systems/hollow';
 import { freeSegment, mergeAdjacentFree, segmentStarts } from '@systems/memory-ops';
+import { packUnit, layoutCarried } from '@systems/carry';
+import { shipDefAt } from '@systems/map-run';
 import { createRng } from '@systems/rng';
 import { chargeLeft, isSkillFile } from '@state/selectors';
 import { giveSkillFile } from '../support/skills';
 import { TRACE_TEXT } from '@data/trace-text';
 import { HOLLOW_STAGES } from '@data/threats';
 import {
-  TRACE_GIFT_CHARGE, TRACE_PURGE_BITE_MULT, TRACE_MERGE_THREADS, FINAL_ROOT_MAX_BLOCKS, SEED_BLOCKS, SEED_TOOL_GAP_BLOCKS,
+  TRACE_GIFT_CHARGE, TRACE_PURGE_BITE_MULT, TRACE_MERGE_THREADS, FINAL_ROOT_MAX_BLOCKS, SEED_BLOCKS, SEED_TOOL_GAP_BLOCKS, WALL_MIN_BLOCKS,
 } from '@data/tuning';
 import { endingOf, lastUnitOf, startRun2, routeVia, beamTo, finalSlotOf, arm2 } from './trace-arm';
 
@@ -100,6 +103,29 @@ check('…the root is the last unit (UNIT-047), its FINALE seeds hunt your best 
   && huntTarget(purge.state) === huntedSkill(purge.state.memory)?.id && huntedSkill(purge.state.memory)?.name === 'AUTOBURN.skl'
   && huntTarget(none.state) === null);
 
+// The hunting gap (the 7c review, the TRACE track's optional patch): laid out for the final ship with REASSIGNMENT's
+// 'near-skill' seeds, the unit's block keeps WALL + seed + gap free right before the hunted skill, and the FINALE's seed
+// lands there facing it; with the FINALE's own 'walls' seeds (no trace) the files stay back to back.
+{
+  const layoutFor = (look: FinalLook): Segment[] => {
+    const s = look.state;
+    const racks = layoutCarried(packUnit(s.memory, 999, []), 20, shipDefAt(s.run.map, finalSlot),
+      { hollow: s.hollow.cfg } as unknown as ShipThreat /* the layout reads only the seeds' target: the ship's HOLLOW as planned */, 'UNIT-047').racks;
+    return racks.startAddr > 0 ? [freeSegment(racks.startAddr), ...racks.segs] : [...racks.segs];
+  };
+  const gap = WALL_MIN_BLOCKS + SEED_BLOCKS + SEED_TOOL_GAP_BLOCKS;
+  const hunting = layoutFor(purge);
+  const at = hunting.findIndex((seg) => seg.id === huntedSkill(hunting)?.id);
+  const spot = nearSkillSeedSpot(hunting, []);
+  const starts = segmentStarts(hunting);
+  const plain = layoutFor(none);
+  const plainAt = plain.findIndex((seg) => seg.id === huntedSkill(plain)?.id);
+  check(`…the hunting gap: ${gap} free blocks right before the hunted skill, the FINALE's seed in it facing the skill; none without the trace`,
+    purge.state.hollow.cfg.seed?.target === 'near-skill' && at > 0 && hunting[at - 1]!.type === 'free' && hunting[at - 1]!.size === gap
+    && spot?.gapId === hunting[at - 1]!.id && spot.startAddr === starts[at]! - SEED_TOOL_GAP_BLOCKS - SEED_BLOCKS
+    && plainAt > 0 && plain[plainAt - 1]!.type !== 'free', JSON.stringify({ before: hunting[at - 1], spot }));
+}
+
 // --- MERGE + REASSIGNMENT ----------------------------------------------------------------------------------------------------
 const merge = toFinal('merge');
 check('MERGE: `> A THREAD IN THE DISH · +1 THREAD` said, the Core\'s capacity +1 from it; the seeds ride as rolled',
@@ -135,14 +161,21 @@ check('…compliant endings owe none (PURGE / MERGE + REASSIGNMENT), and the gif
   const tie = skills.map((seg) => ({ ...seg, version: 2 as const }));
   const larger = tie.reduce((a, b) => (b.size > a.size ? b : a));
   check('…of two at one version, the larger file', huntedSkill(tie)?.id === larger.id);
-  // RM's fair targets (hollow.ts rmTargets, tier by tier): the unit's Repair.bak is a spare, RM's first tier, so the hunt
-  // waits for it; with the spare gone the skills' tier is the fair one, and RM takes the hunted skill every draw.
+  // RM's fair targets (hollow.ts rmTargets, tier by tier): the unit's Repair.bak is a spare, RM's first tier. The hunt does
+  // not wait for it (the 7c review, R33's "first"): RM takes the hunted skill whatever the tier, and the verb lands on it.
   const untried = state().hollow.untriedTools;
   const weights = { mv: 0, rm: 1 };
   const withSpare = state().memory;
-  check('…while a spare tool is in memory (Repair.bak) RM takes the spare first: the hunt is the upgrade tier\'s order',
-    rmTargets(withSpare, untried).every((seg) => seg.type === 'fs-tool') && chooseVerb(withSpare, createRng(1), weights, untried, v2.id)?.targetId !== v2.id,
+  let huntedPastSpare = 0;
+  for (let draw = 1; draw <= 40; draw++) if (chooseVerb(withSpare, createRng(draw), weights, untried, v2.id)?.targetId === v2.id) huntedPastSpare++;
+  const pastSpare = structuredClone(withSpare) as Segment[];
+  check(`…while a spare tool is in memory (Repair.bak, RM's first tier) RM still takes the skill first (${huntedPastSpare}/40), and it lands`,
+    rmTargets(withSpare, untried).every((seg) => seg.type === 'fs-tool') && !rmTargets(withSpare, untried).some((seg) => seg.id === v2.id)
+    && huntedPastSpare === 40 && landVerb(pastSpare, { kind: 'rm', targetId: v2.id }, untried, v2.id) && !pastSpare.some((seg) => seg.id === v2.id),
     rmTargets(withSpare, untried).map((seg) => seg.name).join());
+  check('…without the hunt the tier holds: no hunted id, the spare tier is drawn and an RM at the skill there fails',
+    chooseVerb(withSpare, createRng(1), weights, untried, null)?.targetId !== v2.id
+    && !landVerb(structuredClone(withSpare) as Segment[], { kind: 'rm', targetId: v2.id }, untried));
   const memory = withSpare.map((seg) => (seg.type === 'fs-tool' && /\.(bak|cp)$/.test(seg.name) ? freeSegment(seg.size) : seg));
   mergeAdjacentFree(memory);
   const fair = rmTargets(memory, untried);

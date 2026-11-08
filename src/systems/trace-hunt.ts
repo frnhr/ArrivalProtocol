@@ -14,26 +14,20 @@
 // hollow.ts imports this file and this file calls hollow.ts seedSpot (the FINALE's own rule, the fallback): a call-time
 // cycle only, so neither module reads the other while it loads.
 import type { GameState } from '@state/schema';
-import type { Segment, SkillFileSegment } from '@/types/segment';
+import type { Segment } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
 import type { SeedSpot } from '@systems/hollow';
 import { seedSpot } from '@systems/hollow';
-import { isSkillFile, isInfectable, isShipFile } from '@state/selectors';
+import { isInfectable, isShipFile, huntedSkill } from '@state/selectors';
 import { segmentStarts } from '@systems/memory-ops';
 import { finalTraces, onFinalShip } from '@systems/traces';
 import { currentSlot } from '@systems/map-streams';
 import { createRng, hashSeed } from '@systems/rng';
 import { HUNT_PREFER_WEIGHT, SEED_BLOCKS, SEED_TOOL_GAP_BLOCKS, WALL_MIN_BLOCKS } from '@data/tuning';
 
-// The skill the root hunts in `memory` (R33), or null when the unit holds none.
-export function huntedSkill(memory: readonly Segment[]): SkillFileSegment | null {
-  let best: SkillFileSegment | null = null;
-  for (const seg of memory) {
-    if (!isSkillFile(seg)) continue;
-    if (best === null || seg.version > best.version || (seg.version === best.version && seg.size > best.size)) best = seg;
-  }
-  return best;
-}
+// The skill the root hunts in `memory` (R33), or null when the unit holds none: state/selectors.ts huntedSkill (carry.ts's
+// layout reads it too).
+export { huntedSkill };
 
 // Does the root hunt on this ship (REASSIGNMENT held and built, on the final ship)?
 export function huntsHere(state: Readonly<Pick<GameState, 'run'>>): boolean {

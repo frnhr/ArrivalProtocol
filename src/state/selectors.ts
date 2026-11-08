@@ -156,6 +156,18 @@ export function isSkillFile(seg: Segment): seg is SkillFileSegment {
   return seg.type === 'upgrade' && (SKILL_IDS as readonly string[]).includes(seg.upgrade);
 }
 
+// The skill REASSIGNMENT's root hunts among `files` (R33; systems/trace-hunt.ts): the highest version, then the larger
+// file, then the first in order (the lower address). null: none. Here, not in trace-hunt.ts, so carry.ts's layout can read
+// it without importing HOLLOW's modules (the 7c review).
+export function huntedSkill(files: readonly Segment[]): SkillFileSegment | null {
+  let best: SkillFileSegment | null = null;
+  for (const seg of files) {
+    if (!isSkillFile(seg)) continue;
+    if (best === null || seg.version > best.version || (seg.version === best.version && seg.size > best.size)) best = seg;
+  }
+  return best;
+}
+
 // The skill files of one skill, whatever their health or state, in memory order (capabilities.ts skillLive picks the one
 // that counts).
 export function skillFilesOf(memory: readonly Segment[], id: SkillId): SkillFileSegment[] {

@@ -77,9 +77,10 @@ function seedFor(kind: 'spare' | 'sunset' | 'stay', make: (seed: number) => Retu
   const transit = state().run.transit!;
   const preview = unitArrival(state(), transit);
   const without = unitArrival({ ...state(), run: { ...state().run, traces: { ...state().run.traces, places: [] } } }, transit);
-  // (The sum's `+ 15 (GIFT)` part waits on a lead patch: TRANSMIT_TEXT.arrival takes no gift; its total counts it.)
-  check('…the PACKET\'s arrival counts the gift: 15 more charge wanted than without it, in its total',
-    preview.fit.wanted === without.fit.wanted + TRACE_GIFT_CHARGE && preview.sum.endsWith(`= ${preview.fit.wanted} REPAIR CHARGE`), preview.sum);
+  // The 7c review: the sum names the gift as its own part (`+ 15 (GIFT)`), squeezed or not.
+  check('…the PACKET\'s arrival counts the gift: 15 more charge wanted than without it, in its total and as its own part',
+    preview.fit.wanted === without.fit.wanted + TRACE_GIFT_CHARGE && preview.sum.endsWith(`= ${preview.fit.wanted} REPAIR CHARGE`)
+    && preview.sum.includes(TRACE_TEXT.arrivalPart(TRACE_GIFT_CHARGE)) && !without.sum.includes('(GIFT)'), preview.sum);
   const threads = core().capacity;
   const from = h.events.length;
   if (transit.offer.length > 0) pickCard(h.store, transit.offer.some((card) => card.id === 'charge') ? 'charge' : transit.offer.find((card) => card.id !== 'thread-plus')?.id ?? transit.offer[0]!.id);

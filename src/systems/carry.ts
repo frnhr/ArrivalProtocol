@@ -7,7 +7,7 @@ import type { ShipThreat, BeamSeedPlan } from '@/types/threat';
 import type { Rng } from '@systems/rng';
 import { freeSegment, newSegId } from '@systems/memory-ops';
 import { beamSeedSegment } from '@systems/beam-seeds';
-import { hasIntegrity, isSkillFile, type HealthSegment } from '@state/selectors';
+import { hasIntegrity, isSkillFile, huntedSkill, type HealthSegment } from '@state/selectors';
 import { SKILL_IDS } from '@data/skills';
 import type { SkillId } from '@/types/skill';
 import { setIntegrity } from '@state/actions';
@@ -296,11 +296,30 @@ export interface CarriedLayout {
 // ship (and that tool is untried, so spared), and the seed fell back to the middle of rack D. The WALL keeps a chain
 // that eats the tools away from the AI files and the Core. Only when the receiver has the room: it never costs charge,
 // and never spills the block into the tail.
-function huntingGapBlocks(threat: Readonly<ShipThreat>, packet: Packet, filesBlocks: number, chargeBlocks: number, receiver: number): number {
-  const hunts = threat.hollow.seed?.target === 'near-tools';
-  if (!hunts || packet.rackE.length === 0 || !packet.rackF.some((seg) => seg.type === 'fs-tool')) return 0;
+// Slice 7c (R33, the 7c review): on a final ship whose seeds hunt your best skill ('near-skill', after a REASSIGNMENT trace)
+// the same gap goes right before the hunted skill (state/selectors.ts huntedSkill), so trace-hunt.ts nearSkillSeedSpot
+// lands the FINALE's seeds beside it from the first one; the packed receiver otherwise leaves no free block beside it.
+// `beforeId`: the file the gap goes before.
+function huntingGap(
+  threat: Readonly<ShipThreat>, packet: Packet, filesBlocks: number, chargeBlocks: number, receiver: number,
+): { blocks: number; beforeId: string | null } {
+  const none = { blocks: 0, beforeId: null };
   const gap = WALL_MIN_BLOCKS + SEED_BLOCKS + SEED_TOOL_GAP_BLOCKS;
-  return filesBlocks + gap + chargeBlocks <= receiver ? gap : 0;
+  if (filesBlocks + gap + chargeBlocks > receiver) return none;
+  const target = threat.hollow.seed?.target;
+  if (target === 'near-tools') {
+    const firstF = packet.rackF[0];
+    if (packet.rackE.length === 0 || firstF === undefined || !packet.rackF.some((seg) => seg.type === 'fs-tool')) return none;
+    return { blocks: gap, beforeId: firstF.id };
+  }
+  if (target === 'near-skill') {
+    // A file written at the boot (REPAIR's licence: memory-ops.ts unitInstallAddress takes the last free run that fits) may
+    // land at the gap's start on a full receiver; what is left still borders the skill, and nearSkillSeedSpot takes it when
+    // a seed fits there (else the FINALE's own spot).
+    const skill = huntedSkill([...packet.rackE, ...packet.rackF]);
+    return skill === null ? none : { blocks: gap, beforeId: skill.id };
+  }
+  return none;
 }
 
 // The packed files back into memory on `ship` (step 4): 01-landing §3.16's pooled receiver. The files go as one block
@@ -343,13 +362,14 @@ export function layoutCarried(
   const seedsBlocks = placed * BEAM_SEED_LAYOUT_BLOCKS;
   const charge = fill.charge;
   const overflowLost = fill.lost;
-  const hunting = huntingGapBlocks(threat, packet, filesBlocks + seedsBlocks, charge, receiver);
+  const hunt = huntingGap(threat, packet, filesBlocks + seedsBlocks, charge, receiver);
+  const hunting = hunt.blocks;
   const block = filesBlocks + seedsBlocks + hunting + charge;
   const startAddr = Math.min(layout.unitStart, layout.totalBlocks - block);
   const seedSegs = packet.seeds.map((plan) => beamSeedSegment(plan, owner!));
   const segs: Segment[] = [];
-  files.forEach((seg, index) => {
-    if (hunting > 0 && index === packet.rackE.length) segs.push(freeSegment(hunting));
+  files.forEach((seg) => {
+    if (hunting > 0 && seg.id === hunt.beforeId) segs.push(freeSegment(hunting));
     segs.push(seg);
     const seedIndex = packet.seeds.findIndex((plan) => plan.targetId === seg.id);
     if (seedIndex < 0 || seedIndex >= placed) return;
