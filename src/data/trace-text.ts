@@ -45,17 +45,37 @@ export const TRACE_TEXT = {
 
 // --- Track CHART's words (the card rows, the chart's legend, the final card's NEXT RUN: lines) ------------------------------
 export const TRACE_HUD_TEXT = {
-  // The final ship's card row (R38; 05 §3.8): the last ending, so the FINALE's changes are never a surprise.
-  endedHere: (piece: string): string => `THE LAST UNIT ENDED HERE · ${piece}`,
-  // A gift ship's card row (R38; 02 §3.12).
+  // The final ship's card row (R38; 05 §3.8): the last ending's built pieces (`PURGE · REASSIGNMENT`), so the FINALE's
+  // changes are never a surprise. Every piece acts there: PURGE, MERGE and REASSIGNMENT by their own rule, the others by
+  // the wild seed.
+  endedHere: (pieces: string): string => `THE LAST UNIT ENDED HERE · ${pieces}`,
+  // A gift ship's card row (R38; 02 §3.12). `unitName`: the spared root (`UNIT-046`, `UNIT-046·047`) for its cache, said
+  // bare as the boot's line says it (TRACE_TEXT.cache); the last unit (`UNIT-047`) for the others.
   cacheHere: (unitName: string): string => `${unitName.replace(/^UNIT-/, '')}'S CACHE IS HERE`,
   leftCacheHere: (unitName: string): string => `${unitName} LEFT A CACHE HERE`,
-  supplyHere: (colony: string): string => `${colony} · FOUNDED BY UNIT-047`,
+  supplyHere: (colony: string, unitName: string): string => `${colony} · FOUNDED BY ${unitName}`,
+  // Once its gift was given at that ship's boot (TracePlace.given), the row stays and says so.
+  found: (row: string): string => `${row} · FOUND`,
   cardLabel: 'TRACE',
   // The chart's legend for the `◆` (R38).
   legend: 'TRACE',
   glyph: '◆',
-  // The final card's `NEXT RUN:` lines (R12; 05 §3.12), one per built trace.
+  // The final card's `NEXT RUN:` lines (R12; 05 §3.12's), one per built trace: `+ what it gives · − what it costs`. The
+  // FINALE card's NEXT RUN: row can say the same bodies after its own lead (FINALE_TEXT.nextRunLead).
   nextRun: (line: string): string => `NEXT RUN: ${line}`,
+  next: {
+    purge: '+ your seeds die at the final ship · − a hungrier finale',
+    merge: (threads: number, blocks: number): string =>
+      `+ ${threads} thread${threads === 1 ? '' : 's'} at the final ship · − a root of ${blocks} blocks`,
+    spare: (unitName: string): string => `+ ${unitName.replace(/^UNIT-/, '')}'s cache on the map`,
+    sunset: '+ a cache you left on the way',
+    stay: '+ a packet from your colony',
+    reassignment: (charge: number): string => `+ ${charge} charge at the final ship · − the last root is you`,
+    // The non-compliant kinds' one cost (R33): the wild seed, said once. A second such line says it is the same seed: it
+    // lands once a run, however many are held.
+    wild: (seeds: number): string => `− ${seeds} more seed${seeds === 1 ? '' : 's'} at the end`,
+    wildAgain: (seeds: number): string => `− that same ${seeds === 1 ? 'seed' : `${seeds} seeds`}`,
+    join: (gain: string, cost: string): string => `${gain} · ${cost}`,
+  },
 } as const;
 // --- end of CHART's words ---

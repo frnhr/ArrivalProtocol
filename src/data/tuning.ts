@@ -2563,6 +2563,11 @@ export const HUNT_PREFER_WEIGHT = 1;
 
 // --- 7c CHART (Track CHART: systems/trace-hud.ts, the chart's ◆, the final card's NEXT RUN: lines) --------------------
 
-// (none yet: CHART's new numbers go here)
+// The STAR CHART's `◆` over a gift ship (R38; components/desk/chart-draw.ts): its half-diagonal, and its gap above the node
+// (or the final ship's beacon ring). WHY 4: clearly bigger than REPORTED HOME's corner diamond (2.6), so the two read as
+// different marks at a glance; WHY 6: clear of the selection bracket's corners (5 px out from the square), which the card's
+// own ship always wears while the kid reads its TRACE row.
+export const CHART_TRACE_MARK_PX = 4;
+export const CHART_TRACE_MARK_GAP_PX = 6;
 
 // --- end of 7c CHART -------------------------------------------------------------------------------------------------

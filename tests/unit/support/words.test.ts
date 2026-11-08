@@ -580,11 +580,19 @@ const SLICE7_BASE: Readonly<Record<string, unknown>> = {
 
 // --- 7c CHART (data/trace-text.ts TRACE_HUD_TEXT): Track CHART adds its checks here ------------------------------------------
 {
-  // The longest piece, the widest unit name and colony, and a NEXT RUN: line's body at the room the final card keeps.
+  // The widest pieces an ended-here row joins, the widest unit name (a two-unit root, a three-digit lineage) and colony,
+  // a found gift's widest row, two-digit numbers; then every NEXT RUN: body at its worst behind its lead, as the final
+  // card shows it (the lines' own composition is traces/ui-models').
   const CHART_WORST: Readonly<Record<string, unknown>> = {
-    piece: 'REASSIGNMENT', unitName: 'UNIT-046·047', line: 'THE NEXT FINAL ROOT IS YOU · 15 REPAIR CHARGE WAITS',
+    pieces: 'MERGE · REASSIGNMENT', unitName: 'UNIT-146·147', row: 'MONTGOMERY LANDING · FOUNDED BY UNIT-147',
+    threads: 99, blocks: 99, charge: 999, seeds: 99, gain: '+ a cache you left on the way', cost: '− 99 more seeds at the end',
   };
-  const lines = renderSlice6(TRACE_HUD_TEXT, [], 'TRACE_HUD_TEXT', { ...SLICE7_BASE, ...CHART_WORST });
+  const { next, ...rest } = TRACE_HUD_TEXT;
+  const worst = { ...SLICE7_BASE, ...CHART_WORST };
+  const bodies = renderSlice6(next, [], 'TRACE_HUD_TEXT.next', worst);
+  const lines = [...renderSlice6(rest, [], 'TRACE_HUD_TEXT', { ...worst, line: bodies.reduce((a, b) => (b.length > a.length ? b : a)) }),
+    ...bodies.map((body) => TRACE_HUD_TEXT.nextRun(body)),
+    TRACE_HUD_TEXT.nextRun(next.join(next.spare('UNIT-146·147'), next.wild(99)))];
   const bad = lines.filter((text) => text.length > MAX_LINE_CHARS || RULES.some((rule) => rule.re.test(text)));
   check(`7c CHART words: every line (${lines.length}) fits (≤ ${MAX_LINE_CHARS}) at its worst case and says no never-say word`,
     lines.length > 0 && bad.length === 0, JSON.stringify(bad));

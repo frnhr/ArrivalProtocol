@@ -28,6 +28,17 @@ function rowNode(label: string, pieces: readonly FinalCardPiece[]): HTMLElement 
   return row;
 }
 
+// --- 7c CHART: one NEXT RUN line as two unbreakable parts, `NEXT RUN: + what it gives` and `· − what it costs`, so a narrow
+// card (the phone) wraps between the gain and the cost, never inside either (desk.css's 7c CHART block) ---
+function nextLineNode(line: string): HTMLElement {
+  const node = make('div', 'nf-next-line');
+  const cut = line.lastIndexOf(' · −');
+  if (cut < 0) node.appendChild(make('span', 'nf-next-part', line));
+  else node.append(make('span', 'nf-next-part', line.slice(0, cut)), ' ', make('span', 'nf-next-part', line.slice(cut + 1)));
+  return node;
+}
+// --- end of 7c CHART ---
+
 export function mountFinalCard(store: Store<GameState>): () => void {
   const root = requireById('finalCard');
   root.hidden = true;
@@ -62,7 +73,7 @@ export function mountFinalCard(store: Store<GameState>): () => void {
     endingsEl.textContent = card.endingsLine;
     rowsEl.replaceChildren(rowNode(EPILOGUE_TEXT.rowHollow, card.rows.hollow), rowNode(EPILOGUE_TEXT.rowYou, card.rows.you));
     // --- 7c CHART: the NEXT RUN rows ---
-    nextEl.replaceChildren(...card.next.map((line) => make('div', 'nf-next-line', line)));
+    nextEl.replaceChildren(...card.next.map(nextLineNode));
     // --- end of 7c CHART's rows ---
     bridgeEl.hidden = card.bridge === null;
     bridgeEl.replaceChildren(...(card.bridge === null ? [] : [
