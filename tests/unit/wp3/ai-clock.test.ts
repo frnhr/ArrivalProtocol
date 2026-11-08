@@ -2,7 +2,6 @@
 // 3.35 ± 0.05 wall-s at forced world warp ×1 and ×200, and in memory mode (OVERCLOCK), and the
 // charge spent is exactly 10 every time. Plus the repair rules around it (§6.5): continuous heal,
 // whole-point charging, NO CHARGE, concurrent repairs, the Core staying online, v2, pause.
-import '../support/classic-world';
 import { chargePerPoint } from '@state/actions';
 import { check, finish } from '../wp1/harness';
 import { createHarness3 } from './harness3';
@@ -14,7 +13,7 @@ import { getOps, onOpsChange, threadsBusy } from '@systems/ops-core';
 import { assertMemoryInvariants } from '@systems/memory-ops';
 import { OP_LINES } from '@data/tool-text';
 import type { Segment } from '@/types/segment';
-import { MEMORY_LAYOUTS } from '@data/memory';
+import { layoutOf } from '@data/memory';
 
 const h = createHarness3(1);
 
@@ -123,7 +122,7 @@ for (const { name, setup } of cases) {
   const charge = h.store.getState().memory.find((candidate) => candidate.type === 'redundancy');
   check('empty REPAIR CHARGE leaves memory as free space', charge === undefined);
   let ok = true;
-  try { assertMemoryInvariants(h.store.getState().memory, MEMORY_LAYOUTS.FULL.totalBlocks); } catch { ok = false; }
+  try { assertMemoryInvariants(h.store.getState().memory, layoutOf(h.store.getState()).totalBlocks); } catch { ok = false; }
   check('…and the strip still holds its invariants', ok);
   check('the file is no longer locked and shows its new health', 'state' in seg && seg.state === 'partial' && seg.operating === undefined);
   const refusal = actionRepair(h.store, seg);

@@ -6,7 +6,6 @@
 // • a rack sum of 63, an unknown token, a duplicate role and a hurt pod the ship does not have each throw;
 // plus the run-1 names, the seeded rosters (a later run reseeds the hurt pod among the non-lead pods), and what
 // createInitialState makes of it (600 colonists in 3 pods, aboard, one LZ).
-import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import {
   buildShipMemory, hurtDriversFor, RACK_A, rackOf, racksLabel, shipColonists, shipPodCount, type ShipMemoryDef,
@@ -152,7 +151,8 @@ function throwsWith(memory: Partial<ShipMemoryDef>, pattern: RegExp): { ok: bool
     && state.landing.lead === 1 && JSON.stringify(state.landing.hurt) === '[2]' && state.landing.lzs.length === 1
     && lz?.label === 'LZ-A' && lz.pods === 3 && lz.widthKm === 500 && state.landing.forgiveness === 'gentle'
     && state.landing.colonyFirstRun === 'RIVERSIDE' && !state.landing.finalShip
-    && state.memory.reduce((sum, seg) => sum + seg.size, 0) === 384,
+    // Track RETIRE: the page's first state is run 1's arm, whose ARES-VII is COMPACT (320 blocks; the classic one FULL 384).
+    && state.memory.reduce((sum, seg) => sum + seg.size, 0) === MEMORY_LAYOUTS.COMPACT.totalBlocks && state.level.memoryClass === 'COMPACT',
     JSON.stringify({ colonists: state.mission.colonists, pods: state.landing.pods.length, lead: state.landing.lead, hurt: state.landing.hurt, lz }));
   check('…the bay empty until the lock fills it, nothing ended', state.landing.bay.loaded === 0 && state.landing.ended === null
     && state.landing.startedAtTSec === null && state.landing.window === null);

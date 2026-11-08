@@ -10,6 +10,9 @@ import type { RunThreatState, ShipThreat } from '@/types/threat';
 import { hopBetween } from '@systems/map-hop';
 import { mapFacts, nominalRouteThreat } from '@systems/map-facts';
 import { planThreat, threatInputFor, createRunThreat, NO_FINAL_TRACES } from '@systems/threat-plan';
+import type { ShipResult } from '@state/schema';
+import { shipDefAt } from '@systems/map-run';
+import { COLONISTS_PER_POD } from '@data/tuning';
 
 // 02 §3.14's worked route: ARES-VII, HALCYON, KESTREL, VESPER, CORMORANT, LAST LIGHT.
 export const WORKED_ROUTE: readonly number[] = [0, 2, 5, 11, 15, 19];
@@ -53,4 +56,17 @@ export function nominalAlong(map: Readonly<RunMapState>, slots: readonly number[
   const before = nominalRouteThreat(map, slots.slice(0, -1));
   const facts = mapFacts(map, slots[slots.length - 2]!, slots[slots.length - 1]!, slots.length);
   return { before, verdict: planThreat(threatInputFor(before, facts, false, NO_FINAL_TRACES)) };
+}
+
+// The result of a route stop the unit passed without flying it (in orbit, nobody landed): what a state built straight onto
+// the route (createInitialState, __ap.route and __ap.slot) records for every stop before its last, so the route, the
+// results, the trail, RUN END's world update and the saves agree.
+export function skippedResult(map: Readonly<RunMapState>, slot: number, depth: number): ShipResult {
+  const def = shipDefAt(map, slot);
+  const aboard = map.arm[slot]!.pods * COLONISTS_PER_POD;
+  return {
+    shipId: def.id, shipName: def.name, slot, depth, outcome: 'locked', stars: 0, fuelLeftPct: 0, ringMiss: null,
+    colonistsAboard: aboard, lzs: [], offSite: 0, noGo: 0, restored: 0, parked: [], notLaunched: aboard, landedInLz: 0, points: 0,
+    colony: null, pods: [], survey: null,
+  };
 }

@@ -27,6 +27,8 @@ import { phase2HollowOf } from '../support/hollow-world';
 export const VESPER = 3;
 
 export interface VesperOpts {
+  // The worked route's tools by VESPER (harness7 shipAlone's `kit`; the arm only).
+  kit?: boolean;
   // HOLLOW put to sleep for good (a flight suite measures the flight, not the fight).
   hollowAsleep?: boolean;
   // Phase 3 slice 2: VESPER as phase 2 had it, HOLLOW's HUNT stage (seeds next to your tools, THE DEAL, a 14-block
@@ -78,7 +80,7 @@ export function createHarness10(seed = 1, opts: { soulsFound?: boolean } = {}): 
   return {
     ...base,
     vesper(nextSeed, vesperOpts = {}) {
-      base.shipAlone(VESPER, nextSeed);
+      base.shipAlone(VESPER, nextSeed, { kit: vesperOpts.kit ?? false });
       if (vesperOpts.hunt) {
         // The classic five's VESPER with a HUNT verdict (Track RETIRE: not moved to the arm yet).
         if (fixtureWorldNow() !== 'classic') throw new Error('harness10.vesper: { hunt } is the classic VESPER\'s (import support/classic-world)');

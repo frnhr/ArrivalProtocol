@@ -20,7 +20,8 @@ import { buildShipMemory, type CarriedRacks, type HurtDriver } from '@data/memor
 import { hurtDriversFor } from '@data/driver-damage';
 import { classicRunMap, shipDefAt, currentSlot, shipRng, createRunMap, noiseRng } from '@systems/map-run';
 import { rollNoiseClouds } from '@systems/map-noise';
-import { mapAlong, nominalAlong, workedRouteTo, authoredSlot } from '@systems/arm-fixture';
+import { mapAlong, nominalAlong, workedRouteTo, authoredSlot, skippedResult } from '@systems/arm-fixture';
+import { shipCycles } from '@systems/run-score';
 import { freshUnitRacks } from '@systems/carry';
 import { classicShip } from '@data/classic-five';
 import { nominalRunThreat, nominalShipThreat, createRunThreat, applyThreat } from '@systems/threat-plan';
@@ -161,6 +162,9 @@ export function createRunState(
 ): RunState {
   const classic = fixtureWorld === 'classic';
   const stop = classic ? null : fixtureStop(seed, shipIndex, lineage);
+  // Every stop before the fixture's ship has a result (passed in orbit, nobody landed) and its earning, so the route, the
+  // results, the trail and RUN END's world update agree (systems/arm-fixture.ts skippedResult, as __ap.route records them).
+  const passed = stop === null ? [] : stop.slots.slice(0, -1).map((slot, i) => skippedResult(stop.map, slot, i + 1));
   return {
     rev: 0,
     phase,
@@ -178,9 +182,9 @@ export function createRunState(
     licences: ['scan'],
     hollowNamed: false,
     coreLost: false,
-    skills: createRunSkills(),
+    skills: { ...createRunSkills(), earned: passed.map((result) => shipCycles(result)) },
     repairRenewedOn: null,
-    ships: [],
+    ships: passed,
     stats: createRunStats(),
     pendingStarCredit: 0,
     pendingStars: 0,

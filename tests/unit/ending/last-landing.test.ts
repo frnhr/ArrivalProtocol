@@ -17,7 +17,6 @@
 //   AUTODROP can't place drops blind after it); no drop solution (Nav Plotter dead: blind on the plotter-free geometry), the
 //   plotter lost mid-landing (blind from there), Bay Ctrl missing (nothing ends early), the ship lost mid-landing (7b review). Landing points for every flier by planet class: ending/last-landing-sweep (BALANCE_ONLY).
 // The landing stands while a scenario sets itself up ('manual' landing mode, tests/unit/support/landing-instant.ts).
-import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createHarness11 } from '../wp11/harness11';
 import { theRoot, landVerb, mvSpots, infectNow } from '@systems/hollow';

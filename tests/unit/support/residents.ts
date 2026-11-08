@@ -47,7 +47,10 @@ export function armShipSlices(seed: number, slot: number): { run: RunState; slic
   const start = run1Map(seed);
   const hop = hopBetween(start, 0, slot);
   const map = mapAtShip(start, slot, hop);
-  const run: RunState = { ...createRunState(seed, 'boot', 1, FIRST_RUN_LINEAGE), map };
+  // The run is only the template the slices are built from (createRunState's ship results and earnings, which the fixture
+  // world now fills for the route it builds, are left empty as they always were here: map/arm-parity pins these slices).
+  const template = createRunState(seed, 'boot', 1, FIRST_RUN_LINEAGE);
+  const run: RunState = { ...template, map, ships: [], skills: { ...template.skills, earned: [] } };
   const calm: ShipThreat = { ...nominalShipThreat(1), rootBlocks: null };
   const carried = freshUnitRacks(shipDefAt(map, slot), WIDE_LINK_BLOCKS, calm);
   return { run, slices: createShipSlices(run, carried, calm) };
