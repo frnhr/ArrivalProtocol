@@ -86,8 +86,9 @@ const verdict = (choice: FinaleEnding['choice'], untilAi: number): FinaleEnding 
 // --- The price meters --------------------------------------------------------------------------------------------------------
 {
   const merge = meterModel({ kind: 'charge', have: 26, need: MERGE_COST_CHARGE });
-  check('meter: MERGE at 26 charge: full, the tick at 20/26, the last 20 hatched (spent at the confirm), paid',
-    near(merge.fillPct, 100) && near(merge.tickPct, (100 * 20) / 26) && merge.spendFromPct !== null && near(merge.spendFromPct, (100 * 6) / 26) && merge.ok,
+  const M = MERGE_COST_CHARGE;
+  check(`meter: MERGE at 26 charge: full, the tick at ${M}/26, the last ${M} hatched (spent at the confirm), paid`,
+    near(merge.fillPct, 100) && near(merge.tickPct, (100 * M) / 26) && merge.spendFromPct !== null && near(merge.spendFromPct, (100 * (26 - M)) / 26) && merge.ok,
     JSON.stringify(merge));
   const short = meterModel({ kind: 'charge', have: 14, need: 20 });
   check('meter: MERGE at 14: the fill at 14/20, the tick at the end, nothing hatched, short',
@@ -134,7 +135,7 @@ function input(options: Partial<Record<EndingPiece, OptionState>>, more: Partial
     && purge?.meaning === FINALE_TEXT.meaning.purge && spare?.meaning === FINALE_TEXT.meaning.spare,
     JSON.stringify(model.rows.map((row) => row.command)));
   check('step 1: PURGE is free (no meter, no caption, no NOW:)', purge?.kind === 'open' && purge.meter === null && purge.caption === null && purge.now === null);
-  check('step 1: MERGE open: its charge meter, `COSTS 20 REPAIR CHARGE · you have 26`, and NOW:',
+  check(`step 1: MERGE open: its charge meter, \`COSTS ${MERGE_COST_CHARGE} REPAIR CHARGE · you have 26\`, and NOW:`,
     merge?.kind === 'open' && merge.meter?.kind === 'charge' && merge.meter.ok && merge.caption === FINALE_TEXT.price.charge(26) && merge.now === NOW_MERGE,
     JSON.stringify(merge));
   check('step 1: SPARE open: the FUEL meter and `FUEL 23% ✓ · needs 20%` (met, designer item 4)',
@@ -148,11 +149,11 @@ function input(options: Partial<Record<EndingPiece, OptionState>>, more: Partial
   check('step 1: rowForKey finds [2], none for [4]', rowForKey(model, 2)?.piece === 'merge' && rowForKey(model, 4) === null);
 }
 {
-  const needMerge = 'NEEDS 20 CHARGE · you have 14';
+  const needMerge = `NEEDS ${MERGE_COST_CHARGE} CHARGE · you have 14`;
   const needSpare = 'NEEDS FUEL 20% · you have 12%';
   const named = finaleCardModel(input({
     purge: OPEN(),
-    merge: { kind: 'needs', need: needMerge, named: true, price: { kind: 'charge', have: 14, need: 20 } },
+    merge: { kind: 'needs', need: needMerge, named: true, price: { kind: 'charge', have: 14, need: MERGE_COST_CHARGE } },
     spare: { kind: 'needs', need: needSpare, named: true, price: { kind: 'fuel', have: 12, need: 20 } },
   }));
   const merge = named.rows[1];

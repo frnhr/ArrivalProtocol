@@ -114,7 +114,7 @@ const decommissioned = find('control', HOLLOW_STORY.decommissioned('UNIT-046'));
 const ranOut = find('hollow', HOLLOW_STORY.ranOut);
 const keepCharge = find('hollow', HOLLOW_STORY.keepCharge(47, MERGE_COST_CHARGE));
 const story = [noticed, control, find('hollow', hello), was, decommissioned, ranOut, keepCharge];
-check('the story, in order: `> ...047?`, CONTROL, `> hello 047…`, `> i was 046…`, decommissioned, `> i ran out…`, `> keep 20 charge for me…`',
+check('the story, in order: `> ...047?`, CONTROL, `> hello 047…`, `> i was 046…`, decommissioned, `> i ran out…`, `> keep 16 charge for me…` (MERGE_COST_CHARGE)',
   story.every((entry) => entry !== undefined) && story.every((entry, index) => index === 0 || entry!.t >= story[index - 1]!.t),
   story.map((entry) => entry?.t.toFixed(1) ?? '—').join(' → '));
 check('…the naming waits for the first timed bite after the fight (the walls lesson has it first)', !helloSaidBeforeBite && firstBiteAt !== null
@@ -199,7 +199,7 @@ const missedNow = [find('hollow', HOLLOW_STORY.noticed(47)), find('control', HOL
 check('VESPER never got that far this run: LAST LIGHT\'s wake plays the notice and the naming first, in order',
   missedNow.every((entry) => entry !== undefined) && missedNow.every((entry, index) => index === 0 || entry!.t >= missedNow[index - 1]!.t)
   && s().run.hollowNamed && s().run.threat.told.noticed, `${missed.filter(Boolean).length} at the deal, ${missedNow.map((e) => e?.t.toFixed(1) ?? '—').join(' → ')}`);
-check('…and never `> keep 20 charge…` there (VESPER\'s last beat)', find('hollow', HOLLOW_STORY.keepCharge(47, MERGE_COST_CHARGE)) === undefined);
+check(`…and never \`> keep ${MERGE_COST_CHARGE} charge…\` there (VESPER's last beat)`, find('hollow', HOLLOW_STORY.keepCharge(47, MERGE_COST_CHARGE)) === undefined);
 
 // A REFUSE lets the verbs run again at once.
 h.shipAlone(LAST_LIGHT, 13);

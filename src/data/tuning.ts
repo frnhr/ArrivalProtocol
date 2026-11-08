@@ -1323,9 +1323,14 @@ export const SHAKE_GHOST_PX = 3;
 // the TERMINAL and on the ticker: the 15 s must feel like pressure (the lead's note), and the last five are where a
 // kid who is still reading has to decide.
 export const CHOICE_URGENT_SEC = 5;
-// MERGE (§1, §6.6 ship 5) costs this much REPAIR CHARGE. VESPER's boot line foreshadows it (`> keep 20 charge for me,
+// MERGE (§1, §6.6 ship 5) costs this much REPAIR CHARGE. VESPER's boot line foreshadows it (`> keep 16 charge for me,
 // 047. you'll see.`, §9 WP10 item 5), so the number is the same constant WP11's MERGE will charge.
-export const MERGE_COST_CHARGE = 20;
+// Slice 8 (plan §2.10, OPEN-DECISIONS 88 and 108, [FRAN] confirm): 16, was 20. The playthrough on R5's four routes (16 seeds,
+// strip landings, the runs played for MERGE) reached the choice with 20 in 36% of COMPETENT's runs and 32% of LITERAL's; at
+// 16, 46% and 36%; at 14, 50% and 39%. 16 takes most of what the ladder gives and stays 4 over the FULL ship's arrival
+// floor (CHARGE_ARRIVAL_FLOOR 12), so a kid who spent nothing still can't MERGE. The runs still short hold 0–13 (the 5-ship
+// route's compressed HOLLOW, the TIGHT receiver's squeeze): no price over the floor reaches them. To reverse: 20.
+export const MERGE_COST_CHARGE = 16;
 // VESPER's boot: after HOLLOW's line has typed (it is slow, HOLLOW_TYPE_CPS), the klaxon waits this long more, so the
 // line is read before the cut to amber (the boot's other lines get BOOT_KLAXON_AFTER_LAST_LINE_SEC from their start).
 export const BOOT_AFTER_HOLLOW_LINE_SEC = 1.0;

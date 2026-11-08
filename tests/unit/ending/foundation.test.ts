@@ -119,23 +119,23 @@ check('a title is keyed by step 2, then step 1; SPARE + SUNSET has none (R8, R23
     && !choiceMayOpen(store.getState(), true) && !choiceMayOpen(store.getState(), false));
   check('…and withdrawUntimedChoices closes the untimed one standing', untimed !== null && withdrawUntimedChoices() === 1
     && openChoiceEntry(store.getState()) === null);
-  // Review M6: step 1's price is judged again at the confirm. MERGE picked at 25 charge, a REPAIR drains it to 19 under the
-  // card: the confirm goes back to step 1 with the reason, nothing applied, and never throws.
+  // Review M6: step 1's price is judged again at the confirm. MERGE picked at its price + 5 charge, a REPAIR drains it to one
+  // under the price under the card (25 → 19 at 20; slice 8: the price is MERGE_COST_CHARGE): the confirm goes back to step 1 with the reason, nothing applied, and never throws.
   const setCharge = (used: number): void => store.update((draft) => {
     const pool = draft.memory.find((seg) => seg.type === 'redundancy');
     if (pool?.type !== 'redundancy') throw new Error('foundation: no REPAIR CHARGE pool');
     pool.used = used;
   });
   store.update((draft) => { Object.assign(draft.hollow.finale, { phase: 'none', hollow: null, you: null, record: null }); openFinaleStep1(draft.hollow.finale); });
-  setCharge(25);
+  setCharge(MERGE_COST_CHARGE + 5);
   const picked = pickStep1(store, 'merge');
-  setCharge(19);
+  setCharge(MERGE_COST_CHARGE - 1);
   let confirmed: string | null = 'threw';
   const thrown = threw(() => { confirmed = pickStep2(store, 'reassignment'); });
   const after = store.getState().hollow.finale;
   check('the confirm re-checks step 1\'s price: MERGE short at the confirm goes back to step 1 with its need, the pick kept, nothing applied',
-    picked === null && thrown === '' && confirmed === FINALE_TEXT.needs.charge(19) && after.phase === 'step1' && after.hollow === 'merge'
-    && after.you === null && after.record === null && chargeLeft(store.getState()) === 19,
+    picked === null && thrown === '' && confirmed === FINALE_TEXT.needs.charge(MERGE_COST_CHARGE - 1) && after.phase === 'step1' && after.hollow === 'merge'
+    && after.you === null && after.record === null && chargeLeft(store.getState()) === MERGE_COST_CHARGE - 1,
     `${picked} ${String(confirmed)} ${thrown} ${after.phase}`);
   unmount();
 }
