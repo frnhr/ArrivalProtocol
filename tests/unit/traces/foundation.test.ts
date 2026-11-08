@@ -39,6 +39,7 @@ import { layerOf } from '@systems/map-geometry';
 import { hollowLabel } from '@systems/say';
 import { traceSeedMods, traceSeedAllowance, traceGiftCharge, arrivalTraceLines, traceBootLines, traceBootLineText, traceBootLineSaid, traceMessages } from '@systems/trace-gifts';
 import { huntTarget, nearSkillSeedSpot } from '@systems/trace-hunt';
+import { seedSpot } from '@systems/hollow';
 import { faceBootLines, lineageControlLine, strangerBootLine, lineageBootLineSaid } from '@systems/lineage-boot';
 import { traceCardRow, traceOnChart, traceNextLines } from '@systems/trace-hud';
 import { createRng } from '@systems/rng';
@@ -62,7 +63,8 @@ const threw = (fn: () => unknown): string => {
 
 // --- The gates, the tables ------------------------------------------------------------------------------------------------
 // Track TRACE's gate lines (one a kind; CONTACT's is 7d's):
-check('built: no trace yet (Track TRACE raises each kind; CONTACT is 7d\'s)', Object.values(TRACES_BUILT).every((built) => !built)
+check('built: every trace but CONTACT (Track TRACE raised each kind; CONTACT is 7d\'s)',
+  Object.entries(TRACES_BUILT).every(([kind, built]) => built === (kind !== 'contact'))
   && Object.keys(TRACES_BUILT).join() === 'purge,merge,spare,sunset,stay,reassignment,contact');
 // (Track LINEAGE's gate line:)
 check('built: the lineage not yet (Track LINEAGE)', !LINEAGE_BUILT);
@@ -189,18 +191,18 @@ const asRun = (map: RunMapState, traces: RunTraces, lastUnit: LastUnit): Pick<Ru
     && tracesRng(1)() !== tracesRng(2)());
 }
 
-// --- The gates are down: nothing reads the traces ----------------------------------------------------------------------------
+// --- The gates are up (Track TRACE raised every kind but CONTACT): the final ship reads the traces --------------------------
 {
   const map = createRunMap({ wave: 2 }, 3);
   const held = runTracesOf(lastUnitWith(ending('merge', 'reassignment', { rootUnits: [46] }), null), map, 3);
   const wild = runTracesOf(lastUnitWith(ending('spare', 'reassignment'), null), map, 3);
   const finalStop = map.arm.find((ship) => ship !== undefined && ship.kind === 'final')!;
   const onFinal = { hollowUnits: [31], traces: held, map: { ...map, route: [{ slot: finalStop.slot, depth: 1, hop: null }] }, shipIndex: 0 };
-  check('gates down: a held MERGE + REASSIGNMENT plays nothing (finalTraces all false, the ladder\'s input NO_FINAL_TRACES)',
-    held.kinds.join() === 'merge,reassignment' && Object.values(finalTraces({ traces: held })).every((on) => !on)
-    && JSON.stringify(finalTraceInput({ traces: held })) === JSON.stringify(NO_FINAL_TRACES) && !finalTraces({ traces: wild }).wild && wild.extraSeed);
-  check('…the final root stays the mid-run HOLLOW, and hollowLabel names it', JSON.stringify(rootUnitsOf(onFinal)) === '[31]'
-    && hollowLabel({ ...onFinal, hollowNamed: true }) === 'UNIT-031');
+  check('gates up: a held MERGE + REASSIGNMENT plays MERGE\'s root and REASSIGNMENT\'s hunt (no wipe, no wild seed); SPARE\'s wild seed is owed',
+    held.kinds.join() === 'merge,reassignment' && JSON.stringify(finalTraces({ traces: held })) === '{"purge":false,"merge":true,"reassignment":true,"wild":false}'
+    && JSON.stringify(finalTraceInput({ traces: held })) === '{"purge":false,"merge":true,"hunt":true}' && finalTraces({ traces: wild }).wild && wild.extraSeed);
+  check('…the final root is the last unit (046·047 after the MERGE), and hollowLabel names it', JSON.stringify(rootUnitsOf(onFinal)) === '[46,47]'
+    && hollowLabel({ ...onFinal, hollowNamed: true }) === 'UNIT-046·047');
   check('…as built (the gate\'s rule): the last unit as the root, 046·047 after a MERGE, its wait at least 1 year (R35)',
     JSON.stringify(lastUnitRoot(held.from!)) === '[46,47]' && JSON.stringify(lastUnitRoot(wild.from!)) === '[47]'
     && rootWaitYears({ traces: held, map: { ...map, galaxyYear: 2601 } }) === 1 && rootWaitYears({ traces: held, map: { ...map, galaxyYear: 2590 } }) === 1
@@ -332,19 +334,20 @@ for (const [what, file, raw] of [['run 2\'s first desk', 'run-save-v7-ship-done-
 }
 
 // --- The stubs (each track's block) -----------------------------------------------------------------------------------------------
-// Track TRACE's stubs:
+// Track TRACE's stubs, built (traces/gifts and traces/final-ship fly them): on a run that holds no trace (run 1) every answer
+// is still the neutral one, and a line no boot planned throws.
 {
   const state = createInitialState({ seed: 7 });
   const packet = { linkBlocks: 0, rackE: [], rackF: [], charge: null, filesBlocks: 0, overLink: 0, chargeHeld: 0, chargeCarried: 0, seeds: [], deliveries: [], skills: [] };
   const seed = { targetId: 'a', targetName: 'A', words: 'w', disguise: null };
   const mods = traceSeedMods(state, 1, { beam: [seed], delivery: [] }, packet as never, createRng(1));
-  check('TRACE\'s stubs, neutral: the seeds as rolled, the allowance as given, no gift charge, no trace line, no message, no hunt',
+  check('TRACE\'s seams with no trace held: the seeds as rolled, the allowance as given, no gift charge, no trace line, no message, no hunt',
     mods.seeds.length === 1 && mods.wiped === 0 && mods.extra === 0 && JSON.stringify(traceSeedAllowance(state, 1, { min: 0, max: 2 })) === '{"min":0,"max":2}'
     && traceGiftCharge(state, 1) === 0 && arrivalTraceLines(state, 1, mods, 0).length === 0 && traceBootLines(state).length === 0
     && traceMessages(state.run).length === 0 && huntTarget(state) === null);
-  check('…and throwing where nothing reaches them yet (a trace line\'s words and what it gives, the near-skill spot)',
-    /not built/.test(threw(() => traceBootLineText(state, 'trace-gift', 0))) && /not built/.test(threw(() => traceBootLineSaid(createStore(state), 'dish-wild', 0)))
-    && /not built/.test(threw(() => nearSkillSeedSpot(state.memory, []))));
+  check('…a line no boot planned throws (its words, what it gives); the near-skill spot with no skill is the FINALE\'s own',
+    /no 'trace-gift' line 0/.test(threw(() => traceBootLineText(state, 'trace-gift', 0))) && /no 'dish-wild' line 0/.test(threw(() => traceBootLineSaid(createStore(state), 'dish-wild', 0)))
+    && JSON.stringify(nearSkillSeedSpot(state.memory, [])) === JSON.stringify(seedSpot(state.memory, [])));
 }
 // (Track LINEAGE's stubs:)
 {

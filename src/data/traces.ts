@@ -12,12 +12,12 @@ import type { FsToolKind } from '@/types/fs-tool';
 // are both built. CONTACT's is 7d's.
 export const TRACES_BUILT: Readonly<Record<TraceKind, boolean>> = {
   // Track TRACE's lines (one per kind):
-  purge: false,
-  merge: false,
-  spare: false,
-  sunset: false,
-  stay: false,
-  reassignment: false,
+  purge: true,
+  merge: true,
+  spare: true,
+  sunset: true,
+  stay: true,
+  reassignment: true,
   // (7d's line:)
   contact: false,
 };
