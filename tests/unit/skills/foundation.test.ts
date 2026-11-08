@@ -76,7 +76,7 @@ check('built: AUTOBURN v1–v3', SKILL_TREE.autoburn.built === 3);
 // LANDING: Track DROP raises AUTODROP to v3 here.
 check('built: AUTODROP v1–v3', SKILL_TREE.autodrop.built === 3);
 // SURVEY: slice 6.
-check('built: SURVEY not yet', SKILL_TREE.survey.built === 0);
+check('built: SURVEY v1–v3', SKILL_TREE.survey.built === 3);
 // DEFENCE: Track SENTRY raises SENTRY to v3 here.
 check('built: SENTRY v1–v3', SKILL_TREE.sentry.built === 3);
 // (end of the built checks)

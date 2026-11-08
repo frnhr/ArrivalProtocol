@@ -387,6 +387,12 @@ function renderSlice6(value: unknown, out: string[], owner: string, extra: Reado
   const bad = lines.filter((text) => text.length > MAX_LINE_CHARS || RULES.some((rule) => rule.re.test(text)));
   check(`6 SWATH words: every line (${lines.length}) fits the strip (≤ ${MAX_LINE_CHARS}) at its worst case and says no never-say word`,
     lines.length > 0 && bad.length === 0, JSON.stringify(bad));
+  // The strip's survey-swap row renders with no state: its worst case (`LZ-D IS ROCKY ✕ — SITES: SET SITE 12 AS LZ-D`).
+  const { SURVEY_RULES } = await import('@data/survey-rules');
+  const { WORST_CASE_VARS } = await import('@data/script');
+  const strip = SURVEY_RULES.map((rule) => rule.text({ vars: WORST_CASE_VARS }));
+  check(`…and its strip row (${strip.join(' | ')}) at its worst case`,
+    strip.length === 1 && strip[0] === 'LZ-D IS ROCKY ✕ — SITES: SET SITE 12 AS LZ-D' && strip.every((text) => text.length <= MAX_LINE_CHARS));
 }
 
 // --- end of 6 SWATH --------------------------------------------------------------------------------------------------------

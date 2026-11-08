@@ -107,8 +107,10 @@ import type { GameState } from '@state/schema';
       const shut = !openBranchesAt(unseeded, 3).includes('sentry');
       unseeded.run.threat.seedsMetAtDepth = 4;
       unseeded.run.ships.push(structuredClone(unseeded.run.ships[unseeded.run.ships.length - 1]!));
-      check('…a seedless ship 3 keeps it shut at visit 3; a record written at depth 4 opens it at visit 4',
-        shut && openBranchesAt(unseeded, 4).includes('sentry'));
+      const tie = openBranchesAt(unseeded, 4);
+      unseeded.run.skills.opened.push({ skill: 'survey', visit: 4 });
+      check('…a record written at depth 4 opens it at visit 4, or at visit 5 when SURVEY takes visit 4 (R16)',
+        shut && (tie.includes('sentry') || (tie.includes('survey') && openBranchesAt(unseeded, 5).includes('sentry'))));
     }
   }
   check('the DEFENCE branch opens at visit 3 on the worked route (after KESTREL\'s beam seeds), not before', opened.join(', ')

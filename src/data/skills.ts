@@ -55,7 +55,7 @@ export const SKILL_TREE: Readonly<Record<SkillId, SkillDef>> = {
       { version: 3, mode: 'SWEEP', price: 4, blocks: 6 },
     ],
     // Visit 4 at the earliest: 01 keys POOR site data by layer (from layer 5), and two long hops reach layer 5 at depth 3.
-    locks: [], opens: { kind: 'poor-ahead', minVisit: 4 }, demos: null, built: 0,
+    locks: [], opens: { kind: 'poor-ahead', minVisit: 4 }, demos: null, built: 3,
   },
   sentry: {
     id: 'sentry', branch: 'defence', fileName: 'SENTRY.skl', short: 'SN',
