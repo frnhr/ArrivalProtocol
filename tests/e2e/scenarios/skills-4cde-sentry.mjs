@@ -194,8 +194,9 @@ const outline = () => st(() => {
   if (box) await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
   await page.waitForTimeout(150);
   const armedLook = await outline();
-  await shot('03-preempt-armed');
+  // Read the state before the screenshot: under load the seed can land while the shot is taken.
   const preempted = await st(() => window.__ap.store.getState().hollow.seedTelegraph?.preempted === true);
+  await shot('03-preempt-armed');
   await waitFor(() => window.__ap.store.getState().hollow.seedTelegraph === null, 10000, 50);
   await page.waitForTimeout(400);
   const echo = `> rm seed 0x${addr?.toString(16).toUpperCase().padStart(3, '0')} ... PRE-EMPTED`;
