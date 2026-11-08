@@ -2153,10 +2153,13 @@ export const AUTODROP_DAMAGED_ALERT_SEC = AUTODROP_DONE_LINE_SEC;
 
 // A beam seed lands disguised as a harmless 2-block file (04 §3.6, decision 22) with this chance, by the receiver's depth:
 // the first row whose fromDepth is at most the depth counts (read from the last). Before depth 5 the kid is still learning
-// what a seed looks like; from 7 the arm is HOLLOW's, and half its seeds hide. Noise seeds on the beam only (plan R9).
+// what a seed looks like; from 7 the arm is HOLLOW's, and two of its seeds in three hide. Noise seeds on the beam only (plan
+// R9). Slice 8 (§2.4, OD 4): raised from 1/3 and 1/2 (decision 22's starting values), because a depth-5 run met a decoy in
+// only 25% of runs (balance/decoy-stats, 800 runs); now 33%. The rate alone can't reach 40% (3/4 and 1 give 43%, with
+// nearly every deep seed hidden), so SENTRY v1's price is §2.4's other half (ECONOMY's). To reverse: 1/3 and 1/2.
 export const DISGUISE_CHANCE_BY_DEPTH: readonly Readonly<{ fromDepth: number; chance: number }>[] = [
-  { fromDepth: 5, chance: 1 / 3 },
-  { fromDepth: 7, chance: 1 / 2 },
+  { fromDepth: 5, chance: 1 / 2 },
+  { fromDepth: 7, chance: 2 / 3 },
 ];
 // SENTRY v2's QUICK RM (03 §3.10): DELETE on a hollow block that is not the root takes this share of its time, so a seed
 // goes in 1.0 s instead of 2.0, and a 6-block meal in 2.0 s instead of 4.0. The root's ROOT_DELETE_SEC is untouched (plan
