@@ -1,6 +1,6 @@
-// WP10 acceptance 4 (§9 WP10 item 4, §6.5, §6.6): the COPY licence at VESPER's boot, COPY's refusals, and the
+// WP10 acceptance 4 (§9 WP10 item 4, §6.5, §6.6): COPY on VESPER (run 1's arm, the HUNT verdict), COPY's refusals, and the
 // `near-tools` seed targeting, headless (harness10, every DOM-free system).
-// • COPY is licensed at the flight's first moment, CONTROL saying so after its hello; a COPY of Repair makes Repair.cp
+// • COPY aboard from the flight's first moment (the classic schedule's licence and its line are retired, 03 §6); a COPY of Repair makes Repair.cp
 //   (a third working Repair), and the strip's lesson `UNIT-046 IS HUNTING YOUR TOOLS — COPY your Repair` stands once the
 //   first seed comes for the tools, until that spare exists.
 // • COPY's refusals: people (`Souls can't be copied.`), REPAIR CHARGE, the Core, a card's file, HOLLOW (its root LOCKED,
@@ -15,7 +15,6 @@
 // • WP11 (the lead's TODO, WP10 question 3): a tool licensed on this ship that the kid has not used here yet
 //   (HollowState.untriedTools: COPY from VESPER's boot, SWAP from its first burst; never Repair) is not hunted, and no seed
 //   lands within bite of one; its first use makes it fair game. The pure calls above it pass `[]` (every tool tried).
-import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createHarness10 } from './harness10';
 import { nearToolsSeedSpot, threateningSeeds, hollowReach, seedSpotFor, type SeedSpot } from '@systems/hollow';
@@ -26,7 +25,6 @@ import { DEAL_REFUSE } from '@systems/hollow-deal';
 import { segmentStarts, freeSegment, replaceRange, mergeAdjacentFree } from '@systems/memory-ops';
 import { getOps, canStartOp } from '@systems/ops-core';
 import { createToolFiles } from '@data/fs-tools';
-import { LICENCE_LINES } from '@data/script';
 import { installTool } from '@systems/licences';
 import { TOOL_REFUSAL } from '@data/tool-text';
 import { isUsableTool } from '@state/selectors';
@@ -45,19 +43,15 @@ const repairs = (): FsToolSegment[] => state().memory.filter((seg): seg is FsToo
 const biggestFree = (): FreeSegment => state().memory.filter((seg): seg is FreeSegment => seg.type === 'free' && seg.reservedBy === undefined)
   .sort((a, b) => b.size - a.size)[0]!;
 
-// --- The licence --------------------------------------------------------------------------------------------------
+// --- The tools that arrived here ------------------------------------------------------------------------------------
+// Track RETIRE: run 1's arm VESPER with the HUNT verdict and the tools its fight needs (harness10 vesper({ hunt })). The
+// classic schedule's COPY licence at the boot, and CONTROL's licence line after its hello, are retired with it (03 §6: the
+// licences go; the arm's tools arrive by request, map/run1-route's DELIVERY lines).
 h.vesper(13, { hunt: true, hollowAsleep: true });
 h.step();
 h.step();
 {
-  const log = state().log.entries.map((entry) => entry.text);
-  const hello = log.findIndex((text) => text.startsWith('Hello, Unit'));
-  const licence = log.indexOf(LICENCE_LINES.copy);
-  check('COPY is licensed at VESPER\'s first moment (Cp in memory, the COPY chip)', state().run.licences.includes('copy')
-    && state().memory.some((seg) => seg.type === 'fs-tool' && seg.fsTool === 'copy'));
-  check('…CONTROL says so after its hello', hello >= 0 && licence > hello, log.slice(-4).join(' | '));
-  // (A unit flown here by itself also gets MOVE and DELETE at this ship's start, as if HALCYON and KESTREL were lost: they
-  // arrived on this ship too, so they are spared as well.)
+  // (MOVE, DELETE and SWAP arrived on this ship too, so they are spared as well.)
   check('WP11: …and COPY is spared by HOLLOW until it is used (untriedTools)', state().hollow.untriedTools.includes('copy'),
     state().hollow.untriedTools.join(','));
 }

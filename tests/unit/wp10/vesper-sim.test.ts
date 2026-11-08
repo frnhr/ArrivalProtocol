@@ -10,8 +10,8 @@
 //   the backup keeps its OWN integrity and health word (the lead's item 1: a damaged backup used to read intact) and its
 //   infection (§9 WP10 edge case); refused on a busy file (either one), on a ship file with no backup, on a file that
 //   is not a ship file; clicking the backup swaps the pair; a cancel changes nothing; the thread is held meanwhile.
-import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
+import { fixtureShip } from '../support/arm-ship';
 import { createStore } from '@state/store';
 import type { GameState } from '@state/schema';
 import type { Segment } from '@/types/segment';
@@ -23,22 +23,22 @@ import { computePrediction, mountPredictor } from '@systems/predict';
 import { mountOpsCore, threadsBusy, getOps, cancelOp } from '@systems/ops-core';
 import { mountSay } from '@systems/say';
 import { installTool } from '@systems/licences';
-import { freshUnitRacks } from '@systems/carry';
 import { capabilitiesNow } from '@systems/capabilities';
 import { actionSwap, actionScan } from '@state/actions';
 import { on } from '@systems/events';
 import { getByRole, hasIntegrity, filesWithRole, type HealthSegment } from '@state/selectors';
 import { elementsFromState } from '@/types/orbit';
 import { TOOL_REFUSAL } from '@data/tool-text';
-import { SWAP_SEC, GHOST_BY_BAND } from '@data/tuning';
-import { classicShip } from '@data/classic-five';
+import { SWAP_SEC, ARM_GHOST_BY_BAND } from '@data/tuning';
 import { byDepth } from '../depth';
 
 // WP12 part 1 (the 200-seed playthrough) retuned the failing controller from §3.3's 15% every 25 tac s to
 // GHOST_BY_BAND.failing (30% every 10 tac s), so the checks below read the spec from the data. The drift window
 // scales with the bursts' Δv per tactical second (amp ÷ mean interval) from the one measured at §3.3's numbers
 // (300–900 km at 0.15 ÷ 25).
-const FAILING = GHOST_BY_BAND.failing;
+// Track RETIRE: run 1's arm VESPER's controller fires the arm's spec (ARM_GHOST_BY_BAND: the limping engine, slice 3b);
+// GHOST_BY_BAND was the classic five's.
+const FAILING = ARM_GHOST_BY_BAND.failing;
 if (!FAILING) throw new Error('vesper-sim: no failing ghost spec');
 const DRIFT_SCALE = (FAILING.amp / FAILING.meanIntervalTac) / (0.15 / 25);
 
@@ -49,10 +49,10 @@ const TICK = 0.05;
 // 50. A multiple of 10: the 10th–90th detail indexes by it.
 const SEEDS = byDepth(10, 200);
 const SWAP_SEEDS = byDepth(3, 50);   // 3 in quick depth: the unit tier's budget (slice 3a's review fixes)
-const ship = classicShip(VESPER);
+const ship = fixtureShip(VESPER);
 const CRUISE = ship.flight.cruiseWarp;
 
-const store = createStore<GameState>(createInitialState({ seed: 1, shipIndex: VESPER, carried: freshUnitRacks(ship) }));
+const store = createStore<GameState>(createInitialState({ seed: 1, shipIndex: VESPER, carried: 'fresh' }));
 mountOrbitSim(store);
 mountPredictor(store);
 mountOpsCore(store);
@@ -63,7 +63,7 @@ on('ghost-start', () => { starts++; });
 
 function fresh(seed: number): void {
   store.update((d) => {
-    Object.assign(d, createInitialState({ seed, shipIndex: VESPER, carried: freshUnitRacks(ship) }));
+    Object.assign(d, createInitialState({ seed, shipIndex: VESPER, carried: 'fresh' }));
     d.clock.speed = CRUISE;
     d.clock.speedTarget = CRUISE;
   });

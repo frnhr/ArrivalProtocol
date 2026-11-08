@@ -20,7 +20,8 @@
 // ACCEPT leaves the seed clock alone (the first seed still waits for a calm flight after the pause) and a telegraph it
 // calls off comes back DEAL_SEED_CALLED_OFF_SEC after the pause, also held by a burn; an offer the ship's end cuts
 // short is recorded (invalidated).
-import '../support/classic-world';
+// Track RETIRE: on run 1's arm VESPER (an ark of 16, phase 2's HUNT verdict), whose slot stands between POD 11 (GAP 2)
+// and POD 12 (GAP 1): POD 12 is the nearer (the classic VESPER's POD 09), POD 11 the other (its POD 08).
 import { check, finish } from '../wp1/harness';
 import { byDepth } from '../depth';
 import { createHarness10 } from './harness10';
@@ -75,20 +76,20 @@ function toOffer(seed: number): void {
 // --- The trigger and the offer -------------------------------------------------------------------------------------
 {
   h.vesper(5, { hunt: true });
-  check('VESPER: no deal before HOLLOW wakes', state().hollow.deal.phase === 'none' && dealFront(state().memory, 0)?.pod === 9);
+  check('VESPER: no deal before HOLLOW wakes', state().hollow.deal.phase === 'none' && dealFront(state().memory, 0)?.pod === 12);
   h.stepUntil(() => state().hollow.phase === 'awake', 60);
   const wokeAt = state().clock.aiSec;
-  check('HOLLOW wakes on the coast and bites C09 and C08', isInfected(soul('C09')!) && isInfected(soul('C08')!), `at ${wokeAt.toFixed(1)} AI s`);
+  check('HOLLOW wakes on the coast and bites C12 and C11', isInfected(soul('C12')!) && isInfected(soul('C11')!), `at ${wokeAt.toFixed(1)} AI s`);
   h.stepUntil(() => state().hollow.deal.phase === 'offered', 30);
   const offeredAfter = state().clock.aiSec - wokeAt;
   const entry = dealEntry()!;
   const log = state().log.entries;
-  const echoAt = log.findIndex((line) => line.speaker === 'hollow' && line.text.startsWith('> infect pod09'));
+  const echoAt = log.findIndex((line) => line.speaker === 'hollow' && line.text.startsWith('> infect pod12'));
   check('…and offers the deal at once: its line types right after the bite\'s echoes (the TERMINAL types in order)',
     state().hollow.deal.phase === 'offered' && offeredAfter <= 0.1 && echoAt >= 0 && log.indexOf(entry) > echoAt
     && entryTypedAtAi(state(), entry.id) > entryTypedAtAi(state(), log[echoAt]!.id), `${offeredAfter.toFixed(2)} s after the wake`);
-  check('…naming the pod at its front (POD 09, the nearer)', state().hollow.deal.pod === 9
-    && entry.text === HOLLOW_DEAL.offer('POD 09') && entry.text === '> give me POD 09. then i leave the others alone. for a while.', entry.text);
+  check('…naming the pod at its front (POD 12, the nearer)', state().hollow.deal.pod === 12
+    && entry.text === HOLLOW_DEAL.offer('POD 12') && entry.text === '> give me POD 12. then i leave the others alone. for a while.', entry.text);
   check('…in the TERMINAL (HOLLOW), with ACCEPT and REFUSE and a 15 s timer', entry.speaker === 'hollow' && entry.channel === 'mind'
     && JSON.stringify(entry.choice?.options) === JSON.stringify([DEAL_ACCEPT, DEAL_REFUSE]) && entry.choice?.timeoutAiSec === DEAL_TIMEOUT_SEC);
   const typedAt = entryTypedAtAi(state(), entry.id);
@@ -110,13 +111,13 @@ function toOffer(seed: number): void {
   h.step();
   const pausedAt = state().clock.aiSec;
   const biteIn = state().hollow.biteInSec;
-  check('ACCEPT: POD 09\'s driver is eaten at once (its pod parked later, eaten)', soul('C09') === undefined
-    && podRecord(state(), 9).driverLost === 'eaten');
-  check('…a hollow block stands where POD 09\'s driver was (it remembers the pod)', state().memory.some((seg) => seg.type === 'hollow' && seg.atePod === 9));
-  check('…every infection is cured (C08 too)', !state().memory.some((seg) => isInfected(seg)) && soul('C08')!.recoilUntilAi !== undefined);
+  check('ACCEPT: POD 12\'s driver is eaten at once (its pod parked later, eaten)', soul('C12') === undefined
+    && podRecord(state(), 12).driverLost === 'eaten');
+  check('…a hollow block stands where POD 12\'s driver was (it remembers the pod)', state().memory.some((seg) => seg.type === 'hollow' && seg.atePod === 12));
+  check('…every infection is cured (C11 too)', !state().memory.some((seg) => isInfected(seg)) && soul('C11')!.recoilUntilAi !== undefined);
   check('…CONTROL: "Negotiating with unauthorized processes is not recommended. :)"', state().log.entries.some((line) => line.text === HOLLOW_DEAL.control));
   const deal = state().run.stats.deal;
-  check('…run.stats.deal records it', deal?.outcome === 'accepted' && deal.pod === 9
+  check('…run.stats.deal records it', deal?.outcome === 'accepted' && deal.pod === 12
     && deal.shipId === 'vesper' && state().hollow.deal.phase === 'done');
   // The pause: 60 AI s with no bite (NEXT BITE stands still) and no seed.
   const eventsFrom = h.events.length;
@@ -127,7 +128,7 @@ function toOffer(seed: number): void {
     && state().hollow.biteInSec === biteIn, `bites ${bitten}, telegraphs ${telegraphs}, NEXT BITE ${biteIn?.toFixed(2)} → ${state().hollow.biteInSec?.toFixed(2)}`);
   h.stepUntil(() => state().clock.aiSec >= pausedAt + DEAL_PAUSE_SEC + (biteIn ?? 0) + 0.5, 30);
   check('…then the bites come again', h.events.slice(eventsFrom).some((event) => event.name === 'hollow-bite'));
-  // Never twice on this ship: fronts stand (the eaten C09 is now hollow next to C07), and no offer comes.
+  // Never twice on this ship: fronts stand (the eaten C12 is now hollow next to C10), and no offer comes.
   const offers = h.events.filter((event) => event.name === 'deal-offered').length;
   h.stepFor(30);
   check('…never offered twice (fronts still stand, 30 s later)', h.events.filter((event) => event.name === 'deal-offered').length === offers
@@ -148,7 +149,7 @@ function toOffer(seed: number): void {
   check('…NEXT BITE drops at once (×0.8: the refusal\'s cost, seen)', Math.abs(biteAfter - (biteBefore - 0.05) * DEAL_REFUSE_INTERVAL_FACTOR) < 0.06,
     `${biteBefore.toFixed(2)} → ${biteAfter.toFixed(2)}`);
   const deal = state().run.stats.deal;
-  check('…run.stats.deal = refused', deal?.outcome === 'refused' && deal.pod === 9);
+  check('…run.stats.deal = refused', deal?.outcome === 'refused' && deal.pod === 12);
   // The bite times: every 12.8 s within the 30 s, then every 16 s.
   const biteTimes: number[] = [];
   const from = h.events.length;
@@ -162,10 +163,10 @@ function toOffer(seed: number): void {
 
 // --- The timer running out -------------------------------------------------------------------------------------------
 {
-  // The bites are cured at once (a kid repairing them): unrepaired, HOLLOW eats C09 within the timer (below).
+  // The bites are cured at once (a kid repairing them): unrepaired, HOLLOW eats C12 within the timer (below).
   toOffer(7);
-  cureNow(h.store, soul('C09')!);
-  cureNow(h.store, soul('C08')!);
+  cureNow(h.store, soul('C12')!);
+  cureNow(h.store, soul('C11')!);
   const entry = dealEntry()!;
   const typedAt = entryTypedAtAi(state(), entry.id);
   h.stepUntil(() => state().hollow.deal.phase === 'done', DEAL_TIMEOUT_SEC + 15);
@@ -176,10 +177,10 @@ function toOffer(seed: number): void {
     `ended ${(endedAt - typedAt).toFixed(2)} s after typed`);
 }
 
-// --- Unanswered and unrepaired: HOLLOW holds C09 for the answer (WP10 review fix) ------------------------------------
-// Before the fix HOLLOW's drain ran on through the offer and ate C09 before the 15 s were up on 6 of 8 seeds (`> never
-// mind. i took it.`), so the timeout's cost almost never came, and the strip's `C09 WILL BE EATEN IN 0:08` contradicted
-// the offer's clock. Now the offer's clock is the one clock on C09.
+// --- Unanswered and unrepaired: HOLLOW holds C12 for the answer (WP10 review fix) ------------------------------------
+// Before the fix HOLLOW's drain ran on through the offer and ate C12 before the 15 s were up on 6 of 8 seeds (`> never
+// mind. i took it.`), so the timeout's cost almost never came, and the strip's `C12 WILL BE EATEN IN 0:08` contradicted
+// the offer's clock. Now the offer's clock is the one clock on C12.
 {
   let timedOut = 0;
   let held = 0;
@@ -189,47 +190,47 @@ function toOffer(seed: number): void {
   for (const seed of seeds) {
     toOffer(seed);
     const entry = dealEntry()!;
-    const c09At = soul('C09')!.integrity;
-    const c08At = soul('C08')!.integrity;
+    const c09At = soul('C12')!.integrity;
+    const c08At = soul('C11')!.integrity;
     let alarmed = false;
     h.stepUntil(() => {
       if (state().alerts.list.some((alert) => alert.id === `${EATEN_ALERT_PREFIX}9`)) alarmed = true;
       return state().hollow.deal.phase === 'done';
     }, DEAL_TIMEOUT_SEC + 15);
     if (state().run.stats.deal?.outcome === 'timeout' && !entry.choice!.open) timedOut++;
-    // At the timeout C09 is where it stood when the offer came (the drain resumes from the next tick).
-    if (soul('C09') !== undefined && Math.abs(soul('C09')!.integrity - c09At) < 1e-9) held++;
+    // At the timeout C12 is where it stood when the offer came (the drain resumes from the next tick).
+    if (soul('C12') !== undefined && Math.abs(soul('C12')!.integrity - c09At) < 1e-9) held++;
     if (!alarmed) noAlarm++;
-    if (soul('C08') === undefined || soul('C08')!.integrity < c08At - 10) othersDrain++;
+    if (soul('C11') === undefined || soul('C11')!.integrity < c08At - 10) othersDrain++;
   }
-  check(`unanswered and unrepaired, every offer ends in the timeout (\`> ok.\`, its haste), C09 alive (${seeds.length} seeds)`,
+  check(`unanswered and unrepaired, every offer ends in the timeout (\`> ok.\`, its haste), C12 alive (${seeds.length} seeds)`,
     timedOut === seeds.length, `${timedOut}/${seeds.length}`);
-  check('…HOLLOW held C09 the whole time (its integrity stood still) and never raised `C09 WILL BE EATEN`',
+  check('…HOLLOW held C12 the whole time (its integrity stood still) and never raised `C12 WILL BE EATEN`',
     held === seeds.length && noAlarm === seeds.length, `held ${held}, no alarm ${noAlarm}`);
-  check('…while the other bite (C08) drained on', othersDrain === seeds.length, `${othersDrain}/${seeds.length}`);
+  check('…while the other bite (C11) drained on', othersDrain === seeds.length, `${othersDrain}/${seeds.length}`);
 }
 
 // --- Invalidated: the named driver moves ------------------------------------------------------------------------
 {
   toOffer(8);
   const entry = dealEntry()!;
-  // C09 is being eaten (a MOVE is refused on it): heal it at once, then MOVE it behind a WALL in rack D.
-  cureNow(h.store, soul('C09')!);
+  // C12 is being eaten (a MOVE is refused on it): heal it at once, then MOVE it behind a WALL in rack D.
+  cureNow(h.store, soul('C12')!);
   const free = state().memory.filter((seg): seg is FreeSegment => seg.type === 'free' && seg.reservedBy === undefined).sort((a, b) => b.size - a.size)[0]!;
-  const moved = actionMove(h.store, soul('C09')!, { regionSegIds: [free.id], col: free.size - 8 });
+  const moved = actionMove(h.store, soul('C12')!, { regionSegIds: [free.id], col: free.size - 8 });
   h.step();
   h.step();
   check('a MOVE of the named driver withdraws the offer: `> never mind.`, the buttons go dead, run.stats.deal = invalidated',
     moved === null && state().run.stats.deal?.outcome === 'invalidated' && !entry.choice!.open && entry.choice!.picked === null
     && state().log.entries.some((line) => line.text === HOLLOW_DEAL.neverMind), `${moved} ${state().run.stats.deal?.outcome}`);
-  check('…and a late pick does nothing', pickChoice(entry.id, DEAL_ACCEPT) === false && soul('C09') !== undefined);
+  check('…and a late pick does nothing', pickChoice(entry.id, DEAL_ACCEPT) === false && soul('C12') !== undefined);
   while (getOps().length > 0) h.step();
 }
 
 // --- Invalidated: the named pod launches ----------------------------------------------------------------------------
-// The kid puts POD 09 first (LOAD NEXT) and presses [L] in an LZ window (landing-controls playerLaunch, the key's own
-// path): only POD 09 goes. The offer's 15 AI s are shorter than the wait for VESPER's first window, so it is made in the
-// window (offerDealNow), with HOLLOW asleep so nothing else touches POD 09 meanwhile.
+// The kid puts POD 12 first (LOAD NEXT) and presses [L] in an LZ window (landing-controls playerLaunch, the key's own
+// path): only POD 12 goes. The offer's 15 AI s are shorter than the wait for VESPER's first window, so it is made in the
+// window (offerDealNow), with HOLLOW asleep so nothing else touches POD 12 meanwhile.
 {
   h.vesper(9, { hunt: true, hollowAsleep: true });
   // Slice 1b (risk 5): the engine is open in landing, and VESPER's failing Thrust Ctrl fires there too; unswapped, its
@@ -240,21 +241,21 @@ function toOffer(seed: number): void {
   setLandingMode('manual');
   h.startLanding(1);
   h.stepUntil(() => state().landing.window !== null, 300);
-  offerDealNow(h.store, soul('C09')!);
+  offerDealNow(h.store, soul('C12')!);
   h.step();
   const entry = dealEntry()!;
-  check('an offer in the landing, in an LZ window (named POD 09)', state().run.phase === 'landing' && state().landing.window !== null
-    && entry.choice?.open === true && state().hollow.deal.pod === 9);
-  const loadNext = setLoadNext(h.store, 9);
+  check('an offer in the landing, in an LZ window (named POD 12)', state().run.phase === 'landing' && state().landing.window !== null
+    && entry.choice?.open === true && state().hollow.deal.pod === 12);
+  const loadNext = setLoadNext(h.store, 12);
   const launch = playerLaunch(h.store, (_text, onYes) => onYes());
   h.step();
-  const fate = podRecord(state(), 9).fate;
-  const others = state().landing.pods.filter((record) => record.pod !== 9 && record.fate.kind !== 'aboard').map((record) => record.pod);
-  check('…LOAD NEXT POD 09, then [L]: POD 09 launches alone, and the offer is withdrawn (invalidated)',
-    loadNext === null && launch.kind === 'launched' && launch.pod === 9 && soul('C09') === undefined
+  const fate = podRecord(state(), 12).fate;
+  const others = state().landing.pods.filter((record) => record.pod !== 12 && record.fate.kind !== 'aboard').map((record) => record.pod);
+  check('…LOAD NEXT POD 12, then [L]: POD 12 launches alone, and the offer is withdrawn (invalidated)',
+    loadNext === null && launch.kind === 'launched' && launch.pod === 12 && soul('C12') === undefined
     && (fate.kind === 'down' || fate.kind === 'falling') && others.length === 0
     && state().run.stats.deal?.outcome === 'invalidated' && !entry.choice!.open,
-    `${loadNext ?? 'pinned'}, ${launch.kind}, POD 09 ${fate.kind}, others away ${others.join(',') || 'none'}, deal ${state().run.stats.deal?.outcome}`);
+    `${loadNext ?? 'pinned'}, ${launch.kind}, POD 12 ${fate.kind}, others away ${others.join(',') || 'none'}, deal ${state().run.stats.deal?.outcome}`);
   setLandingMode('instant');
 }
 
@@ -273,7 +274,7 @@ function toOffer(seed: number): void {
   h.stepFor(1);
   h.keyDown('Space');
   h.stepUntil(() => state().burn.lastTickDvKmS > 0, 5);
-  offerDealNow(h.store, soul('C09')!);
+  offerDealNow(h.store, soul('C12')!);
   const entry = dealEntry()!;
   const typedAt = entryTypedAtAi(state(), entry.id);
   h.stepUntil(() => state().clock.aiSec >= typedAt + 2, 15);
@@ -349,16 +350,16 @@ function telegraphWhileBurning(fromAi: number, forSec: number): boolean {
   endFlight(h.store, 'crashed');
   h.step();
   check('an offer the ship\'s end cuts short is withdrawn and recorded (run.stats.deal = invalidated)', !entry.choice!.open
-    && state().hollow.deal.phase === 'done' && state().run.stats.deal?.outcome === 'invalidated' && state().run.stats.deal?.pod === 9,
+    && state().hollow.deal.phase === 'done' && state().run.stats.deal?.outcome === 'invalidated' && state().run.stats.deal?.pod === 12,
     JSON.stringify(state().run.stats.deal));
 }
 
-// The reach a front is measured with (DEAL_FRONT_BLOCKS): VESPER's root sees POD 08 across 2 blocks and POD 09 across 1.
+// The reach a front is measured with (DEAL_FRONT_BLOCKS): VESPER's root sees POD 11 across 2 blocks and POD 12 across 1.
 {
   h.vesper(12, { hunt: true });
   const reach = hollowReach(state().memory, 0).filter((entry) => entry.neighbourId?.startsWith('driver_'));
-  check('VESPER\'s root: POD 08 across a 2-block GAP, POD 09 across 1 (both at its front)',
-    reach.map((entry) => `${entry.neighbourId}:${entry.gapBlocks}`).join(',') === 'driver_pod08:2,driver_pod09:1',
+  check('VESPER\'s root: POD 11 across a 2-block GAP, POD 12 across 1 (both at its front)',
+    reach.map((entry) => `${entry.neighbourId}:${entry.gapBlocks}`).join(',') === 'driver_pod11:2,driver_pod12:1',
     reach.map((entry) => `${entry.neighbourId}:${entry.gapBlocks}`).join(','));
 }
 

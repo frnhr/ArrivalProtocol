@@ -1,7 +1,8 @@
 // WP10 acceptance 2 (the follower part) and item 2's DOM-free logic (§9 WP10), headless with every DOM-free system:
 // • the ship's FIRST uncommanded burst: the alarm `UNCOMMANDED THRUST` (an alarm alert: the klaxon, the red vignette),
-//   the strip's alarm line, TACTICAL during the burst, SWAP licensed in that moment; a SKIP running then lands on the
-//   burst's start (the only burst that stops a SKIP);
+//   the strip's alarm line, TACTICAL during the burst; a SKIP running then lands on the burst's start (the only burst
+//   that stops a SKIP). (Track RETIRE: on run 1's arm VESPER. The classic schedule's SWAP licence at the first burst is
+//   retired with it, 03 §6; the lesson's SWAP is given here, as the arm's arrives by request.)
 // • LATER bursts: no new alarm (no klaxon), no pace change (the world stays at CRUISE through them), a warning counter
 //   `UNCOMMANDED THRUST ×n`;
 // • after the second burst the lesson: in amber `THE ENGINE IS FIRING BY ITSELF — click the THRUST CTRL pip` (lighting
@@ -10,7 +11,6 @@
 // • edge cases: a ghost burst during the lock hold resets it; none while paused; a sticky burst (a dead controller) holds
 //   TACTICAL, refuses SKIP, and ends on a SPACE press and release;
 // • the strip follower with a scripted pip → SWAP defender (and the WP9 defender for HOLLOW) locks VESPER.
-import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createHarness10 } from './harness10';
 import { skipBlockReason } from '@systems/pace';
@@ -55,8 +55,6 @@ const setThrustIntegrity = (integrity: number): void => {
     && alert(GHOST_ALARM_ID)?.text === GHOST_TEXT.alarm && state().clock.pace === 'tactical');
   check('…the strip\'s alarm line', state().director.shown?.text === GHOST_TEXT.alarmLine && state().director.shown?.urgency === 'now',
     state().director.shown?.text);
-  check('…SWAP is licensed with it', state().run.licences.includes('swap') && h.events.some((event) => event.name === 'licence'
-    && (event.payload as { kind: string }).kind === 'swap'));
   check('…SKIP refused during it', skipBlockReason(state(), getPrediction()) !== null);
   h.stepUntil(() => alert(GHOST_ALARM_ID) === undefined, 10);
   check('the alarm clears after the burst (it stood ≥ 3 AI s), and the counter takes over: UNCOMMANDED THRUST ×1',
@@ -86,7 +84,7 @@ const setThrustIntegrity = (integrity: number): void => {
 
 // --- The lesson after the second burst, pip → SWAP ------------------------------------------------------------------
 {
-  h.vesper(22, { hollowAsleep: true });
+  h.vesper(22, { hollowAsleep: true, tools: ['swap'] });
   let pipShown = false;
   h.stepUntil(() => {
     if (shownId() === 'tut-ghost-pip') pipShown = true;
@@ -162,7 +160,7 @@ const setThrustIntegrity = (integrity: number): void => {
 
 // --- The follower with the pip → SWAP defender locks VESPER --------------------------------------------------------
 {
-  h.vesper(24);
+  h.vesper(24, { kit: true, tools: ['swap'] });
   const texts = h.flyDefending10(900);
   const swapped = state().memory.some((seg) => seg.name === 'Thrust.old');
   check('the strip follower with the pip → SWAP defender (and the WP9 defender) locks VESPER', h.status() === 'locked' && swapped,

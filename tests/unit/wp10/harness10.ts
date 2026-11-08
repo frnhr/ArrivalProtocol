@@ -24,12 +24,16 @@ import { nominalShipThreat } from '@systems/threat-plan';
 import { FRESH_UNIT_RACK_E, FRESH_UNIT_RACK_F } from '@data/memory';
 import { classicShip, CLASSIC_HOPS } from '@data/classic-five';
 import type { ShipThreat } from '@/types/threat';
+import type { FsToolKind } from '@/types/fs-tool';
 import type { Segment } from '@/types/segment';
 import { phase2HollowOf } from '../support/hollow-world';
 
 export const VESPER = 3;
 
 export interface VesperOpts {
+  // Tool files given on top (written and licensed: repo-fixture giveTools), the arm's way to hand a suite the SWAP its lesson
+  // needs (Track RETIRE: the classic schedule licensed SWAP at the first burst; 03 §6 retired it, the arm's comes by request).
+  tools?: readonly FsToolKind[];
   // The worked route's tools by VESPER (harness7 shipAlone's `kit`; the arm only).
   kit?: boolean;
   // HOLLOW put to sleep for good (a flight suite measures the flight, not the fight).
@@ -98,7 +102,12 @@ export function createHarness10(seed = 1, opts: { soulsFound?: boolean } = {}): 
         fresh.director.done = [...base.store.getState().director.done];
         base.store.update((d) => { Object.assign(d, fresh); });
         resetWorld();
+        // They arrive on this ship (as the classic ship alone's licences did, and as a delivery's first of its kind does):
+        // HOLLOW spares each until it is used (untriedTools).
         giveTools(base.store, ['move', 'delete', 'copy', 'swap']);
+        base.store.update((d) => {
+          for (const kind of ['move', 'delete', 'copy', 'swap'] as const) if (!d.hollow.untriedTools.includes(kind)) d.hollow.untriedTools.push(kind);
+        });
       } else if (vesperOpts.hunt) {
         const threat = huntVerdict();
         const ship = classicShip(VESPER);
@@ -113,6 +122,7 @@ export function createHarness10(seed = 1, opts: { soulsFound?: boolean } = {}): 
         base.store.update((d) => { Object.assign(d, fresh); });
         resetWorld();
       }
+      if (vesperOpts.tools !== undefined) giveTools(base.store, vesperOpts.tools);
       if (vesperOpts.hollowAsleep) base.store.update((d) => { d.hollow.phase = 'dormant'; });
       base.events.length = 0;
     },

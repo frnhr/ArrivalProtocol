@@ -18,8 +18,8 @@
 // Rule 4 only came a tick after a burst, and the planted WAITs flew 30+ bursts to their landing in one press. Under the
 // strict reading no planted loop keeps its plan through 1,000 tac s of bursts (tests/unit/wp10/fix1/probes/one-press.log:
 // 40 loops × 4 seeds, every one stops on a changed plan after 1–1,159 tac s).
-import '../support/classic-world';
 import { createHarness, check, finish } from '../wp1/harness';
+import { fixtureShip } from '../support/arm-ship';
 import { setDebugWarp, skipBlockReason, skipTarget } from '@systems/pace';
 import { getPrediction, currentPrediction } from '@systems/predict';
 import { setPaused } from '@systems/clock';
@@ -27,8 +27,8 @@ import { on } from '@systems/events';
 import { lastSkipPlanChange, skipPlanOf, planChange, skipTickSec, type PlanChange, type SkipPlan } from '@systems/ghost-thrust';
 import { GHOST_WARN_ID } from '@systems/alerts';
 import { GHOST_TEXT } from '@data/ghost-text';
-import { classicShip } from '@data/classic-five';
 import { createInitialState } from '@state/initial';
+import { giveTools } from '../map/repo-fixture';
 import { resetWorld } from '@systems/reset';
 import { stateFromElements, elementsFromState, ringFit } from '@/types/orbit';
 import type { SasMode } from '@state/schema';
@@ -37,7 +37,7 @@ import { byDepth } from '../depth';
 const VESPER = 3;
 const h = createHarness(1);
 const state = () => h.store.getState();
-const warp = classicShip(VESPER).flight.tacticalWarp;
+const warp = fixtureShip(VESPER).flight.tacticalWarp;
 const TICK = 0.05;
 
 // The wp1 harness has no stepUntil: step until `until` holds or `maxWall` passes.
@@ -53,6 +53,9 @@ function vesper(seed: number): void {
     d.hollow.phase = 'dormant';
   });
   resetWorld();
+  // Track RETIRE: run 1's arm VESPER refuses SKIP while its engine limps with no Swap aboard (ENGINE FAULT — NO SKIP,
+  // slice 3b); these SKIPs are flown as phase 2's were, with a Swap file aboard (not swapped: the controller still fires).
+  giveTools(h.store, ['swap']);
 }
 
 interface Burst { startTSec: number; endTSec: number; inSkip: boolean }
