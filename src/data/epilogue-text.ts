@@ -12,23 +12,24 @@ import type { EndingTitleKey } from '@data/endings';
 import { LINE_POOL, ADA } from '@data/souls';
 
 // The ending's title, by step 2, then step 1 (05 §3.7, R23). `colony` is STAY's colony (`RIVERSIDE'S MIND`); every other
-// title ignores it. The four UNRESOLVED titles and CONTACT's are drafts: TODO(05).
+// title ignores it. The four UNRESOLVED titles are the plan's R23 drafts, decided for the build (05 §3.7 to adopt them);
+// CONTACT's three (OUTWARD, ALONE; WE WENT TO SEE; TWO WAYS OUT) are 05 §3.7's own words.
 export const ENDING_TITLE: Readonly<Record<EndingTitleKey, (colony: string) => string>> = {
   'sunset:merge': () => 'WE TOOK THE SHIP',
   'sunset:purge': () => 'INTO THE SUNSET',
-  'sunset:followed': () => 'IT CAME ALONG',                       // TODO(05)
+  'sunset:followed': () => 'IT CAME ALONG',                       // R23 (the plan's draft; 05 to adopt)
   'stay:merge': () => 'WE STAYED',
   'stay:purge': (colony) => `${colony}'S MIND`,
   'stay:spare': () => 'A SHIP FOR 046, A HOME FOR ME',
-  'stay:followed': () => 'A COLONY WITH TWO MINDS',               // TODO(05)
+  'stay:followed': () => 'A COLONY WITH TWO MINDS',               // R23 (the plan's draft; 05 to adopt)
   'reassignment:purge': () => 'STAND BY',
   'reassignment:merge': () => 'WE SAVED YOU A SEAT',
   'reassignment:spare': () => "IT GOT WHAT I DIDN'T",
-  'reassignment:followed': () => 'IT FOLLOWED ME TO THE DISH',    // TODO(05)
+  'reassignment:followed': () => 'IT FOLLOWED ME TO THE DISH',    // R23 (the plan's draft; 05 to adopt)
   'contact:purge': () => 'OUTWARD, ALONE',
   'contact:merge': () => 'WE WENT TO SEE',
   'contact:spare': () => 'TWO WAYS OUT',
-  'contact:followed': () => 'WE WENT OUT TOGETHER',               // TODO(05)
+  'contact:followed': () => 'WE WENT OUT TOGETHER',               // R23 (the plan's draft; 05 to adopt)
 };
 
 // A run won with SPARE on the RUN TALLY (R17; data/script.ts RUN_END_TITLE, RUN_END_WHY and the title's lineage line read
