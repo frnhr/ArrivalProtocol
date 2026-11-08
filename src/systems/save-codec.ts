@@ -1,5 +1,5 @@
-// Slice 5: the lead owns this file (docs/phase3/impl/slice-5-plan.md §5, as slices 4c–4e's decision on save ownership): the
-// FOUNDATION made the one v4 → v5 bump for all three tracks. A track that needs another saved field asks the lead.
+// Slice 6: the lead owns this file (docs/phase3/impl/slice-6-plan.md §5, as slices 4c–4e's and 5's decision on save
+// ownership): the FOUNDATION made the one v5 → v6 bump for both tracks. A track that needs another saved field asks the lead.
 import type { GameState, RunState } from '@state/schema';
 import type { ShipSlices } from '@state/initial';
 import type { ContentVersions } from '@/types/lineage';
@@ -7,8 +7,12 @@ import type {
   RunSave, SavePoint, SavePayload, ResumeLine, BootParts, DecodeResult, SaveRefusal, SaveRefusalKind,
 } from '@/types/save';
 import type { Meta, RunLineage } from '@systems/meta';
+import type { LzState } from '@/types/landing';
+import type { SurveyState } from '@/types/survey';
 import { parseLastUnit, MetaCorrupt } from '@systems/meta-parse';
-import { createRunState, createInitialState, createRunSkills, createAutodropState, createRunResidents, createResidentState } from '@state/initial';
+import {
+  createRunState, createInitialState, createRunSkills, createAutodropState, createRunResidents, createResidentState, createSurveyState,
+} from '@state/initial';
 import { createRunLog } from '@state/log-selectors';
 import { createRunThreat, nominalShipThreat } from '@systems/threat-plan';
 import { createRunMap } from '@systems/map-run';
@@ -24,7 +28,7 @@ import { REPO_CATALOGUE_VERSION } from '@data/repository';
 import { shipDefOf, validateShipDef } from '@data/ships';
 import { shipSummaryAt } from '@systems/map-run';
 import { currentSlot } from '@systems/map-streams';
-import { RUN_SAVE_VERSION, FIRST_UNIT_NUMBER, CYCLES_ARRIVED, FIRST_PICK_FLOOR_CYCLES } from '@data/tuning';
+import { RUN_SAVE_VERSION, FIRST_UNIT_NUMBER, CYCLES_ARRIVED, FIRST_PICK_FLOOR_CYCLES, SURVEY_CELLS } from '@data/tuning';
 import { shipCycles } from '@systems/run-score';
 import { bankOf } from '@systems/skill-tree';
 import { SKILL_IDS, levelPrice } from '@data/skills';
@@ -178,12 +182,27 @@ const checkMap = rec({
   history: checkHistory,
 });
 
+// A ship's survey record (slice 6, RUN_SAVE_VERSION 6; types/survey.ts SurveyRecord): null on a GOOD planet.
+const EFFECTIVE_VERSION_CHECK = oneOf(0, 1, 2, 3);
+const checkSurveyMove = rec({ lz: name, site: name });
+const checkSurveyRecord = rec({
+  ranAt: EFFECTIVE_VERSION_CHECK,
+  mappedPct: (value, at) => {
+    whole(value, at);
+    if ((value as number) > 100) shapeFail(at, 'is over 100');
+  },
+  found: whole,
+  moves: list(checkSurveyMove),
+  badKept: list(rec({ lz: name, ground: oneOf('rocky', 'wet'), known: oneOf('survey', 'touchdown', null) })),
+});
+
 const checkShipResult = rec({
   shipId: name, shipName: name, slot: whole, depth: whole,
   outcome: oneOf('locked', 'partial', 'stranded', 'escaped', 'crashed', 'abandoned', 'emergency'),
   stars: whole, fuelLeftPct: num, ringMiss: nullable(rec({ apsis: oneOf('▼', '▲'), km: num })),
   colonistsAboard: whole, lzs: list(anyRecord), offSite: whole, noGo: whole, restored: whole,
   parked: list(rec({ pod: whole, why: str })), notLaunched: whole, landedInLz: whole, points: num, colony: nullable(name), pods: list(anyRecord),
+  survey: nullable(checkSurveyRecord),
 });
 
 const checkLastUnit: Check = (value, at) => {
@@ -451,11 +470,74 @@ const checkAutodrop = rec({
   held: oneOf(false), armed: isNull, pass: wholeCounts, sent: wholeCounts, armedAtTSec: isNull, claimed: oneOf(false),
   waitingSinceTSec: isNull, flownAs: oneOf(0, 1, 2, 3), end: nullable(oneOf(...AUTODROP_ENDS)), endAtAi: nullable(num),
 });
+// SURVEY's slice (slice 6, RUN_SAVE_VERSION 6; plan §2.2's codec checks), read whole and at rest: no thread held, no angle
+// kept (survey.ts surveyShipEnd, R20); SURVEY_CELLS cells; unique sites (none on a GOOD planet), each LZ on a site of its own
+// whose geometry and ground are the LZ's (null on GOOD); every move and reveal naming an LZ and a site the slice has; sitesRev
+// at least the moves made.
+const checkSurveySite = rec({
+  id: name, kind: oneOf('guess', 'candidate', 'wreck'), number: whole, centreRad: num, halfWidthRad: num, widthKm: num,
+  width: oneOf('wide', 'standard', 'narrow'), roomPods: whole, ground: oneOf('flat', 'rocky', 'wet'), found: bool, groundKnown: bool,
+});
+const checkSurveyState = rec({
+  site: oneOf('good', 'poor'),
+  sites: list(checkSurveySite),
+  mapped: (value, at) => {
+    list(bool)(value, at);
+    if ((value as unknown[]).length !== SURVEY_CELLS) shapeFail(at, `has ${(value as unknown[]).length} cells, not ${SURVEY_CELLS}`);
+  },
+  paused: bool,
+  claimed: oneOf(false),
+  lastRad: isNull,
+  ranAt: EFFECTIVE_VERSION_CHECK,
+  moves: list(checkSurveyMove),
+  reveals: list(rec({ site: name, by: oneOf('survey', 'touchdown') })),
+  lines: rec({ firstFind: bool, mapped: bool, controlBoot: bool, controlMoved: bool }),
+});
+const checkLz = rec({
+  label: name, centreRad: num, halfWidthRad: num, widthKm: num, pods: whole, ground: oneOf('flat', 'rocky', 'wet'), site: nullable(name),
+});
+function checkSurvey(landing: Readonly<Record<string, unknown>>, at: string): void {
+  list(checkLz)(landing.lzs, `${at}.lzs`);
+  checkSurveyState(landing.survey, `${at}.survey`);
+  whole(landing.sitesRev, `${at}.sitesRev`);
+  const lzs = landing.lzs as LzState[];
+  const survey = landing.survey as SurveyState;
+  const ids = survey.sites.map((site) => site.id);
+  if (new Set(ids).size !== ids.length) shapeFail(`${at}.survey.sites`, 'has two sites with one id');
+  if (survey.site === 'good' && ids.length > 0) shapeFail(`${at}.survey.sites`, 'is not empty on a GOOD planet');
+  const taken = new Set<string>();
+  lzs.forEach((lz, i) => {
+    const where = `${at}.lzs[${i}].site`;
+    if (lz.site === null) {
+      if (survey.site === 'poor') shapeFail(where, 'is null on a POOR planet');
+      return;
+    }
+    if (survey.site === 'good') shapeFail(where, 'names a site on a GOOD planet');
+    const site = survey.sites.find((candidate) => candidate.id === lz.site);
+    if (site === undefined) shapeFail(where, `names '${lz.site}', which the survey does not have`);
+    if (taken.has(site.id)) shapeFail(where, `names '${site.id}', which another LZ stands on`);
+    taken.add(site.id);
+    if (site.kind === 'wreck') shapeFail(where, `names the wreck '${site.id}'`);
+    if (lz.centreRad !== site.centreRad || lz.halfWidthRad !== site.halfWidthRad || lz.widthKm !== site.widthKm || lz.ground !== site.ground) {
+      shapeFail(where, `stands on '${site.id}' with another centre, width or ground`);
+    }
+  });
+  const labels = lzs.map((lz) => lz.label);
+  survey.moves.forEach((move, i) => {
+    if (!labels.includes(move.lz) || !ids.includes(move.site)) shapeFail(`${at}.survey.moves[${i}]`, `names ${move.lz} → ${move.site}, which the slice does not have`);
+  });
+  survey.reveals.forEach((reveal, i) => {
+    if (!ids.includes(reveal.site)) shapeFail(`${at}.survey.reveals[${i}]`, `names '${reveal.site}', which the survey does not have`);
+  });
+  if ((landing.sitesRev as number) < survey.moves.length) shapeFail(`${at}.sitesRev`, `is ${String(landing.sitesRev)}, under the ${survey.moves.length} moves made`);
+}
+
 function checkLanding(reference: Readonly<Record<string, unknown>>): Check {
   const like = likeReference(reference);
   return (value, at) => {
     like(value, at);
     checkAutodrop((value as Record<string, unknown>).autodrop, `${at}.autodrop`);
+    checkSurvey(value as Record<string, unknown>, at);
   };
 }
 
@@ -695,11 +777,35 @@ function migrateRunSave4(save: Record<string, unknown>): Record<string, unknown>
   return next;
 }
 
+// 5 → 6 (slice 6, one bump for the two tracks: slice-6-plan R1, §2.2). No v5 world ever played a POOR planet as POOR (every
+// planet played GOOD until slice 6), so:
+// • a world payload's landing slice: each LZ on no site, the survey at rest on a GOOD planet (createSurveyState('good', [])),
+//   no move made (sitesRev 0);
+// • each ended ship's result (run.ships[], in a world and a boot payload) records no survey (null);
+// • a BEAM save into a POOR ship rebuilds the ship from its boot at the resume, and then plays POOR (plan R2): intended.
+function migrateRunSave5(save: Record<string, unknown>): Record<string, unknown> {
+  const next = structuredClone(save);
+  const payload = isRecord(next.payload) ? next.payload : null;
+  const slices = payload !== null && isRecord(payload.slices) ? payload.slices : null;
+  if (slices !== null && isRecord(slices.landing)) {
+    const landing = slices.landing;
+    if (Array.isArray(landing.lzs)) for (const lz of landing.lzs.filter(isRecord)) lz.site = null;
+    landing.survey = createSurveyState('good', []);
+    landing.sitesRev = 0;
+  }
+  if (payload !== null && isRecord(payload.run) && Array.isArray(payload.run.ships)) {
+    for (const ship of payload.run.ships.filter(isRecord)) ship.survey = null;
+  }
+  next.saveVersion = 6;
+  return next;
+}
+
 export const RUN_SAVE_MIGRATIONS: Readonly<Record<number, (save: Record<string, unknown>) => Record<string, unknown>>> = {
   1: migrateRunSave1,
   2: migrateRunSave2,
   3: migrateRunSave3,
   4: migrateRunSave4,
+  5: migrateRunSave5,
 };
 
 export function migrateRunSave(save: Record<string, unknown>): Record<string, unknown> {
