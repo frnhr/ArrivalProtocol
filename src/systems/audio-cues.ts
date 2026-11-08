@@ -1,3 +1,4 @@
+// Slice 7a: the lead owns this file (slice-7-plan.md §4.1): Track CARD and Track NIGHT change cues in the 7 ENDING block.
 // Slice 6: the lead owns this file (docs/phase3/impl/slice-6-plan.md §5); a track may change the cue on its own events'
 // lines only (the 4c, 4d and 4e blocks, slice 5's resident block, and slice 6's survey block, Track SITES's to tune, at the
 // end of mountAudioCues).
@@ -292,7 +293,12 @@ export function mountAudioCues(store: Store<GameState>): () => void {
     on('root-unlocked', () => play('rootOpen')),
     on('duel-spike', ({ progress }) => play('duelSpike', { progress })),
     on('root-deleted', () => play('rootDeleted')),
-    on('finale-chosen', ({ choice }) => play(choice === 'purge' ? 'purgeTone' : 'mergeChord')),
+    // Slice 7a: the cue is step 1's (a cold tone for PURGE, the converging chord for MERGE); SPARE's and the rest are in the
+    // 7 ENDING block below.
+    on('finale-chosen', ({ hollow }) => {
+      if (hollow === 'purge') play('purgeTone');
+      else if (hollow === 'merge') play('mergeChord');
+    }),
 
     // === Slices 4c–4e (slice-4cde-plan §2.5): existing cues only; a track may change the cue on its own events' lines.
 
@@ -373,6 +379,18 @@ export function mountAudioCues(store: Store<GameState>): () => void {
     on('site-revealed', () => play('siteSting')),
     on('lz-moved', () => play('siteSet')),
     // --- end of 6 survey ---
+
+    // === Slice 7a (slice-7-plan §2.5): existing cues only; Track CARD may change the FINALE's cues on these lines (its
+    // spareNotes and sunsetRumble, audio.ts), Track NIGHT the epilogue's.
+
+    // --- 7 ENDING: the card's hold as each step shows; SPARE's two notes moving apart (CARD's spareNotes; the cold tone
+    // until then); step 2's stamp (CARD's sunsetRumble on SUNSET); a tick per epilogue line. The root's sleep plays nothing
+    // of its own: 'root-deleted' already tears.
+    on('finale-open', () => play('finaleHold')),
+    on('finale-chosen', ({ hollow }) => { if (hollow === 'spare') play('purgeTone'); }),
+    on('finale-step2', () => play('stampHit', { heavy: false })),
+    on('epilogue-line', () => play('typeTick', { voice: 'sys' })),
+    // --- end of 7 ENDING ---
   ];
   offs.push(onPostTick(() => playedThisTick.clear()));
 

@@ -1,5 +1,8 @@
+// Slice 7a: the lead owns this file (slice-7-plan.md §2.5, §4.1): the `7 ENDING` block is complete; Track CARD and Track
+// NIGHT change cues in audio-cues.ts's block only.
 // Slice 6: the lead owns this file (docs/phase3/impl/slice-6-plan.md §2.5, §5); every slice 4c–4e, slice 5 and slice 6 event is
 // named in the blocks at the end of GameEvents, and a track emits its own. Others ask by message.
+import type { HollowFate, YouChoice } from '@/types/ending';
 import type {
   FiringSource, ViewMode, TransitHit, AutoburnPhase, AutoburnEnd, DealOutcome, VerbKind,
 } from '@state/schema';
@@ -190,7 +193,8 @@ export interface GameEvents {
   // WP11 part 2: one of the duel's glitch spikes while the root's DELETE runs; `progress` is how far it is (0..1).
   'duel-spike': { progress: number };
   'root-deleted': Record<string, never>;
-  'finale-chosen': { choice: 'purge' | 'merge'; restoredInPlace: number; restoredHalf: number };
+  // Slice 7a (R7): step 2's confirm applied both choices; `restored`, the pods MERGE gave back (7a: in place, R15).
+  'finale-chosen': { hollow: HollowFate; you: YouChoice; restored: number };
   // Phase 3 slice 2 (04 §3.4–§3.8, 05 §3.2). A beam seed landed behind its target at the boot (the ECC seeds line, the
   // `seedLand` thunk); a seed was deleted (`beam`: a beam seed, whose `words` it may say, at most once a ship); TRACE went
   // up at a ship's end.
@@ -276,6 +280,21 @@ export interface GameEvents {
   // assignSite moved an LZ from one site to another (the stamp `LZ-B → SITE 4`).
   'lz-moved': { lz: string; from: string; to: string };
   // --- end of 6 SURVEY ---
+
+  // === Slice 7a (docs/phase3/impl/slice-7-plan.md §2.5): the FOUNDATION named every event; Track FINALE emits the FINALE's
+  // (systems/finale.ts), Track NIGHT the epilogue's. 'finale-chosen' (above) is widened.
+
+  // --- 7 ENDING ---
+  // The root's DELETE left its last block and HOLLOW sleeps there (R6: no bites, seeds or verbs; the landing goes on).
+  'finale-asleep': Record<string, never>;
+  // The FINALE's card shows a step (R6, R7): step 1 as it opens (and after [ESC] BACK), step 2 after step 1's pick. Emitted
+  // with the two steps built (ENDINGS_BUILT.twoStep); WP11's one-step card plays its own hold.
+  'finale-open': { step: 1 | 2 };
+  // Step 2 was confirmed (with the two steps built; 'finale-chosen' follows the apply in the same moment).
+  'finale-step2': { you: YouChoice };
+  // The epilogue typed its line `n` (0-based; Track NIGHT, components/run/Epilogue.ts).
+  'epilogue-line': { n: number };
+  // --- end of 7 ENDING ---
 }
 
 export type ZoneForecast = 'hit' | 'clear' | 'unknown';

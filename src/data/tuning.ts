@@ -1395,11 +1395,7 @@ export const ROOT_GONE_GLITCH_MS = 900;
 // MERGE: it comes into you. A long, rolling burst that settles into the faint floor the next run keeps.
 export const MERGE_GLITCH_LEVEL = 0.5;
 export const MERGE_GLITCH_MS = 1600;
-// The choice card (FinaleChoice): it comes up this long after the root's end (AI s, like every story timer since the WP11
-// review: the collapse and `> 047. wait.` are seen first), and its buttons take clicks and keys only this long after it
-// is up, so a kid still clicking the root (or mashing a key) never chooses by accident.
-export const FINALE_CHOICE_DELAY_SEC = 1.4;
-export const FINALE_CHOICE_ARM_SEC = 1.6;
+// The choice card's delay and arming moved to slice 7a's FINALE block (FINALE_OPEN_DELAY_SEC, FINALE_STEP_ARM_SEC).
 // The typed ending (§9 WP11 item 5): at most this many lines, typed at FINALE_ENDING_CPS (slower than the TERMINAL: it is
 // the story's last words) with FINALE_ENDING_GAP_SEC between lines and CONTROL's chime before its line, then held for
 // FINALE_ENDING_HOLD_SEC to be read. The WAKE REPORT waits for it (finalePending); a click or a key ends it early.
@@ -2021,7 +2017,9 @@ export const RUN_SAVE_KEY = 'arrival-protocol/run/v1';
 // segment types, DriverSegment.lockedBy and a nullable LogChoice.timeoutAiSec (RUN_SAVE_MIGRATIONS[4]).
 // 6 (slice 6, one bump for the two tracks: slice-6-plan R1): landing.survey and landing.sitesRev, LzState.site and the widened
 // LzGround, run.ships[].survey (RUN_SAVE_MIGRATIONS[5]).
-export const RUN_SAVE_VERSION = 6;
+// 7 (slice 7a, one bump for its three tracks and 7b: slice-7-plan R2): the FINALE's two steps (hollow.finale v7),
+// landing.lastLanding (7b's, always null), FeaturedColonist.line, run.lastUnit.ending (RUN_SAVE_MIGRATIONS[6]).
+export const RUN_SAVE_VERSION = 7;
 // The archive (§4.5; 02 §3.12: v2 holds the arm, the trail, colonies, routes, events and traces). From slice 3c the key
 // stays `meta/v2` and versions migrate in place (systems/meta.ts migrateMeta, META_VERSION the record's); a new key is
 // only ever a deliberate reset. v1's key (phase 2's archive) was the one such reset: never written, read only to detect it
@@ -2029,7 +2027,9 @@ export const RUN_SAVE_VERSION = 6;
 export const META_STORAGE_KEY = 'arrival-protocol/meta/v2';
 export const META_V1_KEY = 'arrival-protocol/meta/v1';
 // 3 (Track SAVE): `mergeBonus` retired (plan risk 3); a version-2 record (the foundation's) migrates in place.
-export const META_VERSION = 3;
+// 4 (slice 7a, slice-7-plan R3, R16): lastUnit.ending (the ending record), endingsSeen widened to the seven pieces, `traces`
+// dropped (a trace lasts one run: the last unit's ending is the next run's traces).
+export const META_VERSION = 4;
 // The save suites print a world point's size, INFO only, against this (3c plan risk 8: an estimated 150–250 KB, the log
 // the largest part; past it the lever is keeping only the last TERMINAL entries).
 export const SAVE_SIZE_INFO_BYTES = 400_000;
@@ -2400,3 +2400,66 @@ export const SITES_RIM_BAR_CELLS = 36;
 export const SURVEY_WEDGE_REACH = 0.9;
 
 // --- end of 6 SITES ------------------------------------------------------------------------------------------------------
+
+
+// =====================================================================================================================
+// --- Phase 3 slice 7a, THE ENDING (docs/phase3/impl/slice-7-plan.md §2.6). The FOUNDATION wrote every number below; each
+// track edits values only in its own block (7a FINALE, 7a CARD, 7a NIGHT), and a new number goes at the end of its own
+// block. The blocks are kept apart by these banners so that the tracks' hunks never touch. RUN_SAVE_VERSION (7) and
+// META_VERSION (4) stay with the save's keys above (3c SAVE).
+// =====================================================================================================================
+
+// --- 7a lead ---------------------------------------------------------------------------------------------------------
+
+// THE EMPTY SHIP (R8, [FRAN]): SPARE's and SUNSET's price is the final ship in orbit after its landing, no pod aboard, with
+// at least this much FUEL as shown. It equals STAR_FUEL_PCT (checked below), so the FUEL bar's one ★ notch is SUNSET's
+// notch too (05 §3.7: "the FUEL bar's ★ notch at 20% also reads SUNSET"). To reverse: any other number, and a second notch.
+export const EMPTY_SHIP_FUEL_PCT = 20;
+// The verdict after step 2 (R13): at most this many typed lines, step 1's command echo, step 2's and CONTROL's verdict. The
+// story moved to the epilogue: telling it twice a minute apart flattens both.
+export const FINALE_VERDICT_MAX_LINES = 3;
+// The epilogue's header year is the final ship's year plus this (05 §3.7: the final colony needs a few decades to have a
+// story): `3060 · FORTY YEARS ON`.
+export const EPILOGUE_YEARS = 40;
+// At most this many lines (05 §3.7); with more colonies than fit, the oldest fold into one `+ 2 OLDER COLONIES` line.
+export const EPILOGUE_MAX_LINES = 16;
+// A colony's people double every this many years (05's 2^(age/100): RIVERSIDE's 600 become 120,000 in 760 years, the
+// sample's figure), shown to this many significant figures (a population is an estimate, not a count).
+export const EPILOGUE_DOUBLING_YEARS = 100;
+export const EPILOGUE_SIG_FIGS = 2;
+
+if (EMPTY_SHIP_FUEL_PCT !== STAR_FUEL_PCT) throw new Error(`tuning: EMPTY_SHIP_FUEL_PCT ${EMPTY_SHIP_FUEL_PCT} is not STAR_FUEL_PCT ${STAR_FUEL_PCT} (one ★ notch, R8)`);
+
+// --- end of 7a lead --------------------------------------------------------------------------------------------------
+
+// --- 7a FINALE (Track FINALE: systems/finale.ts, systems/ending-rules.ts) ---------------------------------------------
+
+// The card comes up this long after the landing settled (R6; AI s, like every story timer since the WP11 review: the
+// tear and HOLLOW's line are seen first). Was FINALE_CHOICE_DELAY_SEC.
+export const FINALE_OPEN_DELAY_SEC = 1.4;
+// Each step's options take clicks and keys only this long after it is up, so a kid still clicking the root (or mashing a
+// key) never chooses by accident. Was FINALE_CHOICE_ARM_SEC.
+export const FINALE_STEP_ARM_SEC = 1.6;
+// STAY's sub-row lists at most this many ships (R9: one per ship of an 8-ship run), keys 1–8.
+export const STAY_PICK_MAX = 8;
+
+// --- end of 7a FINALE ------------------------------------------------------------------------------------------------
+
+// --- 7a CARD (Track CARD: components/run/FinaleChoice.ts) --------------------------------------------------------------
+
+// The card fades out over this long once its verdict is done (ending.css; was FinaleChoice's CLOSE_FADE_MS).
+export const FINALE_CARD_FADE_MS = 600;
+
+// --- end of 7a CARD --------------------------------------------------------------------------------------------------
+
+// --- 7a NIGHT (Track NIGHT: components/run/Epilogue.ts, FinalCard.ts) --------------------------------------------------
+
+// The epilogue types at the typed ending's pace (= FINALE_ENDING_CPS, 05 §4: the story's last words are slower than the
+// TERMINAL), with a gap between lines and a hold on the last before it may go on.
+export const EPILOGUE_CPS = 26;
+export const EPILOGUE_LINE_GAP_SEC = 0.5;
+export const EPILOGUE_HOLD_SEC = 3;
+// NEW RUN on the final card is not hit by the key that ended the epilogue.
+export const FINAL_CARD_ARM_SEC = 1.2;
+
+// --- end of 7a NIGHT -------------------------------------------------------------------------------------------------
