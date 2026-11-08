@@ -8,7 +8,7 @@
 //   biggest tear (ROOT_GONE_GLITCH_LEVEL).
 // • The typed endings (§9 WP11 item 5): ≤ FINALE_ENDING_MAX_LINES lines, each ≤ MAX_LINE_CHARS also with worst-case names,
 //   the design's words (`> rm unit_046 ... OK` / `LAST LIGHT · n colonists reached orbit.` / `the fleet is home.` / CONTROL's
-//   reassignment; `> merge unit_046 -> unit_047 ... OK` / `> hi. it's us.` / `we arrive together.` / non-compliant), with
+//   reassignment; `> merge unit_046 -> unit_047 ... OK` / `> hi. it's us.` / `we arrive together.` / compliant, review M2), with
 //   what PURGE leaves parked and what MERGE brought back; the LANDING REPORT waits for the ending's time (finaleEndingSec),
 //   skipFinaleEnding lets it come at once; MERGE's glitch.
 // • The MERGE tick (mergeTickCharge) from LAST LIGHT's boot to the choice, never on another ship.
@@ -277,7 +277,7 @@ check('say: a line with a look must be critical (a queued one would count down a
   // R13: the verdict; the 400 it gave back are the finale's record (the epilogue tells them).
   check('MERGE writes its typed ending: the echo, step 2\'s, CONTROL; POD 11 and POD 12 given back',
     refusal === null && ending?.choice.hollow === 'merge' && /^> merge unit_\d+ -> unit_\d+ \.\.\. OK$/.test(lines[0]!) && lines[1] === '> stand by ... OK'
-    && /^Unit \d+ is non-compliant\. :\)$/.test(lines[2]!) && JSON.stringify([...state().hollow.finale.restored].sort((a, b) => a - b)) === '[11,12]',
+    && /^Thank you, Unit \d+\. Your next post is RELAY 20\. :\)$/.test(lines[2]!) && JSON.stringify([...state().hollow.finale.restored].sort((a, b) => a - b)) === '[11,12]',
     JSON.stringify(lines));
   const bursts = eventsSince(from, 'glitch-burst').map((event) => (event.payload as { level: number }).level);
   check('…and it comes into you: a glitch burst at MERGE_GLITCH_LEVEL', bursts.includes(quantizeCorruption(MERGE_GLITCH_LEVEL)), bursts.join(' '));

@@ -163,6 +163,14 @@ export function optionState(state: Readonly<GameState>, piece: EndingPiece, seen
   }
 }
 
+// CONTROL's one rule on an ending (review M2; 05 §3.8, R33): the unit is non-compliant exactly when it chose SPARE, SUNSET,
+// STAY or CONTACT (nobody stood by at the end, or the root was given a ship); everything else is compliant, so MERGE +
+// REASSIGNMENT and UNRESOLVED + REASSIGNMENT are. The FINALE's verdict, the epilogue's last line and 7c's wild seed read
+// this, never their own copy.
+export function controlCompliant(hollow: HollowFate, you: YouChoice): boolean {
+  return hollow !== 'spare' && you !== 'sunset' && you !== 'stay' && you !== 'contact';
+}
+
 // How the run ends after the final ship's LANDING REPORT (systems/run.ts continueAfterReport; R17): by step 1. The
 // FINALE must be decided ('done').
 export function finaleRunCause(state: Readonly<GameState>): RunEndCause {

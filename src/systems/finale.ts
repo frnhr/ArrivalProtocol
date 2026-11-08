@@ -28,7 +28,7 @@ import { HOLLOW_FINALE, unitDigits } from '@data/hollow-text';
 import { IS_DEV } from '@/env';
 import { formatCount } from '@data/format';
 import { ENDINGS_BUILT } from '@data/endings';
-import { optionState, stayCandidates, endingRecordAt } from '@systems/ending-rules';
+import { optionState, stayCandidates, endingRecordAt, controlCompliant } from '@systems/ending-rules';
 import { FINALE_TEXT } from '@data/finale-text';
 import {
   MERGE_COST_CHARGE, MERGE_DRIVER_INTEGRITY, DRIVER_BLOCKS, GLITCH_BURST_LEVEL, GLITCH_BURST_MS,
@@ -433,12 +433,11 @@ function stepCommand(state: Readonly<GameState>, piece: HollowChoice | YouChoice
 }
 
 // The short verdict (R13; exported for the suites' worst cases): step 1's command echo (none on UNRESOLVED: nothing was
-// chosen), step 2's, then CONTROL's line, compliant only when the unit did as told: it deleted the root (or nothing could:
-// UNRESOLVED) and stands by. MERGE and SPARE disobey `Please delete UNIT-046. :)` (WP11's MERGE verdict); SUNSET, STAY and
-// CONTACT disobey `stand by`.
+// chosen), step 2's, then CONTROL's line by ending-rules controlCompliant (review M2: the epilogue's last line and 7c's wild
+// seed read the same rule).
 export function finaleVerdictLines(state: Readonly<GameState>, hollow: HollowFate, you: YouChoice, stay: number | null): EndingLine[] {
   const unit = state.mission.transmissionNum;
-  const compliant = (hollow === 'purge' || hollow === 'followed') && you === 'reassignment';
+  const compliant = controlCompliant(hollow, you);
   const lines: EndingLine[] = [];
   if (hollow !== 'followed') lines.push({ voice: 'cmd', text: FINALE_TEXT.echo(stepCommand(state, hollow, null)) });
   lines.push({ voice: 'cmd', text: FINALE_TEXT.echo(stepCommand(state, you, stay)) });

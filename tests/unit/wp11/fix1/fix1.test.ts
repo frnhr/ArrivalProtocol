@@ -158,7 +158,7 @@ setCharge(MERGE_COST_CHARGE + 4);
   const lines = seen?.lines.map((line) => line.text) ?? [];
   // R13: the verdict echoes the two commands and CONTROL; who came back is the finale's record (the epilogue tells it).
   check('MERGE: a listener on the phase already sees the typed verdict, and POD 12 given back', refusal === null && seen !== null
-    && /^> merge unit_\d+ -> unit_\d+ \.\.\. OK$/.test(lines[0] ?? '') && lines[1] === '> stand by ... OK' && /non-compliant/.test(lines[2] ?? '')
+    && /^> merge unit_\d+ -> unit_\d+ \.\.\. OK$/.test(lines[0] ?? '') && lines[1] === '> stand by ... OK' && /^Thank you, Unit \d+\./.test(lines[2] ?? '')
     && JSON.stringify(state().hollow.finale.restored) === '[12]', JSON.stringify(lines));
 }
 

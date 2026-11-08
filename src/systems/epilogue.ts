@@ -11,7 +11,7 @@ import type { GameState, RunEndCause, ShipResult } from '@state/schema';
 import type { PodSummary } from '@/types/landing';
 import type { Meta } from '@systems/meta';
 import type { EndingPiece, EndingRecord, HollowFate, YouChoice } from '@/types/ending';
-import { endingRecordOf } from '@systems/ending-rules';
+import { endingRecordOf, controlCompliant } from '@systems/ending-rules';
 import { runEndNext, fleetSlots } from '@systems/run-end';
 import { fleetHome } from '@systems/run-score';
 import { shipSummaryAt } from '@systems/map-run';
@@ -211,7 +211,8 @@ function piecesOf(state: Readonly<GameState>, record: Readonly<EndingRecord>): E
 function controlLine(state: Readonly<GameState>, record: Readonly<EndingRecord> | null): string {
   const unit = state.run.unitNumber;
   if (record === null) return EPILOGUE_TEXT.control.lost(unit);
-  return record.you === 'reassignment' ? EPILOGUE_TEXT.control.compliant(unit) : EPILOGUE_TEXT.control.nonCompliant(unit);
+  // Review M2: the verdict's rule (ending-rules controlCompliant), so CONTROL never says both a minute apart.
+  return controlCompliant(record.hollow, record.you) ? EPILOGUE_TEXT.control.compliant(unit) : EPILOGUE_TEXT.control.nonCompliant(unit);
 }
 
 // The next unit (R20), by the gap the bridging line names (the world update's gap and the time valve's years); none on the

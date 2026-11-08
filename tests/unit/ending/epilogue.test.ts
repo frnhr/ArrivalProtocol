@@ -7,7 +7,7 @@
 //   an LZ (keyed by the bio, PAYOFF_OF), else a mislanded pod's walked-in line, else the boat, else a plain line; the payoff on
 //   its own line when the head and it pass 70; a woken sleeper's line; no-go and unlaunched pods never told;
 // • the fold: at most 16 lines, the oldest colonies folded into `+ n OLDER COLONIES`;
-// • the pieces: each step 1 × each step 2 (MERGE + SUNSET's own piece), CONTROL's last line, the next unit by the gap (0: the
+// • the pieces: each step 1 × each step 2 (MERGE + SUNSET's own piece), CONTROL's last line (the verdict's, review M2), the next unit by the gap (0: the
 //   same year);
 // • the final card: every title by combination (STAY's colony), the rows from endingsSeen (CONTACT absent until built), this
 //   run's pieces, ENDINGS n/6, the bridge, a lost run's cause title; off the run end both models are null.
@@ -24,6 +24,9 @@ import {
   epilogueOf, epilogueModel, finalCardOf, finalCardModel, roundSig, colonyPeople, endingTitle, type EpilogueModel,
 } from '@systems/epilogue';
 import { ENDING_TITLE, EPILOGUE_TEXT, PAYOFF_OF, WALKED_IN } from '@data/epilogue-text';
+import { FINALE_TEXT } from '@data/finale-text';
+import { finaleVerdictLines } from '@systems/finale';
+import { controlCompliant } from '@systems/ending-rules';
 import { ENDINGS_BUILT, builtPieces, HOLLOW_PIECES, YOU_PIECES, type EndingTitleKey } from '@data/endings';
 import { EPILOGUE_MAX_LINES, MAX_LINE_CHARS } from '@data/tuning';
 import { run1Map, WORKED_ROUTE } from '../map/run1-fixture';
@@ -195,6 +198,28 @@ check(`…every line ≤ ${MAX_LINE_CHARS}, at most ${EPILOGUE_MAX_LINES}`, line
   const mergeNone = epilogueOf(endState(WORKED), null, record('merge', 'reassignment'));
   check('…a MERGE with no driver given back: it is part of you; REASSIGNMENT after MERGE keeps a seat',
     texts(mergeNone).includes(EPILOGUE_TEXT.step1.mergeNone('UNIT-046', 'UNIT-047')) && texts(mergeNone).includes(EPILOGUE_TEXT.step2.reassignmentSeat));
+}
+// Review M2: CONTROL's last line in the epilogue is the verdict's, for every ending (ending-rules controlCompliant: SPARE,
+// SUNSET, STAY and CONTACT are non-compliant, everything else compliant, MERGE + REASSIGNMENT included).
+{
+  const st = endState(WORKED);
+  const FATES: readonly HollowFate[] = [...HOLLOW_PIECES, 'followed'];
+  const bad: string[] = [];
+  let combos = 0;
+  for (const hollow of FATES) {
+    for (const you of YOU_PIECES) {
+      if (hollow === 'spare' && you === 'sunset') continue;
+      combos++;
+      const verdict = finaleVerdictLines(st, hollow, you, you === 'stay' ? 0 : null).at(-1)?.text ?? '';
+      const last = texts(epilogueOf(st, null, record(hollow, you))).at(-1) ?? '';
+      const compliant = controlCompliant(hollow, you);
+      const want = compliant ? FINALE_TEXT.verdict.compliant(47) : FINALE_TEXT.verdict.nonCompliant(47);
+      if (last !== `ARRIVAL CONTROL: ${verdict}` || verdict !== want) bad.push(`${hollow}+${you}: ${verdict} / ${last}`);
+    }
+  }
+  check(`CONTROL agrees with itself: the verdict's line and the epilogue's last line, all ${combos} endings (MERGE + REASSIGNMENT compliant)`,
+    combos === 15 && bad.length === 0 && controlCompliant('merge', 'reassignment') && controlCompliant('followed', 'reassignment')
+    && !controlCompliant('spare', 'reassignment') && !controlCompliant('purge', 'stay'), bad.join(' | '));
 }
 {
   const spareStay = epilogueOf(endState(WORKED), null, record('spare', 'stay'));

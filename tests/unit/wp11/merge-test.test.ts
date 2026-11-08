@@ -177,7 +177,8 @@ check('…no block of HOLLOW is left in memory, the memory is whole', !state().m
   && (() => { try { assertMemoryInvariants(state().memory, MEMORY_LAYOUTS.FULL.totalBlocks); return true; } catch { return false; } })());
 // WP12 p3 (the lead's note of 22:40): CONTROL's verdict waits until the typed ending is over (the card types it
 // as its last line); said at the choice, the header's ticker spoiled the ending. Checked below, at the WAKE REPORT.
-const mergeVerdict = (): boolean => state().log.entries.some((entry) => /is non-compliant\. :\)$/.test(entry.text));
+// Review M2: MERGE + REASSIGNMENT is compliant (ending-rules controlCompliant).
+const mergeVerdict = (): boolean => state().log.entries.some((entry) => entry.text === FINALE_TEXT.verdict.compliant(47));
 check('…the finale records it, and the TERMINAL says it; CONTROL waits for the typed ending', JSON.stringify([...state().hollow.finale.restored].sort((a, b) => a - b)) === JSON.stringify([11, 12])
   && !state().hollow.finale.restored.includes(13)
   && state().log.entries.some((entry) => /^> merge unit_\d+ -> unit_\d+ \.\.\. OK$/.test(entry.text))
@@ -192,7 +193,7 @@ const fate13 = podRecord(state(), 13).fate;
 check('the landing went on with POD 11 and POD 12 (down, restored) and reached the LANDING REPORT; POD 13 parked eaten, restorable',
   state().run.phase === 'report' && [11, 12].every((pod) => podRecord(state(), pod).fate.kind === 'down' && podRecord(state(), pod).restored)
   && fate13.kind === 'parked' && fate13.why === 'eaten' && fate13.restorable, `${state().run.phase} ${JSON.stringify(fate13)}`);
-check('…and CONTROL said `Unit 47 is non-compliant. :)` once the typed ending was over', mergeVerdict());
+check('…and CONTROL said `Thank you, Unit 47. …` once the typed ending was over', mergeVerdict());
 // The archive behind the page: a stub that keeps what it is given.
 closeArchive();
 openRunArchive(stubStorage());

@@ -171,8 +171,8 @@ export const EPILOGUE_TEXT = {
   // The next unit (R20), by the launch gap (the bridging line's: the world update's gap and the time valve's years).
   next: (unit: string, gap: number): string => `${unit} came in ${gap} ${plural(gap, 'year', 'years')} behind you, and found your beacons.`,
   nextSameYear: (unit: string): string => `${unit} came in the same year as you, and found your beacons.`,
-  // CONTROL's last line (05 §3.12): thanks for a REASSIGNMENT (and an UNRESOLVED stood by), non-compliant for the rest, and a
-  // run lost on the way.
+  // CONTROL's last line (05 §3.12): thanks for a compliant ending, non-compliant for SPARE, SUNSET, STAY or CONTACT
+  // (systems/ending-rules.ts controlCompliant, the verdict's rule too), and a run lost on the way.
   control: {
     compliant: (unitNo: number): string => `ARRIVAL CONTROL: Thank you, Unit ${unitNo}. Your next post is RELAY 20. :)`,
     nonCompliant: (unitNo: number): string => `ARRIVAL CONTROL: Unit ${unitNo} is non-compliant. :)`,

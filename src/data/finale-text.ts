@@ -77,7 +77,7 @@ export const FINALE_TEXT = {
   stayPick: 'WHICH COLONY?',
   back: '[ESC] BACK',
   // The verdict (R13): each step's command echoed as the TERMINAL runs it (`> rm unit_046 ... OK`), then CONTROL's line:
-  // compliant (thanks) only for PURGE (or UNRESOLVED) with REASSIGNMENT: the unit did as CONTROL told it.
+  // compliant (thanks) unless the ending holds SPARE, SUNSET, STAY or CONTACT (systems/ending-rules.ts controlCompliant).
   echo: (command: string): string => `${command} ... OK`,
   verdict: {
     compliant: (unit: number): string => `Thank you, Unit ${unit}. Your next post is RELAY 20. :)`,
