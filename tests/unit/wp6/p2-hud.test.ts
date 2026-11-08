@@ -19,7 +19,6 @@
 // • the chew follows the total drain (half for one file at rest, full while the engine burns, silent
 //   when paused); the tug's beat follows the boundary speed (16.5 %/s → 8.25 Hz; slower while a burn
 //   doubles the drain) and its pitch the file's integrity.
-import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createHarness6 } from './harness6';
 import { biteClock, reachMarks, miniStripRows, chewLevel, tugTone } from '@systems/hollow-hud';
@@ -35,8 +34,8 @@ import { childRng } from '@systems/rng';
 import { createHollowState, createLandingState } from '@state/initial';
 import { phase2ShipOne } from '../support/hollow-world';
 import { ROOT_BLOCKS } from '@data/tuning';
-import { CLASSIC_FIVE } from '@data/classic-five';
-import { MEMORY_LAYOUTS } from '@data/memory';
+import { layoutOf } from '@data/memory';
+import { fixtureShip } from '../support/arm-ship';
 import { stateFromElements } from '@/types/orbit';
 import type { Segment } from '@/types/segment';
 import {
@@ -88,15 +87,17 @@ function fresh(): void {
 {
   fresh();
   const rows = miniStripRows(state());
-  check('mini-strip: 6 racks, each exactly 64 blocks', rows.length === MEMORY_LAYOUTS.FULL.racks.length && rows.every((cells) => cells.reduce((sum, cell) => sum + cell.blocks, 0) === RACK_BLOCKS),
+  // Track RETIRE: run 1's ARES-VII is COMPACT: five racks (A B C E F), its pod racks B and C (the classic one's B, C, D).
+  const layout = layoutOf(state());
+  check('mini-strip: the class\'s racks (COMPACT: 5), each exactly 64 blocks', rows.length === layout.racks.length && layout.racks.length === 5
+    && rows.every((cells) => cells.reduce((sum, cell) => sum + cell.blocks, 0) === RACK_BLOCKS),
     rows.map((cells) => cells.reduce((sum, cell) => sum + cell.blocks, 0)).join());
   const rackB = rows[1]!;
-  const rackC = rows[2]!;
-  const rackD = rows[3]!;
+  const rest = rows.slice(2, 1 + layout.podRacks.length);
   const kinds = rackB.map((cell) => cell.kind).join();
-  check('mini-strip: rack B is the red root, three drivers (POD 02 hurt), then 32 free blocks; racks C and D are the rest of that gap',
-    kinds === 'hollow,driver,driver-hurt,driver,free' && rackB.at(-1)!.blocks === 32
-    && [rackC, rackD].every((rack) => rack.length === 1 && rack[0]!.kind === 'free' && rack[0]!.blocks === 64 && rack[0]!.segId === rackB.at(-1)!.segId),
+  check('mini-strip: rack B is the red root, three drivers (POD 02 hurt), then 32 free blocks; the other pod rack (C) is the rest of that gap',
+    kinds === 'hollow,driver,driver-hurt,driver,free' && rackB.at(-1)!.blocks === 32 && rest.length === 1
+    && rest.every((rack) => rack.length === 1 && rack[0]!.kind === 'free' && rack[0]!.blocks === 64 && rack[0]!.segId === rackB.at(-1)!.segId),
     rackB.map((cell) => `${cell.kind}:${cell.blocks}`).join(' '));
   check('mini-strip: POD 02 at 44% is the hurt yellow', rackB[2]!.kind === 'driver-hurt' && rackB[2]!.segId === 'driver_pod02');
 
@@ -154,11 +155,13 @@ function fresh(): void {
 // --- HALCYON's rack C: NEXT BITE m:ss, GAP 2 / GAP 1, an eaten block bites on ------------------------------------
 {
   fresh();
-  const ares = CLASSIC_FIVE[0]!;
+  // (run 1's ARES-VII's fresh unit, on a FULL ship: the test HALCYON's racks need rack D)
+  const ares = fixtureShip(0);
   const cfg: HollowDef = { wake: { afterAiSec: 0, coastLeadSec: null }, spreadEverySec: 25, drainPerSec: 3.5, burnMult: 2, landMult: 1.5, seed: null, verbs: null, deal: false, story: 'none' };
   const halcyon: ShipDef = {
     ...ares,
     id: 'halcyon-hud-test',
+    memoryClass: 'FULL',
     memory: {
       ...ares.memory,
       // HALCYON's pod racks with one pod more on each side of the root: POD 05 | GAP 2 | root | GAP 1 | POD 06, POD 07.
@@ -174,6 +177,7 @@ function fresh(): void {
   const wakeAt = state().clock.aiSec + 12;
   h.store.update((d) => {
     d.memory = memory;
+    d.level.memoryClass = 'FULL';
     // The landing slice follows the memory (one record per driver: HOLLOW records an eaten driver on its pod).
     d.landing = createLandingState({ ...halcyon.landing, lzs: [{ label: 'LZ-A', centreDeg: 160, width: 'wide', pods: 7 }] }, memory,
       { finalShip: false, lead: 5, hurt: halcyon.memory.drivers.hurt, planetR: d.level.planet.R });

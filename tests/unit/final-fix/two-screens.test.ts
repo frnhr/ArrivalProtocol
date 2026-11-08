@@ -13,7 +13,6 @@
 // MIND CLEAR), and they do not both ask for a TAB. Also: maxShownSec and the one-shot completion are counted per lesson
 // (director.ts completedOneShots, outlivedOneShots), checked on the real rule table.
 // Usage: node_modules/.bin/tsx --tsconfig tsconfig.json tests/unit/final-fix/two-screens.test.ts
-import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createHarness11 } from '../wp11/harness11';
 import { followDirector } from '../wp2/harness2';
@@ -115,7 +114,8 @@ function playLesson(name: string, amberId: string, blueId: string, retireBy: num
 
 // --- The FIREWALL to place (phase 3 slice 2: on VESPER, the first ship with HOLLOW's root aboard; KESTREL has none) ----
 {
-  h.vesper(7, { hollowAsleep: true });
+  // Track RETIRE: run 1's arm VESPER carries no root of its own (HOLLOW boards at CORMORANT): phase 2's HUNT verdict brings it.
+  h.vesper(7, { hunt: true, hollowAsleep: true });
   for (const kind of ['repair', 'move'] as const) if (!state().run.licences.includes(kind)) installTool(h.store, kind);
   // A healthy Thrust Ctrl: no uncommanded bursts and their alarms on this coast.
   h.store.update((d) => {
@@ -142,7 +142,7 @@ function playLesson(name: string, amberId: string, blueId: string, retireBy: num
 
 // --- VESPER: the COPY lesson ---------------------------------------------------------------------------------------
 {
-  h.vesper(7, { hollowAsleep: true });
+  h.vesper(7, { hunt: true, hollowAsleep: true });
   for (const kind of ['repair', 'move', 'delete'] as const) if (!state().run.licences.includes(kind)) installTool(h.store, kind);
   // A healthy Thrust Ctrl (no uncommanded bursts and their alarms on this coast) and the seeds on their way.
   h.store.update((d) => {

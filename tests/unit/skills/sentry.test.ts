@@ -11,11 +11,12 @@
 //   full Core release or refuse it;
 // • v3 under damage works as v2 (no FIREWALL, still the quick rm); the cap and NO ROOM; the salvage's FIREWALL card hidden
 //   while v3 works, and every other deal unchanged.
-import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createHarness7 } from '../wp7/harness7';
 import { lockOn } from '../landing/harness-landing';
-import { continueAfterReport } from '../support/classic-flow';
+import { continueAfterReport as runContinueAfterReport } from '@systems/run';
+import { setRequest } from '@systems/repository';
+import { setCourseFromDesk } from '../support/desk';
 import { giveSkillFile } from '../support/skills';
 import { phase2HollowOf } from '../support/hollow-world';
 import { armRun, send, toDesk } from '../map/repo-fixture';
@@ -132,7 +133,11 @@ const setSentry = (integrity: number): void => h.store.update((draft) => {
 h.shipAlone(1, 3);
 lockOn(h);
 if (!h.untilPhase('report', 120)) throw new Error(`HALCYON never reached its report (${s().run.phase})`);
-continueAfterReport(h.store);
+// Track RETIRE: on run 1's arm, Rm requested at HALCYON's desk arrives at KESTREL's boot (the classic schedule licensed
+// DELETE at KESTREL's start).
+runContinueAfterReport(h.store);
+setRequest(h.store, 'rm');
+setCourseFromDesk(h.store, WORKED_ROUTE[s().run.map.route.length]!);
 h.transmit();
 let seedId = '';
 h.store.update((draft) => {

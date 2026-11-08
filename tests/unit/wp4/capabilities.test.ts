@@ -4,7 +4,6 @@
 // sets, the reactor's thread share, two copies of one role, and the loud copy table.
 // Slice 1a: Bay Ctrl's `bay` role in Printer Uplink's place, and the drop: no DROP SOLUTION with Nav Plotter dead or
 // missing (01-landing §3.8). Slice 1b: Bay Ctrl's cadence by band and BAY OFFLINE, the drop factors and `uncertain`.
-import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createInitialState } from '@state/initial';
 import type { GameState } from '@state/schema';
@@ -15,7 +14,7 @@ import {
 } from '@systems/capabilities';
 import { hasIntegrity, coreThreads } from '@state/selectors';
 import {
-  ENGINE_POWER_BY_BAND, ENGINE_JITTER_BY_BAND, REACTOR_CAP_BY_BAND, GHOST_BY_BAND, BAY_CADENCE_TAC,
+  ENGINE_POWER_BY_BAND, ENGINE_JITTER_BY_BAND, REACTOR_CAP_BY_BAND, ARM_GHOST_BY_BAND, BAY_CADENCE_TAC,
   SENSOR_FUZZ_KM_PER_POINT, PLOT_STALE_TAC, MAX_LINE_CHARS,
 } from '@data/tuning';
 
@@ -85,13 +84,17 @@ for (const role of CAPABILITY_ROLES) {
     && BAND_COPY['engine-io'].missing === 'NO ENGINE DRIVER');
 
   const ghostAt = (integrity: number) => caps(withIntegrity('thrust-ctrl', integrity)).thrustCtrl.ghost;
-  const noGhost = [100, 80, 79, 60, 50].filter((integrity) => ghostAt(integrity) !== null);
-  check('thrust-ctrl: no ghost at 50 or better', noGhost.length === 0, noGhost.join(','));
+  // Track RETIRE: run 1's arm fires ARM_GHOST_BY_BAND (the limping engine, slice 3b; GHOST_BY_BAND was the classic five's):
+  // nothing at 80 or better, a twitch in the degraded band (what a field REPAIR of Thrust Ctrl reaches).
+  const noGhost = [100, 80].filter((integrity) => ghostAt(integrity) !== null);
+  check('thrust-ctrl: no ghost at 80 or better', noGhost.length === 0, noGhost.join(','));
+  check('thrust-ctrl degraded (79, 60, 50): the arm\'s twitch, 20 tac s mean, amp 0.15', [79, 60, 50].every((integrity) =>
+    JSON.stringify(ghostAt(integrity)) === JSON.stringify(ARM_GHOST_BY_BAND.degraded)) && ghostAt(60)?.meanIntervalTac === 20 && ghostAt(60)?.amp === 0.15);
   // WP12 part 1 (the 200-seed playthrough) retuned §3.3's numbers (failing 25 tac s / 0.15; dead 12 tac s / 0.25 / stick
   // 0.3) to failing 10 tac s / 0.3 and dead 10 tac s / 0.3 / stick 0.3 (tuning.ts GHOST_BY_BAND has the why).
-  check('thrust-ctrl failing: 10 tac s mean, amp 0.3, dur 1.0, no stick (WP12)', JSON.stringify(ghostAt(49)) === JSON.stringify(GHOST_BY_BAND.failing)
-    && ghostAt(31)?.meanIntervalTac === 10 && ghostAt(31)?.amp === 0.3 && ghostAt(31)?.durTac === 1 && ghostAt(31)?.stickChance === 0);
-  check('thrust-ctrl dead: 10 tac s, amp 0.3, stick 0.3 (WP12: never weaker than failing)', ghostAt(24)?.meanIntervalTac === 10 && ghostAt(0)?.amp === 0.3 && ghostAt(10)?.stickChance === 0.3);
+  check('thrust-ctrl failing: 10 tac s mean, amp 0.15, dur 1.0, no stick (the arm\'s limp)', JSON.stringify(ghostAt(49)) === JSON.stringify(ARM_GHOST_BY_BAND.failing)
+    && ghostAt(31)?.meanIntervalTac === 10 && ghostAt(31)?.amp === 0.15 && ghostAt(31)?.durTac === 1 && ghostAt(31)?.stickChance === 0);
+  check('thrust-ctrl dead: 10 tac s, amp 0.15, stick 0.3 (never weaker than failing)', ghostAt(24)?.meanIntervalTac === 10 && ghostAt(0)?.amp === 0.15 && ghostAt(10)?.stickChance === 0.3);
   const noController = caps(without('thrust-ctrl'));
   check('thrust-ctrl missing: engine dead, NO THRUST CONTROLLER', noController.thrustCtrl.band === 'missing'
     && thrustCap(noController) === 0 && engineFault(noController) === 'no-controller' && noController.thrustCtrl.ghost === null);

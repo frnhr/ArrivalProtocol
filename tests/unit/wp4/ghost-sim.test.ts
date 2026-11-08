@@ -8,7 +8,6 @@
 // A lean harness: the store, the clock heartbeat and orbit-sim only, with the warp pinned, so
 // 400 runs of 120 tactical s take seconds. The ship sits on a circular loop at 12,000 km, outside
 // the ring, so nothing locks, crashes or runs dry.
-import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createStore } from '@state/store';
 import type { GameState } from '@state/schema';
@@ -21,10 +20,11 @@ import { choosePace, skipBlockReason } from '@systems/pace';
 import { holdThrottle } from '@systems/flight-controls';
 import { on } from '@systems/events';
 import { hasIntegrity } from '@state/selectors';
-import { GHOST_BY_BAND } from '@data/tuning';
+import { ARM_GHOST_BY_BAND } from '@data/tuning';
 
 // WP12 part 1: the failing controller's spec as tuned (read from the data, not §3.3's numbers).
-const FAILING_GHOST = GHOST_BY_BAND.failing;
+// Track RETIRE: run 1's arm fires ARM_GHOST_BY_BAND (the limping engine, slice 3b); GHOST_BY_BAND was the classic five's.
+const FAILING_GHOST = ARM_GHOST_BY_BAND.failing;
 if (!FAILING_GHOST) throw new Error('ghost-sim: no failing ghost spec');
 
 const TICK = 0.05;
@@ -109,8 +109,12 @@ function stats(warp: number, integrity: number, seeds = SEEDS): Stats {
 
 // --- No ghost from a healthy controller ----------------------------------------------------------------
 {
-  const healthy = [50, 79, 100].map((integrity) => stats(200, integrity, 20).meanEvents);
-  check('ghost: none with Thrust Ctrl at 50 / 79 / 100', healthy.every((mean) => mean === 0), healthy.join(','));
+  // Run 1's arm leaves a twitch in the degraded band (ARM_GHOST_BY_BAND.degraded: what a field REPAIR reaches), none above it.
+  const healthy = [80, 100].map((integrity) => stats(200, integrity, 20).meanEvents);
+  check('ghost: none with Thrust Ctrl at 80 / 100', healthy.every((mean) => mean === 0), healthy.join(','));
+  const twitch = [50, 79].map((integrity) => stats(200, integrity, 20).meanEvents);
+  check('ghost: …the degraded band (50 / 79) only twitches, less often than a failing controller fires', twitch.every((mean) => mean > 0
+    && mean < stats(200, 31, 20).meanEvents), twitch.join(','));
 }
 
 // --- Sticky bursts, the pace, SKIP and a fix ------------------------------------------------------------

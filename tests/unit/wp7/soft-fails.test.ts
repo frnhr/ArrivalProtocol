@@ -7,7 +7,6 @@
 // • BEAM OUT: refused on run 1's ship 1, without comms, and on a ship that is not doomed; offered on an
 //   impact within 20 tactical s or a tank that can't lift ▼ out of the planet; cancelled by the kid or by
 //   the path clearing the planet; when it fills before the impact the ship is ABANDONED (+2 hits).
-import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createHarness7 } from './harness7';
 import { lossPlan, startBeamOut, cancelBeamOut } from '@systems/run';
@@ -19,7 +18,7 @@ import { getPrediction } from '@systems/predict';
 import { getByRole, hasIntegrity } from '@state/selectors';
 import { LINES } from '@data/script';
 import { BEAM_OUT_TAC, BEAM_OUT_EXTRA_HITS, EMERGENCY_EXTRA_HITS, EMERGENCY_CORE_HIT, CORE_RESET_INTEGRITY } from '@data/tuning';
-import { CLASSIC_HOPS } from '@data/classic-five';
+import { hitsLanding } from '@systems/map-hop';
 import type { SegmentRole } from '@/types/segment';
 
 const h = createHarness7(5, { soulsFound: false });
@@ -75,9 +74,9 @@ function bootToFlight(): void {
   const hits = state().run.arrival?.hits ?? [];
   const toll = hits[0];
   const coreHits = hits.slice(1).filter((hit) => hit.role === 'core').reduce((sum, hit) => sum + hit.from - hit.to, 0);
-  check('…next ship (HALCYON), the Core −25 first in the log, then the 3 + 3 transit hits',
+  check('…next ship (HALCYON), the Core −25 first in the log, then the hop\'s hits (less ECC) + 3',
     state().run.shipIndex === 1 && toll?.role === 'core' && toll.from === coreBefore && toll.to === coreBefore - EMERGENCY_CORE_HIT
-    && hits.length === 1 + CLASSIC_HOPS[1]!.transitHits + EMERGENCY_EXTRA_HITS, JSON.stringify(hits));
+    && hits.length === 1 + hitsLanding(state().run.map.route.at(-1)!.hop!, EMERGENCY_EXTRA_HITS), JSON.stringify(hits));
   check('…the Core arrives at 100 − 25 − its transit hits', Math.abs(integrity('core') - (coreBefore - EMERGENCY_CORE_HIT - coreHits)) < 1e-9,
     `${integrity('core')}`);
 }
@@ -139,6 +138,16 @@ function bootToFlight(): void {
   h.store.update((d) => { if (onVesper.type === 'core') onVesper.integrity = 0.5; d.ui.memoryRev++; });
   h.stepUntil(() => state().run.coreLost, 5);
   check('Core 0 on VESPER (not the last ship any more): EMERGENCY again', lossPlan(state()).kind === 'transmit', JSON.stringify(lossPlan(state())));
+  continueAfterLoss(h.store);
+  h.transmit();
+  bootToFlight();
+  // Track RETIRE: run 1's worked route has CORMORANT between VESPER and LAST LIGHT: its Core eaten is an EMERGENCY too.
+  const onCormorant = getByRole(state(), 'core')!;
+  infectNow(h.store, onCormorant);
+  h.store.update((d) => { if (onCormorant.type === 'core') onCormorant.integrity = 0.5; d.ui.memoryRev++; });
+  h.stepUntil(() => state().run.coreLost, 5);
+  check('Core 0 on CORMORANT (not the last ship either): EMERGENCY again', state().level.shipName === 'CORMORANT' && lossPlan(state()).kind === 'transmit',
+    JSON.stringify(lossPlan(state())));
   continueAfterLoss(h.store);
   h.transmit();
   bootToFlight();
@@ -204,7 +213,7 @@ function bootToFlight(): void {
     state().run.phase === 'transmit' && state().run.ships[0]?.outcome === 'abandoned' && state().run.transit?.extraHits === BEAM_OUT_EXTRA_HITS,
     `${state().run.phase} ${JSON.stringify(state().run.transit)}`);
   h.transmit();
-  check('…HALCYON arrives with 3 + 2 transit hits', (state().run.arrival?.hits.length ?? 0) === CLASSIC_HOPS[1]!.transitHits + BEAM_OUT_EXTRA_HITS,
+  check('…HALCYON arrives with its hop\'s hits (less ECC) + 2', (state().run.arrival?.hits.length ?? 0) === hitsLanding(state().run.map.route.at(-1)!.hop!, BEAM_OUT_EXTRA_HITS),
     `${state().run.arrival?.hits.length}`);
   check('the progress readout is null when not beaming', beamOutProgress(state()) === null);
 }

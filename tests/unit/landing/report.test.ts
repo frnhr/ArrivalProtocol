@@ -1,18 +1,28 @@
 // Slice 1a, Track UI: the LANDING REPORT's view model (src/systems/landing-report.ts). Pure: worlds from the foundation's
 // constructors with each pod's fate written by hand (no store, no mounts, nothing flown).
-import '../support/classic-world';
 import { check, finish } from './checks';
 import type { GameState } from '@state/schema';
 import type { LaunchRecord, Place, PodFate, Touch } from '@/types/landing';
 import { createInitialState } from '@state/initial';
+import { createStore } from '@state/store';
+import { phase2Ship } from '../support/hollow-world';
 import { beginLanding } from '@state/actions';
 import { podPoints } from '@systems/landing-rules';
 import { landingReportModel } from '@systems/landing-report';
 import { isDriver } from '@state/selectors';
 import { HARD_WORDS_POOL } from '@data/souls';
 
+// Track RETIRE: run 1's arm ships, HALCYON and KESTREL with phase 2's racks and landings (support/hollow-world phase2Ship:
+// LZ-A 3 / LZ-B 2, and three WIDE sites of 4 for 12 pods), the splits these reports were written for; run 1's own split
+// theirs differently (4 / 1, and 3 / 3 for 6).
 function world(shipIndex: number): GameState {
-  const state = createInitialState({ seed: 11, shipIndex, carried: 'fresh' });
+  const built = createInitialState({ seed: 11, shipIndex, carried: 'fresh' });
+  let state = built;
+  if (shipIndex === 1 || shipIndex === 2) {
+    const store = createStore<GameState>(built);
+    phase2Ship(store, shipIndex);
+    state = store.getState();
+  }
   state.run.phase = 'report';
   state.burn.status = 'locked';
   beginLanding(state);

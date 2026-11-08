@@ -237,7 +237,7 @@ function doneForNextShip(state: Readonly<GameState>): string[] {
 export function startRun(store: Store<GameState>, seed: number, lineage: Readonly<RunLineage>, world: RunMapState['world'] = store.getState().run.map.world): void {
   const map = world === 'arm' ? createRunMap(lineage, seed) : classicRunMap(seed, 0, lineage.wave);
   resetWorldForShip(store, {
-    phase: 'title', run: withRunMap(createRunState(seed, 'title', 0, lineage), map), carried: null,
+    phase: 'title', run: withRunMap(createRunState(seed, 'title', 0, lineage, undefined, map), map), carried: null,
     threat: nominalShipThreat(0), freshLog: true, done: [],
   });
 }

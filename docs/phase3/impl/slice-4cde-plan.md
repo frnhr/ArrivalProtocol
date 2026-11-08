@@ -1884,31 +1884,51 @@ Track RETIRE, on branch `retire` from baffe52. OPEN-DECISIONS items 85–88 hold
 - Every moved suite keeps its classic check count. The one exception is `wp11/p2/views`, which gained a check: the
   fixture's five passed results are present and all in orbit.
 - **Deleted:** `map/memory-refactor`, the classic five's digest. `map/arm-parity` pins run 1's arm in its place.
-- **37 suites are left**, by what stops them on the arm:
-  - **VESPER as phase 2's HOLLOW ship (16).** The arm's VESPER is calm, its POD 12 leads, and it has no SWAP. Each suite
-    needs `vesper({ hunt })` or a given verdict, the kit or the tools given, and its pods re-measured. Some of their
-    checks test the classic licence schedule itself (COPY at the boot, SWAP at the first ghost), which 03 §6 retires; those
-    go with it.
+- **Third pass** (after the merge at c945e6b): 28 more moved.
+  - **VESPER as HOLLOW's ship**, 15 of the 16:
     - wp10: `copy-test`, `deal-test`, `p2/views`, `vesper-flow`, `vesper-sim`, `skip-through`.
-    - `final-fix/two-screens`, `landing/engine-landing`, `landing/review-fixes`.
-    - `threat/arrival-story`, `ui/threat-models`, `wp12/p3/swap-pairing`, `wp12/fix1/fixes`.
-    - Ghost: `lead2/ghost-warp`, `wp4/capabilities`, `wp4/ghost-sim`. The arm's ghost bands are `ARM_GHOST_BY_BAND`.
-  - **Hand-built FULL memories (7):** `wp7/p2-models`, `wp8/fix1/fixes`, `wp6/hollow-ship2`, `wp6/p2-hud`, `wp5/racks`,
-    `threat/beam-seeds`, `threat/disguise`.
-    - Each builds a memory from `CLASSIC_FIVE` or `CLASSIC_HOPS` itself, or assumes 384 blocks.
-    - `wp8/fix1` also plays several runs through the archive. Its run 2+ is a fresh roll, so its "HALCYON" is a TIGHT ship
-      there.
-  - **The classic route's numbers (14):** hop lengths and hits, 22 LY, LAST LIGHT as ship 5, HALCYON's two LZs.
-    - wp7: `soft-fails`, `fix1/run-end-and-boot`.
-    - wp8: `run-flow`, `draft`.
-    - `wp11/p2/purge-fleet`, `wp12/p3/repair-renewed`, `wp4/flight-coupling`.
-    - `opening/ghost-placement`, `opening/calm-ships`, `skills/sentry`.
-    - landing: `flow`, `pace-landing`, `report`, `review-1b`.
-- The tier passed at every commit, in 198–234 s on four workers with other work on the machine.
+    - `final-fix/two-screens`, `landing/engine-landing`, `landing/review-fixes`, `threat/arrival-story`, `ui/threat-models`,
+      `wp12/p3/swap-pairing`.
+    - The ghost suites: `lead2/ghost-warp`, `wp4/capabilities`, `wp4/ghost-sim`.
+  - **Hand-built FULL memories**, 5 of 7: `wp5/racks`, `wp6/hollow-ship2`, `wp6/p2-hud`, `threat/beam-seeds`,
+    `threat/disguise`.
+  - **The classic route's numbers**, 8 of 14: `landing/report`, `wp4/flight-coupling`, `wp12/p3/repair-renewed`,
+    `wp7/soft-fails`, `wp8/run-flow`, `wp11/p2/purge-fleet`, `wp8/draft`, `skills/sentry`.
+  - New fixtures:
+    - `support/arm-ship fixtureBoardedVerdict`, HOLLOW forced aboard as `__ap.board` makes it. `harness7 shipAlone` takes
+      it as `{ boarded }`.
+    - `harness10 vesper({ tools })`.
+    - The HUNT fixture's tools are spared while untried, like tools that arrived on the ship.
+  - What changed with the arm:
+    - The arm's ghost spec is `ARM_GHOST_BY_BAND`: amp 0.15, a twitch in the degraded band, nothing once the orbit is
+      locked.
+    - SKIP through bursts is flown with a Swap file aboard. The arm refuses SKIP while the engine limps without one.
+    - The deal names POD 12 on the arm VESPER, whose slot is between POD 11 and POD 12.
+    - The forced boarding is checked on the beam into CORMORANT.
+- **Checks deleted, as tests of the classic licence schedule** (03 §6 retires it; the lead's decision):
+  - `wp10/vesper-flow`: "…SWAP is licensed with it", the SWAP licence at the first burst. The lesson and the defender now
+    get a Swap file given.
+  - `wp10/copy-test`: "COPY is licensed at VESPER's first moment" and "…CONTROL says so after its hello", the COPY licence
+    at the boot and its line. The arm's tools arrive by delivery, and `map/run1-route` checks the DELIVERY lines.
+- **A check re-pinned to the arm's rule, not deleted:** `landing/engine-landing`'s "the engine fires by itself during the
+  landing … [L] refused ENGINE FIRING".
+  - On the arm the controller fires before the lock and stays quiet through the landing (`capabilities.ts ghostSpecOf`,
+    slice 3b). The check now says that.
+  - ENGINE FIRING's refusal of [L] is still checked by the suite's SPACE scenario.
+- **Checks re-expressed as the arm's twin:** `wp9/seed-test`, `threat/beam-seeds` and `skills/sentry` each checked that
+  "DELETE is licensed at KESTREL's start". Each now checks DELETE arriving at KESTREL's boot, requested at HALCYON's desk.
+- **9 suites are left**, each needing its own re-measurement:
+  - `wp12/fix1/fixes`: an `alarm-eaten` line leads the COPY lesson's lead-in on the arm VESPER. The cause is not found.
+  - `wp7/fix1/run-end-and-boot`: the arm's boot sends the arrival's flashes twice, and its ECC line is the arm's.
+  - `wp7/p2-models` and `wp8/fix1/fixes`: their models' numbers are the classic route's (22 LY, link 120). `wp8/fix1` also
+    plays runs 2+, whose arm is a fresh roll.
+  - `opening/calm-ships`: classic-only data, the licence table and the layer table of the classic five.
+  - `opening/ghost-placement`, `landing/flow`, `landing/review-1b`: the HALCYON and KESTREL landings.
+  - `landing/pace-landing`: on the arm, the late launch at the window's end does not fill LZ-B.
 
 ### Phase 3, not started
 
-- Gate: the 37 above are gone.
+- Gate: the 9 above are gone.
 - Then delete:
   - `classic-five.ts` and `classic-slots.ts`;
   - `useClassicFixture` / `inFixtureWorld` (state/initial.ts), `support/classic-world`, `support/classic-fixture` and the 17

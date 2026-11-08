@@ -4,7 +4,6 @@
 //   the copy keeps the engine going; with the original gone, SWAP on Thrust.alt (or on the copy) hands the job over.
 // • The strip asked for `SWAP in Thrust.alt` with the Swap file eaten. Now it asks for the Swap file's REPAIR first
 //   while one is in memory, and with none says the engine can't fire.
-import '../../support/classic-world';
 import { check, finish } from '../../wp1/harness';
 import { createHarness10 } from '../../wp10/harness10';
 import { actionDelete, actionSwap, actionCopy } from '@state/actions';
@@ -30,7 +29,8 @@ const biggestFree = (): FreeSegment =>
 
 // --- COPY the controller, DELETE the original, SWAP in Thrust.alt --------------------------------------------------
 {
-  h.vesper(21, { hollowAsleep: true });
+  // Track RETIRE: with COPY, SWAP and DELETE aboard (the classic schedule licensed them on VESPER; the arm's come by request).
+  h.vesper(21, { hollowAsleep: true, tools: ['copy', 'swap', 'delete'] });
   h.stepUntil(() => state().run.licences.includes('swap') && state().run.licences.includes('copy'), 120);
   const original = getByRole(state(), 'thrust-ctrl') as ShipSegment;
   check('setup: a COPY of the controller starts', actionCopy(h.store, original, { regionSegIds: [biggestFree().id], col: 0 }) === null);
@@ -59,7 +59,7 @@ const biggestFree = (): FreeSegment =>
 
 // --- A lost controller with the Swap file hurt, then gone ------------------------------------------------------------
 {
-  h.vesper(22, { hollowAsleep: true });
+  h.vesper(22, { hollowAsleep: true, tools: ['copy', 'swap', 'delete'] });
   h.stepUntil(() => state().run.licences.includes('swap'), 120);
   check('DELETE Thrust Controller starts', actionDelete(h.store, getByRole(state(), 'thrust-ctrl')!) === null);
   while (getOps().length > 0) h.step();

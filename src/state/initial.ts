@@ -157,11 +157,18 @@ export function createRunSkills(): RunSkillState {
 // `shipIndex` (ship 1: nothing reported, HOLLOW not aboard; a later ship built alone: as if flown with TRACE 0); with
 // `threat` (a fixture's own verdict for the ship) it is the nominal run before the ship with that verdict applied, so
 // run.threat never disagrees with the HOLLOW the ship is built with.
+// `map`: the run's own map at ship 1 (NEW RUN's, the page's, __ap.runNumber's; the caller places its traces, withRunMap),
+// so no fixture map is built for it: a lineage that carries a stored arm for another run than its wave (__ap.runNumber)
+// must never reach createRunMap here.
 export function createRunState(
   seed: number, phase: RunPhase, shipIndex: number, lineage: Readonly<RunLineage>, threat?: Readonly<ShipThreat>,
+  map?: Readonly<RunMapState>,
 ): RunState {
-  const classic = fixtureWorld === 'classic';
-  const stop = classic ? null : fixtureStop(seed, shipIndex, lineage);
+  if (map !== undefined && (shipIndex !== 0 || map.route.length !== 1)) throw new Error('createRunState: a map is given for ship 1 only');
+  const classic = fixtureWorld === 'classic' && map === undefined;
+  const stop = classic ? null : map !== undefined
+    ? { map: structuredClone(map) as RunMapState, slots: [map.route[0]!.slot], ...nominalAlong(map, [map.route[0]!.slot]) }
+    : fixtureStop(seed, shipIndex, lineage);
   // Every stop before the fixture's ship has a result (passed in orbit, nobody landed) and its earning, so the route, the
   // results, the trail and RUN END's world update agree (systems/arm-fixture.ts skippedResult, as __ap.route records them).
   const passed = stop === null ? [] : stop.slots.slice(0, -1).map((slot, i) => skippedResult(stop.map, slot, i + 1));
@@ -440,7 +447,7 @@ export function createDealState(): HollowState['deal'] {
 // harness build their state here, so a test flies exactly the flight the page opens on.
 export function createInitialState(opts: InitialStateOpts): GameState {
   const phase = opts.phase ?? 'flight';
-  const created = createRunState(opts.seed, phase, opts.shipIndex ?? 0, opts.lineage ?? FIRST_RUN_LINEAGE, opts.threat);
+  const created = createRunState(opts.seed, phase, opts.shipIndex ?? 0, opts.lineage ?? FIRST_RUN_LINEAGE, opts.threat, opts.map);
   if (opts.map !== undefined && (opts.map.route.length !== 1 || (opts.shipIndex ?? 0) !== 0)) {
     throw new Error('createInitialState: a map is given for ship 1 only (a later arm ship is reached by its hop)');
   }

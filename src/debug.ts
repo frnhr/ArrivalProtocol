@@ -955,8 +955,9 @@ function debugRunNumber(store: Store<GameState>, run: number): void {
   if (!(Number.isInteger(run) && run >= 1)) throw new Error(`__ap.runNumber(${run}): a run number is a whole number ≥ 1`);
   const lineage = { ...archiveLineage(), wave: run };
   const seed = newRunSeed();
+  const map = createRunMap({ wave: run }, seed);
   resetWorldForShip(store, {
-    phase: 'title', run: withRunMap(createRunState(seed, 'title', 0, lineage), createRunMap({ wave: run }, seed)), carried: null,
+    phase: 'title', run: withRunMap(createRunState(seed, 'title', 0, lineage, undefined, map), map), carried: null,
     threat: nominalShipThreat(0), freshLog: true, done: [],
   });
 }

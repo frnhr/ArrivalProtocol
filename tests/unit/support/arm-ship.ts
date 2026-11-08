@@ -12,6 +12,9 @@ import type { CarriedRacks } from '@data/memory';
 import { currentSlot, currentShip, createRunMap } from '@systems/map-run';
 import { mapAlong, nominalAlong, workedRouteTo, authoredSlot } from '@systems/arm-fixture';
 import { freshUnitRacks } from '@systems/carry';
+import type { ShipThreat } from '@/types/threat';
+import { mapFacts, nominalRouteThreat } from '@systems/map-facts';
+import { planThreat, threatInputFor, NO_FINAL_TRACES } from '@systems/threat-plan';
 import { createInitialState } from '@state/initial';
 import { giveTools } from '../map/repo-fixture';
 
@@ -45,4 +48,17 @@ export function fixtureFreshRacks(index: number, ship: ShipDef = fixtureShip(ind
   const hop = map.route.at(-1)!.hop;
   if (hop === null) throw new Error('fixtureFreshRacks: ship 1 meets a fresh unit by itself');
   return freshUnitRacks(ship, hop.linkBlocks, nominalAlong(map, slots).verdict);
+}
+
+// The verdict HOLLOW's forced boarding gives authored ship `index` on the worked route (as `__ap.board` makes it: the ship
+// treated as one hop from a final ship, M3, on the nominal route's threat): the classic five's VESPER played this (ARRIVAL
+// with WALLS folded in, a 10-block root); run 1's arm forces the boarding at CORMORANT instead, so a suite that means
+// "the ship HOLLOW boards" builds it here.
+export function fixtureBoardedVerdict(index: number, seed = 1): ShipThreat {
+  const slots = workedRouteTo(authoredSlot(index));
+  if (slots.length < 2) throw new Error('fixtureBoardedVerdict: ship 1 is never boarded');
+  const map = mapAlong(createRunMap({ wave: 1 }, seed), slots);
+  const before = nominalRouteThreat(map, slots.slice(0, -1));
+  const facts = { ...mapFacts(map, slots[slots.length - 2]!, slots[slots.length - 1]!, slots.length), oneHopFromFinal: true };
+  return planThreat(threatInputFor({ ...before, aboard: false, age: 0 }, facts, false, NO_FINAL_TRACES));
 }

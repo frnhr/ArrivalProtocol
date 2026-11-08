@@ -11,8 +11,8 @@
 // • the minors: FUEL noted at the end of the landing (N3), the drop cache keyed on the orbit epoch and ω (N4), LOAD NEXT
 //   and END LANDING refusals (N7), RUN END's NOBODY WOKE judged on pods down (N2);
 // • issue 5: on a fresh unit VESPER's tool-hunting seed borders a tool (the pooled receiver's hunting ground).
-import '../support/classic-world';
 import { check, finish } from './checks';
+import { fixtureShip } from '../support/arm-ship';
 import { phase2HollowOf } from '../support/hollow-world';
 import type { ShipThreat } from '@/types/threat';
 import { lockOn } from './harness-landing';
@@ -42,7 +42,7 @@ import { podRecord } from '@systems/landing-rules';
 import { DRIVER_RULES, RUN_END_NOBODY_LANDED } from '@data/script';
 import { HOLLOW_STORY, HOLLOW_FINALE } from '@data/hollow-text';
 import { LANDING_NONE_LEFT_SEC } from '@data/tuning';
-import { classicShip, CLASSIC_HOPS } from '@data/classic-five';
+import { CLASSIC_HOPS } from '@data/classic-five';
 import { isAiFile } from '@state/selectors';
 import type { DriverSegment } from '@/types/segment';
 import { nominalShipThreat } from '@systems/threat-plan';
@@ -52,10 +52,11 @@ const state = () => h.store.getState();
 
 // The ship alone, locked in the middle of its ring, its tutorial asks already met (the hurt-driver lesson would pause
 // nothing here, but keeps the strip quiet).
-function landingOn(ship: number, seed = 5): void {
+function landingOn(ship: number, seed = 5, opts: { boarded?: boolean; kit?: boolean } = {}): void {
   if (ship === 0) h.newRun(seed);
-  else h.shipAlone(ship, seed);
-  h.store.update((draft) => { draft.director.done.push(...DRIVER_RULES.map((rule) => rule.id)); });
+  else h.shipAlone(ship, seed, opts);
+  // (and the landing's dot and split lessons, met before: run 1's arm plays them on a ship alone too)
+  h.store.update((draft) => { draft.director.done.push(...DRIVER_RULES.map((rule) => rule.id), 'lesson-pods-dot', 'lesson-split'); });
   lockOn(h);
   h.stepFor(0.2);
 }
@@ -138,9 +139,10 @@ const huntOnVesper = (): void => { h.store.update((draft) => { draft.hollow.cfg 
 }
 
 // --- 2. The undecided scripted fight holds the report (review: END LANDING first skipped `> ...047?`) ------------------
-// Slice 2: the scripted fight is ARRIVAL's, on the ship HOLLOW boards (VESPER), no longer ARES-VII's.
+// Slice 2: the scripted fight is ARRIVAL's, on the ship HOLLOW boards (VESPER), no longer ARES-VII's. Track RETIRE: run 1's
+// arm VESPER with HOLLOW forced aboard (the arm forces it at CORMORANT; support/arm-ship fixtureBoardedVerdict).
 {
-  landingOn(3);
+  landingOn(3, 5, { boarded: true });
   const end = h.wall() + 30;
   while (state().hollow.scriptTargetId === null && h.wall() < end) h.step();
   const targetId = state().hollow.scriptTargetId;
@@ -165,7 +167,9 @@ const huntOnVesper = (): void => { h.store.update((draft) => { draft.hollow.cfg 
     for (const seg of draft.memory) if (seg.type === 'driver') setIntegrity(seg, 10);
     for (const seg of draft.memory) if (seg.type === 'redundancy') seg.used = 0;
   });
-  h.step();
+  // A second for the strip to take the new row (Track RETIRE: on run 1's arm HALCYON a WAIT row stood first, and the
+  // strip holds a shown line a moment before a new one replaces it).
+  h.stepFor(1);
   const shown = h.shown();
   check('HALCYON, every driver at 10% and no REPAIR CHARGE: the strip says L12 (NO POD CAN LAUNCH), not L11 or WAIT',
     !repairPossible(state()) && shown?.id === 'landing-L12', `${shown?.id}: ${shown?.text}`);
@@ -176,7 +180,7 @@ const huntOnVesper = (): void => { h.store.update((draft) => { draft.hollow.cfg 
 
 // --- N6. The root's DELETE from a selector (LAST LIGHT's duel) ------------------------------------------------------
 {
-  landingOn(4);
+  landingOn(4, 5, { kit: true });
   h.stepFor(0.2);
   const root = theRoot(state().memory);
   check('LAST LIGHT: the duel opens, the root is deletable, its DELETE not running', state().hollow.finale.phase === 'duel' && root !== null
@@ -206,7 +210,7 @@ const huntOnVesper = (): void => { h.store.update((draft) => { draft.hollow.cfg 
 // --- 3. L0 and 'all-pods-down' when some pods were parked ------------------------------------------------------------
 {
   // LAST LIGHT: two pods launched and down, END LANDING parks the rest: the duel's wait does not say EVERY POD IS DOWN.
-  landingOn(4);
+  landingOn(4, 5, { kit: true });
   h.stepFor(0.2);
   forceLandAllButFirst();
   endLanding(h.store);
@@ -350,7 +354,7 @@ function forceLandAllButFirst(): void {
   const freshFiles = [...FRESH_UNIT_RACK_E, ...FRESH_UNIT_RACK_F]
     .filter((item): item is Exclude<typeof item, { free: number }> => !('free' in item)).map((item) => structuredClone(item) as Segment);
   const huntPacket = packUnit(freshFiles, CLASSIC_HOPS[VESPER]!.linkBlocks, []);
-  const carried = layoutCarried(huntPacket, huntPacket.chargeCarried, classicShip(VESPER), hunt).racks;
+  const carried = layoutCarried(huntPacket, huntPacket.chargeCarried, fixtureShip(VESPER), hunt).racks;
   const world = createInitialState({ seed: 4, shipIndex: VESPER, carried, threat: hunt });
   const memory = world.memory;
   const starts = segmentStarts(memory);
@@ -368,7 +372,7 @@ function forceLandAllButFirst(): void {
   const files = [...FRESH_UNIT_RACK_E, ...FRESH_UNIT_RACK_F]
     .filter((item): item is Exclude<typeof item, { free: number }> => !('free' in item)).map((item) => structuredClone(item) as Segment);
   const packet = packUnit(files, 120, []);
-  const halcyon = layoutCarried(packet, packet.chargeCarried, classicShip(1), nominalShipThreat(1)).racks.segs;
+  const halcyon = layoutCarried(packet, packet.chargeCarried, fixtureShip(1), nominalShipThreat(1)).racks.segs;
   check('…and HALCYON\'s unit is still laid out back to back (no free run before the charge)',
     halcyon.findIndex((seg) => seg.type === 'free') > halcyon.findIndex((seg) => seg.type === 'redundancy'));
 }

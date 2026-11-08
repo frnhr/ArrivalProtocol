@@ -15,8 +15,8 @@
 //   so), FUEL TRIM widens the Δv budget +15% on arrival (none below 50%; eaten mid-ship it keeps this ship's
 //   budget and gives none on the next arrival);
 // • a FIREWALL can be MOVEd next to HOLLOW's root and holds that side when HOLLOW wakes; it can't be copied.
-import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
+import { fixtureShip } from '../support/arm-ship';
 import { createHarness7 } from './../wp7/harness7';
 import { draftCards, draftEntries, UPGRADES, BASE_WHY, type DraftContext, type UpgradeId, type DraftCardId } from '@data/upgrades';
 import { dealDraft, draftContext, pickCard, ownedUpgrades, PREVIEW_ID } from '@systems/draft';
@@ -32,13 +32,13 @@ import { chargeLeft, getAiCore, coreThreads, effectiveToolVersion, upgradeFiles,
 import { repairRatePerSec } from '@data/fs-tools';
 import { assertMemoryInvariants, segmentStarts } from '@systems/memory-ops';
 import { TOOL_REFUSAL } from '@data/tool-text';
-import { classicShip, CLASSIC_HOPS } from '@data/classic-five';
+import { CLASSIC_HOPS } from '@data/classic-five';
 import {
   MAX_LINE_CHARS, DRAFT_CARDS, FUEL_TRIM_DV_BONUS_FRAC, CHARGE_CARD_BLOCKS, FIREWALL_BLOCKS, REPAIR_V2_VERSION, CHARGE_ARRIVAL_FLOOR,
 } from '@data/tuning';
 import type { Segment, DriverSegment, FreeSegment, UpgradeSegment } from '@/types/segment';
 import { plantHalcyonRoot } from '../support/hollow-world';
-import { MEMORY_LAYOUTS, rackStartOf } from '@data/memory';
+import { layoutOf, rackStartOf } from '@data/memory';
 
 const none: Record<UpgradeId, number> = { firewall: 0, 'repair-v2': 0, 'thread-plus': 0, charge: 0, 'fuel-trim': 0, cycles: 0 };
 // The base context has no sign of trouble at all (a fresh unit's 36 charge, most of the FUEL left): every card
@@ -132,8 +132,8 @@ const ever = (context: DraftContext, id: UpgradeId, seeds = 1000): boolean => {
 // --- The cards in the run ------------------------------------------------------------------------------------
 const h = createHarness7(21, { soulsFound: true });
 const state = () => h.store.getState();
-const halcyon = classicShip(1);
-const memoryValid = (): boolean => { try { assertMemoryInvariants(state().memory, MEMORY_LAYOUTS.FULL.totalBlocks); return true; } catch { return false; } };
+const halcyon = fixtureShip(1);
+const memoryValid = (): boolean => { try { assertMemoryInvariants(state().memory, layoutOf(state()).totalBlocks); return true; } catch { return false; } };
 
 // Ship 1, run 1, the simulation already used: a crash goes to EMERGENCY TRANSMIT (TRANSMIT in a few ticks).
 // `prepare` runs on ship 1 before the crash (licences, damage).
@@ -271,7 +271,7 @@ function pick(id: UpgradeId): void {
   h.transmit();
   const trims = upgradeFiles(state().memory, 'fuel-trim');
   check('FUEL TRIM arrives as a 2-block upgrade file in rack E, and works (caps.upgrades)', trims.length === 1
-    && segmentStarts(state().memory)[state().memory.indexOf(trims[0]!)]! < rackStartOf('F', MEMORY_LAYOUTS.FULL) && capabilitiesNow(state()).upgrades['fuel-trim'] === 1);
+    && segmentStarts(state().memory)[state().memory.indexOf(trims[0]!)]! < rackStartOf('F', layoutOf(state())) && capabilitiesNow(state()).upgrades['fuel-trim'] === 1);
   check('…HALCYON\'s Δv budget is +15% (FUEL 100% is worth more)', Math.abs(state().level.dvBudgetKmS - halcyon.flight.dvBudgetKmS * (1 + FUEL_TRIM_DV_BONUS_FRAC)) < 1e-9,
     `${state().level.dvBudgetKmS} km/s`);
   const trim = trims[0]! as UpgradeSegment;

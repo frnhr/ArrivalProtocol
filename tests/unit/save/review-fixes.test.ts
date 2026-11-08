@@ -328,6 +328,20 @@ function run2Arm(): NonNullable<Meta['arm']> {
   try { finalReport(store); continueAfterReport(store); } catch (error) { ended = (error as Error).message; }
   check('…and the routed run ends (RUN END, the update, the archive)', ended === '' && state().run.phase === 'end' && archiveMeta().lastUnit?.number === 47
     && archiveMeta().arm?.run === 2, ended);
+  // e2e run-flow's bug (Track RETIRE's fixture world): __ap.runNumber(n) on a page whose archive holds the next run's arm
+  // (run 2 here) built a fixture map from that stored arm with the wave set to n, and createRunMap threw.
+  const runNumber = (globalThis as unknown as { window: { __ap: { runNumber: (run: number) => void } } }).window.__ap.runNumber;
+  const runs: string[] = [];
+  for (const run of [1, 3, 2, 1]) {
+    try {
+      quiet(() => runNumber(run));
+      runs.push(`${run}:${state().run.wave}:${state().run.map.run}:${state().run.phase}`);
+    } catch (error) {
+      runs.push(`${run}: ${(error as Error).message}`);
+    }
+  }
+  check('__ap.runNumber across runs (1, 3, 2, 1) with run 2\'s arm stored: each a fresh title on its own run\'s map, no throw',
+    runs.join() === '1:1:1:title,3:3:3:title,2:2:2:title,1:1:1:title', runs.join(' | '));
 }
 
 finish();

@@ -11,7 +11,6 @@
 // • HALCYON's boot has no ghost either (it is LAST LIGHT's).
 // Then a page "reload" mid-run 2: the leftover run is 'abandoned' at HALCYON, and run 3's ghost says so at HALCYON's boot
 // (not ship 1's), once (KESTREL's boot has none).
-import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createHarness7 } from '../wp7/harness7';
 import { receiveTransmission, skipBoot } from '@systems/boot';
@@ -93,7 +92,12 @@ crashOn();
 h.transmit();
 h.stepUntil(() => state().run.phase === 'flight', 20);
 check('…EMERGENCY TRANSMIT on to VESPER', state().level.shipName === 'VESPER' && stored().activeRun?.shipName === 'VESPER');
-// WP11: VESPER is no longer the last ship either: one more EMERGENCY, to LAST LIGHT (the flagship), where the run ends.
+// Track RETIRE: run 1's worked route has CORMORANT after VESPER: one more EMERGENCY, to CORMORANT.
+crashOn();
+h.transmit();
+h.stepUntil(() => state().run.phase === 'flight', 20);
+check('…EMERGENCY TRANSMIT on to CORMORANT', state().level.shipName === 'CORMORANT' && stored().activeRun?.shipName === 'CORMORANT');
+// WP11: and on to LAST LIGHT (the flagship), where the run ends.
 crashOn();
 h.transmit();
 h.stepUntil(() => state().run.phase === 'flight', 20);
@@ -114,7 +118,9 @@ check('NEW RUN: UNIT-048 · WAVE 2, the last unit on the run, HOLLOW is UNIT-031
 const titleLine = LINES.titleUnit({
   ...WORST_CASE_VARS, unit: state().mission.transmissionNum, wave: state().mission.wave, distanceLy: solLy(END_SLOTS[0]!), year: state().run.map.startYear,
 });
-check('…the title line says it', titleLine === 'UNIT-048 · YEAR 2300 · FINAL SHIP 180 LY OUT', titleLine);
+// Track RETIRE: run 2 is the world update's arm (its start year after run 1's gap, its own ships' names); the classic five
+// started every run in 2300 with the same five.
+check('…the title line says it', titleLine === `UNIT-048 · YEAR ${state().run.map.startYear} · FINAL SHIP 180 LY OUT` && state().run.map.startYear >= 2300, titleLine);
 const souls = driversInMemory(state());
 const families = souls.map((soul) => soul.family);
 check('ship 1 is reseeded: none of run 1\'s families, still 3 pods',
@@ -141,7 +147,7 @@ check('…and HOLLOW stays unnamed (no root on ship 1 to rename, risk 11)',
 h.stepUntil(() => said().filter((entry) => entry.speaker === 'mind-sys').length >= 3 || state().run.phase !== 'boot', 10);
 const bootLines = said().filter((entry) => entry.speaker === 'mind-sys').map((entry) => entry.text);
 check('then the boot: UNPACKING UNIT-048, the host line (3 PODS · 600 COLONISTS), the ECC line',
-  bootLines[0] === '> UNPACKING UNIT-048 ... 100%' && bootLines[1] === hostLine('ARES-VII', 3, 600) && /^> ECC:/.test(bootLines[2] ?? ''),
+  bootLines[0] === '> UNPACKING UNIT-048 ... 100%' && bootLines[1] === hostLine(state().level.shipName, 3, 600) && /^> ECC:/.test(bootLines[2] ?? ''),
   bootLines.join(' | '));
 check('…and REPAIR is licensed in the boot (both Repair files in memory)', state().run.licences.includes('repair')
   && state().memory.filter((seg) => seg.type === 'fs-tool' && seg.fsTool === 'repair').length === 2 && state().run.phase === 'boot');
@@ -180,6 +186,8 @@ const hollowLines = said().filter((entry) => entry.speaker === 'hollow').map((en
 check('HOLLOW said nothing on ship 1, not even the ghost (no fight on a calm ship; `remembers` moved to its arrival)',
   hollowLines.length === 0 && !state().run.hollowNamed && !state().run.ghostSpoken, hollowLines.join(' | '));
 
+// The run's second ship (run 2's arm names its own: in place of the classic five's HALCYON).
+let secondShip = '';
 // --- HALCYON on run 2: no ghost --------------------------------------------------------------------------------------
 {
   const from = state().log.entries.length;
@@ -188,19 +196,21 @@ check('HOLLOW said nothing on ship 1, not even the ghost (no fight on a calm shi
   continueAfterReport(h.store);
   h.transmit();
   h.stepUntil(() => state().run.phase === 'flight', 15);
+  secondShip = state().level.shipName;
   const ghostly = said(from).filter((entry) => entry.speaker === 'hollow' && entry.text.startsWith('> hi '));
   check('HALCYON\'s boot on run 2 has no ghost line either (run 1 was lost on LAST LIGHT: it speaks there)',
     ghostly.length === 0 && state().run.shipIndex === 1 && !state().run.ghostSpoken);
 }
 
 // --- A reload mid-run 2: abandoned, and run 3's ghost says so ----------------------------------------------------------
-check('mid-run 2 the archive holds the run in progress (HALCYON)', stored().activeRun?.unit === 48 && stored().activeRun?.shipName === 'HALCYON');
+check('mid-run 2 the archive holds the run in progress (its second ship)', secondShip !== '' && stored().activeRun?.unit === 48 && stored().activeRun?.shipName === secondShip,
+  `${secondShip} / ${stored().activeRun?.shipName}`);
 closeArchive();
 const reopened = openRunArchive(() => storage);
 // Slice 3c: the page's open sequence abandons the run in progress when no run save resumes it (the classic world never saves).
 abandonActiveRun();
 check('the next page load finds it left: lastUnit UNIT-048, abandoned at HALCYON, written back',
-  reopened === 'ok' && stored().lastUnit?.number === 48 && stored().lastUnit?.cause === 'abandoned' && stored().lastUnit?.shipName === 'HALCYON'
+  reopened === 'ok' && stored().lastUnit?.number === 48 && stored().lastUnit?.cause === 'abandoned' && stored().lastUnit?.shipName === secondShip
     && stored().activeRun === null);
 newRunFromArchive(13);
 check('run 3 is UNIT-049 · WAVE 3, and HOLLOW is UNIT-038 (the second relay stranger)', state().run.unitNumber === 49 && state().run.wave === 3 && JSON.stringify(state().run.hollowUnits) === '[38]');
@@ -223,7 +233,7 @@ check('…ship 1\'s boot has no ghost (it was abandoned at HALCYON)', !said().so
   const fromKestrel = state().log.entries.length;
   h.transmit();
   h.stepUntil(() => state().run.phase === 'flight', 20);
-  check('…KESTREL\'s boot has none: the ghost speaks once a run', state().level.shipName === 'KESTREL'
+  check('…the third ship\'s boot has none: the ghost speaks once a run', state().run.shipIndex === 2
     && !said(fromKestrel).some((entry) => entry.speaker === 'hollow') && state().run.ghostSpoken);
 }
 closeArchive();
