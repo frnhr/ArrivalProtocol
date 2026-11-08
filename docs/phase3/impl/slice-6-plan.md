@@ -1334,3 +1334,90 @@ and §2.3's module state are corrected in place).
 - **The lead:** now owns `GroundTrack.ts` and `ToolsTabs.ts` beyond SITES's marked lines (B1, M6). **m12:** the SITES dock
   item and window are in `index.html`, hidden while `body:not(.survey)`; no e2e scenario iterates dock items today, so
   nothing moves, but a later one that does must skip `survey-only` items.
+
+## Deviations (Track SWATH)
+
+Recorded by the SWATH agent (branch `swath-6`, from 0b93e6e). §2.8 and §2.9 are built in `systems/survey.ts` and
+`systems/survey-model.ts`, with the words in `data/swath-text.ts` and the strip row in `data/survey-rules.ts`; both gates are
+raised (`SURVEY_BUILT.poor`, then `SKILL_TREE.survey.built` 3) with R23's sentry edit applied as given. No saved field and no
+save bump. No tuning value moved.
+
+### What is built
+
+- **The tick** runs on two clock hooks. The game tick maps: it knows the game time the tick covered, so a step of a period
+  or more (a long SKIP) maps the whole rim. The post tick runs in every phase: it reconciles the thread, puts the machine
+  at rest outside a mapping tick (`lastRad` null), says CONTROL's boot quip at the first flight tick, rates what v2+ has
+  found (R11), and emits `'survey-state'` on a change (`lastRunning`, the one module variable, reset with the world).
+- **The thread (R8, m4):** claimed with `{ yieldable: true }` only while `threadsTotal() − threadsBusy() ≥ 2`, reconciled
+  each tick with `holdsThread`, let go when the Core runs fewer than 2 threads, when it is paused, done, off, or at v3.
+- **Finding and rating:** a site is found when its centre's cell is mapped (`survey-model cellOf`); at v2+ every found site
+  is rated, latched (R11), and a bad site an LZ stands on is revealed by the swath (`by: 'survey'`). The first pod down on a
+  bad ground nobody knew reveals it (`by: 'touchdown'`), SURVEY aboard or not, with the echo's tail.
+- **`assignSite`** with every refusal (R10, m5), `toggleSurveyPause`, `surveyStatus`, `surveyRunning`, `swathHalfRad`,
+  `bestSwap`, the debug bodies (`__ap.survey.map`, `.set`, `.pause`).
+
+### Deviations
+
+1. **`sweptCells` takes an optional fifth argument, `fullTurn`** (default false): a long SKIP's whole turn can't be told
+   from its two angles. Four-argument callers are unchanged.
+2. **More pure exports in `survey-model.ts`:** `cellOf` (the find rule), `surveyWantsThread` (the claim rule), `knownBad`
+   and `surveySwap` (the strip row's LZ and site). SITES may read them.
+3. **`assignRefusal`'s order** is `closed`, `not-found`, `wreck`, `same`, `too-small`, `taken`, `landing-over`,
+   `pods-down`, `falling`, `window-open`: `same` comes early, so the pill on an LZ's own site reads `LZ-B IS ON SITE 4`, not
+   a landing refusal. CONTROL's guesses are never `not-found` (they are known from the boot). It throws on an LZ or a site
+   the ship does not have (on a GOOD planet `closed` comes first). `closed` also covers the boot and a desk; `landing-over`
+   covers the LANDING REPORT and a lost ship. **m5** needs no new refusal: a held GO LOWER for the LZ reads `window-open`
+   (`LZ-B'S WINDOW IS OPEN`). `falling` checks the pod's `aimLz` and `pendingTouchdowns`'s placement.
+4. **`'site-found'` is emitted for guesses too** (the swath finds them, and v2 rates them); `first` is true only for the
+   ship's first candidate. The TERMINAL types that first candidate and every wreck. The wreck's line names it by number
+   (`> SURVEY: SITE 4 IS WRECKAGE · AN OLD POD. NOT OURS.`), since `siteLabel` of a wreck already says WRECKAGE.
+5. **`PLANET MAPPED · n SITES` and `DONE · n SITES` count the candidates and wrecks found** (`foundSites`, the record's
+   `found`): CORMORANT says 5.
+6. **`surveyRunning`:** `'done'` comes before the phase check, so the SITES header keeps saying DONE after the landing;
+   `'off'` while the clock is paused, as the contract says.
+7. **CONTROL's reveal quip** is said once per bad site (`reveals` is the guard); no `lines` flag was added.
+8. **`surveyStatus`** is null (the plain row: its version, OFF or GONE) when SURVEY does not work and when `surveyRunning` is
+   `'off'` (the boot, a desk, a paused clock). `SITE DATA GOOD · IDLE` shows only when SURVEY works on a GOOD planet.
+9. **`landing-text.ts`:** the tail is one line (a call of the same template without `revealing`, plus the tail, so the
+   switch is untouched) and one import (`SWATH_TEXT`, a data module: no cycle).
+10. **The strip row** (`survey-swap`, R22) needs a live phase, the landing not ended, no window open and `surveySwap`; its
+    template renders its worst case with no state (as `resident-rules.ts`), and the SWATH words block checks it.
+11. **A lead line moved:** `survey/foundation.test.ts:396–398` checked that `surveyRunning` and `swathHalfRad` answer
+    neutrally (`'off'`, 0) until SWATH builds them. SWATH's build breaks that by design, so the check now pins the built
+    contract (`'off'` on a GOOD planet; 0, ±20°, ±40°). The lead may prefer other words.
+12. **R8's flow case** takes SURVEY's thread with ops-core `reserveThread('autoburn', { preempt: true })`, the very call
+    AUTOBURN's claim line makes, rather than flying AUTOBURN to its claim.
+13. **R23's churn:** none beyond `skills/sentry.test.ts:110–111` in the quick tier. `wp12/playthrough` plays the classic
+    five (all GOOD): on 24 seeds at full depth its table is identical to 0b93e6e's, and its LITERAL and SLOPPY `every run
+    ends` FAILs (21 and 9 stuck, `printing on LAST LIGHT`) are at 0b93e6e too.
+14. **The sweep** (`survey/survey-sweep.test.ts`, BALANCE_ONLY, about 9 minutes on one core) reaches each POOR ship by its
+    shortest route with no flight before it and heals its files, so the numbers are the site's. Its v1 kid is the plan's
+    (a NARROW guess goes to the widest found candidate), and v2/v3 take `bestSwap`. The "kid who reacts to a touchdown
+    reveal" is not built: without SURVEY an LZ can't be moved (`closed`), so a reaction is only over-filling the other LZ,
+    which the strip-following kid never does. A pod a resident locks for good keeps the landing open with no strip row
+    asking for END LANDING; the sweep's kid ends it (PROVIDENCE).
+
+### The sweep's numbers (42 POOR ships, seeds 1–10, every flight to its report)
+
+| | Q (points / aboard) | vs GOOD | landed | hard pods | cycles | mapped at the capture |
+|---|---|---|---|---|---|---|
+| GOOD (same ships) | 93.9% | — | 93.4% | 0.00 | 5.57 | — |
+| POOR, no SURVEY | 71.3% | −22.6 | 91.6% | 3.38 | 4.14 | — |
+| v1 | 75.4% | −18.6 | 94.5% | 2.95 | 4.38 | 33–43% (mean 39) |
+| v2 | 79.9% | −14.0 | 92.4% | 1.93 | 4.64 | 33–43% (mean 39) |
+| v3 | 80.9% | −13.0 | 92.4% | 1.86 | 4.71 | 44–54% (mean 51) |
+
+- R3's expectation holds for no SURVEY (−22.6, at the top of the −12 to −25 band, about 1.4 cycles). v2 does **not** reach
+  "within 3% of GOOD": it is −14.0.
+- **Why (a finding for the lead):** the swath is under the ship (01 §3.13), but in a landing orbit the drop dot leads the
+  ship by about 80° (CORMORANT: 75–83° measured). An LZ the approach did not sweep therefore gets its first window about 60°
+  (v1/v2) or 40° (v3) before the swath reaches it, and the strip's kid launches into it then: v2 found the bad guess before
+  any pod in 20 of 42 ships, v3 in 21; in the other half the first touchdown showed it, and an LZ with a pod down can't
+  move. Where the swath came first, v2/v3 matched GOOD. Ways out, all the lead's or Fran's: map around the drop dot too
+  during the landing; a landing row that holds a window while SURVEY v2+ runs and the LZ's ground is unknown (`SURVEY
+  HASN'T SEEN LZ-B — [F] NEXT PASS`); or let an LZ move off a bad ground with pods down (the pods stay where they landed).
+- FUEL at ORBIT LOCK is 29.1% with the thread (v1, v2) against 28.7% without: the 75% THRUST LIMIT costs nothing here.
+- **Review m6:** 0 verb moments skipped and 0 AI s of lock waits with SURVEY's thread held, at every version. Verbs are
+  the FINALE's only (`data/threats.ts`) and a final ship is GOOD, so SURVEY never holds a thread where a verb could be
+  skipped; no corrupted resident's due lock met a Core SURVEY had filled.
+- **R16:** 0 SURVEY/SENTRY ties at the 58 desks of these routes.
