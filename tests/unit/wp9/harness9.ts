@@ -21,6 +21,7 @@ import { capabilitiesNow } from '@systems/capabilities';
 import { followDirector } from '../wp2/harness2';
 import type { Segment } from '@/types/segment';
 import { phase2Ship } from '../support/hollow-world';
+import { giveWorkedKit } from '../support/arm-ship';
 import { classicShip } from '@data/classic-five';
 
 export const KESTREL = 2;
@@ -28,6 +29,9 @@ export const KESTREL = 2;
 export interface KestrelOpts {
   // The ship's own arrival damage (Sensor Interp to 45%: PATH UNCERTAIN). Off: the fresh unit's 78% (≈).
   arrivalDamage?: boolean;
+  // The worked route's tools by KESTREL (MOVE, DELETE: support/arm-ship WORKED_KIT; the arm only), as the classic schedule
+  // licensed them there.
+  kit?: boolean;
   // HOLLOW put to sleep for good (a flight suite measures the flight, not the fight).
   hollowAsleep?: boolean;
   // Sensor Interp healed to 100 (exact path) before the flight starts.
@@ -97,6 +101,7 @@ export function createHarness9(seed = 1, opts: { soulsFound?: boolean } = {}): H
       }
       base.store.update((d) => { Object.assign(d, fresh); });
       resetWorld();
+      if (kestrelOpts.kit) giveWorkedKit(base.store);
       if (kestrelOpts.phase2Hollow) phase2Ship(base.store, KESTREL);
       if (kestrelOpts.hollowAsleep) base.store.update((d) => { d.hollow.phase = 'dormant'; });
       base.events.length = 0;

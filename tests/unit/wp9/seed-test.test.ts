@@ -16,8 +16,8 @@
 //   above it pass `[]` (every tool tried).
 // Slice 1a: KESTREL's racks are phase 2's with `C` → `P`; the old cluster codes below name the pods where those
 // clusters sat (`C08` is POD 08, tests/unit/support/pod-code.ts). Bay Ctrl took Printer Uplink's 6 blocks.
-import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
+import { fixtureFreshRacks } from '../support/arm-ship';
 import { isPodCode } from '../support/pod-code';
 import { createHarness9, KESTREL } from './harness9';
 import { seedSpot, hollowReach, seedsInMemory, threateningSeeds } from '@systems/hollow';
@@ -25,7 +25,6 @@ import { actionDelete, actionMove } from '@state/actions';
 import { installTool } from '@systems/licences';
 import { deleteQuestion, targetRefusal } from '@systems/tool-targets';
 import { mergeAdjacentFree, freeSegment, segmentStarts, assertMemoryInvariants } from '@systems/memory-ops';
-import { freshUnitRacks } from '@systems/carry';
 import { validateHollowDef, type HollowDef } from '@data/ships';
 import { hollowInspectState, HOLLOW_INSPECT, HOLLOW_STORY } from '@data/hollow-text';
 import { SEED_BLOCKS, SEED_TELEGRAPH_SEC, WALL_MIN_BLOCKS, WAKE_AFTER_DODGE_SEC, ROOT_BLOCKS } from '@data/tuning';
@@ -33,7 +32,6 @@ import { createToolFiles } from '@data/fs-tools';
 import type { Segment, DriverSegment, HollowSegment } from '@/types/segment';
 import { phase2HollowOf, phase2ShipDef } from '../support/hollow-world';
 import { buildShipMemory, MEMORY_LAYOUTS } from '@data/memory';
-import { classicShip } from '@data/classic-five';
 import { createRng } from '@systems/rng';
 
 const h = createHarness9(3);
@@ -49,7 +47,7 @@ const correctIn = (): void => {
 
 // Phase 3 slice 2: KESTREL as phase 2 had it (its root between POD 09 and POD 10), where these seeds were tuned.
 function kestrelMemory(): Segment[] {
-  return buildShipMemory(phase2ShipDef(KESTREL), freshUnitRacks(classicShip(KESTREL)), createRng(3), false, '???', { blocks: ROOT_BLOCKS }, []);
+  return buildShipMemory(phase2ShipDef(KESTREL), fixtureFreshRacks(KESTREL, phase2ShipDef(KESTREL)), createRng(3), false, '???', { blocks: ROOT_BLOCKS }, []);
 }
 
 // Takes clusters out of a memory (as a MOVE away would), leaving free space, merged.
@@ -118,7 +116,7 @@ const soul = (memory: readonly Segment[], code: string): DriverSegment =>
 
 // --- The live seed: telegraph, DELETE, the line, the WALL --------------------------------------------------------
 {
-  h.kestrel(3, { phase2Hollow: true, sensorHealed: true });
+  h.kestrel(3, { phase2Hollow: true, sensorHealed: true, kit: true });
   // The IN correction first, as every real KESTREL kid makes it before HOLLOW wakes (WP9 fix round 1: the debris
   // dodge's countdown is an urgent line until then; since round 2 a timed wake also waits while the dodge is open).
   correctIn();
@@ -134,7 +132,8 @@ const soul = (memory: readonly Segment[], code: string): DriverSegment =>
   h.stepUntil(() => state().hollow.phase === 'awake', WAKE_AFTER_DODGE_SEC + 2);
   check('KESTREL\'s HOLLOW wakes, and its first seed is due firstAfterSec later', state().hollow.seedInSec !== null
     && Math.abs(state().hollow.seedInSec! - firstAfter) < 0.2, String(state().hollow.seedInSec));
-  // Phase 3 slice 2: DELETE comes at KESTREL's start now (the beam's seeds are in memory from the first tick).
+  // Phase 3 slice 2: DELETE comes at KESTREL's start now (the beam's seeds are in memory from the first tick); on run 1's
+  // arm it is delivered at the boot (Rm requested at HALCYON's desk: the worked route's kit, Track RETIRE).
   check('…DELETE is already licensed (at the ship\'s start)', state().run.licences.includes('delete'));
   const wakeAt = state().clock.aiSec;
   h.stepUntil(() => state().hollow.seedTelegraph !== null, firstAfter + 2);
@@ -192,7 +191,7 @@ const soul = (memory: readonly Segment[], code: string): DriverSegment =>
 
 // --- A telegraph on a spot a MOVE then takes ---------------------------------------------------------------------
 {
-  h.kestrel(3, { phase2Hollow: true, sensorHealed: true });
+  h.kestrel(3, { phase2Hollow: true, sensorHealed: true, kit: true });
   // WP9 review round 2: HOLLOW never wakes while the debris dodge is open, so the IN correction first (as above).
   correctIn();
   h.store.update((d) => {
@@ -232,7 +231,7 @@ const soul = (memory: readonly Segment[], code: string): DriverSegment =>
 
 // --- A seed next to a FIREWALL ----------------------------------------------------------------------------------
 {
-  h.kestrel(3, { phase2Hollow: true, sensorHealed: true });
+  h.kestrel(3, { phase2Hollow: true, sensorHealed: true, kit: true });
   correctIn();
   // A FIREWALL at the far end of the 9-block wall, against the root (where a kid MOVEs it): [C08][7 free][FW][R].
   h.store.update((d) => {
@@ -274,7 +273,7 @@ const soul = (memory: readonly Segment[], code: string): DriverSegment =>
 
 // --- DELETE on ship files: the inline confirm with its consequence (§9 WP9 item 4) ---------------------------------
 {
-  h.kestrel(3, { phase2Hollow: true, sensorHealed: true });
+  h.kestrel(3, { phase2Hollow: true, sensorHealed: true, kit: true });
   const named = (name: string): Segment => state().memory.find((seg) => seg.name === name)!;
   const cargo = deleteQuestion(state(), named('Cargo Ctrl'));
   const thrust = deleteQuestion(state(), named('Thrust Controller'));

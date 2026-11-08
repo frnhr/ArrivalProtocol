@@ -16,7 +16,8 @@ import { createHollowState, createLandingState } from '@state/initial';
 import { hollowLabel } from '@systems/say';
 import { childRng } from '@systems/rng';
 import type { ShipDef } from '@data/ships';
-import { CLASSIC_FIVE } from '@data/classic-five';
+import { currentShip } from '@systems/map-run';
+import { fixtureShip } from './arm-ship';
 
 // Phase 2's ship index → the stage its HollowDef became.
 export const PHASE2_STAGE_OF_SHIP: readonly HollowStage[] = ['arrival', 'walls', 'seeds', 'hunt', 'finale'];
@@ -71,10 +72,33 @@ export const PHASE2_RACKS: Readonly<Record<1 | 2, ShipDef['memory']['podRacks']>
 };
 export const PHASE2_HALCYON_RACKS = PHASE2_RACKS[1];
 
-// The ship with phase 2's pod racks (its own pods and LZs).
-export function phase2ShipDef(index: 1 | 2): ShipDef {
-  const ship = CLASSIC_FIVE[index]!;
-  return { ...ship, memory: { ...ship.memory, podRacks: { ...PHASE2_RACKS[index] } } };
+// Phase 2's HALCYON and KESTREL landings, for the pods of PHASE2_RACKS (5 and 12): HALCYON's two sites (the lesson is the
+// split), KESTREL's three WIDE sites of 4 on HARSH ocean.
+export const PHASE2_LANDINGS: Readonly<Record<1 | 2, ShipDef['landing']>> = {
+  1: {
+    lzs: [{ label: 'LZ-A', centreDeg: 40, width: 'wide', pods: 3 }, { label: 'LZ-B', centreDeg: 190, width: 'standard', pods: 2 }],
+    forgiveness: 'gentle', terrain: 'GRASSLAND', noGo: [], colonyFirstRun: null, drag: true,
+  },
+  2: {
+    lzs: [
+      { label: 'LZ-A', centreDeg: 20, width: 'wide', pods: 4 }, { label: 'LZ-B', centreDeg: 140, width: 'wide', pods: 4 },
+      { label: 'LZ-C', centreDeg: 260, width: 'wide', pods: 4 },
+    ],
+    forgiveness: 'harsh', terrain: 'OCEAN', noGo: [], colonyFirstRun: null, drag: true,
+  },
+};
+const PHASE2_LEADS: Readonly<Record<1 | 2, number>> = { 1: 5, 2: 10 };
+
+// The ship as phase 2 had it: the ship being flown (the fixture's authored HALCYON or KESTREL: its flight, rack A and
+// rolls), with phase 2's FULL memory (racks A–F, the unit at block 256), its pod racks, lead pod and landing. Track RETIRE:
+// run 1's arm HALCYON and KESTREL are COMPACT (no rack D), so the phase-2 geometry is this fixture's, not the ship's.
+export function phase2ShipDef(index: 1 | 2, ship: ShipDef = fixtureShip(index)): ShipDef {
+  const podRacks = PHASE2_RACKS[index];
+  const pods = Object.values(podRacks).reduce((sum, rack) => sum + (rack ?? '').split(' ').filter((token) => token === 'P').length, 0);
+  return {
+    ...ship, memoryClass: 'FULL', pods, landing: structuredClone(PHASE2_LANDINGS[index]) as ShipDef['landing'],
+    memory: { ...ship.memory, podRacks: { ...podRacks }, drivers: { ...ship.memory.drivers, lead: PHASE2_LEADS[index] } },
+  };
 }
 
 export function phase2HalcyonDef(): ShipDef {
@@ -93,14 +117,18 @@ export function phase2Halcyon(store: Store<GameState>, cfg: HollowDef = phase2Ho
 export function phase2Ship(store: Store<GameState>, index: 1 | 2, cfg: HollowDef = phase2HollowOf(index)): void {
   const state = store.getState();
   const starts = segmentStarts(state.memory);
-  const unitAt = starts.indexOf(MEMORY_LAYOUTS.FULL.unitStart);
+  // The unit's files where the ship's class put them (rack E: block 256 on FULL, 192 on COMPACT); they move to FULL's.
+  const unitAt = starts.indexOf(layoutOf(state).unitStart);
   if (unitAt < 0) throw new Error('phase2Ship: the unit\'s files do not start at rack E');
-  const ship = phase2ShipDef(index);
+  const ship = phase2ShipDef(index, currentShip(state));
   const carried = { startAddr: MEMORY_LAYOUTS.FULL.unitStart, segs: state.memory.slice(unitAt).map((seg) => structuredClone(seg)) };
   const memory = buildShipMemory(ship, carried, childRng(state.run.seed, index, ship.memory.drivers.familiesSeedStream), false, hollowLabel(state.run), { blocks: ROOT_BLOCKS }, []);
   const landing = createLandingState(ship.landing, memory, { finalShip: false, lead: ship.memory.drivers.lead, hurt: [], planetR: state.level.planet.R });
   store.update((draft) => {
     draft.memory = memory;
+    draft.level.memoryClass = 'FULL';
+    // Phase 2's KESTREL's debris named rack C on the written run (where its POD 07–12 are); run 1's arm KESTREL names B.
+    if (index === 2) draft.level.zones = draft.level.zones.map((zone) => (zone.kind === 'debris' ? { ...zone, rack: 'C' } : zone));
     draft.landing = landing;
     draft.mission.colonists = landing.pods.reduce((sum, record) => sum + record.colonists, 0);
     draft.hollow = createHollowState(cfg);
