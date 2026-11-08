@@ -3,6 +3,8 @@ import type { Store } from '@state/store';
 import type { GameState, RunPhase, ArchiveStatus } from '@state/schema';
 import { receiveTransmission, skipBoot } from '@systems/boot';
 import { archiveMeta, wipeArchive, playWithoutArchive, isFirstRun, archiveNotesSaid, ENDINGS } from '@systems/meta';
+import { ENDINGS_BUILT, builtPieces } from '@data/endings';
+import type { EndingPiece } from '@/types/ending';
 import { resumeRun, abandonRun } from '@systems/run-save';
 import { registerKeys } from '@systems/input';
 import {
@@ -191,9 +193,11 @@ export function mountTitleCard(store: Store<GameState>): () => void {
     // The endings live in the archive's session copy, which every browser page opens (state/instance.ts).
     const returning = !isFirstRun(state.run);
     endingsEl.hidden = !returning;
-    // Slice 7a: only WP11's two count until Track NIGHT moves the line to the built pieces (endingsSeen holds all seven).
-    const seen = returning ? ENDINGS.filter((ending) => archiveMeta().endingsSeen.includes(ending)) : [];
-    endingsEl.textContent = returning ? ARCHIVE_TEXT.endings(seen.length, ENDINGS.length) : '';
+    // Slice 7a (Track NIGHT, R22): with the night built the line counts the built pieces, `ENDINGS n/6` (n/7 once CONTACT
+    // is built); before it, WP11's two.
+    const pieces: readonly EndingPiece[] = ENDINGS_BUILT.night ? builtPieces() : ENDINGS;
+    const seen = returning ? pieces.filter((ending) => archiveMeta().endingsSeen.includes(ending)) : [];
+    endingsEl.textContent = returning ? ARCHIVE_TEXT.endings(seen.length, pieces.length) : '';
     // WP11 part 2: lit once an ending has been found (RUN END names them: `ENDINGS 1/2 · PURGE · ???`).
     endingsEl.classList.toggle('found', seen.length > 0);
   };

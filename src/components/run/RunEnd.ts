@@ -2,6 +2,8 @@
 // TALLY loses its ending block and the bridge (both move to the FINAL CARD), and its button goes on to the EPILOGUE. The
 // FOUNDATION's seam: with ENDINGS_BUILT.night raised the button reads EPILOGUE ▸ and sets ui.runEndStage 'epilogue' (the
 // keys answer only on the tally); while it is down it is NEW RUN, as before slice 7.
+// Track NIGHT: with the night raised the tally shows no endings line and no bridge (the FINAL CARD has both), and it steps
+// aside (`night-on`) while the EPILOGUE and the FINAL CARD are up; its modal layer stays open under them.
 // Slice 4: Track UI's UNSPENT stands. Others ask by message.
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
@@ -232,7 +234,9 @@ export function mountRunEnd(store: Store<GameState>): () => void {
     titleEl.textContent = report.title;
     whyEl.textContent = report.why;
     // The archive's session copy: this run's ending is already in it (recorded as the run ended).
-    const endings = report.ending === null || state.archive.status === 'none' ? null : endingsLine(archiveMeta().endingsSeen, ENDINGS);
+    // Slice 7a (R19): with the night built, the endings found and the bridge are the FINAL CARD's.
+    const endings = ENDINGS_BUILT.night || report.ending === null || state.archive.status === 'none'
+      ? null : endingsLine(archiveMeta().endingsSeen, ENDINGS);
     endingsEl.hidden = endings === null;
     endingsEl.textContent = endings ?? '';
     totalEl.textContent = RUN_END_TEXT.total(0, report.fleetColonists);
@@ -251,9 +255,10 @@ export function mountRunEnd(store: Store<GameState>): () => void {
     unspentEl.hidden = skillLines === null;
     unspentEl.textContent = skillLines?.unspentLine ?? '';
     paintNext(tally.next, report.next);
-    bridgeEl.hidden = report.next === null;
-    bridgeEl.replaceChildren(...(report.next === null ? [] : [
-      make('div', 're-bridge-line', report.next.bridge), make('div', 're-bridge-tail', report.next.bridgeTail),
+    const bridge = ENDINGS_BUILT.night ? null : report.next;
+    bridgeEl.hidden = bridge === null;
+    bridgeEl.replaceChildren(...(bridge === null ? [] : [
+      make('div', 're-bridge-line', bridge.bridge), make('div', 're-bridge-tail', bridge.bridgeTail),
     ]));
     // The route's mini chart is drawn once the screen shows (show(): its size is the CSS box's, and a hidden box has none:
     // drawn here, under a BEAM OUT's delayed show, it was often empty; the e2e run), and again on a resize.
@@ -281,6 +286,7 @@ export function mountRunEnd(store: Store<GameState>): () => void {
     model = null;
     stopTimers();
     root.hidden = true;
+    root.classList.remove('night-on');
     closeModal?.();
     closeModal = null;
   }
@@ -302,12 +308,17 @@ export function mountRunEnd(store: Store<GameState>): () => void {
     else close();
   });
   if (store.getState().run.phase === 'end') open();
+  // Slice 7a (R19): the EPILOGUE and the FINAL CARD stand in the tally's place (its modal layer stays theirs: the 'end' keys).
+  const unsubStage = store.subscribe((s) => s.ui.runEndStage, (stage) => {
+    if (model !== null) root.classList.toggle('night-on', stage !== 'tally');
+  });
 
   return () => {
     newBtn.removeEventListener('click', onNew);
     offKeys();
     offMute();
     unsub();
+    unsubStage();
     chartResize.disconnect();
     close();
   };

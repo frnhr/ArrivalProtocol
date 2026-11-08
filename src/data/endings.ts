@@ -14,7 +14,7 @@ export const ENDINGS_BUILT: Readonly<{ twoStep: boolean; night: boolean; contact
   // Track FINALE raises this line.
   twoStep: false,
   // Track NIGHT raises this line.
-  night: false,
+  night: true,
   // 7d's CONTACT raises this line.
   contact: false,
 };
