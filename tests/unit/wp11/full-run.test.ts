@@ -15,7 +15,7 @@
 // NEW RUN. Prints each seed's line.
 // WP11 fix round 1 (the lead's rulings of 20:55 and 21:30): also LAST LIGHT's verbs (telegraphed, landed, blocked, and
 // the turns skipped: no fair target, or no thread free to block with), its drivers lost, and the REPAIR CHARGE at the
-// choice; at least half of the runs that reach the choice must have the 20 MERGE costs (the lead's target; the lever is
+// choice; at least half of the runs that reach the choice must have the 20 MERGE costs (the lead's target until slice 8, now information: OPEN-DECISIONS 109; the lever is
 // the guidance, `MOVE it behind a WALL` once a driver is bitten again in the same spot, and the defender now MOVEs onto
 // a spot the MOVE preview calls SAFE: harness11.ts).
 // Slice 1a: every landing lands at once (tests/unit/support/landing-instant.ts) except LAST LIGHT's, which the kid flies
@@ -84,20 +84,18 @@ const FINAL_LANDING = process.env.FINAL_LANDING ?? 'strip';
 if (FINAL_LANDING !== 'strip' && FINAL_LANDING !== 'stand') throw new Error(`FINAL_LANDING=${FINAL_LANDING} is neither strip nor stand`);
 const FINAL_STRIP = FINAL_LANDING === 'strip';
 
-// Quick depth (tests/unit/depth.ts): seed 4, a MERGE run whose charge at the choice pays for it (28 at the slice 2
-// re-fly), the longer of the two endings (THE DEAL's choice, MERGE's typed ending, the drivers given back). Slice 3a's
+// Quick depth (tests/unit/depth.ts): seed 6, a MERGE run whose charge at the choice pays for it (19 on the arm against
+// MERGE's 16; slice 8 ENDINGS moved it from seed 4, which reaches the choice with 13: the lowest even seed that affords the
+// new price, plan §2.10), the longer of the two endings (THE DEAL's choice, MERGE's typed ending, the drivers given back). Slice 3a's
 // review fixes (the unit tier's budget): seed 3's PURGE run left the quick depth; PURGE is flown to its RUN END by
 // wp11/merge-test's PURGE scenario and wp11/fix1's, and both endings in one sweep by RUN_SEEDS=4 or `npm run balance`.
 // Full: 1–50. RUN_SEEDS=n flies seeds 1–n.
 const SEED_LIST: readonly number[] = process.env.RUN_SEEDS !== undefined
   ? Array.from({ length: Number(process.env.RUN_SEEDS) }, (_, i) => i + 1)
-  : byDepth([4], Array.from({ length: 50 }, (_, i) => i + 1));
+  : byDepth([6], Array.from({ length: 50 }, (_, i) => i + 1));
 const SEEDS = SEED_LIST.length;
-// The MERGE-charge target is a balance measurement: on fewer than BALANCE_SEEDS seeds it is printed as INFO (slice 2's
-// re-fly: at RUN_SEEDS=8 the charge at the choice runs 5–30, median 20, so two seeds say nothing about the median;
-// `RUN_SEEDS=8` or `npm run balance` checks it). The per-ship checks, the victory rate and both endings hold on any count
-// that flies an even seed with the charge for MERGE and an odd one (the quick pair does).
-const BALANCE_SEEDS = 8;
+// The MERGE-charge share is information since slice 8 (below: the target is the playthrough's). The per-ship checks, the
+// victory rate and both endings hold on any count that flies an even seed with the charge for MERGE and an odd one.
 const h = createHarness11(1, { soulsFound: false });
 mountStoryLog(h.store);
 const state = (): Readonly<GameState> => h.store.getState();
@@ -250,7 +248,7 @@ function shipChecked(): void {
   }
 }
 
-// A kid playing for MERGE saves REPAIR CHARGE (VESPER's boot: `> keep 20 charge for me`): it heals the Core only back to
+// A kid playing for MERGE saves REPAIR CHARGE (VESPER's boot: `> keep 16 charge for me`): it heals the Core only back to
 // its two threads.
 let defendOpts: { coreHealBelow?: number; coreHealTo?: number } = {};
 
@@ -409,12 +407,11 @@ console.log(`LAST LIGHT over the ${atChoice.length} runs that reached the choice
   + `skipped turns ${(sum((verbs) => verbs.moments - verbs.telegraphed) / atChoice.length).toFixed(1)}); drivers lost `
   + `${(lostRuns.reduce((total, result) => total + result.lost!, 0) / Math.max(1, lostRuns.length)).toFixed(2)} on average (worst ${Math.max(...lostRuns.map((result) => result.lost!))})`);
 for (const [name, { runs, fails }] of perShip) check(`${name} (checked ${runs}×)`, fails.length === 0, fails.slice(0, 3).join(' | '));
-const balance = (name: string, ok: boolean, detail: string): void => {
-  if (SEEDS >= BALANCE_SEEDS) check(name, ok, detail);
-  else console.log(`INFO  ${name}: ${ok ? 'met' : 'not met'} on ${SEEDS} seeds (checked from RUN_SEEDS=${BALANCE_SEEDS})  — ${detail}`);
-};
-balance(`…at least half of the runs reach the choice with the ${MERGE_COST_CHARGE} MERGE costs (the lead's target, 21:30)`,
-  affordable * 2 >= atChoice.length, `${affordable}/${atChoice.length}`);
+// Slice 8 ENDINGS (plan §2.10, OPEN-DECISIONS 109): information, no longer a check. This kid trains nothing past the first
+// pick and takes the first card dealt, so it reaches the choice with less charge than any kid the target names (on the
+// arm: median 13, range 0–25 on seeds 1–10, played for MERGE or not alike). The target is G6b's, the playthrough's
+// COMPETENT and LITERAL (npm run balance:report, merge.afford.*).
+console.log(`INFO  …runs reaching the choice with the ${MERGE_COST_CHARGE} MERGE costs: ${affordable}/${atChoice.length} (the WP11 kid; the target is the playthrough's, G6b)`);
 check(`the route's six ships end in the victory RUN END in ≥ 90% of ${SEEDS} seeds`, victories >= Math.ceil(0.9 * SEEDS), `${victories}/${SEEDS}`);
 if (SEEDS >= 2) check('…both endings were reached', merges > 0 && victories - merges > 0, `${merges} MERGE, ${victories - merges} PURGE`);
 else check('…the quick seed reached its MERGE (PURGE: merge-test and fix1)', merges === SEEDS, `${merges} MERGE, ${victories - merges} PURGE`);

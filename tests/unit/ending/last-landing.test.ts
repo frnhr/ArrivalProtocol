@@ -2,7 +2,7 @@
 // acceptance 3: LAST LIGHT's choice), which plan §4.4 turns into this suite; its PURGE, UNRESOLVED and edge cases stay.
 // • The classic LAST LIGHT: HOLLOW eats POD 11, 12 and 13 (an MV moves POD 12's block, the kid DELETEs POD 13's) and the belt
 //   kills POD 01's driver. The root's DELETE (12 AI s, its last block locked, HOLLOW asleep: R6), the card once the landing
-//   settles, MERGE refused below 20 charge (`NEEDS 20 CHARGE · you have 14`), then MERGE: every block of HOLLOW leaves
+//   settles, MERGE refused below MERGE_COST_CHARGE (16; `NEEDS 16 CHARGE · you have 14`), then MERGE: every block of HOLLOW leaves
 //   memory and the three eaten drivers come back by radio at MERGE_DRIVER_INTEGRITY, never in memory (R24), whatever became
 //   of their blocks (R25); POD 01 stays parked. THE LAST LANDING starts (its words, 'last-landing-start', the SHIP view and
 //   the 'last-landing' layer: R26), flies blind (the classic unit holds no AUTODROP), ends with the machine cleared and
@@ -171,7 +171,7 @@ check('…the landing settled: the card\'s step 1 is up', finaleAtStep1(state())
 setCharge(14);
 const before = JSON.stringify(state().memory.map((seg) => seg.id));
 const refusal = chooseEnding(h.store, 'merge');
-check('MERGE below 20: refused `NEEDS 20 CHARGE · you have 14`, nothing changes', refusal === `NEEDS ${MERGE_COST_CHARGE} CHARGE · you have 14`
+check(`MERGE below ${MERGE_COST_CHARGE}: refused \`NEEDS ${MERGE_COST_CHARGE} CHARGE · you have 14\`, nothing changes`, refusal === `NEEDS ${MERGE_COST_CHARGE} CHARGE · you have 14`
   && optionState(state(), 'merge', []).kind === 'needs' && JSON.stringify(state().memory.map((seg) => seg.id)) === before
   && finaleAtStep1(state()) && chargeLeft(state()) === 14, String(refusal));
 check('…PURGE is still open', optionState(state(), 'purge', []).kind === 'open');
@@ -185,7 +185,7 @@ const eventsBefore = h.events.length;
 const merged = chooseEnding(h.store, 'merge');
 const radio = state().landing.lastLanding;
 const radioPods = radio === null ? '-' : radio.drivers.map((driver) => `${driver.pod}@${driver.integrity}`).join(' ');
-check('MERGE with 30: chosen, 20 charge spent', merged === null && chargeLeft(state()) === 30 - MERGE_COST_CHARGE && decidedAs(state()) === 'merge',
+check(`MERGE with 30: chosen, ${MERGE_COST_CHARGE} charge spent`, merged === null && chargeLeft(state()) === 30 - MERGE_COST_CHARGE && decidedAs(state()) === 'merge',
   `${merged} charge ${chargeLeft(state())}`);
 check(`…THE LAST LANDING (7b): POD 11, 12 and 13's drivers back by radio at ${MERGE_DRIVER_INTEGRITY}, in pod order`,
   state().hollow.finale.phase === 'last-landing' && radioPods === `11@${MERGE_DRIVER_INTEGRITY} 12@${MERGE_DRIVER_INTEGRITY} 13@${MERGE_DRIVER_INTEGRITY}`

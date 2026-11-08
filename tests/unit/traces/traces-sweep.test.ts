@@ -26,7 +26,7 @@ import { shipResultOf } from '@systems/run';
 import { HOLLOW_STAGES } from '@data/threats';
 import { byDepth } from '../depth';
 import {
-  TRACE_GIFT_CHARGE, TRACE_PURGE_BITE_MULT, TRACE_MERGE_THREADS, THREAD_PLUS_THREADS, FINAL_ROOT_MAX_BLOCKS, TRACE_EXTRA_SEEDS,
+  TRACE_GIFT_CHARGE, TRACE_ALLOWANCE_CHARGE, TRACE_PURGE_BITE_MULT, TRACE_MERGE_THREADS, THREAD_PLUS_THREADS, FINAL_ROOT_MAX_BLOCKS, TRACE_EXTRA_SEEDS,
 } from '@data/tuning';
 import { endingOf, lastUnitOf, arm2, trailOn, startRun2, routeVia, beamTo } from './trace-arm';
 
@@ -46,7 +46,7 @@ interface Case {
   hollow: HollowFate;
   you: YouChoice;
 }
-const CASES: readonly Case[] = [
+const ALL_CASES: readonly Case[] = [
   { id: 'REASSIGNMENT', hollow: 'followed', you: 'reassignment' },
   { id: 'PURGE+REASSIGN', hollow: 'purge', you: 'reassignment' },
   { id: 'MERGE+REASSIGN', hollow: 'merge', you: 'reassignment' },
@@ -59,6 +59,10 @@ const CASES: readonly Case[] = [
     { id: 'MERGE+CONTACT', hollow: 'merge', you: 'contact' },
   ] as const : []),
 ];
+// Slice 8 ENDINGS: TS_CASES=<id>,<id> flies only those cases (a track re-measuring its own rows); unset, every case above.
+const CASE_FILTER = (process.env.TS_CASES ?? '').split(',').filter((id) => id !== '');
+for (const id of CASE_FILTER) if (!ALL_CASES.some((one) => one.id === id)) throw new Error(`TS_CASES: no case ${id} (${ALL_CASES.map((one) => one.id).join(', ')}; CONTACT's need TS_CONTACT=1)`);
+const CASES: readonly Case[] = CASE_FILTER.length === 0 ? ALL_CASES : ALL_CASES.filter((one) => CASE_FILTER.includes(one.id));
 
 function lastUnitFor(seed: number, c: Case | null): LastUnit | null {
   if (c === null) return null;
@@ -197,7 +201,7 @@ for (let seed = FIRST_SEED; seed < FIRST_SEED + SEEDS; seed++) {
       // MERGE's thread, over the Core's capacity less what THREAD+ gives (a card, or SPARE's cache on the route: the runs pick
       // different cards once one owns THREAD+, so each is counted by its own run.upgrades).
       threads: base.threads - THREAD_PLUS_THREADS * base.threadPlus + THREAD_PLUS_THREADS * fb.threadPlus + (c.hollow === 'merge' ? TRACE_MERGE_THREADS : 0),
-      gift: c.you === 'reassignment' ? TRACE_GIFT_CHARGE : 0,
+      gift: c.you === 'reassignment' ? TRACE_ALLOWANCE_CHARGE : 0,
       wild: c.hollow === 'spare' || c.you === 'sunset' || c.you === 'stay' || c.you === 'contact',
     };
     const seedsOk = fb.seeds === (c.hollow === 'purge' ? 0 : base.seeds) + (want.wild ? TRACE_EXTRA_SEEDS : 0);
@@ -238,7 +242,7 @@ for (const c of CASES) {
 }
 console.log(`(a pod is ${POD_COLONISTS} colonists)\n`);
 
-check(`R33's numbers at every final boot (${SEEDS} seeds × ${CASES.length} endings): bites × ${TRACE_PURGE_BITE_MULT} after PURGE, an ${FINAL_ROOT_MAX_BLOCKS}-block root and +${TRACE_MERGE_THREADS} thread after MERGE, PURGE's wipe, ${TRACE_EXTRA_SEEDS} wild seed when non-compliant, +${TRACE_GIFT_CHARGE} after REASSIGNMENT`,
+check(`R33's numbers at every final boot (${SEEDS} seeds × ${CASES.length} endings): bites × ${TRACE_PURGE_BITE_MULT} after PURGE, an ${FINAL_ROOT_MAX_BLOCKS}-block root and +${TRACE_MERGE_THREADS} thread after MERGE, PURGE's wipe, ${TRACE_EXTRA_SEEDS} wild seed when non-compliant, +${TRACE_ALLOWANCE_CHARGE} after REASSIGNMENT`,
   problems.length === 0, problems.slice(0, 3).join(' | '));
 check('each gift ship: the gift lands (0 to +15 charge against no trace on the same route, a squeeze taking at most the gift)',
   giftsOff.length === 0, giftsOff.join(' | '));

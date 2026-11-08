@@ -27,7 +27,7 @@ import { freeSegment, mergeAdjacentFree } from '@systems/memory-ops';
 import { createRng } from '@systems/rng';
 import { chargeLeft } from '@state/selectors';
 import { TRACE_TEXT } from '@data/trace-text';
-import { TRACE_GIFT_CHARGE, THREAD_PLUS_THREADS, INBOX_BODY_MAX_LINES, MAX_LINE_CHARS } from '@data/tuning';
+import { TRACE_GIFT_CHARGE, TRACE_ALLOWANCE_CHARGE, THREAD_PLUS_THREADS, INBOX_BODY_MAX_LINES, MAX_LINE_CHARS } from '@data/tuning';
 import { endingOf, lastUnitOf, arm2, trailOn, startRun2, routeVia, beamTo, bootOut } from './trace-arm';
 
 const h = createHarness11(1, { soulsFound: false });
@@ -71,7 +71,7 @@ function seedFor(kind: 'spare' | 'sunset' | 'stay', make: (seed: number) => Retu
   check(`SPARE on seed ${seed}: its ship (slot ${slot}) gives ${TRACE_GIFT_CHARGE} charge, its beam carries no seed (the beam's and the deliveries'), the preview counts none`,
     traceGiftCharge(state(), slot) === TRACE_GIFT_CHARGE && mods.seeds.length === 0 && mods.wiped === 3
     && JSON.stringify(traceSeedAllowance(state(), slot, { min: 1, max: 3 })) === '{"min":0,"max":0}'
-    && traceGiftCharge(state(), route[route.length - 1]!) === TRACE_GIFT_CHARGE /* REASSIGNMENT's allowance */,
+    && traceGiftCharge(state(), route[route.length - 1]!) === TRACE_ALLOWANCE_CHARGE /* REASSIGNMENT's allowance */,
     JSON.stringify(mods));
   setCourseFromDesk(h.store, slot);
   const transit = state().run.transit!;

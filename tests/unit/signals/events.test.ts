@@ -10,7 +10,7 @@
 // • the glyph (R40): none while nothing is held; then on KITTIWAKE (a `?` ship that carries fragments), never on the old
 //   colony, and never on HERON's `unknown` card (OD 31 holds);
 // • the signal: KITTIWAKE's rack A holds the 1-block `▓▓░▓` file after Cargo Ctrl, not food, SCAN only; SCAN finds its 2
-//   fragments once (`SIGNAL · 3/3`, 'signal-event', the TERMINAL's line, INSPECT's line and noise), a second SCAN nothing;
+//   fragments once (`SIGNAL · 3`, past CONTACT's 2 since slice 8, 'signal-event', the TERMINAL's line, INSPECT's line and noise), a second SCAN nothing;
 // • the run's records pass the save's check, and a SHIP DONE save there round-trips.
 import { check, finish } from '../landing/checks';
 import type { GameState } from '@state/schema';
@@ -33,7 +33,7 @@ import { isInfectable } from '@state/selectors';
 import { buildRunSave, encodeRunSave, decodeRunSave } from '@systems/save-codec';
 import { UNKNOWN_TEXT } from '@data/unknown-text';
 import { TOOL_REFUSAL } from '@data/tool-text';
-import { INBOX_BODY_MAX_LINES } from '@data/tuning';
+import { INBOX_BODY_MAX_LINES, SIGNALS_FOR_CONTACT } from '@data/tuning';
 
 const SEED = 7;
 const [HALCYON, LAPWING, PLOVER, KITTIWAKE, HERON] = [2, 8, 10, 14, 4];
@@ -109,7 +109,7 @@ to(PLOVER);
     && !st().memory.some((seg) => seg.type === 'signal'));
   actionScan(h.store, note!);
   h.stepUntil(() => st().resident.left?.noteRead === true, 10);
-  check('…SCAN on it finds 1 (`source` note): `SIGNAL · 1/3`', signalCount(st().run) === 1 && st().run.residents.signals[0]?.source === 'note'
+  check('…SCAN on it finds 1 (`source` note): `SIGNAL · 1/2`', signalCount(st().run) === 1 && st().run.residents.signals[0]?.source === 'note'
     && JSON.stringify(heard.at(-1)) === JSON.stringify({ name: 'signal-found', payload: { slot: PLOVER, count: 1 } }), JSON.stringify(heard));
   desk();
   check('the glyph (R40): on KITTIWAKE (a `?` ship with fragments), not on the visited old colony, not on HERON (OD 31)',
@@ -135,14 +135,15 @@ to(KITTIWAKE);
   const from = heard.length;
   actionScan(h.store, file as Segment);
   h.stepUntil(() => st().run.residents.signals.length === 2, 20);
-  h.stepUntil(() => st().log.entries.slice(logFrom).some((entry) => entry.text === UNKNOWN_TEXT.signal.found(2, 3, 3)), 200);
+  h.stepUntil(() => st().log.entries.slice(logFrom).some((entry) => entry.text === UNKNOWN_TEXT.signal.found(2, 3, SIGNALS_FOR_CONTACT)), 200);
   const read = st().memory.find((seg) => seg.type === 'signal') as SignalSegment;
   const record = st().run.residents.signals.at(-1);
-  check('SCAN reads it: 2 fragments found (3 held), the record `signal-event` × 2 at its depth, `SIGNAL · 3/3`, \'signal-event\'',
+  check('SCAN reads it: 2 fragments found (3 held), the record `signal-event` × 2 at its depth, `SIGNAL · 3` (past CONTACT\'s 2), \'signal-event\'',
     signalCount(st().run) === 3 && record?.source === 'signal-event' && record.n === 2 && record.slot === KITTIWAKE && record.depth === st().run.map.route.at(-1)!.depth
     && JSON.stringify(heard.slice(from)) === JSON.stringify([{ name: 'signal-found', payload: { slot: KITTIWAKE, count: 3 } }, { name: 'signal-event', payload: { slot: KITTIWAKE, n: 2 } }])
-    && signalStamp(3).text === 'SIGNAL · 3/3', JSON.stringify(heard.slice(from)));
-  check('…the TERMINAL says `> ▓▓░▓ · 2 FRAGMENTS OF THE SIGNAL · 3/3`', st().log.entries.slice(logFrom).some((entry) => entry.text === UNKNOWN_TEXT.signal.found(2, 3, 3)),
+    && signalStamp(1).text === 'SIGNAL · 1/2' && signalStamp(3).text === 'SIGNAL · 3', JSON.stringify(heard.slice(from)));
+  check('…the TERMINAL says `> ▓▓░▓ · 2 FRAGMENTS OF THE SIGNAL · 3 HELD`', st().log.entries.slice(logFrom).some((entry) => entry.text === UNKNOWN_TEXT.signal.found(2, 3, SIGNALS_FOR_CONTACT))
+    && UNKNOWN_TEXT.signal.found(2, 3, SIGNALS_FOR_CONTACT) === '> ▓▓░▓ · 2 FRAGMENTS OF THE SIGNAL · 3 HELD',
     JSON.stringify(st().log.entries.slice(logFrom).map((entry) => entry.text)));
   const inspect = residentInspect(st(), read);
   check('…INSPECT shows its one line, no sender and its noise; the strip its `▓░`', read.scanned && inspect?.note?.lines[0] === UNKNOWN_TEXT.signal.lines['signal-event']

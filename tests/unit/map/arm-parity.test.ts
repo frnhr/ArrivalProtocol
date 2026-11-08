@@ -50,7 +50,11 @@ check(`run 1's arm, seed ${SEED}: its 20 ShipDefs are as they were before the re
 check(`…and every ship's built world past ARES-VII (its ship slices from a beam off it)`, slicesNow === PINNED_SLICES, `${slicesNow} ≠ ${PINNED_SLICES}`);
 
 // --- Run 1 played ---------------------------------------------------------------------------------------------------------
-const PINNED_RUN = 'de4d1e6da04d568e';
+// Slice 8 ENDINGS re-recorded this one digest (it was de4d1e6da04d568e), and found what moved it: MERGE_COST_CHARGE 20 → 16
+// (OPEN-DECISIONS 108) changes HOLLOW's `> keep 16 charge for me, 047.` line, said one hop from the final ship. The first
+// moment that moves is CORMORANT's desk, every ship's outcome and the run's end (won-purge) are as before, and an A/B copy
+// of src/ at 20 (tests/unit/balance/ab.mjs) still gives de4d1e6da04d568e.
+const PINNED_RUN = '8ceb50b18060dcb5';
 const REQUESTS: readonly (RepoFileId | null)[] = ['mv', 'rm', 'swap', 'cp', null];
 const h = createHarness11(1, { soulsFound: false });
 const state = (): Readonly<GameState> => h.store.getState();

@@ -12,9 +12,10 @@
 // • the strip's looks and INSPECT's rows for every resident file (`?` until scanned, IDLE asleep, the chain, the who-line
 //   with `aboard since 2240`, the note's lines, signature and noise);
 // • the TERMINAL's voices and the untimed choice; the lock's reticle (its second, its share, `LOCK 3`); the sleeper's breath;
-// • the stamps (the surprise's wake with its tear, DELETED, CURED, `SIGNAL · 1/3`) and the PACKET's leftover deck.
+// • the stamps (the surprise's wake with its tear, DELETED, CURED, `SIGNAL · 1/2`: CONTACT's price, SIGNALS_FOR_CONTACT) and the PACKET's leftover deck.
 // Every word's worst case is support/words.test's block 5 FACE.
 import { withClassicWorld } from '../support/classic-fixture';
+import { SIGNALS_FOR_CONTACT } from '@data/tuning';
 import { check, finish } from '../landing/checks';
 import type { GameState, LogChoice } from '@state/schema';
 import type { Segment, DriverSegment, ResidentSegment, SleeperSegment, NoteSegment, LeftoverSegment, SleepLockSegment } from '@/types/segment';
@@ -263,8 +264,8 @@ check('TERMINAL: the sleeper\'s untimed offer has no bar or clock; THE DEAL keep
 check('stamps: the late surprise\'s wake stamps `THE SHIP\'S OWN AI IS AWAKE · RACK A` with its tear; a reported one, or the sleeper, none',
   wakeStamp({ kind: 'corrupted', surprise: true })?.text === T.stamp.awake && wakeStamp({ kind: 'corrupted', surprise: true })?.glitch === true
   && wakeStamp({ kind: 'corrupted', surprise: false }) === null && wakeStamp({ kind: 'sleeping', surprise: false }) === null);
-check('stamps: RESIDENT DELETED, RESIDENT CURED, `SIGNAL · 1/3`', deletedStamp().text === 'RESIDENT DELETED' && curedStamp().text === 'RESIDENT CURED'
-  && signalStamp(1).text === 'SIGNAL · 1/3' && signalStamp(3).text === 'SIGNAL · 3/3');
+check(`stamps: RESIDENT DELETED, RESIDENT CURED, \`SIGNAL · 1/${SIGNALS_FOR_CONTACT}\``, deletedStamp().text === 'RESIDENT DELETED' && curedStamp().text === 'RESIDENT CURED'
+  && signalStamp(1).text === `SIGNAL · 1/${SIGNALS_FOR_CONTACT}` && signalStamp(SIGNALS_FOR_CONTACT).text === `SIGNAL · ${SIGNALS_FOR_CONTACT}/${SIGNALS_FOR_CONTACT}`);
 {
   const packet = deskAt([0, 15]);
   packet.resident = createResidentState({ kind: 'left', shown: 'unknown', name: 'LOOKOUT', fragments: 0 });

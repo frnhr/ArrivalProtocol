@@ -166,8 +166,8 @@ export const TARGETS: readonly Target[] = [
   { goal: 'G6b', label: 'full-run: charge at the choice median', metric: 'merge.charge.median', unit: 'charge', source: 'full-run', od: [88], lever: '' },
   { goal: 'G6b', label: 'full-run: charge at the choice p75', metric: 'merge.charge.p75', unit: 'charge', source: 'full-run', od: [88], lever: '' },
   { goal: 'G6b', label: 'COMPETENT leaves the empty ship', metric: 'empty.competent', min: 50, unit: '%', source: 'playthrough', od: [], lever: 'EMPTY_SHIP_FUEL_PCT: WAIT, the lead brings it to Fran (§2.14)' },
-  { goal: 'G6b', label: 'CONTACT open (3 signals at the final ship)', metric: 'contact.open', min: 15, max: 35, unit: '%', source: 'playthrough', od: [84], lever: 'SIGNALS_FOR_CONTACT 3 → 2 if under 15% (§2.9)' },
-  { goal: 'G6b', label: 'a route can collect 3 signals (run-1 arms)', metric: 'contact.reach', unit: '%', source: 'signal-stats', od: [84], lever: '' },
+  { goal: 'G6b', label: 'CONTACT open (its signals at the final ship)', metric: 'contact.open', min: 15, max: 35, unit: '%', source: 'playthrough', od: [84], lever: 'SIGNALS_FOR_CONTACT (2 since slice 8, was 3; §2.9)' },
+  { goal: 'G6b', label: 'a route can collect CONTACT\'s signals (run-1 arms)', metric: 'contact.reach', unit: '%', source: 'signal-stats', od: [84], lever: '' },
   // --- G7: pace (information) --------------------------------------------------------------------------------------------
   { goal: 'G7', label: 'COMPETENT wall time, median', metric: 'wall.competent', unit: 'min', source: 'playthrough', od: [], lever: '' },
   // --- §2's acceptance numbers ---------------------------------------------------------------------------------------------

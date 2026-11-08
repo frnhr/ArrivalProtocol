@@ -331,6 +331,9 @@ own items from 67 too; renumber at the merge.
     +1.6, +1.6 and +1.2 pods against no trace (TRACE measured +1.3, +1.3, +1.5, +1.2), outside ±1. The allowance's +15 is the
     gain; the hunt costs only a thread and a SCAN. Slice 8's levers: a smaller allowance, a hunt RM that a SCAN cannot block
     (or that comes faster than the telegraph), or a cost on pods.
+    - **BUILT in slice 8 (Track ENDINGS, item 105), [FRAN] confirm:** the allowance is its own number, +8. REASSIGNMENT,
+      MERGE+ and SPARE+ come within ±1 (+1.0, +1.0, +0.5 on 20 seeds); PURGE+REASSIGN stays +1.6, for PURGE's own reason
+      (item 106).
 71. **The boot's charge line folds its parts when they pass 70 characters** (review B1). BUILT: `data/script.ts chargeLine`
     drops `CHARGE` from the later parts (`+12 (CARD)`), and with all four sources at their widest says one sum
     (`+144 CHARGE (★★★ CARD GIFT FLOOR)`). The full line with ★★ + CARD + GIFT was 76 characters and stopped the final boot.
@@ -392,6 +395,9 @@ The calls one agent made building 7d's FOUNDATION and both its tracks (`docs/pha
 84. **CONTACT is built and its gate raised**, not shipped dark. BUILT: its row, price, words, title, epilogue piece, trace
     and stops are complete and tested (`signals/contact`, `ending/*`, `traces/*`, the e2e `signals.mjs`). Balance is slice
     8's: the sweep of 7c (`traces/traces-sweep`) does not fly CONTACT yet.
+    - **BUILT in slice 8 (Track ENDINGS, items 107 and 111):** traces-sweep flies CONTACT's three cases (−0.5, −0.3, −0.8
+      pods, each stop +7.8), and CONTACT's price is 2 signals. `contact.open` is still under its band with the playthrough's
+      kid (item 111).
 
 ## Retiring the classic world
 
@@ -440,6 +446,9 @@ list, and the classic licence schedule's checks deleted (three, per the lead's d
     - **Known gap for slice 8:** MERGE's margin is thin on the worked route (slice-3a risk 6: "the MERGE margin moves to the
       route"). COMPETENT has the 20 charge in 2 of 5 runs (median 11). `full-run`'s quick seed 4 reaches the choice with
       13, so its "the quick seed reached its MERGE" check fails in `npm run balance` until the rebalance.
+    - **BUILT in slice 8 (Track ENDINGS, items 108 and 109), [FRAN] confirm:** MERGE costs 16. `full-run`'s quick seed is 6
+      (19 at the choice), and its MERGE share is information: the target is the playthrough's (G6b). LITERAL stays under 50%
+      at any price the ladder allows (item 108).
 89. **Tests of the classic licence schedule are deleted, not moved.** That schedule is COPY at the boot and SWAP at the
     first ghost. DECIDED (RETIRE): 03 §6 retires that schedule, so the arm has nothing for those checks to test.
     - Checks in the same suites that test behaviour the arm keeps (the DEAL, SWAP pairing, the ghost) move to the arm.
@@ -636,3 +645,83 @@ at CLOSE. Each says before → after, measured on the branch.
        THREAT's probe won seeds 3, 7 and 8 with no ship lost.
      - **ASK (game side): should the strip say RELEASE first, while a burn is held, before `PATH UNCERTAIN — [TAB]`?** A
        real kid holding SPACE may do what the script did.
+
+## Slice 8 ENDINGS, built
+
+Track ENDINGS' calls (`docs/phase3/impl/slice-8-plan.md` §2.8–§2.10, §2.14 and "Deviations (Track ENDINGS)"). The lead
+renumbers them at CLOSE. "Before → after" is the number the change moved; traces-sweep is 20 seeds unless named.
+
+105. **REASSIGNMENT's allowance is +8 REPAIR CHARGE, its own number** (`TRACE_ALLOWANCE_CHARGE`; it was the caches'
+     `TRACE_GIFT_CHARGE` 15; round 3 item 4). BUILT, **[FRAN] confirm**. The caches keep 15.
+     - Δpods against no trace, REASSIGNMENT / PURGE+ / MERGE+ / SPARE+: **+1.5 / +1.6 / +1.6 / +1.2 → +1.0 / +1.6 / +1.0 /
+       +0.5**. The duel is won in every run either way. Charge at the duel against no trace: +8.0 → +3.4.
+     - The curve (REASSIGNMENT alone): 0 charge 0.0 pods, 3 → +1.1, 5 → +1.0, 8 → +1.0, 15 → +1.5. The first few charge buy
+       the one REPAIR that saves a cluster, so below 8 the gain hardly shrinks until the gift is gone. 8 is one CONTACT stop.
+     - The hunt is not the gain: with `HUNT_PREFER_WEIGHT` 0 (no hunt) REASSIGNMENT still reads +1.0 at 8.
+     - The spread is wide: a 20-seed Δ has a standard error of 0.34–0.43. The report's quick profile (seeds 1–6) reads +1.7 /
+       +1.5 / +1.7 / +1.2 at 8, against +1.5 / +1.5 / +1.7 / +1.3 at 15. On seeds 21–40, two no-trace runs lose the final
+       ship in flight (0 pods each), and every REASSIGNMENT row reads +2.4 to +3.0 at 8 (+2.9 at 15, +1.8 at 0). CLOSE's
+       `--full` (20 seeds) is the acceptance; 40 or more seeds would separate 8 from 15 with confidence.
+     - To reverse: `TRACE_ALLOWANCE_CHARGE` 15.
+106. **PURGE + REASSIGNMENT stays +1.6 pods, outside ±1.** KNOWN GAP, for the lead and Fran. PURGE's wipe takes the two
+     seeds the beam carries into the final ship, and those seeds are what eat the drivers there: with them gone the run
+     loses none (eaten 0.1 against 1.7). PURGE's cost, bites × `TRACE_PURGE_BITE_MULT`, never reaches a driver while the
+     sweep's WP11 defender blocks every verb: at 0.7 the row reads +1.7. So the multiplier stays 0.85 (§2.14), and PURGE's own
+     effect by difference is +0.6 (§2.8 asked ±0.5). With a wild seed (PURGE + CONTACT, + SUNSET, + STAY) PURGE is within
+     ±1. Levers, each a rule and so [FRAN]: the wipe spares one seed, or PURGE's cost becomes a seed of its own. A kid's
+     defender, not WP11's, may also show the hungrier finale's cost (the playthrough flies no next run).
+107. **CONTACT needs 2 signals, not 3** (`SIGNALS_FOR_CONTACT`, 05 §3.7, 02 §3.5). BUILT, **[FRAN]**.
+     - Why: an arm holds 5 fragments on 4 ships (the signal `?` ship's 2, the gone resident's and two notes' 1 each, layers
+       3–7), and a route meets few. signal-stats over 200 run-1 arms: a route can collect 3 on 17.9% of arm-routes, but never
+       on the worked, 5-ship or TIGHT route, and the 8-ship route on 21 of 200 arms. At 2: 43.3% of arm-routes; worked and
+       5-ship 28 of 200 arms (the signal ship is CORMORANT), TIGHT 29, 8-ship 75 (14%, 14%, 15%, 38%: 20% across the four).
+     - The other levers were rejected: more signal ships or notes, or a note worth 2, move the generator's stored
+       reservations (plan R3); a CONTACT stop only exists after a CONTACT ending, so it cannot open the first one.
+     - The words follow the constant (`COLLECT 2 SIGNALS`, `SIGNAL · 1/2`, `SIGNAL · 3` past it). A save holding a CONTACT
+       ending held 3, which still passes the codec's check.
+     - To reverse: 3, and the movers (signals/*, ending/foundation, residents/{left,ui-models}, e2e signals, ending and
+       residents).
+108. **MERGE costs 16 REPAIR CHARGE, not 20** (`MERGE_COST_CHARGE`). BUILT, **[FRAN] confirm**. VESPER's and CORMORANT's
+     `> keep 16 charge for me` follows it. Round 3 item 7 ("kept through the duel") is untouched.
+     - Measured on the playthrough's four routes (16 seeds, strip landings; the runs played for MERGE that reach the
+       choice, 28 per kid), the share holding each price:
+
+       | Price | 20 | 18 | 16 | 15 | 14 |
+       |---|---|---|---|---|---|
+       | COMPETENT | 36% | 39% | 46% | 46% | 50% |
+       | LITERAL | 32% | 32% | 36% | 36% | 39% |
+
+       By route at 20, COMPETENT / LITERAL: worked 57% / 29%, 8-ship 50% / 62%, 5-ship 29% / 29%, TIGHT 0% / 0%. The quick
+       report's worked route alone (24 seeds) read 64% / 55%.
+     - Why 16: no ladder price brings LITERAL to 50%. Its short runs hold 0–13 at the choice (the 5-ship route's
+       compressed HOLLOW, the TIGHT receiver's squeeze), so no price over the FULL ship's floor of 12 reaches them. 16 takes
+       most of what the ladder gives COMPETENT and stays 4 over that floor. The kid's play before the choice does not read
+       the price, so the table is exact for every price from one run.
+     - Still LOW for LITERAL; the plan's next levers are POLISH's PACKET hint and then the link slope (R3).
+     - To reverse: 20.
+109. **`wp11/full-run`'s MERGE share is information, and its quick seed is 6.** BUILT. Its kid trains nothing past the first
+     pick and takes the first card dealt, so it reaches the choice with less than any kid G6b names: median 13, range 0–25
+     on seeds 1–10, about the same whether it played for MERGE or not (median 13 and 11), so 10% hold 20 and 30% hold 16. Its "half the runs hold MERGE's
+     price" check is an INFO line now. Seed 4 reaches the choice with 13, so the quick seed is seed 6 (19, a MERGE). To
+     reverse: the check back, at whatever price G6b settles.
+110. **The other trace numbers stay** (§2.14). KEPT:
+     - `TRACE_GIFT_CHARGE` 15 for SPARE's, SUNSET's and STAY's caches: SUNSET +0.2, STAY 0.0, SPARE + REASSIGN +0.5 at 8;
+       each gift +15.0 at its ship.
+     - `CONTACT_GIFT_CHARGE` 8: CONTACT −0.5, PURGE + CONTACT −0.3, MERGE + CONTACT −0.8 (6 seeds), each stop +7.8.
+     - `TRACE_MERGE_THREADS` 1 and `TRACE_MERGE_ROOT_EXTRA` 2: MERGE's own effect 0.0 at 8 (+0.2 at 15).
+     - `TRACE_PURGE_BITE_MULT` 0.85 (item 106), `TRACE_EXTRA_SEEDS` 1, `HUNT_PREFER_WEIGHT` 1 (0 moved nothing),
+       `TRACE_PLACE_COUNT.contact` 2.
+     - `MERGE_DRIVER_INTEGRITY` 80 and the blind drop (0.68 GENTLE, 0.36 HARSH), and `EMPTY_SHIP_FUEL_PCT` 20 (COMPETENT
+       leaves the empty ship in 100% of runs).
+111. **`contact.open` stays under its band with the playthrough's kid**, because the kid loses the signal `?` ship. KNOWN
+     GAP, for HARNESS's kid or the lead. On the four routes (16 seeds), COMPETENT holds 2 signals in 9% of runs (3 in 2%).
+     In 10 of the 14 runs whose route met the signal ship, the ship was lost about a minute in, with its `▓▓░▓` file
+     unread.
+     - One read (seed 8, worked route, `PT_TRACE=1`): CORMORANT arrives with Sensor Interp at 45%. The strip says
+       `DON'T HIT THE PLANET — hold [SPACE]`, then `KEEP HOLDING`, then `PATH UNCERTAIN — [TAB], REPAIR SENSOR INTERP`. The
+       kid holds SPACE through that line until the tank is empty and the ship flies away.
+     - CORMORANT is lost in 32 of 96 flights and LAST LIGHT in 28 of 128 (G2b's `lost.competent` 0.4).
+     - A kid that does not lose the ship would read the routes' 20% (item 107), inside 15–35%. Whether a real kid also
+       holds on once `KEEP HOLDING` is gone is a guidance question for the lead.
+112. **traces-sweep takes `TS_CASES`.** BUILT: `TS_CASES=<id>,<id>` flies only those cases, so a track can re-measure its
+     own rows. With it unset, every case flies, as before.

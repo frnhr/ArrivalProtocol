@@ -1,7 +1,7 @@
 // Slice 7d (docs/phase3/impl/slice-7-plan.md §6.1 signals/contact; R41, OPEN-DECISIONS 50): CONTACT, built.
-// • its row (ending-rules optionState): `???` with `COLLECT 3 SIGNALS · you have n` before it was ever chosen, named after,
+// • its row (ending-rules optionState): `???` with `COLLECT 2 SIGNALS · you have n` before it was ever chosen, named after,
 //   open with its signals meter once SIGNALS_FOR_CONTACT are held (from any source), never spent; the open caption
-//   `SIGNALS 3 ✓ · needs 3`; ENDINGS n/7;
+//   `SIGNALS 2 ✓ · needs 2`; ENDINGS n/7 (slice 8, OPEN-DECISIONS 107: CONTACT's price is 2, was 3);
 // • its words: the verdict (`> transmit outward`, CONTROL non-compliant), the four titles, its NEXT RUN: line;
 // • its trace on run 2 (startRun's own traces, the real sends): two signal stops in layers 5–7, each on an ordinary ship
 //   (never authored, `?`, TIGHT, first or final), the save's check clean, over 40 seeds; each stop's card row and `◆`; the
@@ -41,20 +41,23 @@ const contactUnit = () => lastUnitOf(endingOf('purge', 'contact'));
   const fresh = state();
   const at = (n: number): GameState => {
     const copy = structuredClone(fresh) as GameState;
-    copy.run.residents.signals = n === 0 ? [] : [{ slot: 4, depth: 3, source: 'note', n: 1 }, ...(n >= 3 ? [{ slot: 14, depth: 4, source: 'signal-event' as const, n: n - 1 }] : [])];
+    // 1: a note; 2: the signal ship alone (its 2); 3: a note and the signal ship; 4: two notes and the signal ship.
+    const note = { slot: 4, depth: 3, source: 'note' as const, n: 1 };
+    const signal = { slot: 14, depth: 4, source: 'signal-event' as const, n: 2 };
+    copy.run.residents.signals = [[], [note], [signal], [note, signal], [note, signal, { ...note, slot: 6 }]][n]!;
     return copy;
   };
   const none = optionState(at(0), 'contact', []);
   const seen = optionState(at(1), 'contact', ['contact']);
-  const paid = optionState(at(3), 'contact', []);
-  check('CONTACT\'s row: `???` before it was ever chosen, `COLLECT 3 SIGNALS · you have 0`; named once seen (`you have 1`)',
-    none.kind === 'needs' && !none.named && none.need === FINALE_TEXT.needs.signals(0, SIGNALS_FOR_CONTACT)
-    && seen.kind === 'needs' && seen.named && seen.need === 'COLLECT 3 SIGNALS · you have 1', JSON.stringify({ none, seen }));
-  check('…open at 3 fragments from any source, its signals meter (held, not spent); four is still open',
-    paid.kind === 'open' && paid.price?.kind === 'signals' && paid.price.have === 3 && paid.price.need === 3 && paid.now === null
-    && optionState(at(4), 'contact', []).kind === 'open' && signalCount(at(4).run) === 4);
-  check('…its open caption reads as met: `SIGNALS 3 ✓ · needs 3`; ENDINGS n/7 (CONTACT counts)',
-    FINALE_TEXT.price.signals(3, 3) === 'SIGNALS 3 ✓ · needs 3' && builtPieces().length === 7 && builtPieces().includes('contact'));
+  const paid = optionState(at(2), 'contact', []);
+  check('CONTACT\'s row: `???` before it was ever chosen, `COLLECT 2 SIGNALS · you have 0`; named once seen (`you have 1`)',
+    SIGNALS_FOR_CONTACT === 2 && none.kind === 'needs' && !none.named && none.need === FINALE_TEXT.needs.signals(0, SIGNALS_FOR_CONTACT)
+    && seen.kind === 'needs' && seen.named && seen.need === 'COLLECT 2 SIGNALS · you have 1', JSON.stringify({ none, seen }));
+  check('…open at 2 fragments (the signal ship alone), its signals meter (held, not spent); three and four are still open',
+    paid.kind === 'open' && paid.price?.kind === 'signals' && paid.price.have === 2 && paid.price.need === 2 && paid.now === null
+    && optionState(at(3), 'contact', []).kind === 'open' && optionState(at(4), 'contact', []).kind === 'open' && signalCount(at(4).run) === 4);
+  check('…its open caption reads as met: `SIGNALS 2 ✓ · needs 2`; ENDINGS n/7 (CONTACT counts)',
+    FINALE_TEXT.price.signals(2, 2) === 'SIGNALS 2 ✓ · needs 2' && builtPieces().length === 7 && builtPieces().includes('contact'));
   const lines = finaleVerdictLines(at(3), 'purge', 'contact', null).map((line) => line.text);
   check('the verdict: `> rm unit_046`, `> transmit outward`, CONTROL non-compliant', lines.length === 3 && lines[1] === FINALE_TEXT.echo('> transmit outward')
     && /non-compliant/.test(lines[2]!), JSON.stringify(lines));

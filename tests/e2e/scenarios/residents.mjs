@@ -13,7 +13,7 @@
 // • CURLEW (slot 7, BARNABY asleep): a grey `BARNABY.sys` reading IDLE; SCAN says `Not inactive. Asleep.`; DELETE gives the
 //   hint; DELETE sleep.lock wakes it (three green lines and the offer's buttons, no timer); MEND DRIVERS by its key heals a
 //   hurt driver; the LANDING REPORT's `+4 TRAINING CYCLES · taught by BARNABY`.
-// • HERON (slot 4, HELM left): SCAN farewell.txt → `SIGNAL · 1/3`; SCAN a leftover → its card's name; the PACKET headed `LEFT
+// • HERON (slot 4, HELM left): SCAN farewell.txt → `SIGNAL · 1/2`; SCAN a leftover → its card's name; the PACKET headed `LEFT
 //   BEHIND BY HELM` with three cards, the third a `.skl`.
 // Usage: node tests/e2e/scenarios/residents.mjs (env E2E_BASE_URL; tests/e2e/run.mjs runs it). Shots: tests/.out/e2e/shots/res-*.
 import { launch, BASE_URL, SHOTS, checker, pageKit, runKit } from '../lib.mjs';
@@ -328,7 +328,7 @@ async function arrive(route, name, bypass = null) {
   await opsDone();
   await page.waitForTimeout(500);
   const signal = await st(() => window.__ap.signals().length);
-  check('HERON: SCAN farewell.txt reads HELM\'s note, and its fragment stamps `SIGNAL · 1/3`', ok && signal === 1 && (await stamps()).slice(before).includes('SIGNAL · 1/3'),
+  check('HERON: SCAN farewell.txt reads HELM\'s note, and its fragment stamps `SIGNAL · 1/2`', ok && signal === 1 && (await stamps()).slice(before).includes('SIGNAL · 1/2'),
     JSON.stringify(await stamps()));
   await clickSeg('leftover1');
   await opsDone();

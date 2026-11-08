@@ -40,8 +40,8 @@ const fixture = (): { save: Raw; meta: Raw } => JSON.parse(readFileSync(join(FIX
 check('built: the `?` ships and their events (UNKNOWN_EVENTS_BUILT)', UNKNOWN_EVENTS_BUILT);
 check('built: CONTACT, its row and its trace (ENDINGS_BUILT.contact, TRACES_BUILT.contact)', ENDINGS_BUILT.contact && TRACES_BUILT.contact);
 check('RUN_SAVE_VERSION 9', RUN_SAVE_VERSION === 9);
-check('the numbers: the signal ship 2, a stop 1 fragment and +8 (two stops +16, against a gift\'s +15), CONTACT\'s price 3',
-  SIGNAL_EVENT_FRAGMENTS === 2 && CONTACT_STOP_FRAGMENTS === 1 && CONTACT_GIFT_CHARGE * 2 - TRACE_GIFT_CHARGE === 1 && SIGNALS_FOR_CONTACT === 3
+check('the numbers: the signal ship 2, a stop 1 fragment and +8 (two stops +16, against a gift\'s +15), CONTACT\'s price 2 (slice 8)',
+  SIGNAL_EVENT_FRAGMENTS === 2 && CONTACT_STOP_FRAGMENTS === 1 && CONTACT_GIFT_CHARGE * 2 - TRACE_GIFT_CHARGE === 1 && SIGNALS_FOR_CONTACT === 2
   && TRACE_LAYERS.contact.join() === '5,7');
 {
   // Every arm the generator rolls puts SIGNAL_EVENT_FRAGMENTS on its signal ship, and the file rule reads it (it throws on
