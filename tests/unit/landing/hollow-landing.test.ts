@@ -1,14 +1,16 @@
 // Slice 1a, Track SIM: HOLLOW during the landing (01-landing §5, plan §1.6, risk 9). The drain takes the LARGER of the
 // burn's and the landing's multipliers, never their product; landMult applies only while an in-band window is open AND
 // a pod can launch (§5's definition: state.landing.window plus nextToLaunch); the projected drain (the countdowns) uses
-// landMult in landing. MERGE (LAST LIGHT) restores an eaten driver in place at MERGE_DRIVER_INTEGRITY, the landing
-// resumes and the restored pod launches again; a pod whose eaten block is gone stays parked, restorable.
+// landMult in landing. MERGE (LAST LIGHT; slice 7b's THE LAST LANDING) gives every eaten driver back by radio at
+// MERGE_DRIVER_INTEGRITY, its block standing or gone (never in memory), and their pods land on their own, the others staying
+// parked; the result counts both as restored.
 import { check, finish } from './checks';
 import { lockOn } from './harness-landing';
 import { createHarness7 } from '../wp7/harness7';
 import { drainConditions, drainRatePerSec, projectedDrainPerSec } from '@systems/hollow';
 
-import { endLanding, forceLandAll } from '@systems/landing';
+import { endLanding } from '@systems/landing';
+import { skipLastLanding } from '@systems/last-landing';
 import { landingResult, nextToLaunch } from '@systems/landing-rules';
 import { replaceRange, requireAddr, freeSegment, mergeAdjacentFree, newSegId } from '@systems/memory-ops';
 import { createInitialState } from '@state/initial';
@@ -108,23 +110,29 @@ h.store.update((draft) => {
   if (pool && pool.type === 'redundancy') pool.used = Math.max(pool.used, MERGE_COST_CHARGE);
 });
 const refusal = chooseEnding(h.store, 'merge');
-const leadRecord = state().landing.pods.find((record) => record.pod === lead)!;
-const leadDriver = driversInMemory(state()).find((driver) => driver.pod === lead);
+const leadRecord = (): GameState['landing']['pods'][number] => state().landing.pods.find((record) => record.pod === lead)!;
+const goneRecord = (): GameState['landing']['pods'][number] => state().landing.pods.find((record) => record.pod === otherPod)!;
+const radio = state().landing.lastLanding;
 check('MERGE is chosen', refusal === null && decidedAs(state()) === 'merge', `${refusal} ${state().hollow.finale.phase} charge ${chargeLeft(state())}`);
-check(`MERGE restores the eaten driver in place at ${MERGE_DRIVER_INTEGRITY}`, leadDriver !== undefined && leadDriver.integrity === MERGE_DRIVER_INTEGRITY
-  && leadRecord.driverLost === null && leadRecord.restored && leadRecord.fate.kind === 'aboard', JSON.stringify(leadRecord.fate));
-check('...and the landing resumes, its no-time pods unparked', state().landing.ended === null && state().landing.lingerAiSec === null
-  && state().landing.pods.filter((record) => record.fate.kind === 'aboard').length === state().landing.pods.length - 1);
-const goneRecord = state().landing.pods.find((record) => record.pod === otherPod)!;
-check('a pod whose block is gone stays parked, eaten, restorable', goneRecord.fate.kind === 'parked' && goneRecord.fate.why === 'eaten'
-  && goneRecord.fate.restorable && goneRecord.driverLost === 'eaten', JSON.stringify(goneRecord.fate));
+check(`MERGE gives the eaten driver back by radio at ${MERGE_DRIVER_INTEGRITY}, never in memory (7b R24): THE LAST LANDING`,
+  state().hollow.finale.phase === 'last-landing' && radio !== null && radio.drivers.some((driver) => driver.pod === lead && driver.integrity === MERGE_DRIVER_INTEGRITY)
+  && !driversInMemory(state()).some((driver) => driver.pod === lead) && leadRecord().driverLost === null && leadRecord().restored
+  && leadRecord().fate.kind === 'aboard', JSON.stringify(leadRecord().fate));
+check('...and the landing reopens for the restored pods alone: the no-time pods stay parked', state().landing.ended === null && state().landing.lingerAiSec === null
+  && state().landing.pods.filter((record) => record.fate.kind === 'aboard').length === 2
+  && state().landing.pods.filter((record) => record.fate.kind === 'parked' && record.fate.why === 'no-time').length === state().landing.pods.length - 2);
+check('a pod whose block is gone comes back too, by radio (R25: whatever became of its block), released aboard',
+  goneRecord().fate.kind === 'aboard' && goneRecord().restored && goneRecord().driverLost === null
+  && radio !== null && radio.drivers.some((driver) => driver.pod === otherPod), JSON.stringify(goneRecord().fate));
 
-forceLandAll(h.store);
-const landed = state().landing.pods.find((record) => record.pod === lead)!;
-check('the restored pod launches again and lands', landed.fate.kind === 'down', landed.fate.kind);
+skipLastLanding(h.store);
+check('the restored pods land on their own ([ENTER] skips to the result), and the FINALE is decided', [lead, otherPod].every((pod) =>
+  state().landing.pods.find((record) => record.pod === pod)!.fate.kind === 'down') && state().landing.lastLanding === null
+  && state().hollow.finale.phase === 'done', `${leadRecord().fate.kind} ${goneRecord().fate.kind} ${state().hollow.finale.phase}`);
 const tally = landingResult(state(), 'locked');
-check('the result counts it as restored, and parks the other', tally.restored === leadRecord.colonists
-  && tally.pods.find((summary) => summary.pod === lead)?.restored === true && tally.parked.some((entry) => entry.pod === otherPod && entry.why === 'eaten'),
+check('the result counts both as restored, and parks the others', tally.restored === leadRecord().colonists + goneRecord().colonists
+  && [lead, otherPod].every((pod) => tally.pods.find((summary) => summary.pod === pod)?.restored === true)
+  && tally.parked.length === state().landing.pods.length - 2 && tally.parked.every((entry) => entry.why === 'no-time'),
   `restored ${tally.restored}, parked ${JSON.stringify(tally.parked)}`);
 
 finish();

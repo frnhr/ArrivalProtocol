@@ -110,18 +110,22 @@ const onTarget = (slot: number, colony: string): ShipResult => result(slot, colo
     JSON.stringify(optionState(base(), piece as never, [])) === JSON.stringify({ kind: 'open', price: null, now: null })));
   check(`MERGE with ${charge} charge: open, its meter (${charge}/${MERGE_COST_CHARGE}), no NOW: with nobody eaten`,
     charge >= MERGE_COST_CHARGE && JSON.stringify(optionState(state, 'merge', [])) === JSON.stringify({ kind: 'open', price: { kind: 'charge', have: charge, need: MERGE_COST_CHARGE }, now: null }));
-  // Two drivers eaten, one block still standing: NOW: names the one MERGE gives back in 7a.
+  // Two drivers eaten, one block still standing, and a third driver lost to the belt: NOW: names both eaten ones, which 7b's
+  // THE LAST LANDING gives back by radio whatever became of their blocks (R25), and never the belt's.
   const eaten = ended(base(), 31);
-  const [first, second] = eaten.landing.pods;
+  const [first, second, third] = eaten.landing.pods;
   first!.driverLost = 'eaten';
   second!.driverLost = 'eaten';
+  third!.driverLost = 'dead';
   first!.fate = { kind: 'parked', why: 'eaten', restorable: true };
   second!.fate = { kind: 'parked', why: 'eaten', restorable: true };
+  third!.fate = { kind: 'parked', why: 'dead', restorable: false };
   const block: HollowSegment = { id: 'h-test', name: 'HOLLOW', type: 'hollow', size: DRIVER_BLOCKS, root: false, locked: false, owner: 'HOLLOW', atePod: first!.pod };
   const freeAt = eaten.memory.findIndex((seg) => seg.type === 'free' && seg.size >= DRIVER_BLOCKS);
   eaten.memory.splice(freeAt, 0, block);
-  check('…MERGE\'s NOW: counts the eaten drivers whose blocks stand (R15\'s interim words)', JSON.stringify(mergeRestorable(eaten)) === JSON.stringify([first!.pod])
-    && (() => { const option = optionState(eaten, 'merge', []); return option.kind === 'open' && option.now === FINALE_TEXT.nowInterim(1); })());
+  check('…MERGE\'s NOW: counts every eaten driver still in orbit, its block standing or not (7b: by radio, R25), never the belt\'s',
+    JSON.stringify(mergeRestorable(eaten)) === JSON.stringify([first!.pod, second!.pod])
+    && (() => { const option = optionState(eaten, 'merge', []); return option.kind === 'open' && option.now === FINALE_TEXT.now(2); })());
   const poor = ended(base(), 31);
   const pool = poor.memory.find((seg) => seg.type === 'redundancy');
   if (pool?.type !== 'redundancy') throw new Error('rules: no REPAIR CHARGE');

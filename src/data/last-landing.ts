@@ -5,4 +5,4 @@
 // HOLLOW in, hands the eaten drivers back by radio (landing.lastLanding, never memory), and systems/last-landing.ts
 // startLastLanding flies their pods on their own.
 // Track DROP raises this line (one line) once startLastLanding, its controller, its tick and skipLastLanding are built.
-export const LAST_LANDING_BUILT: boolean = false;
+export const LAST_LANDING_BUILT: boolean = true;

@@ -46,7 +46,7 @@ const threw = (fn: () => unknown): string => {
 
 // --- The gate, the numbers, the words --------------------------------------------------------------------------------------
 // Track DROP's gate line:
-check('built: THE LAST LANDING not yet (7a\'s interim MERGE plays)', !LAST_LANDING_BUILT);
+check('built: THE LAST LANDING (Track DROP raised its gate: MERGE\'s pods land on their own)', LAST_LANDING_BUILT);
 // (end of DROP's gate line)
 
 check('the numbers are 01 §3.17\'s: 2.0 s between launches, 2 orbits of AUTODROP, ±(W/2 + 150 km), ×2 spread; the skip cap far above a run',
