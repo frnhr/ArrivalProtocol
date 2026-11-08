@@ -18,6 +18,8 @@
 // is KESTREL's DELETE, and LAST LIGHT's duel is fought with it. The headless CORMORANT run gets its MOVE and DELETE by
 // __ap.give('mv') / __ap.give('rm') on ship 1 (__ap.route resets the requests), and after the kid DELETEs its only rm there
 // the DESK to LAST LIGHT opens on the REPOSITORY with Rm lit (the last-rm prompt).
+// Slice 6: CORMORANT is POOR on seed 4: its card's SITE DATA row and `LZ: 2 · SURVEY NEEDED`, the boot's SITE DATA POOR line,
+// and the report's `· ROCKY · n HARD` (or WET) on the bad guess, shown by the first touchdown (no SURVEY aboard).
 // Usage: node tests/e2e/scenarios/run-flow.mjs [outPrefix]   env SHOT_VIEWPORT=1280x720, E2E_BASE_URL (tests/e2e/run.mjs runs it)
 import { launch, BASE_URL, runKit } from '../lib.mjs';
 const out = process.argv[2] ?? 'tests/.out/e2e/shots/p2';
@@ -352,6 +354,9 @@ check('CONTINUE on VESPER goes on to the DESK (CORMORANT picked there)', (await 
 const cormorantDesk = await throughDesk(15, 'CORMORANT');
 check('…CORMORANT\'s card said HOLLOW WILL FIND YOU ON THIS BEAM before SET COURSE (M3: the final ship is in range)',
   cormorantDesk.card?.name === 'CORMORANT' && cormorantDesk.card.rows.includes('threat=HOLLOW WILL FIND YOU ON THIS BEAM'), JSON.stringify(cormorantDesk.card?.rows));
+// Slice 6: CORMORANT is POOR on seed 4: its card's SITE DATA row and the LZ row's words.
+check('…and `SITE DATA · POOR · ARRIVAL CONTROL GUESSED`, `LZ: 2 · SURVEY NEEDED`',
+  cormorantDesk.card?.rows.includes('site=POOR · ARRIVAL CONTROL GUESSED') && cormorantDesk.card.rows.includes('lzs=LZ: 2 · SURVEY NEEDED'), JSON.stringify(cormorantDesk.card?.rows));
 await page.waitForTimeout(1200);
 // Slice 2's boarding, on the arm's beam into CORMORANT: the uninvited chip rides after the unit's own, locked, free.
 const toCormorant = await packetThreat();
@@ -381,8 +386,20 @@ check('CORMORANT boots boarded: the unpack types `100% ... 108%`, the root sits 
 // Slice 5 (plan §7.4): CORMORANT is seed 4's gone-resident ship (PURSER left), so its boot types the amber RECEIVER CLOSED line.
 const closed = await st(() => window.__ap.log().filter((entry) => entry.text === '> RECEIVER CLOSED · this ship launched with its own AI').map((entry) => entry.tone ?? null));
 check('…and, its resident gone (PURSER), the amber `> RECEIVER CLOSED · this ship launched with its own AI`', closed.includes('resident'), JSON.stringify(closed));
+// Slice 6: the POOR boot line; and with no SURVEY aboard, the first pod down on the bad guess shows its ground in the report.
+const siteLine = await st(() => window.__ap.log().filter((entry) => /^> SITE DATA POOR/.test(entry.text)).map((entry) => entry.text));
+check('…its boot types `> SITE DATA POOR · ARRIVAL CONTROL GUESSED 2 LZs`', siteLine.includes('> SITE DATA POOR · ARRIVAL CONTROL GUESSED 2 LZs'), JSON.stringify(siteLine));
 await kit.lockInRing({ sleep: true });
 check('CORMORANT (locked at once) lands and reaches its LANDING REPORT', await kit.landToReport());
+await page.waitForTimeout(1500);
+const poorRows = await st(() => ({
+  rows: [...document.querySelectorAll('#lrRows .lr-row')].map((row) => row.innerText.replace(/\s+/g, ' ')),
+  bad: window.__ap.survey().sites.filter((site) => site.kind === 'guess' && site.ground !== 'flat').map((site) => site.ground.toUpperCase()),
+  reveals: window.__ap.survey().reveals,
+}));
+check(`…its report names the bad guess's ground and its hard pods (\`· ${poorRows.bad[0]} · n HARD\`), shown by the first touchdown`,
+  poorRows.bad.length === 1 && poorRows.rows.some((row) => new RegExp(` · ${poorRows.bad[0]} · \\d+ HARD`).test(row)) && poorRows.reveals[0]?.by === 'touchdown',
+  JSON.stringify(poorRows));
 await kit.finishReport();
 // WP11: the final ship. The DESK → LAST LIGHT (locked at once, HOLLOW asleep), whose duel is fought by clicks (DELETE on the
 // root), then the FINALE's two steps on the card (slice 7a: PURGE, then REASSIGNMENT, once the landing has settled), and its

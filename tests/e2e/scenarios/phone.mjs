@@ -265,6 +265,12 @@ for (const [tool, selector] of [['engine', '.engine-win'], ['telemetry', '.telem
   await overflow(`tab ${tool}`);
   await shot(`07-tab-${tool}`);
 }
+// Slice 6: SITES is a POOR planet's tab only (survey-only): on ARES-VII (GOOD) neither its tab nor its window shows (the tab
+// itself is checked on CORMORANT by the survey scenario).
+check('tab sites: hidden on a GOOD planet (no SITES tab in the dock, its window closed)', await st(() => {
+  const item = document.querySelector('.dock-item[data-tool="sites"]');
+  return item !== null && getComputedStyle(item).display === 'none' && document.getElementById('sitesWin').hidden && !document.body.classList.contains('survey');
+}));
 await page.tap('.dock-item[data-tool="navplot"]');
 await page.waitForTimeout(300);
 

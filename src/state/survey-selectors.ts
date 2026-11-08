@@ -15,6 +15,17 @@ function lzOf(landing: Readonly<Pick<LandingState, 'lzs'>>, label: string): LzSt
   return landing.lzs.find((lz) => lz.label === label) ?? null;
 }
 
+// A site the kid can see (review A4: the one rule the SITES window, assignRefusal and bestSwap share): CONTROL's guesses are
+// on the list from the boot, every other site once the swath found it.
+export function siteVisible(site: Readonly<Pick<SurveySite, 'kind' | 'found'>>): boolean {
+  return site.kind === 'guess' || site.found;
+}
+
+// The LZ standing on the site `siteId`, by its label, or null (review A4: the machine's reveal, 'taken', the SITES window).
+export function lzOnSite(landing: Readonly<Pick<LandingState, 'lzs'>>, siteId: string): string | null {
+  return landing.lzs.find((lz) => lz.site === siteId)?.label ?? null;
+}
+
 // The site the LZ `label` stands on, or null (a GOOD planet, or no such LZ).
 export function lzSiteOf(landing: Readonly<Pick<LandingState, 'lzs' | 'survey'>>, label: string): SurveySite | null {
   const site = lzOf(landing, label)?.site ?? null;
@@ -50,6 +61,12 @@ export function foundSites(survey: Readonly<SurveyState>): SurveySite[] {
   return survey.sites.filter((site) => site.kind !== 'guess' && site.found);
 }
 
+// The candidates found so far: the sites an LZ could move to, so the wreck is left out (review m3: `PLANET MAPPED · 4 SITES`
+// on CORMORANT, whose fifth find is a wreck no LZ can take).
+export function candidatesFound(survey: Readonly<SurveyState>): number {
+  return survey.sites.filter((site) => site.kind === 'candidate' && site.found).length;
+}
+
 // The mapped share of the rim, whole percent (0 on a planet SURVEY never touched).
 export function mappedPct(survey: Readonly<Pick<SurveyState, 'mapped'>>): number {
   if (survey.mapped.length === 0) return 0;
@@ -79,4 +96,49 @@ export function surveyRecordOf(landing: Readonly<Pick<LandingState, 'lzs' | 'sur
     ranAt: survey.ranAt, mappedPct: mappedPct(survey), found: foundSites(survey).length,
     moves: survey.moves.map((move) => ({ ...move })), badKept, movedOff,
   };
+}
+
+// One LZ's net outcome over the ship, read from its record alone (review m5, A1; the record's shape is unchanged): where it
+// ended against its own guess, and the ground it started and ended on. The SHIP CARD's `POOR · LZ-B MOVED` and slice 7's
+// epilogue (`RIVERSIDE stayed dry: you moved LZ-B off the lake`) read it, not the raw moves: a move away and back is no move.
+export interface SurveyNetOutcome {
+  lz: string;
+  endedSite: string | null;          // the site it ended on; null: it never moved (its own guess)
+  moved: boolean;                    // it ended off its own guess
+  groundBefore: LzGround | null;     // its guess's ground; null when the record can't tell (see below)
+  groundAfter: LzGround;
+  knownBefore: RevealBy | null;      // who made a bad guess known before the LZ left it (null: moved off blind, or FLAT)
+  knownAfter: RevealBy | null;       // who made the bad ground it ended on known (null: nobody, or FLAT)
+}
+
+// Every LZ the record says anything about (a move, or bad ground kept), by label; an LZ that never moved and stood on FLAT
+// has no entry (nothing happened to it, and the record does not list it).
+// • After: `badKept` names every LZ left on bad ground, so any other LZ ended on FLAT.
+// • Before: every LZ starts on its own guess, so its first move's `from` is the guess. `movedOff` is the moves off bad ground
+//   in order, so an LZ that ended back on its guess started on the ground it ended on; one with as many of those as moves
+//   left bad ground every time (the guess was bad); one with none left FLAT every time. With some but not all (off a FLAT
+//   guess onto a bad candidate and off again, or the other way round) the record can't tell which move left the bad ground:
+//   groundBefore is null, and nothing should be claimed about the guess.
+// • An LZ with no move started where it ended.
+export function surveyNetOutcome(record: Readonly<SurveyRecord>): SurveyNetOutcome[] {
+  const labels = [...new Set([...record.moves, ...record.badKept, ...record.movedOff].map((entry) => entry.lz))].sort();
+  return labels.map((lz): SurveyNetOutcome => {
+    const moves = record.moves.filter((move) => move.lz === lz);
+    const off = record.movedOff.filter((entry) => entry.lz === lz);
+    const kept = record.badKept.find((entry) => entry.lz === lz) ?? null;
+    const groundAfter: LzGround = kept?.ground ?? 'flat';
+    const knownAfter = kept?.known ?? null;
+    if (moves.length === 0) {
+      if (off.length > 0) throw new Error(`surveyNetOutcome: ${lz} moved off bad ground without a move`);
+      return { lz, endedSite: null, moved: false, groundBefore: groundAfter, groundAfter, knownBefore: knownAfter, knownAfter };
+    }
+    if (off.length > moves.length) throw new Error(`surveyNetOutcome: ${lz} has ${off.length} moves off bad ground of ${moves.length}`);
+    const guess = moves[0]!.from;
+    const endedSite = moves[moves.length - 1]!.site;
+    const moved = endedSite !== guess;
+    const groundBefore: LzGround | null = !moved ? groundAfter : off.length === 0 ? 'flat' : off.length === moves.length ? off[0]!.ground : null;
+    // A bad guess is the first move's `from`, so the first move off bad ground is the move off the guess.
+    const knownBefore = groundBefore !== null && groundBefore !== 'flat' && off.length > 0 ? off[0]!.known : null;
+    return { lz, endedSite: moved ? endedSite : null, moved, groundBefore, groundAfter, knownBefore, knownAfter };
+  });
 }

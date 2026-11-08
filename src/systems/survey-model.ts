@@ -9,7 +9,8 @@ import type { SurveySite, AssignRefusal, SurveyRunning } from '@/types/survey';
 import type { EffectiveVersion } from '@/types/skill';
 import { isLivePhase } from '@systems/clock';
 import { pendingTouchdowns } from '@systems/landing-rules';
-import { surveyVersion, groundKnownAt } from '@state/survey-selectors';
+import { surveyVersion, groundKnownAt, siteVisible, lzOnSite } from '@state/survey-selectors';
+import { fileLevel } from '@systems/skill-levels';
 import {
   SURVEY_CELL_DEG, SURVEY_CELLS, SURVEY_SWATH_DEG, SURVEY_SWEEP_FACTOR, SURVEY_SWEEP_VERSION, SURVEY_RATE_VERSION,
 } from '@data/tuning';
@@ -120,22 +121,44 @@ function podsDownIn(state: Readonly<GameState>, lz: string): boolean {
   return state.landing.pods.some((record) => record.fate.kind === 'down' && record.fate.touchdown.lz === lz);
 }
 
+const anyFalling = (state: Readonly<GameState>): boolean => state.landing.pods.some((record) => record.fate.kind === 'falling');
+
 // A pod falling that was aimed at the LZ, or will come down in it as it stands (pendingTouchdowns: the touchdown's own rule).
 function podFallingTo(state: Readonly<GameState>, lz: string): boolean {
-  const falling = state.landing.pods.filter((record) => record.fate.kind === 'falling');
-  if (falling.length === 0) return false;
-  if (falling.some((record) => record.fate.kind === 'falling' && record.fate.launch.aimLz === lz)) return true;
+  if (!anyFalling(state)) return false;
+  if (state.landing.pods.some((record) => record.fate.kind === 'falling' && record.fate.launch.aimLz === lz)) return true;
   for (const touchdown of pendingTouchdowns(state).values()) if (touchdown.lz === lz) return true;
   return false;
 }
 
+// Review B1: whether moving the LZ `lz` onto `site` would change where a pod already falling comes down (its place or its LZ).
+// A pod's fate is fixed at its touchdown, from its launch's landingRad against the LZs as they stand then (landing-rules
+// classifyLanding, through pendingTouchdowns), so a free LZ moved under a pod falling off-site would make it an LZ pod. Every
+// falling pod is judged against the LZs now and against the moved ones; any difference refuses the move (R4: no pod in
+// flight is re-judged).
+function moveRejudgesFalling(state: Readonly<GameState>, lz: string, site: Readonly<SurveySite>): boolean {
+  if (!anyFalling(state)) return false;
+  const lzs = state.landing.lzs.map((one): LzState => (one.label !== lz ? one : {
+    ...one, centreRad: site.centreRad, halfWidthRad: site.halfWidthRad, widthKm: site.widthKm, ground: site.ground, site: site.id,
+  }));
+  const before = pendingTouchdowns(state);
+  const after = pendingTouchdowns({ ...state, landing: { ...state.landing, lzs } });
+  for (const [pod, touchdown] of before) {
+    const moved = after.get(pod);
+    if (moved === undefined || moved.place !== touchdown.place || moved.lz !== touchdown.lz) return true;
+  }
+  return false;
+}
+
 // Why the site `siteId` can't take the LZ `lz` now, or null when it can (R10), checked in this order:
-// • 'closed': a GOOD planet, no SURVEY aboard that works, or the ship is not in flight or landing (the boot, a desk);
+// • 'closed': a GOOD planet, no SURVEY aboard, or the ship is not in flight or landing (the boot, a desk); 'offline': a
+//   SURVEY.skl aboard that damage has turned OFF (review m1: a REPAIR brings it back);
 // • 'not-found' (a candidate or a wreck not mapped yet; CONTROL's guesses are known from the boot, so an LZ can go back),
 //   'wreck', 'same' (the LZ stands on it);
 // • 'too-small' (ROOM under the LZ's count), 'taken' (another LZ's);
 // • 'landing-over';
-// • 'pods-down' (01: "an LZ can't move once a pod has landed in it"), 'falling' (a pod on its way there);
+// • 'pods-down' (01: "an LZ can't move once a pod has landed in it"), 'falling' (a pod on its way there), 'falling-under' (a
+//   pod on its way elsewhere would come down in the moved LZ, or out of it: review B1);
 // • 'window-open': its window is open now, or GO LOWER holds an aim for it (review m5: the burn would fly to the old place).
 // Throws on an LZ or a site the ship does not have.
 export function assignRefusal(state: Readonly<GameState>, lz: string, siteId: string): AssignRefusal | null {
@@ -143,17 +166,19 @@ export function assignRefusal(state: Readonly<GameState>, lz: string, siteId: st
   const at = lzOf(state, lz);
   if (landing.survey.site !== 'poor') return 'closed';
   const site = siteOf(state, siteId);
-  if (surveyVersion(state) === 0) return 'closed';
   const phase = state.run.phase;
   if (phase !== 'flight' && phase !== 'landing' && phase !== 'report') return 'closed';
-  if (site.kind !== 'guess' && !site.found) return 'not-found';
+  if (surveyVersion(state) === 0) return fileLevel(state.memory, 'survey') === null ? 'closed' : 'offline';
+  if (!siteVisible(site)) return 'not-found';
   if (site.kind === 'wreck') return 'wreck';
   if (at.site === siteId) return 'same';
   if (site.roomPods < at.pods) return 'too-small';
-  if (landing.lzs.some((other) => other.label !== lz && other.site === siteId)) return 'taken';
+  const owner = lzOnSite(landing, siteId);
+  if (owner !== null && owner !== lz) return 'taken';
   if (phase === 'report' || (phase === 'landing' && landing.ended !== null) || !isLivePhase(state)) return 'landing-over';
   if (podsDownIn(state, lz)) return 'pods-down';
   if (podFallingTo(state, lz)) return 'falling';
+  if (moveRejudgesFalling(state, lz, site)) return 'falling-under';
   if (landing.window?.lz === lz || (landing.goLow?.held === true && landing.goLow.lz === lz)) return 'window-open';
   return null;
 }
@@ -178,7 +203,7 @@ export function knownBad(state: Readonly<GameState>, lz: string): boolean {
 export function bestSwap(state: Readonly<GameState>, lz: string): string | null {
   if (!knownBad(state, lz)) return null;
   const options = state.landing.survey.sites
-    .filter((site) => site.kind !== 'wreck' && site.groundKnown && site.ground === 'flat' && (site.kind === 'guess' || site.found))
+    .filter((site) => site.kind !== 'wreck' && site.groundKnown && site.ground === 'flat' && siteVisible(site))
     .filter((site) => assignRefusal(state, lz, site.id) === null)
     .sort((a, b) => b.halfWidthRad - a.halfWidthRad || b.roomPods - a.roomPods || a.number - b.number);
   return options[0]?.id ?? null;

@@ -24,12 +24,14 @@ export const SURVEY_TEXT = {
   // Refused assigns (R10): at most 46 characters at the worst case (`SITE 12 HOLDS 3,200 · LZ-D NEEDS 3,200`).
   refusal: {
     'closed': () => 'NO SURVEY · SITES STAY AS GUESSED',
+    'offline': () => 'SURVEY OFFLINE — REPAIR IT',
     'not-found': () => 'NOT FOUND YET',
     'wreck': () => 'WRECKAGE · NO ROOM',
     'too-small': (words) => `${words.site} HOLDS ${formatCount(words.holds)} · ${words.lz} NEEDS ${formatCount(words.needs)}`,
     'taken': (words) => `${words.site} IS ${words.lz}'s`,
     'pods-down': (words) => `${words.lz} HAS PODS DOWN`,
     'falling': (words) => `A POD IS FALLING TO ${words.lz}`,
+    'falling-under': () => 'A POD IS FALLING — WAIT FOR IT',
     'window-open': (words) => `${words.lz}'S WINDOW IS OPEN`,
     'landing-over': () => 'THE LANDING IS OVER',
     'same': (words) => `${words.lz} IS ON ${words.site}`,

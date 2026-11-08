@@ -133,7 +133,7 @@ built(() => {
   // The header's five run states (survey-model.ts surveyRunning, Track SWATH's), half mapped: each built as the rule reads it.
   const runAt = (version: 2 | 3, edit: (state: GameState) => void): GameState =>
     giveSurvey(cormorant((s) => { mapCells(s, 0, 30, false); edit(s); }), version);
-  const candidates = sites.filter((site) => site.kind !== 'guess').length;
+  const candidates = sites.filter((site) => site.kind === 'candidate').length;   // the wreck is no site to land (review m3)
   const cases: { name: string; state: GameState; want: string; tone: string; pause: string | null }[] = [
     { name: 'running (v2, its thread held)', state: runAt(2, (s) => { s.landing.survey.claimed = true; }),
       want: SITES_TEXT.window.status.running(2), tone: 'good', pause: SITES_TEXT.window.pause },
@@ -320,6 +320,64 @@ built(() => {
   }
   check('…an unknown bad guess nobody landed on says nothing; a GOOD planet nothing',
     surveyLzRowSuffix(cormorant(), 'LZ-B') === '' && surveyLzRowSuffix(cormorant((s) => { s.landing.survey = createSurveyState('good', []); }), 'LZ-B') === '');
+});
+
+// --- Review fixes (slice-6-review m1, m2, m4, m5, m8) -------------------------------------------------------------------
+built(() => {
+  // m1: SURVEY.skl aboard but OFF by damage is no "no SURVEY".
+  const offline = (state: GameState): GameState => {
+    for (const seg of state.memory) if (seg.type === 'upgrade' && 'version' in seg && seg.upgrade === 'survey') seg.integrity = 0;
+    return state;
+  };
+  const off = offline(giveSurvey(cormorant((s) => { mapCells(s, 0, 30, false); }), 1));
+  const offModel = sitesWindowModel(off);
+  check('m1: SURVEY aboard but OFF: `SURVEY OFFLINE — REPAIR IT` (warn), the guesses `GROUND ?`, the pills refused `offline`',
+    offModel?.status === SITES_TEXT.window.status.offline && offModel.tone === 'warn' && offModel.pause === null
+    && offModel.lzs.every((row) => row.ground.word === SITES_TEXT.row.groundUnknown)
+    && (sitesWindowModel(off, offModel.sites.find((row) => row.selectable)?.site ?? null)?.pills ?? []).filter((pill) => pill.refusal === 'offline').length === 2
+    && SURVEY_TEXT.refusal.offline() === 'SURVEY OFFLINE — REPAIR IT',
+    JSON.stringify(offModel?.lzs.map((row) => row.text)));
+  check('…with nothing found an OFF SURVEY asks for a REPAIR (`REPAIR SURVEY.skl …`); with none aboard it still says TRAIN',
+    sitesWindowModel(offline(giveSurvey(cormorant(), 1)))?.empty === SITES_TEXT.window.emptyOffline
+    && sitesWindowModel(cormorant())?.empty === SITES_TEXT.window.emptyNone);
+  // m2: v3's pause frees no thread.
+  const v3Paused = giveSurvey(cormorant((s) => { mapCells(s, 0, 30, false); s.landing.survey.paused = true; s.clock.paused = false; s.burn.status = 'approaching'; }), 3);
+  const p3 = sitesWindowModel(v3Paused);
+  check('m2: a v3 PAUSE reads `SURVEY v3 · PAUSED`, its title names no thread; v2\'s still `ITS THREAD IS FREE`',
+    surveyRunning(v3Paused) === 'paused' && p3?.status === SITES_TEXT.window.status.pausedFree(3) && p3.pause?.title === SITES_TEXT.window.pauseTitleFree
+    && !/THREAD/.test(p3.status) && !/thread/i.test(p3.pause.title), `${p3?.status} | ${p3?.pause?.title}`);
+  // m4: `1 POD`.
+  check('m4: an LZ row counts `1 POD`, `4 PODS`', SITES_TEXT.row.lz('LZ-B', 'GUESS', 1, 'WIDE', 'GROUND ?') === 'LZ-B · GUESS · 1 POD · WIDE · GROUND ?'
+    && SITES_TEXT.row.lz('LZ-B', 'GUESS', 4, 'WIDE', 'GROUND ?').includes('· 4 PODS ·'));
+  // m8: an LZ that moved onto another LZ's guess names it in the report.
+  const two = sites.find((site) => site.kind === 'candidate' && site.number === 2)!;
+  const guessA = sites.find((site) => site.id === 'guess-A')!;
+  const swapped = cormorant((s) => {
+    const a = s.landing.lzs.find((one) => one.label === 'LZ-A')!;
+    const b = s.landing.lzs.find((one) => one.label === 'LZ-B')!;
+    Object.assign(a, { centreRad: two.centreRad, halfWidthRad: two.halfWidthRad, widthKm: two.widthKm, ground: two.ground, site: two.id });
+    Object.assign(b, { centreRad: guessA.centreRad, halfWidthRad: guessA.halfWidthRad, widthKm: guessA.widthKm, ground: guessA.ground, site: guessA.id });
+    s.landing.survey.moves.push({ lz: 'LZ-A', from: 'guess-A', site: two.id }, { lz: 'LZ-B', from: 'guess-B', site: 'guess-A' });
+  });
+  check('m8: LZ-B on LZ-A\'s guess reads ` · LZ-A GUESS` in the report; LZ-A on SITE 2 ` · SITE 2`',
+    surveyLzRowSuffix(swapped, 'LZ-B') === SITES_TEXT.report.site('LZ-A GUESS') && surveyLzRowSuffix(swapped, 'LZ-A') === SITES_TEXT.report.site('SITE 2'),
+    `${surveyLzRowSuffix(swapped, 'LZ-B')}|${surveyLzRowSuffix(swapped, 'LZ-A')}`);
+});
+
+// m5: the card reads the record's net outcome (state/survey-selectors.ts surveyNetOutcome).
+built(() => {
+  const { run, slices } = armShipSlices(SEED, VESPER);
+  const visited = (survey: SurveyRecord): GameState => ({
+    ...createInitialState({ seed: SEED }), run: { ...run, phase: 'desk', ships: [{ slot: CORMORANT, survey } as unknown as ShipResult],
+      map: { ...run.map, route: [...run.map.route, { slot: CORMORANT } as never] } }, ...slices,
+  } as GameState);
+  const back: SurveyRecord = {
+    ranAt: 1, mappedPct: 100, found: 5, badKept: [{ lz: 'LZ-B', ground: 'rocky', known: null }],
+    moves: [{ lz: 'LZ-B', from: 'guess-B', site: 'site-5' }, { lz: 'LZ-B', from: 'site-5', site: 'guess-B' }],
+    movedOff: [{ lz: 'LZ-B', ground: 'rocky', known: null }],
+  };
+  check('m5: LZ-B moved to SITE 5 and back to its guess: the card says `POOR · SURVEYED, KEPT`, not `LZ-B MOVED`',
+    surveyCardRow(visited(back), CORMORANT)?.value === SITES_TEXT.card.kept, JSON.stringify(surveyCardRow(visited(back), CORMORANT)));
 });
 
 finish();

@@ -10,8 +10,9 @@ import type { SurveySite, SurveyState, BadGround, AssignRefusal } from '@/types/
 import { siteDataOf, SURVEY_BUILT } from '@data/survey';
 import { siteLabel, SURVEY_TEXT } from '@data/survey-text';
 import { SITES_TEXT as T } from '@data/sites-text';
-import { COLONISTS_PER_POD, SITES_RIM_BAR_CELLS } from '@data/tuning';
-import { surveyVersion, mappedPct, lzSiteOf } from '@state/survey-selectors';
+import { COLONISTS_PER_POD, SITES_RIM_BAR_CELLS, SURVEY_SWEEP_VERSION } from '@data/tuning';
+import { lzLetter } from '@data/survey-sites';
+import { surveyVersion, mappedPct, lzSiteOf, siteVisible, lzOnSite, candidatesFound, surveyNetOutcome } from '@state/survey-selectors';
 import { surveyRunning, swathHalfRad, siteStars, assignableLzs, dropSwathOn, type SiteStars } from '@systems/survey-model';
 import { getDropSolution } from '@systems/drop-cache';
 import { shipSummaryAt } from '@systems/map-run';
@@ -65,14 +66,13 @@ export function cellArcs(mapped: readonly boolean[], want: boolean): RimArc[] {
 export function freeSites(state: Readonly<GameState>): SurveySite[] {
   const survey = poorSurvey(state);
   if (survey === null) return [];
-  const taken = new Set(state.landing.lzs.flatMap((lz) => (lz.site === null ? [] : [lz.site])));
   return survey.sites
-    .filter((site) => !taken.has(site.id) && (site.kind === 'guess' || site.found))
+    .filter((site) => lzOnSite(state.landing, site.id) === null && siteVisible(site))
     .sort((a, b) => a.centreRad - b.centreRad);
 }
 
-// What is known of a site's ground, as the rows show it: `FLAT ★★★`, `ROCKY ✕`, `GROUND ?` (SURVEY aboard, not rated), or
-// `UNSURVEYED` (no SURVEY: CONTROL's guess, as 01 §3.13 flags it).
+// What is known of a site's ground, as the rows show it: `FLAT ★★★`, `ROCKY ✕`, `GROUND ?` (SURVEY aboard, not rated: OFF by
+// damage too, review m1), or `UNSURVEYED` (no SURVEY.skl aboard: CONTROL's guess, as 01 §3.13 flags it).
 export interface GroundShown {
   word: string;
   known: 'flat' | BadGround | null;
@@ -196,7 +196,8 @@ export function surveyCardRow(state: Readonly<GameState>, slot: number): SurveyC
   if (result === null) return row(T.card.poor, 'warn');
   const record = result.survey;
   if (record === null || record === undefined) return row(T.card.notSurveyed);
-  const moved = [...new Set(record.moves.map((move) => move.lz))].sort();
+  // Review m5: the LZs that ended off their own guess (a move away and back is none), from the record's net outcome.
+  const moved = surveyNetOutcome(record).filter((outcome) => outcome.moved).map((outcome) => outcome.lz);
   if (moved.length > 0) return row(T.card.moved(moved.join(', ')), 'good');
   return record.ranAt > 0 ? row(T.card.kept) : row(T.card.notSurveyed);
 }
@@ -215,15 +216,17 @@ export function surveyAheadLine(state: Readonly<GameState>, slot: number | null)
 
 // --- The LANDING REPORT -------------------------------------------------------------------------------------------------
 
-// The LANDING REPORT's LZ row suffix for `lz` (landing-report.ts, 01's LZ-row slot): the site it moved to (` · SITE 4`),
-// then a bad ground with the pods that landed hard on it (` · ROCKY · 5 HARD`), or the bad ground alone when it is known
-// and no pod went there. '' on a GOOD planet, or an LZ that stayed on a sound guess.
+// The LANDING REPORT's LZ row suffix for `lz` (landing-report.ts, 01's LZ-row slot): the site it moved to (` · SITE 4`, or
+// ` · LZ-A GUESS` for another LZ's guess: review m8), then a bad ground with the pods that landed hard on it (` · ROCKY · 5
+// HARD`), or the bad ground alone when it is known and no pod went there. '' on a GOOD planet, or an LZ that stayed on a
+// sound guess.
 export function surveyLzRowSuffix(state: Readonly<GameState>, lz: string): string {
   const survey = poorSurvey(state);
   if (survey === null) return '';
   const site = lzSiteOf(state.landing, lz);
   if (site === null) return '';
-  let suffix = site.kind === 'guess' ? '' : T.report.site(siteLabel(site));
+  const ownGuess = site.kind === 'guess' && `LZ-${lzLetter(site.number)}` === lz;
+  let suffix = ownGuess ? '' : T.report.site(siteLabel(site));
   if (site.ground !== 'flat') {
     const hard = state.landing.pods.filter((record) => record.fate.kind === 'down' && record.fate.touchdown.lz === lz
       && record.fate.touchdown.touch === 'hard').length;
@@ -259,7 +262,7 @@ export interface SitesWindowModel {
   rim: string;                                // `▓▓▓░░░…`: the rim mapped, SITES_RIM_BAR_CELLS glyphs from 0 rad
   status: string;                             // SURVEY's state and version, or NO SURVEY
   tone: 'good' | 'warn' | 'dim';
-  pause: { label: string; paused: boolean } | null;   // [ PAUSE ] / [ RESUME ] while SURVEY works on this planet
+  pause: { label: string; paused: boolean; title: string } | null;   // [ PAUSE ] / [ RESUME ] while SURVEY works here
   lzs: SitesRow[];
   sites: SitesRow[];
   empty: string | null;                       // under SITES FOUND while there are none
@@ -272,7 +275,7 @@ function pillOf(state: Readonly<GameState>, site: Readonly<SurveySite>, lz: Read
   const room = SURVEY_TEXT.room(lz.pods);
   if (refusal === null) return { lz: lz.label, text: T.pill(lz.label, room), refusal };
   // 'taken' names the LZ standing on the site (`SITE 4 IS LZ-A's`); every other refusal the LZ asked about.
-  const owner = state.landing.lzs.find((other) => other.site === site.id)?.label ?? lz.label;
+  const owner = lzOnSite(state.landing, site.id) ?? lz.label;
   const why = SURVEY_TEXT.refusal[refusal]({
     site: siteLabel(site), lz: refusal === 'taken' ? owner : lz.label, holds: site.roomPods * COLONISTS_PER_POD, needs: lz.pods * COLONISTS_PER_POD,
   });
@@ -299,26 +302,33 @@ export function sitesWindowModel(state: Readonly<GameState>, selected: string | 
   if (survey === null || !(phase === 'boot' || phase === 'flight' || phase === 'landing' || phase === 'report')) return null;
   const version = surveyVersion(state);
   const surveying = version > 0;
+  // Review m1: SURVEY.skl aboard but OFF by damage is no "no SURVEY": the kid needs a REPAIR, and the guesses read GROUND ?.
+  const aboard = fileLevel(state.memory, 'survey') !== null;
   const running = surveyRunning(state);
   const pct = mappedPct(survey);
   const allMapped = survey.mapped.length > 0 && survey.mapped.every(Boolean);
-  const found = survey.sites.filter((site) => site.kind !== 'guess' && site.found).length;
+  const found = candidatesFound(survey);
+  const threadless = version >= SURVEY_SWEEP_VERSION;
 
   let status: string;
   let tone: SitesWindowModel['tone'] = 'good';
-  if (!surveying) { status = T.window.status.none; tone = 'warn'; }
+  if (!surveying) { status = aboard ? T.window.status.offline : T.window.status.none; tone = 'warn'; }
   else if (running === 'done' || allMapped) status = T.window.status.done(version, found);
-  else if (running === 'running') status = version >= 3 ? T.window.status.sweeping(version) : T.window.status.running(version);
+  else if (running === 'running') status = threadless ? T.window.status.sweeping(version) : T.window.status.running(version);
   else if (running === 'waiting') { status = T.window.status.waiting(version); tone = 'warn'; }
-  else if (running === 'paused') { status = T.window.status.paused(version); tone = 'warn'; }
+  // Review m2: v3 holds no thread, so its pause frees none.
+  else if (running === 'paused') { status = threadless ? T.window.status.pausedFree(version) : T.window.status.paused(version); tone = 'warn'; }
   else { status = T.window.status.idle(version); tone = 'dim'; }
   const pausable = surveying && !allMapped && (running === 'running' || running === 'waiting' || running === 'paused');
-  const pause = pausable ? { label: survey.paused ? T.window.resume : T.window.pause, paused: survey.paused } : null;
+  const pause = pausable ? {
+    label: survey.paused ? T.window.resume : T.window.pause, paused: survey.paused,
+    title: threadless ? T.window.pauseTitleFree : T.window.pauseTitle,
+  } : null;
 
   const lzs = state.landing.lzs.map((lz): SitesRow => {
     const site = lzSiteOf(state.landing, lz.label);
     if (site === null) throw new Error(`sitesWindowModel: ${lz.label} stands on no site on a POOR planet`);
-    const ground = groundShown(site, surveying);
+    const ground = groundShown(site, aboard);
     const where = site.kind === 'guess' ? T.row.guess : siteLabel(site);
     return {
       kind: 'lz', key: lz.label, site: site.id, text: T.row.lz(lz.label, where, lz.pods, T.width[site.width], ground.word), ground,
@@ -328,7 +338,7 @@ export function sitesWindowModel(state: Readonly<GameState>, selected: string | 
   const free = freeSites(state);
   const chosen = free.find((site) => site.id === selected && site.kind !== 'wreck') ?? null;
   const sites = free.map((site): SitesRow => {
-    const ground = groundShown(site, surveying);
+    const ground = groundShown(site, aboard);
     if (site.kind === 'wreck') {
       return { kind: 'wreck', key: site.id, site: site.id, text: T.row.wreck(siteLabel(site)), ground, selectable: false, selected: false, moved: false };
     }
@@ -342,7 +352,8 @@ export function sitesWindowModel(state: Readonly<GameState>, selected: string | 
     if (at === undefined) throw new Error(`sitesWindowModel: assignableLzs named ${lz}, which the landing does not have`);
     return pillOf(state, chosen, at, refusal);
   });
-  const empty = sites.length > 0 ? null : !surveying ? T.window.emptyNone : allMapped ? T.window.emptyDone : T.window.emptyMapping;
+  const empty = sites.length > 0 ? null
+    : !surveying ? (aboard ? T.window.emptyOffline : T.window.emptyNone) : allMapped ? T.window.emptyDone : T.window.emptyMapping;
   const anyRoom = sites.some((row) => row.kind === 'site');
   return {
     header: T.window.header(pct), rim: rimBar(survey.mapped), status, tone, pause, lzs, sites, empty, pills,

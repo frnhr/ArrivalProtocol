@@ -23,6 +23,11 @@
 // • R8: a preempting claim (AUTOBURN's and AUTODROP's: ops-core reserveThread preempt) takes SURVEY's thread when the kid's op
 //   holds the other; SURVEY waits while a claim would take the kid's last thread, and claims again once two are free. m4: a
 //   Core worn to one thread makes it let go. R7: PAUSE gives the thread back and stops mapping; RESUME takes it again.
+// • Review fixes (slice-6-review.md): B1, the review's repro (v2, a pod launched off-site over SITE 1, LZ-A may not move
+//   under it: `falling-under`); M1, SURVEY steps aside while AUTOBURN or AUTODROP holds a thread (the reactor cap stays 0.75),
+//   pinned by the claim and by a real AUTOBURN v1 capture; m6, a paused v2 rates nothing; m7, a bad site the kid moved onto
+//   is revealed with no CONTROL joke, by v2 and by a touchdown (with the report's row); a touchdown reveal on a mislanded
+//   pod; v2 in the landing with the Nav Plotter dead (no dot swath, no throw).
 import { check, finish } from '../landing/checks';
 import type { GameState } from '@state/schema';
 import type { SkillFileSegment } from '@/types/segment';
@@ -50,6 +55,14 @@ import { GUIDE_RULES } from '@data/script';
 import { SURVEY_TEXT } from '@data/survey-text';
 import { SWATH_TEXT } from '@data/swath-text';
 import { REACTOR_CAP_BY_BAND, REACTOR_THREAD_SHARE } from '@data/tuning';
+import type { LaunchRecord } from '@/types/landing';
+import { assignRefusal, dropSwathOn } from '@systems/survey-model';
+import { surveyLzRowSuffix } from '@systems/survey-hud';
+import { requestLaunch } from '@systems/landing';
+import { getDropSolution } from '@systems/drop-cache';
+import { pendingTouchdowns } from '@systems/landing-rules';
+import { SITES_TEXT } from '@data/sites-text';
+import { engageAutoburn, autoburnRefusal, mountAutoburn } from '@systems/autoburn';
 
 const SEED = 7;
 const ROUTE = [2, 5, 11, 15];
@@ -197,8 +210,8 @@ withSurveyBuilt(() => {
     const downB = s().landing.pods.flatMap((record) => (record.fate.kind === 'down' && record.fate.touchdown.lz === 'LZ-B' ? [record.fate.touchdown.touch] : []));
     check(`…the pods land on LZ-B's new site (${downB.length} down there, all soft), and no ground is revealed`,
       downB.length === 4 && downB.every((touch) => touch === 'soft') && events('site-revealed', from).length === 0, downB.join());
-    check('…the planet mapped within the first orbit: `> SURVEY: PLANET MAPPED · 5 SITES` once, the thread let go at 100%, `DONE · 5 SITES`',
-      said('mind-sys', SWATH_TEXT.terminal.mapped(5)) === 1 && releasedWhenDone && surveyRunning(s()) === 'done' && surveyStatus(s())?.text === SWATH_TEXT.status.done(5)
+    check('…the planet mapped within the first orbit: `> SURVEY: PLANET MAPPED · 4 SITES` once (the wreck not counted: review m3), the thread let go at 100%, `DONE · 4 SITES`',
+      said('mind-sys', SWATH_TEXT.terminal.mapped(4)) === 1 && releasedWhenDone && surveyRunning(s()) === 'done' && surveyStatus(s())?.text === SWATH_TEXT.status.done(4)
       && events('survey-state', from).some((event) => event.running === 'done'));
     const shipsBefore = s().run.ships.length;
     toDesk(h.store);
@@ -355,6 +368,185 @@ withSurveyBuilt(() => {
     h.stepUntil(() => Math.abs(angle() - resumedRad) > 0.2, 600);
     check('…RESUME takes the thread again and mapping goes on', !survey().paused && survey().claimed && mappedCells() > pausedAt, `${pausedAt} → ${mappedCells()}`);
   }
+  // --- Review B1: a move may not drop an LZ under a pod already falling ------------------------------------------------------
+  // The review's repro: v2, the rim mapped, the dot over SITE 1 (63°, NARROW FLAT ROOM 5, free) with no window open; the kid
+  // launches off-site (the guard confirmed), then asks to move LZ-A (5 pods) there. The move would make the pod an LZ pod.
+  {
+    fromStart(2);
+    flyApproach();
+    h.stepUntil(() => s().run.phase === 'landing' && getDropSolution()?.dot != null, 60);
+    mapNow(h.store, 100);
+    h.step();
+    const one = survey().sites.find((site) => site.id === siteId(1))!;
+    h.stepUntil(() => {
+      const dot = getDropSolution()?.dot;
+      return dot != null && Math.abs(angleDelta(dot.rad, one.centreRad)) < one.halfWidthRad * 0.3 && s().landing.window === null;
+    }, 600);
+    let launched = requestLaunch(h.store, { source: 'player' });
+    if (launched.kind === 'confirm') launched = requestLaunch(h.store, { source: 'player', confirmed: launched.ask });
+    const falling = s().landing.pods.find((record) => record.fate.kind === 'falling')!;
+    const before = pendingTouchdowns(s()).get(falling.pod)!;
+    const refusal = assignRefusal(s(), 'LZ-A', one.id);
+    const assigned = assignSite(h.store, 'LZ-A', one.id);
+    check(`B1: a pod falling off-site over SITE 1 (${before.place}, ${before.points} points): LZ-A onto SITE 1 is refused \`${SURVEY_TEXT.refusal['falling-under']()}\`, nothing moves`,
+      before.place === 'off-site' && refusal === 'falling-under' && assigned === 'falling-under' && lz('LZ-A').site === 'guess-A' && s().landing.sitesRev === 0,
+      `${JSON.stringify(launched)} ${refusal}`);
+    h.stepUntil(() => s().landing.pods.find((record) => record.pod === falling.pod)!.fate.kind === 'down', 600);
+    const fate = s().landing.pods.find((record) => record.pod === falling.pod)!.fate;
+    check('…the pod lands off-site, scored where it was launched', fate.kind === 'down' && fate.touchdown.place === 'off-site' && fate.touchdown.lz === null);
+    check('…once it is down the move is free again (SITE 1 has nothing falling over it)', assignRefusal(s(), 'LZ-A', one.id) === null);
+  }
+
+  // --- Review M1: SURVEY steps aside while AUTOBURN or AUTODROP holds a thread --------------------------------------------------
+  {
+    const capOk = REACTOR_CAP_BY_BAND.ok;
+    const oneThreadCap = capOk * (1 - REACTOR_THREAD_SHARE);
+    for (const owner of ['autoburn', 'autodrop'] as const) {
+      fromStart(1);
+      h.step();
+      const surveyCap = reactorCapNow();
+      const took = reserveThread(owner, { preempt: true });
+      const capAtClaim = reactorCapNow();
+      h.step();
+      stepFor(1);
+      check(`M1: with SURVEY v1 holding a thread and the other free, ${owner.toUpperCase()}'s claim takes SURVEY's: the reactor cap stays ${oneThreadCap} (not ${capOk * (1 - 2 * REACTOR_THREAD_SHARE)})`,
+        took && Math.abs(surveyCap - oneThreadCap) < 1e-9 && Math.abs(capAtClaim - oneThreadCap) < 1e-9 && Math.abs(reactorCapNow() - oneThreadCap) < 1e-9
+        && threadsBusy() === 1 && holdsThread(owner) && !holdsThread(SURVEY_THREAD_OWNER), `${surveyCap} ${capAtClaim} ${reactorCapNow()} busy ${threadsBusy()}`);
+      check(`…SURVEY does not claim the spare thread beside ${owner.toUpperCase()} (\`WAITS FOR A SPARE THREAD\`), and claims again once it lets go`,
+        !survey().claimed && surveyRunning(s()) === 'waiting' && canStartOp()
+        && (releaseThread(owner), h.step(), survey().claimed && holdsThread(SURVEY_THREAD_OWNER) && Math.abs(reactorCapNow() - oneThreadCap) < 1e-9));
+    }
+  }
+
+  // …and in a real capture: AUTOBURN v1 engaged within LOCK RANGE by the strip's kid, SURVEY v1 aboard. Measured (review M1):
+  // before the fix both threads were held through the burn (cap 0.5, a burn half as long again, FUEL 30.3% at the lock); now
+  // the burn flies at 0.75 as with no SURVEY (FUEL 30.7%; 31.3% with no SURVEY, the gap being the approach's THRUST LIMIT).
+  {
+    const offAutoburn = mountAutoburn(h.store);
+    fromStart(1);
+    giveSkillFile(h.store, 'autoburn', 1);
+    h.step();
+    let minCap = Infinity;
+    let both = 0;
+    let engaged = false;
+    followDirector(h, {
+      reactionSec: 0.4, maxWall: 900,
+      mistake: (_h, ctx) => {
+        if (s().burn.auto.phase !== 'idle') {
+          ctx.setHolding(false);
+          if (s().burn.firing) {
+            minCap = Math.min(minCap, reactorCapNow());
+            if (holdsThread('autoburn') && holdsThread(SURVEY_THREAD_OWNER)) both++;
+          }
+          return true;
+        }
+        if (!engaged && autoburnRefusal(s(), getPrediction()) === null) {
+          ctx.setHolding(false);
+          engaged = engageAutoburn(h.store) === null;
+          return engaged;
+        }
+        return false;
+      },
+    });
+    offAutoburn();
+    check(`M1 in a real capture: AUTOBURN v1 captures with SURVEY v1 aboard, its burn at a reactor cap of ${minCap} (never both threads held), FUEL ${s().burn.fuelPct.toFixed(1)}% at the lock`,
+      engaged && s().burn.status === 'locked' && Math.abs(minCap - REACTOR_CAP_BY_BAND.ok * (1 - REACTOR_THREAD_SHARE)) < 1e-9 && both === 0, `${minCap} ${both}`);
+  }
+
+  // --- Review m6, m7: rating waits for SURVEY to work; CONTROL jokes only about its own guess ----------------------------------
+  {
+    fromStart(2);
+    h.step();
+    toggleSurveyPause(h.store);
+    const foundBefore = new Set(survey().sites.filter((site) => site.found).map((site) => site.id));
+    mapNow(h.store, 60);
+    h.step();
+    const foundNow = (): GameState['landing']['survey']['sites'] => survey().sites.filter((site) => site.found && !foundBefore.has(site.id));
+    check(`m6: v2 paused rates nothing it finds (${foundNow().length} found, no ground known)`,
+      surveyRunning(s()) === 'paused' && foundNow().length >= 2 && foundNow().every((site) => !site.groundKnown));
+    toggleSurveyPause(h.store);
+    h.step();
+    check('…and rates them once it works again', surveyRunning(s()) === 'running' && foundNow().every((site) => site.groundKnown));
+    // m7 by SURVEY: v1 moves LZ-B onto SITE 3 (NARROW WET ROOM 4) blind; v2 then rates it.
+    fromStart(1);
+    h.step();
+    mapNow(h.store, 100);
+    const moved = assignSite(h.store, 'LZ-B', siteId(3));
+    const from = h.events.length;
+    giveSkillFile(h.store, 'survey', 2);
+    h.step();
+    check('m7: LZ-B moved onto WET SITE 3 at v1, then rated by v2: revealed by survey, `> SURVEY: LZ-B IS WET ✕`, and CONTROL says nothing about a lake',
+      moved === null && JSON.stringify(events('site-revealed', from)) === JSON.stringify([{ lz: 'LZ-B', siteId: siteId(3), ground: 'wet', by: 'survey' }])
+      && said('mind-sys', SWATH_TEXT.terminal.revealed('LZ-B', 'wet')) === 1 && said('control', SWATH_TEXT.control.reveal('LZ-B', 'wet')) === 0,
+      JSON.stringify(events('site-revealed', from)));
+  }
+
+  // --- A touchdown reveal on a site the kid moved onto (v1 onto WET SITE 3), and the report's row ----------------------------
+  {
+    fromStart(1);
+    const from = h.events.length;
+    let moved: string | null = 'not yet';
+    flyApproach(() => { if (moved === 'not yet' && survey().sites.find((site) => site.id === siteId(3))!.found) moved = String(assignSite(h.store, 'LZ-B', siteId(3))); });
+    followLanding(h, { maxWall: 900 });
+    const downB = s().landing.pods.flatMap((record) => (record.fate.kind === 'down' && record.fate.touchdown.lz === 'LZ-B' ? [record.fate.touchdown.touch] : []));
+    const tails = saidLike(/LZ-B IS WET$/);
+    check(`moved-onto: LZ-B on WET SITE 3 (${moved}), its pods land hard (${downB.join()}); the first shows it: 'site-revealed' by touchdown, the echo's tail`,
+      moved === 'null' && downB.length > 0 && downB.every((touch) => touch === 'hard')
+      && JSON.stringify(events('site-revealed', from)) === JSON.stringify([{ lz: 'LZ-B', siteId: siteId(3), ground: 'wet', by: 'touchdown' }])
+      && tails.length === 1 && /^> pod\d\d \.\.\. LANDED · HARD · LZ-B IS WET$/.test(tails[0]!), tails.join(' | '));
+    check('…CONTROL makes no lake joke (m7: the site was the kid\'s pick, not CONTROL\'s guess)', said('control', SWATH_TEXT.control.reveal('LZ-B', 'wet')) === 0);
+    const suffix = surveyLzRowSuffix(s(), 'LZ-B');
+    check(`…the report's LZ-B row names the site, the ground and the hard pods (\`${suffix}\`)`,
+      suffix === SITES_TEXT.report.site('SITE 3') + SITES_TEXT.report.hard('wet', downB.length));
+  }
+
+  // --- A touchdown reveal on a mislanded pod (no SURVEY) ------------------------------------------------------------------------
+  // LZ-B written full by hand (its 4 pods down, no event, so no reveal yet): the next pod into it is mislanded, lands hard on
+  // the ROCKY guess (mislanded pods stand on its ground too), and shows the ground.
+  {
+    fromStart(null);
+    flyApproach();
+    const guessB = survey().sites.find((site) => site.id === 'guess-B')!;
+    const launch = (rad: number): LaunchRecord => ({
+      atTSec: 0, atAi: 0, source: 'player', launchRadius: 1, dotRad: rad, halfWidthKm: 1, aimLz: 'LZ-B', landingRad: rad, predictedTouch: 'soft',
+      driverIntegrity: 100, arc: [], descentSec: 3.5, firstOfRun: false,
+    });
+    h.store.update((draft) => {
+      draft.landing.pods.slice(-4).forEach((record) => {
+        record.fate = { kind: 'down', launch: launch(guessB.centreRad), touchdown: { place: 'lz', lz: 'LZ-B', points: 100, missKm: null, touch: 'hard', atAi: 0 } };
+      });
+    });
+    const from = h.events.length;
+    h.stepUntil(() => {
+      const dot = getDropSolution()?.dot;
+      return dot != null && Math.abs(angleDelta(dot.rad, guessB.centreRad)) < guessB.halfWidthRad * 0.3;
+    }, 600);
+    let launched = requestLaunch(h.store, { source: 'player' });
+    if (launched.kind === 'confirm') launched = requestLaunch(h.store, { source: 'player', confirmed: launched.ask });
+    h.stepUntil(() => events('site-revealed', from).length > 0 || !s().landing.pods.some((record) => record.fate.kind === 'falling'), 600);
+    const mislanded = s().landing.pods.find((record) => record.fate.kind === 'down' && record.fate.touchdown.place === 'mislanded');
+    check(`mislanded (${JSON.stringify(launched)}): the pod into full LZ-B is mislanded and lands hard on its ROCKY guess, and shows it (by touchdown, CONTROL's line)`,
+      mislanded !== undefined && mislanded.fate.kind === 'down' && mislanded.fate.touchdown.touch === 'hard' && mislanded.fate.touchdown.lz === 'LZ-B'
+      && JSON.stringify(events('site-revealed', from)) === JSON.stringify([{ lz: 'LZ-B', siteId: 'guess-B', ground: 'rocky', by: 'touchdown' }])
+      && said('control', SWATH_TEXT.control.reveal('LZ-B', 'rocky')) === 1);
+  }
+
+  // --- The machine with a dead Nav Plotter: no dot, so no dot swath; no throw, the ship's swath still maps ---------------------
+  {
+    fromStart(2);
+    flyApproach();
+    h.store.update((draft) => { for (const seg of draft.memory) if (seg.role === 'navplot' && 'integrity' in seg) seg.integrity = 0; draft.ui.memoryRev++; });
+    h.step();
+    const before = mappedCells();
+    const angle = (): number => Math.atan2(s().orbit.y, s().orbit.x);
+    const at = angle();
+    let threw = '';
+    try { h.stepUntil(() => Math.abs(angleDelta(angle(), at)) > 0.6 || survey().mapped.every(Boolean), 600); } catch (error) { threw = (error as Error).message; }
+    check(`dead Nav Plotter, v2 in the LANDING: no dot (${String(getDropSolution()?.dot ?? null)}), no throw, the ship's swath maps on (${before} → ${mappedCells()} cells)`,
+      s().run.phase === 'landing' && (getDropSolution()?.dot ?? null) === null && threw === '' && (mappedCells() > before || survey().mapped.every(Boolean))
+      && dropSwathOn(s()) === (surveyRunning(s()) === 'running'), threw);
+  }
 });
+
 
 finish();

@@ -151,27 +151,34 @@ export function canStartOp(): boolean {
 export interface ReserveOpts {
   // Another claim may take it (SURVEY's thread, R8).
   yieldable?: boolean;
-  // With no thread free, take a yieldable one (AUTOBURN's and AUTODROP's claims).
+  // Take a yieldable one when one is held, else a free one (AUTOBURN's and AUTODROP's claims; review M1).
   preempt?: boolean;
+}
+
+function firstYieldable(): OpOwner | null {
+  for (const owner of yieldableThreads) return owner;
+  return null;
 }
 
 // The yieldable reservation a preempting claim would take now (the oldest held), or null: none held, or dropping it would
 // still leave no thread free (a Core worn below its reservations).
 function yieldableToTake(): OpOwner | null {
   if (threadsBusy() - 1 >= threadsTotal()) return null;
-  for (const owner of yieldableThreads) return owner;
-  return null;
+  return firstYieldable();
 }
 
 // Holds one thread for `owner` without an op (AUTOBURN, SWAP, SURVEY). false when every thread is busy (with `preempt`:
-// and none is yieldable).
+// and none is yieldable). A preempting claim takes a yieldable thread whenever one is held, a thread free or not (review M1,
+// R8 as corrected): SURVEY steps aside for AUTOBURN and AUTODROP, so their claim never stacks a second thrust cut on SURVEY's.
+// survey.ts then claims no spare thread while either holds one.
 export function reserveThread(owner: OpOwner, opts: Readonly<ReserveOpts> = {}): boolean {
   if (reservedThreads.has(owner)) throw new Error(`reserveThread: '${owner}' already holds a thread`);
-  if (!canStartOp()) {
-    const taken = opts.preempt === true ? yieldableToTake() : null;
-    if (taken === null) return false;
+  const taken = opts.preempt === true && (canStartOp() || yieldableToTake() !== null) ? firstYieldable() : null;
+  if (taken !== null) {
     reservedThreads.delete(taken);
     yieldableThreads.delete(taken);
+  } else if (!canStartOp()) {
+    return false;
   }
   reservedThreads.add(owner);
   if (opts.yieldable === true) yieldableThreads.add(owner);

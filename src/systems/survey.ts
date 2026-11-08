@@ -8,7 +8,7 @@ import { onWorldReset } from '@systems/reset';
 import { on, emit } from '@systems/events';
 import { say } from '@systems/say';
 import { releaseThread, reserveThread, holdsThread, threadsTotal, threadsBusy } from '@systems/ops-core';
-import { surveyRecordOf, surveyVersion, mappedPct, foundSites, lzSiteOf } from '@state/survey-selectors';
+import { surveyRecordOf, surveyVersion, mappedPct, candidatesFound, lzSiteOf, lzOnSite } from '@state/survey-selectors';
 import { sweptCells, swathHalfRad, surveyRunning, surveyWantsThread, cellOf, assignRefusal, dropSwathOn } from '@systems/survey-model';
 import { getDropSolution } from '@systems/drop-cache';
 import { SWATH_TEXT, WIDTH_WORD } from '@data/swath-text';
@@ -36,18 +36,26 @@ import { SURVEY_RATE_VERSION, SURVEY_SWEEP_VERSION, SURVEY_KEEP_FREE_THREADS, SU
 // Its Core thread's owner (ops-core reserveThread(SURVEY_THREAD_OWNER, { yieldable: true })).
 export const SURVEY_THREAD_OWNER = 'survey';
 
+// The skills SURVEY steps aside for (R8 as the lead corrected it, review M1): while either holds a thread SURVEY holds none, so
+// a skill's claim never adds a second thrust cut (each busy thread costs REACTOR_THREAD_SHARE) nor a second thread. ops-core's
+// preempting claim takes SURVEY's thread when it holds one; this keeps SURVEY from claiming a spare one beside the skill.
+// Their owners as autoburn.ts and autodrop.ts reserve them.
+const STEP_ASIDE_FOR = ['autoburn', 'autodrop'] as const;
+const skillHoldsThread = (): boolean => STEP_ASIDE_FOR.some((owner) => holdsThread(owner));
+
 const OFF_KEY = 'off|0';
 let lastRunning: string = OFF_KEY;
 
 // --- The thread (R8, review m4) ---------------------------------------------------------------------------------------------
 
 // Makes `claimed` true exactly when SURVEY holds its thread, and claims or lets go as the rule says: it wants one while it
-// would map below v3; it claims only when SURVEY_KEEP_FREE_THREADS stay free after the claim (never the kid's last thread),
-// and lets go of a held one when the Core runs fewer threads than that leaves room for (a worn Core down to one thread).
-// threadsTotal() needs the AI Core in memory, so it is asked only while SURVEY wants a thread (a live flight or landing).
+// would map below v3 and neither AUTOBURN nor AUTODROP holds a thread (review M1: it steps aside for them); it claims only
+// when SURVEY_KEEP_FREE_THREADS stay free after the claim (never the kid's last thread), and lets go of a held one when the
+// Core runs fewer threads than that leaves room for (a worn Core down to one thread). threadsTotal() needs the AI Core in
+// memory, so it is asked only while SURVEY wants a thread (a live flight or landing).
 function syncThread(store: Store<GameState>): void {
   const holds = holdsThread(SURVEY_THREAD_OWNER);
-  const wants = surveyWantsThread(store.getState());
+  const wants = surveyWantsThread(store.getState()) && !skillHoldsThread();
   let claimed = holds;
   if (!wants) {
     if (holds) releaseThread(SURVEY_THREAD_OWNER);
@@ -114,11 +122,6 @@ function mapTick(store: Store<GameState>, dtWorld: number): void {
   if (cells.length > 0) afterMapping(store);
 }
 
-// A site an LZ stands on, by the LZ's label (null: none).
-function lzOn(state: Readonly<GameState>, siteId: string): string | null {
-  return state.landing.lzs.find((lz) => lz.site === siteId)?.label ?? null;
-}
-
 // Finds what the mapped cells now cover, rates what v2+ has seen (R11: latched), reveals a bad ground an LZ stands on, and
 // says PLANET MAPPED at the last cell. Then the events and the lines, outside the update.
 function afterMapping(store: Store<GameState>): void {
@@ -127,11 +130,14 @@ function afterMapping(store: Store<GameState>): void {
   const version = surveyVersion(state);
   const found = survey.sites.filter((site) => !site.found && survey.mapped[cellOf(site.centreRad)] === true);
   const foundIds = new Set(found.map((site) => site.id));
-  const rated = version >= SURVEY_RATE_VERSION
+  // Review m6: v2 rates only while SURVEY works (running, or done with the rim mapped): a PAUSE, a wait for a spare thread or
+  // a paused clock stop the rating with the mapping.
+  const running = surveyRunning(state);
+  const rated = version >= SURVEY_RATE_VERSION && (running === 'running' || running === 'done')
     ? survey.sites.filter((site) => (site.found || foundIds.has(site.id)) && !site.groundKnown)
     : [];
   const reveals = rated.flatMap((site) => {
-    const lz = lzOn(state, site.id);
+    const lz = lzOnSite(state.landing, site.id);
     return lz !== null && site.ground !== 'flat' && !survey.reveals.some((reveal) => reveal.site === site.id)
       ? [{ lz, site, ground: site.ground as BadGround }] : [];
   });
@@ -161,12 +167,13 @@ function afterMapping(store: Store<GameState>): void {
   for (const reveal of reveals) {
     emit('site-revealed', { lz: reveal.lz, siteId: reveal.site.id, ground: reveal.ground, by: 'survey' });
     say('mind-sys', SWATH_TEXT.terminal.revealed(reveal.lz, reveal.ground), { critical: true });
-    say('control', SWATH_TEXT.control.reveal(reveal.lz, reveal.ground), { critical: true });
+    // Review m7: CONTROL's quip is about CONTROL's own bad guess; a bad site the kid moved onto gets the TERMINAL line only.
+    if (reveal.site.kind === 'guess') say('control', SWATH_TEXT.control.reveal(reveal.lz, reveal.ground), { critical: true });
   }
   if (sayMapped) {
     // Done: the thread goes back now (the post tick would on its next look), and the line once.
     syncThread(store);
-    say('mind-sys', SWATH_TEXT.terminal.mapped(foundSites(store.getState().landing.survey).length), { critical: true });
+    say('mind-sys', SWATH_TEXT.terminal.mapped(candidatesFound(store.getState().landing.survey)), { critical: true });
   }
 }
 
@@ -187,7 +194,8 @@ function touchdownReveal(store: Store<GameState>, lz: string | null): void {
     if (!already) slice.reveals.push({ site: site.id, by: 'touchdown' });
   });
   emit('site-revealed', { lz, siteId: site.id, ground, by: 'touchdown' });
-  if (!already) say('control', SWATH_TEXT.control.reveal(lz, ground), { critical: true });
+  // Review m7: only on CONTROL's guess; on a site the kid moved onto, the echo's tail (`· LZ-B IS WET`) says it.
+  if (!already && site.kind === 'guess') say('control', SWATH_TEXT.control.reveal(lz, ground), { critical: true });
 }
 
 // --- The post tick: the thread, at rest, CONTROL's boot quip, 'survey-state' ------------------------------------------------
@@ -203,8 +211,9 @@ function postTick(store: Store<GameState>): void {
   const running = surveyRunning(state);
   if (running !== 'running' && survey.lastRad !== null) store.mutate((draft) => { draft.landing.survey.lastRad = null; });
   // R11: while SURVEY works at v2+, every site it found is rated, mapped this tick or before (a site found at v1, rated once a
-  // REPAIR brings v2 back, whether or not anything is left to map).
-  if (isLivePhase(state) && surveyVersion(state) >= SURVEY_RATE_VERSION && survey.sites.some((site) => site.found && !site.groundKnown)) {
+  // REPAIR brings v2 back, whether or not anything is left to map). Review m6: works = running, or done.
+  if (isLivePhase(state) && surveyVersion(state) >= SURVEY_RATE_VERSION && (running === 'running' || running === 'done')
+    && survey.sites.some((site) => site.found && !site.groundKnown)) {
     afterMapping(store);
   }
   // CONTROL's boot quip (R21): at the first flight tick of a POOR planet, SURVEY aboard or not.
@@ -300,7 +309,7 @@ export function surveyStatus(state: Readonly<GameState>): { text: string; tone: 
   if (survey.site === 'good') return { text: SWATH_TEXT.status.goodIdle, tone: 'good' };
   const pct = mappedPct(survey);
   switch (surveyRunning(state)) {
-    case 'done': return { text: SWATH_TEXT.status.done(foundSites(survey).length), tone: 'good' };
+    case 'done': return { text: SWATH_TEXT.status.done(candidatesFound(survey)), tone: 'good' };
     case 'paused': return { text: SWATH_TEXT.status.paused(pct), tone: 'warn' };
     case 'waiting': return { text: SWATH_TEXT.status.waits, tone: 'warn' };
     case 'running':
