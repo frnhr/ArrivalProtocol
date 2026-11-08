@@ -35,6 +35,16 @@
 // Usage (one harness per process: the systems are module singletons):
 //   PT_PLAYER=COMPETENT|SLOPPY|LITERAL PT_FROM=1 PT_TO=200 tsx --tsconfig tsconfig.json tests/unit/wp12/playthrough.ts
 // prints one `RECORD {json}` line per seed (playthrough.test.ts runs shards of it in parallel and judges them).
+//
+// Slice 8 Step 0 (docs/phase3/impl/slice-8-plan.md §3.2, R4): the records the balance report reads (cycles, pods, the
+// boarding's cause, the thread waits, the last two ships' busy MIND, the signals held, the restores; per ship its pods,
+// landed pods, points and the files left behind), and three changes to the kids:
+// • SLOPPY buys too (`buys: 'cheapest'`: the cheapest cell the tree sells, again and again at every desk, as a careless kid
+//   still buys what the desk offers). PT_SLOPPY_BUYS=none gives back the pick-only SLOPPY of slices 4–7.
+// • COMPETENT and LITERAL SCAN every `▓▓░▓` file and departed resident's note they meet (`scansSignals`, a proactive MIND job),
+//   so CONTACT's price is measured. PT_SCAN_SIGNALS=0 turns it off.
+// • PT_VARIANT=no-<skill>[-v<n>] (COMPETENT only): that skill, or its versions from n up, is dropped from the kid's buys, so
+//   the cycles go to the list's next item (the leave-one-out of §3.2: "this skill against the next best buy").
 import { createHarness11, type Harness11, type DefendOpts } from '../wp11/harness11';
 import { receiveTransmission } from '@systems/boot';
 import { shipLost, startBeamOut, startRun, setCourse, continueAfterReport, continueAfterLoss } from '@systems/run';
@@ -73,7 +83,12 @@ import {
 } from '@state/selectors';
 import { isBusy } from '@systems/tool-targets';
 import { podCode } from '@data/landing-text';
-import { BAND_OK_MIN, MERGE_COST_CHARGE } from '@data/tuning';
+import { BAND_OK_MIN, MERGE_COST_CHARGE, SIGNALS_FOR_CONTACT } from '@data/tuning';
+import { treeTotalCycles } from '@data/skills';
+import { bankOf, earnedCycles, trainedCycles } from '@systems/skill-tree';
+import { signalCount } from '@systems/signals';
+import { emptyShip } from '@systems/ending-rules';
+import { armShipAt } from '@systems/map-streams';
 import type { GameState, ObjectiveLine, PendingPlacement, ShipOutcome } from '@state/schema';
 import type { Segment } from '@/types/segment';
 import type { UpgradeId } from '@data/upgrades';
@@ -105,7 +120,10 @@ export interface Player {
   // first cell of this list the tree would sell (treeCells' refusal null), again and again until none is (an empty list:
   // only the required pick).
   firstPick: SkillId;
-  buys: readonly (readonly [SkillId, SkillVersion])[];
+  // Slice 8 (R4): 'cheapest': the cheapest cell the tree would sell (tree order on a tie), again and again until none is.
+  buys: readonly (readonly [SkillId, SkillVersion])[] | 'cheapest';
+  // Slice 8 (§2.9): SCAN every `▓▓░▓` file and note met (a proactive MIND job for COMPETENT, a task for LITERAL).
+  scansSignals: boolean;
   // Reading time on the screens between flights (wall s).
   titleSec: number;
   lostCardSec: number;
@@ -117,13 +135,14 @@ export const COMPETENT: Player = {
   id: 'COMPETENT', reactionSec: 0.4, burnNoiseTac: 0, competentMind: true, literalMind: false, mergeOnEven: true, repairInfectedBelow: Infinity,
   ignoresDodge: false, ignoresSwap: false, usesAutoburn: true,
   firstPick: 'autoburn', buys: [['autoburn', 2], ['autodrop', 1], ['sentry', 1], ['autoburn', 3], ['autodrop', 2], ['sentry', 2], ['autodrop', 3], ['sentry', 3]],
+  scansSignals: process.env.PT_SCAN_SIGNALS !== '0',
   titleSec: 6, lostCardSec: 6, reportSec: 15, transmitSec: 12,
 };
 
 export const SLOPPY: Player = {
   id: 'SLOPPY', reactionSec: 1.2, burnNoiseTac: 5, competentMind: false, literalMind: false, mergeOnEven: false, repairInfectedBelow: 50,
   ignoresDodge: true, ignoresSwap: true, usesAutoburn: false,
-  firstPick: 'autoburn', buys: [],
+  firstPick: 'autoburn', buys: process.env.PT_SLOPPY_BUYS === 'none' ? [] : 'cheapest', scansSignals: false,
   titleSec: 4, lostCardSec: 4, reportSec: 5, transmitSec: 6,
 };
 
@@ -137,6 +156,7 @@ export const LITERAL: Player = {
   id: 'LITERAL', reactionSec: 0.4, burnNoiseTac: 0, competentMind: false, literalMind: true, mergeOnEven: true, repairInfectedBelow: Infinity,
   ignoresDodge: false, ignoresSwap: false, usesAutoburn: true,
   firstPick: 'autoburn', buys: [['autoburn', 2], ['autodrop', 1], ['sentry', 1], ['autoburn', 3], ['autodrop', 2], ['sentry', 2], ['autodrop', 3], ['sentry', 3]],
+  scansSignals: process.env.PT_SCAN_SIGNALS !== '0',
   titleSec: 6, lostCardSec: 6, reportSec: 15, transmitSec: 12,
 };
 
@@ -152,6 +172,28 @@ export function playerById(id: string): Player {
   if (id === 'SLOPPY') return SLOPPY;
   if (id === 'LITERAL') return LITERAL;
   throw new Error(`playthrough: no player '${id}' (COMPETENT, SLOPPY or LITERAL)`);
+}
+
+// Slice 8 (§3.2): a leave-one-out variant, `no-<skill>` (every version) or `no-<skill>-v<n>` (versions n and up), of a kid
+// with a buy list. Dropping v1 of the first pick moves the first pick to the next skill of the list. Throws on a variant
+// that drops nothing, so a typo never measures the full kid twice.
+export function parseVariant(variant: string): { skill: SkillId; fromVersion: SkillVersion } {
+  const match = /^no-(autoburn|autodrop|sentry|survey)(?:-v([123]))?$/.exec(variant);
+  if (match === null) throw new Error(`PT_VARIANT=${variant} is not no-<skill>[-v<n>]`);
+  return { skill: match[1] as SkillId, fromVersion: Number(match[2] ?? 1) as SkillVersion };
+}
+
+export function withVariant(player: Player, variant: string | undefined): Player {
+  if (variant === undefined || variant === '') return player;
+  if (player.buys === 'cheapest') throw new Error(`PT_VARIANT=${variant}: ${player.id} buys the cheapest cell, it has no list to drop from`);
+  const { skill, fromVersion } = parseVariant(variant);
+  const buys = player.buys.filter(([id, version]) => id !== skill || version < fromVersion);
+  if (buys.length === player.buys.length && !(player.firstPick === skill && fromVersion === 1)) {
+    throw new Error(`PT_VARIANT=${variant}: ${player.id} never buys it`);
+  }
+  const firstPick = player.firstPick === skill && fromVersion === 1 ? (buys.find(([id]) => id !== skill)?.[0] ?? null) : player.firstPick;
+  if (firstPick === null) throw new Error(`PT_VARIANT=${variant}: no first pick left`);
+  return { ...player, firstPick, buys: buys.filter(([id, version]) => !(id === firstPick && version === 1 && firstPick !== player.firstPick)) };
 }
 
 // In the MIND with nothing to do and no op of its own running, the kid looks back at the ship after this long.
@@ -190,6 +232,12 @@ export interface ShipRecord {
   repairLeft: boolean;
   // Where the unit's Repair copies were eaten on this ship (flight / printing), in order.
   repairEaten: string[];
+  // Slice 8: the ship's pods (its colonists aboard ÷ 200), those landed in an LZ with room, its points, and the files the
+  // kid left behind on the TRANSMIT into it (fitPacket's drops; 0 for the first ship).
+  pods: number;
+  landed: number;
+  points: number;
+  filesLeft: number;
 }
 
 export interface RunRecord {
@@ -220,7 +268,36 @@ export interface RunRecord {
   // What the kid trained at the desks, in order (`autoburn v1@1`: the skill, the version, the visit), and the route flown.
   bought: string[];
   route: number[];
+  // Slice 8 Step 0 (§3.2): what the balance report reads. `planned`: the route the kid set out to fly (PT_ROUTE), so a run
+  // that ended early still counts for its route; the prices it was judged by (an A/B copy may move them).
+  planned: number[];
+  mergeCost: number;
+  signalsForContact: number;
+  variant: string | null;
+  // The bank: earned (ARRIVED + LANDED steps), granted (the first-pick floor, cards, residents), spent; unspent after the
+  // last desk's buying (null: no desk); the tree's cycles paid for (skill-tree.ts trainedCycles) and the whole tree's
+  // price; the first-pick floor's cycles.
+  cycles: { earned: number; granted: number; spent: number; unspentLastDesk: number | null; trained: number; tree: number; floor: number };
+  purchases: { skill: SkillId; kind: string; version: number; cost: number; visit: number }[];
+  // The route's pods (every stop's, flown or not) and those landed in an LZ with room.
+  pods: { aboard: number; landed: number };
+  boardedBy: 'trace' | 'forced' | null;
+  driversEaten: number;
+  // AUTODROP's `autodrop-wait`s plus AUTOBURN's claims that found no thread (`× AN OP`), over the run.
+  waits: number;
+  // AI s on the route's last two ships with every Core thread busy, and the AI s flown there.
+  mindBusySec: number;
+  mindAiSec: number;
+  // Signal fragments held at the end (CONTACT's price), restores bought and those whose file was hurt (so a restore healed
+  // it), the empty ship at the final choice (null: never reached it), and AUTOBURN's reserve stops (`SAVING FUEL`).
+  signals: number;
+  restores: number;
+  restoresHealed: number;
+  emptyShip: boolean | null;
+  reserveRefusals: number;
 }
+
+const POD_COLONISTS = 200;
 
 // PT_TRACE=1: every strip line and every kid action, with the wall clock, FUEL and pace (for reading one run).
 const TRACE = process.env.PT_TRACE === '1';
@@ -243,7 +320,14 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
     player: player.id, seed, cause: '', completed: false, woke: 0, score: 0, souls: 0, phaseSec: {},
     ships: [], shipsLost: 0, simulationRetries: 0, coreLost: 0, coreMin: 100, wallSec: 0, mindSec: 0, overclockSec: 0,
     tacticalSec: 0, skipSec: 0, chargeAtChoice: null, verbs: null, lastLightLost: null, playedFor, opsDone: {}, bought: [], route: [],
+    planned: [...PT_ROUTE], mergeCost: MERGE_COST_CHARGE, signalsForContact: SIGNALS_FOR_CONTACT, variant: process.env.PT_VARIANT || null,
+    cycles: { earned: 0, granted: 0, spent: 0, unspentLastDesk: null, trained: 0, tree: treeTotalCycles(), floor: 0 }, purchases: [],
+    pods: { aboard: 0, landed: 0 }, boardedBy: null, driversEaten: 0, waits: 0, mindBusySec: 0, mindAiSec: 0, signals: 0,
+    restores: 0, restoresHealed: 0, emptyShip: null, reserveRefusals: 0,
   };
+  // Slice 8: the files left behind on the TRANSMIT into each ship (by ships ended so far, as diag), AUTOBURN's last claim state.
+  const filesLeft: number[] = [];
+  let autoburnWaiting = false;
 
   // Per ship (index = the ships already ended), filled as the run goes.
   const diag: { chargeIn: number; coreIn: number; chargeOut: number; coreOut: number; filesEaten: number; repairLeft: boolean; repairEaten: string[] }[] = [];
@@ -282,10 +366,13 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
         const kind = (event.payload as { kind: string }).kind;
         record.opsDone[kind] = (record.opsDone[kind] ?? 0) + 1;
       }
+      if (event.name === 'autodrop-wait') record.waits++;
+      if (event.name === 'autoburn' && (event.payload as { end: string | null }).end === 'reserve') record.reserveRefusals++;
     }
     eventsSeen = harness.events.length;
     if (state().run.phase === 'flight' && diagNow().chargeIn < 0) { diagNow().chargeIn = chargeLeft(state()); diagNow().coreIn = coreNow(); }
     const phaseKey = shipLost(state()) ? 'lost' : state().run.phase;
+    const aiBefore = state().clock.aiSec;
     harness.step();
     const now = state();
     const tickSec = 0.05;
@@ -298,6 +385,15 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
     }
     const core = now.memory.find((seg) => seg.type === 'core');
     if (core && hasIntegrity(core)) record.coreMin = Math.min(record.coreMin, core.integrity);
+    // Slice 8: AUTOBURN's claim that found no thread (`× AN OP`), once per wait; the last two ships' busy Core.
+    const waiting = now.burn.auto.waitingSinceTSec !== null;
+    if (waiting && !autoburnWaiting) record.waits++;
+    autoburnWaiting = waiting;
+    if ((now.run.phase === 'flight' || now.run.phase === 'landing') && !now.clock.paused && now.run.ships.length >= PT_ROUTE.length - 2) {
+      const dtAi = now.clock.aiSec - aiBefore;
+      record.mindAiSec += dtAi;
+      if (!canStartOp()) record.mindBusySec += dtAi;
+    }
   };
   const stepFor = (wallSec: number): void => {
     const end = harness.wall() + wallSec;
@@ -386,6 +482,7 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
     if (core && hasIntegrity(core) && core.integrity < (defendOpts.coreHealBelow ?? BAND_OK_MIN) && idle(core)) return { reason: 'core', urgent: false };
     if (now.run.licences.includes('move') && now.hollow.phase === 'awake' && exposedDrivers(now).length > 0) return { reason: 'wall', urgent: false };
     if (firewallSpot() !== null) return { reason: 'firewall', urgent: false };
+    if (signalToScan() !== null) return { reason: 'signal', urgent: false };
     if (now.run.licences.includes('delete') && core) {
       const biting = hollowReach(now.memory, now.clock.aiSec).some((reach) => reach.neighbourId === core.id
         && (reach.verdict === 'bite' || reach.verdict === 'infected' || reach.verdict === 'recoiling'));
@@ -411,7 +508,15 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
     if (placing && canStartOp() && actionMove(harness.store, placing.seg, placing.spot) === null) acted = true;
     const deal = state().hollow.deal;
     if (deal.phase === 'offered' && deal.entryId !== null) { pickChoice(deal.entryId, DEAL_REFUSE); acted = true; }
+    const signal = signalToScan();
+    if (signal !== null && canStartOp() && actionScan(harness.store, signal) === null) acted = true;
     return acted;
+  };
+
+  // Slice 8 (§2.9, scansSignals): a `▓▓░▓` file or a departed resident's note not read yet, with no op on it.
+  const signalToScan = (): Segment | null => {
+    if (!player.scansSignals || !state().run.licences.includes('scan')) return null;
+    return state().memory.find((seg) => (seg.type === 'signal' || seg.type === 'note') && !seg.scanned && getOpsBySeg(seg.id).length === 0) ?? null;
   };
 
   // A SAFE spot for `seg` (the MOVE preview: HOLLOW can't reach it there and it bridges nothing to rack E), at either end
@@ -468,6 +573,8 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
         } });
       }
       if (id.startsWith('tut-ghost-pip') || id.startsWith('tut-ghost-swap')) tasks.push({ reason: 'swap', run: () => harness.pipSwap() });
+      const signal = signalToScan();
+      if (signal !== null) tasks.push({ reason: `signal:${signal.id}`, run: () => canStartOp() && actionScan(harness.store, signal) === null });
     } else {
       // SLOPPY: any infected cluster or file, but only once the infection has eaten past half of it.
       for (const seg of infected) {
@@ -674,6 +781,7 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
       if (!chose && finaleAtStep1(now)) {
         chose = true;
         record.chargeAtChoice = chargeLeft(now);
+        record.emptyShip = emptyShip(now).ok;
         const hollow = now.hollow;
         record.verbs = { telegraphed: hollow.verbsLanded + hollow.verbsBlocked, landed: hollow.verbsLanded, blocked: hollow.verbsBlocked };
         stepFor(player.reactionSec);
@@ -707,13 +815,24 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
     }
     for (let guard = 0; guard < 16; guard++) {
       const cells = treeCells(state(), visitNow(state().run));
-      const buy = player.buys.find(([skill, version]) => cells.some((cell) => cell.skill === skill && cell.row.kind === 'version'
+      const list = player.buys;
+      if (list === 'cheapest') {
+        // SLOPPY (slice 8, R4): the cheapest cell the tree sells now, tree order on a tie (a version or a LOCK RANGE level).
+        const cheapest = cells.filter((cell) => cell.refusal === null).sort((a, b) => a.price - b.price)[0];
+        if (cheapest === undefined) break;
+        const refusal = trainCell(harness.store, cheapest.skill, cheapest.row);
+        if (refusal !== null) throw new Error(`playthrough: ${cheapest.skill} ${JSON.stringify(cheapest.row)} refused (${refusal})`);
+        trace(`train ${cheapest.skill} ${JSON.stringify(cheapest.row)} (cheapest)`);
+        continue;
+      }
+      const buy = list.find(([skill, version]) => cells.some((cell) => cell.skill === skill && cell.row.kind === 'version'
         && cell.row.version === version && cell.refusal === null));
       if (buy === undefined) break;
       const refusal = trainCell(harness.store, buy[0], { kind: 'version', version: buy[1] });
       if (refusal !== null) throw new Error(`playthrough: ${buy[0]} v${buy[1]} refused (${refusal})`);
       trace(`train ${buy[0]} v${buy[1]}`);
     }
+    record.cycles.unspentLastDesk = bankOf(state().run.skills);
     // The repository (slice 3b): every tool but REPAIR comes by request. Each kid asks for what ARRIVAL CONTROL tags here.
     const ask = recommendation(state());
     if (ask !== null) setRequest(harness.store, ask);
@@ -772,6 +891,7 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
     } else if (phase === 'transmit') {
       pick();
       fitPacket(harness.store);
+      filesLeft[state().run.ships.length] = state().run.transit?.dropped.length ?? 0;
       transmitNext(harness.store);
     } else {
       record.cause = `stuck:phase ${phase}`;
@@ -792,7 +912,28 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
     ship: ship.shipName, outcome: ship.outcome, woke: ship.landedInLz, half: ship.lzs.reduce((sum, row) => sum + row.hard, 0), lost: ship.parked.length, stars: ship.stars,
     fuelPct: Math.round(ship.fuelLeftPct * 10) / 10, wallSec: Math.round(shipWall[index] ?? 0),
     ...(diag[index] ?? { chargeIn: -1, coreIn: -1, chargeOut: -1, coreOut: -1, filesEaten: 0, repairLeft: false, repairEaten: [] }),
+    pods: ship.colonistsAboard / POD_COLONISTS, landed: ship.landedInLz / POD_COLONISTS, points: ship.points, filesLeft: filesLeft[index] ?? 0,
   }));
+  // Slice 8 Step 0: the balance report's fields.
+  const end = state();
+  const skills = end.run.skills;
+  record.cycles = {
+    ...record.cycles,
+    earned: skills.earned.reduce((sum, earning) => sum + earnedCycles(earning), 0),
+    granted: skills.grants.reduce((sum, grant) => sum + grant.cycles, 0),
+    spent: skills.bought.reduce((sum, purchase) => sum + purchase.cost, 0),
+    trained: trainedCycles(skills),
+    floor: skills.grants.filter((grant) => grant.source === 'first-pick').reduce((sum, grant) => sum + grant.cycles, 0),
+  };
+  record.purchases = skills.bought.map((purchase) => ({ skill: purchase.skill, kind: purchase.kind, version: purchase.to.version, cost: purchase.cost, visit: purchase.visit }));
+  record.restores = skills.bought.filter((purchase) => purchase.kind === 'restore').length;
+  record.pods = {
+    aboard: PT_ROUTE.reduce((sum, slot) => sum + armShipAt(end.run.map, slot).pods, 0),
+    landed: end.run.ships.reduce((sum, ship) => sum + ship.landedInLz, 0) / POD_COLONISTS,
+  };
+  record.boardedBy = end.run.threat.boardCause;
+  record.driversEaten = end.run.stats.driversLost;
+  record.signals = signalCount(end.run);
   record.bought = state().run.skills.bought.map((purchase) => `${purchase.skill} v${purchase.to.version}@${purchase.visit}`);
   record.route = state().run.map.route.map((stop) => stop.slot);
   record.shipsLost = record.ships.filter((ship) => LOST_OUTCOMES.has(ship.outcome)).length;
@@ -800,7 +941,7 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
 }
 
 export function playthroughMain(): void {
-  const player = playerById(process.env.PT_PLAYER ?? 'COMPETENT');
+  const player = withVariant(playerById(process.env.PT_PLAYER ?? 'COMPETENT'), process.env.PT_VARIANT);
   const from = Number(process.env.PT_FROM ?? 1);
   const lastSeed = Number(process.env.PT_TO ?? 200);
   if (!Number.isInteger(from) || !Number.isInteger(lastSeed) || from < 1 || lastSeed < from) throw new Error(`playthrough: bad seed range ${from}–${lastSeed}`);
