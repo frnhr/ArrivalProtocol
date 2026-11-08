@@ -438,8 +438,9 @@ const PINNED: Readonly<Record<number, typeof shape>> = {
     ],
     content: { arm: 1, generator: 2, update: 1, mapState: 1, catalogue: 1 },
   },
-  // 7 (slice 7a): hollow.finale v7 (phase's new values, rootFell, hollow, you, stay, restored, cardAtAi; restoredInPlace and
-  // restoredHalf gone), landing.lastLanding. run.lastUnit.ending sits below the pin's depth (and a run 1 desk has no last unit).
+  // 7 (slice 7a): hollow.finale v7 (phase's new values, rootFell, hollow, you, stay, restored, cardAtAi, record;
+  // restoredInPlace and restoredHalf gone), landing.lastLanding. run.lastUnit.ending sits below the pin's depth (and a run 1
+  // desk has no last unit).
   7: {
     run: [
       'arrival', 'arrival.boarded', 'arrival.card', 'arrival.cardCharge', 'arrival.chargeCarried',
@@ -482,7 +483,7 @@ const PINNED: Readonly<Record<number, typeof shape>> = {
       'hollow.cfg.story', 'hollow.cfg.verbs', 'hollow.cfg.wake', 'hollow.deal', 'hollow.deal.entryId',
       'hollow.deal.hasteUntilAi', 'hollow.deal.pauseUntilAi', 'hollow.deal.phase', 'hollow.deal.pod',
       'hollow.deal.segId', 'hollow.deal.startAddr', 'hollow.finale', 'hollow.finale.cardAtAi', 'hollow.finale.ending',
-      'hollow.finale.hollow', 'hollow.finale.phase', 'hollow.finale.restored', 'hollow.finale.rootFell',
+      'hollow.finale.hollow', 'hollow.finale.phase', 'hollow.finale.record', 'hollow.finale.restored', 'hollow.finale.rootFell',
       'hollow.finale.stay', 'hollow.finale.unresolvedUntilAi', 'hollow.finale.you', 'hollow.phase',
       'hollow.scriptTargetId', 'hollow.seedInSec', 'hollow.seedMoments', 'hollow.seedTelegraph', 'hollow.seedsLanded',
       'hollow.story', 'hollow.unlinkedLastSpare', 'hollow.untriedTools', 'hollow.verb', 'hollow.verbInSec',

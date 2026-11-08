@@ -18,7 +18,7 @@ import type { SkillId, SkillLevel, AutoMode, RunSkillState, CellRow } from '@/ty
 import type { BurnReason, BurnEvent } from '@systems/predict';
 import type { ResidentState, RunResidentState } from '@/types/resident';
 import type { SurveyRecord } from '@/types/survey';
-import type { FinalePhase, HollowFate, YouChoice, RunEndStage } from '@/types/ending';
+import type { FinalePhase, HollowFate, YouChoice, RunEndStage, EndingRecord } from '@/types/ending';
 
 export type { FinalePhase } from '@/types/ending';
 
@@ -627,6 +627,10 @@ export interface FinaleState {
   // UNRESOLVED's last line (`> you can't delete me now. i'll come with you.`) holds the LANDING REPORT back until this AI
   // second: it has typed in the TERMINAL and been read (WP11 review). null before an UNRESOLVED end.
   unresolvedUntilAi: number | null;
+  // The ending record (slice 7a review M4), frozen at step 2's confirm in the same update as 'done' (or UNRESOLVED's decision
+  // while the two steps are down): the world moves on after it (MERGE's reopened landing, REPAIRs, FUEL), so the archive
+  // keeps what the card saw. null until then. systems/ending-rules.ts endingRecordOf reads it at RUN END.
+  record: EndingRecord | null;
 }
 
 // One line of a typed ending (§9 WP11 item 5), by who says it: `cmd` the TERMINAL's echo of the choice, `us` the merged

@@ -28,7 +28,8 @@ import { HOLLOW_FINALE } from '@data/hollow-text';
 import { IS_DEV } from '@/env';
 import { formatCount } from '@data/format';
 import { ENDINGS_BUILT } from '@data/endings';
-import { optionState, stayCandidates } from '@systems/ending-rules';
+import { optionState, stayCandidates, endingRecordAt } from '@systems/ending-rules';
+import { FINALE_TEXT } from '@data/finale-text';
 import { notBuilt } from '@systems/not-built';
 import {
   MERGE_COST_CHARGE, MERGE_DRIVER_INTEGRITY, DRIVER_BLOCKS, GLITCH_BURST_LEVEL, GLITCH_BURST_MS,
@@ -299,6 +300,7 @@ function unresolve(store: Store<GameState>): void {
       finale.phase = 'done';
       finale.hollow = 'followed';
       finale.you = 'reassignment';
+      finale.record = endingRecordAt(draft, 'followed', 'reassignment', null);
     }
   });
   say('hollow', line, { critical: true });
@@ -335,7 +337,7 @@ function driverFromRecord(record: Readonly<PodRecord>): DriverSegment {
   };
 }
 
-function purge(store: Store<GameState>, you: YouChoice): void {
+function purge(store: Store<GameState>, you: YouChoice, stay: number | null): void {
   const memory = store.getState().memory;
   const blocks = memory.filter(isHollow);
   removeBlocks(memory, blocks);
@@ -345,7 +347,10 @@ function purge(store: Store<GameState>, you: YouChoice): void {
     draft.hollow.finale.phase = 'done';
     draft.hollow.finale.hollow = 'purge';
     draft.hollow.finale.you = you;
+    draft.hollow.finale.stay = stay;
     draft.hollow.finale.ending = endingFor(draft, 'purge', you);
+    // Review M4: the record as the card saw it, after the apply (the blocks gone).
+    draft.hollow.finale.record = endingRecordAt(draft, 'purge', you, stay);
     if (draft.ui.selectedId !== null && gone.has(draft.ui.selectedId)) draft.ui.selectedId = null;
     draft.ui.memoryRev++;
   });
@@ -355,7 +360,7 @@ function purge(store: Store<GameState>, you: YouChoice): void {
   emit('finale-chosen', { hollow: 'purge', you, restored: 0 });
 }
 
-function merge(store: Store<GameState>, you: YouChoice): void {
+function merge(store: Store<GameState>, you: YouChoice, stay: number | null): void {
   spendCharge(store, MERGE_COST_CHARGE);
   const state = store.getState();
   const memory = state.memory;
@@ -387,9 +392,12 @@ function merge(store: Store<GameState>, you: YouChoice): void {
     finale.phase = 'done';
     finale.hollow = 'merge';
     finale.you = you;
+    finale.stay = stay;
     finale.restored = inPlace;
     // Its numbers count the drivers just given back.
     finale.ending = endingFor(draft, 'merge', you);
+    // Review M4: the record as the card saw it, after the apply (MERGE's charge spent), before the landing reopens.
+    finale.record = endingRecordAt(draft, 'merge', you, stay);
     // Drivers back in memory: the landing goes on with them (it may have ended, or been lingering toward the report).
     // The pods parked when it ended reopen too if their driver never left memory (parked 'no-time'): the landing parks
     // at the moment it ends (landing.ts endNow), so reopening it must unpark them; FUEL is noted again when it ends again.
@@ -427,10 +435,11 @@ export function sayOwedVerdict(): void {
 // Step 2's confirm applies both picks (R7): the blocks leave, MERGE's charge is spent, the verdict types. The FOUNDATION's
 // apply is WP11's PURGE and MERGE with their typed endings, then 'done'; SPARE, the verdict (R13) and MERGE's reopened
 // landing as 'last-landing' (R15) are Track FINALE's.
-function confirm(store: Store<GameState>, hollow: HollowChoice, you: YouChoice): void {
+// `stay`: STAY's ship (null for every other step 2). The ending record is frozen in the apply's update (review M4).
+function confirm(store: Store<GameState>, hollow: HollowChoice, you: YouChoice, stay: number | null): void {
   if (hollow === 'spare') notBuilt('finale SPARE\'s apply', 'FINALE', store, hollow, you);
-  if (hollow === 'purge') purge(store, you);
-  else merge(store, you);
+  if (hollow === 'purge') purge(store, you, stay);
+  else merge(store, you, stay);
   if (ENDINGS_BUILT.twoStep) emit('finale-step2', { you });
 }
 
@@ -442,7 +451,7 @@ export function chooseFinale(store: Store<GameState>, choice: FinaleChoice): str
     emit('refused', { reason: refusal });
     return refusal;
   }
-  confirm(store, choice, 'reassignment');
+  confirm(store, choice, 'reassignment', null);
   return null;
 }
 
@@ -473,7 +482,8 @@ export function pickStep1(store: Store<GameState>, hollow: HollowChoice): string
     draft.hollow.finale.hollow = hollow;
     draft.hollow.finale.phase = 'step2';
   });
-  emit('finale-open', { step: 2 });
+  // Review m9: the card's events are the two-step path's (WP11's card plays its own hold).
+  if (ENDINGS_BUILT.twoStep) emit('finale-open', { step: 2 });
   return null;
 }
 
@@ -481,12 +491,17 @@ export function pickStep1(store: Store<GameState>, hollow: HollowChoice): string
 export function backToStep1(store: Store<GameState>): string | null {
   if (store.getState().hollow.finale.phase !== 'step2') return refused('NOT NOW');
   store.update((draft) => { draft.hollow.finale.phase = 'step1'; });
-  emit('finale-open', { step: 1 });
+  if (ENDINGS_BUILT.twoStep) emit('finale-open', { step: 1 });
   return null;
 }
 
-// Step 2's pick, the confirm (R7): both picks are applied. STAY with more than one ★ ON TARGET ship asks which first
-// (pickStay); with one it is that one. The FOUNDATION applies REASSIGNMENT after PURGE or MERGE; the rest is FINALE's.
+// Step 2's pick, the confirm (R7): both picks are applied.
+// • Step 1's price is judged again here (review M6: the AI clock runs under the card, so a REPAIR can drain MERGE's charge
+//   while step 2 is up): one that can no longer be paid sends the card back to step 1 with its reason, the pick kept; never
+//   a throw mid-apply.
+// • STAY (review M3): with one ★ ON TARGET ship it is that one, and this confirms; with more, it refuses with
+//   FINALE_TEXT.stayPick and the card opens its sub-row (CARD's own, unsaved), whose pick is pickStay.
+// The FOUNDATION applies REASSIGNMENT after PURGE or MERGE; the rest is FINALE's.
 export function pickStep2(store: Store<GameState>, you: YouChoice): string | null {
   const state = store.getState();
   const hollow = state.hollow.finale.hollow;
@@ -494,13 +509,25 @@ export function pickStep2(store: Store<GameState>, you: YouChoice): string | nul
   if (refusal !== null) return refused(refusal);
   if (hollow === null) throw new Error('pickStep2: step 2 with no step-1 pick');
   if (hollow === 'followed') notBuilt('finale UNRESOLVED\'s step 2', 'FINALE', store, you);
-  if (you === 'stay' && stayCandidates(state).length !== 1) notBuilt('finale STAY\'s pick', 'FINALE', store, you);
-  confirm(store, hollow, you);
+  const first = optionState(state, hollow, []);
+  if (first.kind !== 'open') {
+    store.update((draft) => { draft.hollow.finale.phase = 'step1'; });
+    if (ENDINGS_BUILT.twoStep) emit('finale-open', { step: 1 });
+    return refused(first.kind === 'needs' ? first.need : 'NOT NOW');
+  }
+  let stay: number | null = null;
+  if (you === 'stay') {
+    const ships = stayCandidates(state);
+    if (ships.length !== 1) return refused(FINALE_TEXT.stayPick);
+    stay = ships[0]!.slot;
+  }
+  confirm(store, hollow, you, stay);
   return null;
 }
 
-// STAY's sub-row (R9): the ship (its slot on the arm, its route index on the classic world) whose colony the unit mounts;
-// then the confirm.
+// STAY's sub-row (R9; review M3): valid at 'step2' with STAY's several ships; refuses a slot that is not one of
+// stayCandidates (the arm slot, the route index on the classic world), else confirms STAY with it. ESC in the sub-row only
+// closes it (CARD's); ESC on step 2 is backToStep1.
 export function pickStay(store: Store<GameState>, stay: number): string | null {
   return notBuilt('pickStay', 'FINALE', store, stay);
 }

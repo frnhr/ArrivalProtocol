@@ -9,7 +9,10 @@ import type {
 import type { Meta, RunLineage } from '@systems/meta';
 import type { LzState } from '@/types/landing';
 import type { SurveyState } from '@/types/survey';
-import { parseLastUnit, MetaCorrupt, endingOfV3LastUnit } from '@systems/meta-parse';
+import { parseLastUnit, MetaCorrupt, endingOfV3LastUnit, parseEnding } from '@systems/meta-parse';
+import { hasUsableTool } from '@state/selectors';
+import { FS_TOOL_KINDS } from '@data/fs-tools';
+import type { Segment } from '@/types/segment';
 import type { FinaleState } from '@state/schema';
 import type { FinalePhase } from '@/types/ending';
 import { HOLLOW_PIECES, YOU_PIECES } from '@data/endings';
@@ -564,6 +567,15 @@ const checkFinale = rec({
     lines: list(rec({ voice: oneOf('cmd', 'us', 'story', 'control'), text: str })), startAi: num, untilAi: num,
   })),
   unresolvedUntilAi: nullable(num),
+  // Review M4: the ending record frozen at the confirm, read as the archive reads one.
+  record: (value, at) => {
+    try {
+      parseEnding(value, at);
+    } catch (error) {
+      if (error instanceof MetaCorrupt) shapeFail(at, `is not an ending record (${error.message})`);
+      throw error;
+    }
+  },
 });
 
 function checkHollow(reference: Readonly<Record<string, unknown>>): Check {
@@ -833,6 +845,27 @@ function migrateRunSave5(save: Record<string, unknown>): Record<string, unknown>
   return next;
 }
 
+// The ending record of a decided v6 finale (review M4), as the confirm would have written it: step 1 and REASSIGNMENT, the
+// root the run's HOLLOW, the final ship from the slices and the route, the kit and the charge from its memory. Unchecked
+// input: the checks after the migration read the result.
+function migratedRecord(run: Record<string, unknown>, slices: Record<string, unknown>, hollow: string): Record<string, unknown> {
+  const map = isRecord(run.map) ? run.map : {};
+  const route = Array.isArray(map.route) ? map.route : [];
+  const stop = typeof run.shipIndex === 'number' ? route[run.shipIndex] : undefined;
+  const memory = (Array.isArray(slices.memory) ? slices.memory : []) as Segment[];
+  const pool = memory.find((seg) => seg.type === 'redundancy') as { used?: unknown } | undefined;
+  return {
+    hollow, you: 'reassignment', rootUnits: run.hollowUnits,
+    finalSlot: map.world === 'arm' && isRecord(stop) ? stop.slot : null,
+    finalShip: isRecord(slices.level) ? slices.level.shipName : null,
+    finalYear: map.galaxyYear,
+    stay: null,
+    kit: FS_TOOL_KINDS.filter((kind) => hasUsableTool(memory, kind, 'counts')),
+    fuelPct: null,
+    charge: pool?.used ?? 0,
+  };
+}
+
 // 6 → 7 (slice 7a, one bump for its three tracks and 7b: slice-7-plan R2, R16). Before slice 7 a won run had one step, and
 // CONTROL stood the unit by for reassignment, so a decided finale migrates to its step 1 and REASSIGNMENT:
 // • a world payload's hollow.finale: 'purged' → PURGE, 'merged' → MERGE (restored: the pods restored in place), each with
@@ -842,6 +875,7 @@ function migrateRunSave5(save: Record<string, unknown>): Record<string, unknown>
 // • its landing slice: THE LAST LANDING null (7b's, R2);
 // • every ended ship's pods (run.ships[], in a world and a boot payload): each featured colonist's bio line null (R21: the
 //   epilogue's payoff then falls back);
+// • a decided finale's ending record (review M4: FinaleState.record, migratedRecord); null for any other phase;
 // • run.lastUnit.ending by META 4's rule (meta-parse endingOfV3LastUnit).
 function migrateRunSave6(save: Record<string, unknown>): Record<string, unknown> {
   const next = structuredClone(save);
@@ -864,6 +898,7 @@ function migrateRunSave6(save: Record<string, unknown>): Record<string, unknown>
       cardAtAi: null,
       ending,
       unresolvedUntilAi: old.unresolvedUntilAi,
+      record: done !== undefined && isRecord(payload!.run) ? migratedRecord(payload!.run, slices, done.hollow) : null,
     };
     slices.hollow.finale = finale;
   }
@@ -972,7 +1007,8 @@ export function decodeRunSave(raw: string): DecodeResult {
 // • a decided FINALE has both choices, and its root fell exactly when step 1 was not 'followed'; SPARE rules out SUNSET;
 // • STAY names a ship (a slot of an ended ship, or the final ship's), and nothing else names one;
 // • the pods MERGE gave back are pods of this ship restored by it (7a's interim restores in place, so their driver is no
-//   longer lost: their records say `restored`).
+//   longer lost: their records say `restored`);
+// • a decided finale holds its ending record, which agrees with its choices, and an undecided one none (review M4).
 // STAY's ship being ★ ON TARGET is Track FINALE's rule (ending-rules stayCandidates); its check joins here when it is built.
 function finaleRefusal(
   point: SavePoint, finale: Readonly<FinaleState>, landing: Readonly<ShipSlices['landing']>, run: Readonly<RunState>, slot: number,
@@ -988,6 +1024,13 @@ function finaleRefusal(
   const restorable = new Set(landing.pods.filter((record) => record.restored).map((record) => record.pod));
   const stray = finale.restored.find((pod) => !restorable.has(pod));
   if (stray !== undefined) return `MERGE restored pod ${stray}, which it never gave back`;
+  // Review M4: a decided finale's record, frozen at the confirm, agrees with its choices; an undecided one has none.
+  const record = finale.record;
+  if (finale.phase !== 'done') return record === null ? null : `an ending record before the finale is decided ('${finale.phase}')`;
+  if (record === null) return 'a decided finale without its ending record';
+  if (record.hollow !== finale.hollow || record.you !== finale.you || (record.stay?.slot ?? null) !== finale.stay) {
+    return `the ending record (${record.hollow} + ${record.you}) is not the finale's (${finale.hollow} + ${finale.you})`;
+  }
   return null;
 }
 

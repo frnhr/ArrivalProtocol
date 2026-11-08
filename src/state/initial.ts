@@ -365,7 +365,7 @@ export function createInitialState(opts: InitialStateOpts): GameState {
 export function createFinaleState(): HollowState['finale'] {
   return {
     phase: 'none', rootFell: false, hollow: null, you: null, stay: null, restored: [], cardAtAi: null, ending: null,
-    unresolvedUntilAi: null,
+    unresolvedUntilAi: null, record: null,
   };
 }
 

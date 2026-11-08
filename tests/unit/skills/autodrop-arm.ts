@@ -51,7 +51,7 @@ export function armLanding(h: Harness7, route: readonly number[], opts: ArmLandi
   h.store.update((draft) => {
     draft.hollow.phase = 'dormant';
     draft.director.done.push(...QUIET);
-    if (draft.landing.finalShip) decideFinale(draft.hollow.finale, 'purge');
+    if (draft.landing.finalShip) decideFinale(draft, 'purge');
     for (const seg of draft.memory) {
       if (seg.role === 'thrust-ctrl' && 'integrity' in seg) seg.integrity = 100;
       if (opts.healDrivers !== false && seg.type === 'driver') seg.integrity = 100;

@@ -42,7 +42,7 @@ function boardShip(index: number, seed = 1): void {
   h.store.update((draft) => {
     draft.hollow.phase = 'dormant';
     draft.director.done.push(...DRIVER_RULES.map((rule) => rule.id), 'engine-io-fault');
-    if (draft.landing.finalShip) decideFinale(draft.hollow.finale, 'purge');
+    if (draft.landing.finalShip) decideFinale(draft, 'purge');
     // Slice 1b (risk 5): the engine is open in landing, so VESPER's failing Thrust Ctrl fires there too, and this kid
     // presses no SPACE: unswapped, its RETRO bursts take ▼ under the planet in 95–190 s (review M2's measurement), and it
     // does not follow L7b's SWAP. The flight's tutorial has the kid SWAP Thrust.alt in first (wp10 vesper-flow);
@@ -215,7 +215,7 @@ function eat(pod: number): void {
   landInstantly(h, 4);
   check('every pod down before the root: the strip says EVERY POD IS DOWN — now DELETE THE ROOT', state().run.phase === 'landing'
     && h.shown()?.id === 'landing-L0', h.shown()?.text ?? '');
-  h.store.update((draft) => { decideFinale(draft.hollow.finale, 'purge'); });
+  h.store.update((draft) => { decideFinale(draft, 'purge'); });
   h.stepFor(2);
   check('...and the LANDING REPORT comes after the duel', state().run.phase === 'report');
 }

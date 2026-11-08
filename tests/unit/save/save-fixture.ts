@@ -106,7 +106,7 @@ export function finalReport(store: Store<GameState>, fate: HollowFate = 'purge')
   store.update((draft) => {
     draft.run.phase = 'report';
     draft.burn.status = 'locked';
-    decideFinale(draft.hollow.finale, fate);
+    decideFinale(draft, fate);
   });
   writeEndingChosen(store, sayOwedVerdict);
 }

@@ -268,7 +268,7 @@ function run2Arm(): NonNullable<Meta['arm']> {
 // --- Minor 3: ENDING CHOSEN only with a save -------------------------------------------------------------------------------
 {
   const headless = createStore<GameState>(createInitialState({ seed: 3, phase: 'report' }));
-  headless.update((draft) => { decideFinale(draft.hollow.finale, 'purge'); draft.memory.push(freeSegment(1, 999)); });
+  headless.update((draft) => { decideFinale(draft, 'purge'); draft.memory.push(freeSegment(1, 999)); });
   let flushed = 0;
   let threw = '';
   try { writeEndingChosen(headless, () => { flushed++; }); } catch (error) { threw = (error as Error).message; }
@@ -278,7 +278,7 @@ function run2Arm(): NonNullable<Meta['arm']> {
   pageOpen(store, storage, SEED);
   receiveToReport(store);
   for (const slot of WORKED_ROUTE.slice(1)) beamTo(store, slot);
-  store.update((draft) => { draft.run.phase = 'report'; decideFinale(draft.hollow.finale, 'purge'); draft.memory.push(freeSegment(1, 999)); });
+  store.update((draft) => { draft.run.phase = 'report'; decideFinale(draft, 'purge'); draft.memory.push(freeSegment(1, 999)); });
   // abortAll frees what an op reserved; a block reserved by no op at all stays (the bug the check guards).
   threw = '';
   try { quiet(() => writeEndingChosen(store, () => { flushed++; })); } catch (error) { threw = (error as Error).message; }
