@@ -2370,3 +2370,227 @@ no tuning number (the `7b VIEW` block stays empty). The unit tier is green: 214 
   falling pod). With the guard, the check stages by `forceLandAll` or DROP's machine instead.
 - **The lead (e2e, §6.4):** the header strip (`#lastLanding`, hidden through 7a's interim), `.pb-restored`,
   `.np-beacon.restored` and `.lr-row.kind-restored` are the selectors to check once DROP's machine flies.
+
+## Deviations (7c foundation)
+
+Recorded by the 7c FOUNDATION agent (branch `found-7c`, from 9a7b3eb, the head of `claude/modest-hawking-209t0f` with 7a and
+7b merged). §2.2's 7c save, §2.4's 7c seams, §2.5's events, §2.6's tuning, §2.9's word pools and §2.12's hooks are built,
+with `systems/traces.ts` in full and the tracks' stubs below. Every gate is down (`TRACES_BUILT` per kind, `LINEAGE_BUILT`),
+so nothing a player can reach changes: the traces are rolled and saved at RUN START, and nothing reads them. The unit tier:
+214 passed, 1 failed, 12 balance-only skipped, **192 s** on 4 workers (budget 265 s; the 1-minute load average was 2.1 at
+the start and 6.9 at the end, with the 7b fix agent working in the main checkout). The one failure is `tsc-tests` on
+`ending/last-landing-models.test.ts:46`: VIEW's hand-built `LastLandingState` lacks DROP's fields. It fails the same way at
+9a7b3eb, the file is a `last-landing*` file this branch stays out of, and the 7b fix agent's working copy already fixes it.
+`npm run typecheck` is clean, the tests' tsc has no other error, and the import guard is green. The e2e was not run.
+
+**Step 0, checked at HEAD:** `RUN_SAVE_VERSION` was 7 and `META_VERSION` 4. Every name §2.4 and the critical-files list cite
+exists, with the corrections below.
+
+### What the tracks stand on
+
+**Built (lead-owned):**
+- `types/trace.ts`: `TraceKind`, `PlacedTraceKind`, `TracePlace`, `RunTraces`, `TraceBootLine`, `LogBook`.
+- `data/traces.ts`: `TRACES_BUILT` (one line per kind; CONTACT's is 7d's), `LINEAGE_BUILT`, `traceBuilt`, `TRACE_RULES` (where,
+  gain, cost), `TRACE_PLACE_COUNT`, `STRANGER_UNITS`, `SUNSET_GIFT_PRIORITY`.
+- `systems/traces.ts`, pure and in full: `noTraces`, `traceKindsOf`, `tracesOf`, `tracesRng` (`run:<seed>:traces`),
+  `placeExcluded`, `placeTraces`, `runTracesOf`, `traceAt`, `onFinalShip`, `finalTraces`, `finalTraceInput`, `lastUnitRoot`,
+  `rootUnitsOf` / `rootUnits`, `rootWaitYears`, `midRunHollowUnits`, `logBookOf`, `traceRefusal`.
+- Save v8:
+  - `RunState.traces`, `RunLogState.book`, `ArrivalReport.traceLines` and `ArrivalReport.giftCharge`;
+  - `RUN_SAVE_MIGRATIONS[7]`: no traces, 046.log, no trace line, no gift;
+  - the codec checks the traces by `traceRefusal`, and the book field by field (a `'last'` book holds at most
+    `NOTABLE_EVENTS_MAX` events, each read by `parseEvent`);
+  - the shape pin at v8;
+  - the fixtures `run-save-v7-ship-done-run2.json` and `run-save-v7-beam-final.json`, dumped by the game's own save path
+    before any change (b8e26cf).
+- RUN START:
+  - `state/initial.ts withRunMap(run, map)` places the traces with the run's map: the page's first title, `run.ts startRun`
+    and `?debug`'s `runNumber`;
+  - `createRunState` chooses the book (`createRunLog(logBookOf(…))`);
+  - `RunLineage.events` carries the last run's notable events (047.log's).
+- The seams, each neutral while its gate is down:
+  - `threat-plan.ts`: `ThreatInput.traces: FinalTraceInput { purge; merge; hunt }`, `NO_FINAL_TRACES` off a final ship.
+    `threatInputFor` takes it, and every caller passes `finalTraceInput(state.run)` or `NO_FINAL_TRACES`. `planThreat`'s final
+    rule plays bites × `TRACE_PURGE_BITE_MULT`, an 18-block root (`rootBlocksFor(…, mergeTrace)`) and the FINALE's seeds as
+    `'near-skill'` (the hunt). A load check pins 16 + `TRACE_MERGE_ROOT_EXTRA` = `FINAL_ROOT_MAX_BLOCKS`.
+  - `run.ts transmitNext`: `traceSeedMods` on the rolled seeds (the hop's own `'traces'` stream), `traceGiftCharge` into
+    `carry.ts arrivalCharge(…, giftCharge)`, and `arrivalTraceLines` into the arrival. `transmit.ts`'s model,
+    `arrival-preview.ts unitArrival` (roomFit's `bonus.gift`, `traceSeedAllowance`) and the desk card's seeds row count the
+    same.
+  - The boot (`data/script.ts bootLinePlan`, `bootLine`, `bootLineSpeaker`; `systems/boot.ts sayNextLine`):
+    - the kinds `'trace-gift'`, `'dish-wiped'` and `'dish-wild'` repeat, after the deliveries and before the charge line (a
+      first ship's come after the site-data line);
+    - `'face'` (repeats), `'lineage-control'` and `'stranger'` come after the INBOX line and before HOLLOW's own;
+    - `BOOT_LINE_MAX` is 30, and `BOOT_LINE_AT_SEC` has six more times;
+    - the charge line and `arrivalParts` name a gift's charge.
+  - The root: `say.ts hollowLabel`, `hollow.ts nameHollow` and `ending-rules.ts endingRecordAt`'s `rootUnits` read
+    `rootUnitsOf` (the last unit, on the final ship, after a built REASSIGNMENT).
+  - The hunt: `hollow.ts chooseVerb(…, prefer)`. RM takes `prefer` when it is in `rmTargets`, and the draws are unchanged.
+    `hollow-verbs.ts` and `__ap.verbs` feed it with `trace-hunt.ts huntTarget`. `seedSpotFor` gains `'near-skill'`.
+  - The books: `state/log-selectors.ts` has `BookShape`, `BOOK_046`, `BOOK_STRANGER`, `BOOK_LAST`, `bookShape`,
+    `rootEntryLines`, `logEntriesAtBoot(…, shape)` and `logDisplayName` by `bookName`. `story-log.ts`, `log-view.ts` and
+    `FinaleChoice.ts` read the book's count, root entry and words (all 046.log until LINEAGE's gate).
+  - The screens: `desk.ts cardModel`'s `'trace'` row (`traceCardRow`), `chartModel`'s `node.trace` (`traceOnChart`), the
+    legend's `'trace'`, and `epilogue.ts finalCardOf`'s `next` (`traceNextLines(record)`; none on a lost run).
+  - `inbox.ts deriveMessages` adds `traceMessages(run)`, and its memo keys on `run.traces`.
+  - `meta.ts lineageAt`: `LINEAGE_BUILT ? midRunHollowUnits(wave) : hollowUnitsAfter(lastUnit)`.
+  - `beam-seeds.ts rollExtraSeeds(packet, count, rng, excludeIds)`: the wild seed's target rule, for TRACE.
+- Tuning:
+  - the 7c lead block: `TRACE_GIFT_CHARGE` 15, `TRACE_PURGE_BITE_MULT` 0.85, `TRACE_MERGE_THREADS` 1, `TRACE_MERGE_ROOT_EXTRA`
+    2, `TRACE_EXTRA_SEEDS` 1, `TRACE_LAYERS`, `TRACE_SPARE_FALLBACK_LAYERS` [2, 6], `TRACE_ROOT_WAIT_MIN_YEARS` 1;
+  - the 7c TRACE block: `HUNT_PREFER_WEIGHT` 1;
+  - empty LINEAGE and CHART blocks.
+- Events: `events.ts`'s 7c NEXT RUN block (`'trace-gift'`, `'dish-wiped'`, `'dish-wild'`, `'root-face'`) and their cues
+  (`chime`, `fizzle`, `seedDrop`, `nameGlitch`).
+- Debug:
+  - `__ap.traces()`: the traces, `finalTraces`, the root and the gates;
+  - `__ap.traces.as(kind)`: a step-1 piece with REASSIGNMENT, or a step-2 piece after PURGE. The last unit's record gains that
+    ending (a run 1 gets a made-up one), and the places are rolled again;
+  - `__ap.log.book()`: the book and its shape.
+- `tests/unit/traces/foundation.test.ts`: 47 checks, about 2–3 s.
+
+**The contract, per track.** "Neutral" stubs are safe on every tick and paint. "Throws" stubs throw through `not-built.ts
+notBuilt` where nothing reaches them yet (`not-built.ts` is back, with `Track = 'TRACE' | 'LINEAGE' | 'CHART'`). Each file
+opens with its track's banner.
+
+| Track | Function (file) | Signature | Now |
+|---|---|---|---|
+| TRACE | `traceSeedMods` (systems/trace-gifts.ts) | `(state, toSlot, { beam, delivery }, packet, rng) => { seeds; wiped; extra }` | neutral: the seeds as rolled |
+| TRACE | `traceSeedAllowance` | `(state, toSlot, { min, max }) => { min, max }` | neutral: as given |
+| TRACE | `traceGiftCharge` | `(state, toSlot) => number` | neutral: 0 |
+| TRACE | `arrivalTraceLines` | `(state, toSlot, mods, giftCharge) => TraceBootLine[]` | neutral: [] |
+| TRACE | `traceBootLines` | `(state) => TraceBootLine[]` | neutral: [] |
+| TRACE | `traceBootLineText` | `(state, kind, ordinal) => string` | throws (unreachable) |
+| TRACE | `traceBootLineSaid` | `(store, kind, ordinal) => void` | throws (unreachable) |
+| TRACE | `traceMessages` | `(run) => InboxMessage[]` | neutral: [] |
+| TRACE | `huntTarget` (systems/trace-hunt.ts) | `(state) => string \| null` | neutral: null |
+| TRACE | `nearSkillSeedSpot` | `(memory, untried) => SeedSpot \| null` | throws (unreachable: no `'near-skill'` until built) |
+| TRACE | `TRACE_TEXT` (data/trace-text.ts) | cache, leftCache, supply, wiped, wild, thread, allowance, chargePart, arrivalPart, stayLetter | seeded |
+| LINEAGE | `faceBootLines` (systems/lineage-boot.ts) | `(state) => string[]` | neutral: [] |
+| LINEAGE | `lineageControlLine` | `(state) => string \| null` | neutral: null |
+| LINEAGE | `strangerBootLine` | `(state) => string \| null` | neutral: null |
+| LINEAGE | `lineageBootLineSaid` | `(store, kind, ordinal) => void` | throws (unreachable) |
+| LINEAGE | `bookName`, `bookEntryKey`, `bookEntryLines` (data/log-books.ts) | `(book, …)` | 046.log's words; the other books throw (plain errors: a data file) |
+| LINEAGE | `LINEAGE_TEXT` (data/lineage-text.ts) | stranger, strangerWas, face, faceCharge, faceMerged, faceByStep1, reassigned, nonCompliant | seeded |
+| CHART | `traceCardRow` (systems/trace-hud.ts) | `(state, slot) => { label; value; tone } \| null` | neutral: null |
+| CHART | `traceOnChart` | `(state, slot) => boolean` | neutral: false |
+| CHART | `traceNextLines` | `(record) => string[]` | neutral: [] |
+| CHART | `TRACE_HUD_TEXT` (data/trace-text.ts, CHART's block) | endedHere, cacheHere, leftCacheHere, supplyHere, cardLabel, legend, glyph, nextRun | seeded |
+
+**Files each track owns:**
+- **TRACE:**
+  - its own files: `systems/trace-gifts.ts`, `systems/trace-hunt.ts`, `data/trace-text.ts`'s TRACE block;
+  - its lines in the lead's files: `data/traces.ts:15–20` (its six gate lines), `tuning.ts`'s 7c TRACE block (`:2550–2556`),
+    `audio-cues.ts`'s three TRACE cue lines (`:413–416`), `support/words.test.ts`'s 7c TRACE block (`:511–528`),
+    `traces/foundation.test.ts:64–66` (its gate line) and its stubs block (`:335–347`), and the dry run's trace movers;
+  - new suites: `traces/final-ship`, `traces/gifts`.
+- **LINEAGE:**
+  - its own files: `systems/lineage-boot.ts`, `data/lineage-text.ts`, `data/log-books.ts`, `data/log-text.ts`,
+    `systems/story-log.ts`, `systems/log-view.ts`, and `hollow-text.ts`'s HOLLOW_STORY and GHOST_LINE blocks;
+  - its lines in the lead's files: `data/traces.ts:29` (its gate), `tuning.ts`'s 7c LINEAGE block (`:2558–2562`),
+    `audio-cues.ts:417–418`, `support/words.test.ts`'s 7c LINEAGE block (`:532–544`), `traces/foundation.test.ts:67–68` and its
+    stubs block (`:349–354`), and the lineage movers;
+  - new suites: `traces/lineage`, `traces/logs`.
+- **CHART:**
+  - its own files: `systems/trace-hud.ts`, `data/trace-text.ts`'s CHART block, `desk.css`, and the marked edits in
+    `components/desk/chart-draw.ts` (the `◆` from `node.trace`) and `components/run/FinalCard.ts` (the `NEXT RUN:` rows from
+    `model.next`);
+  - its lines in the lead's files: `tuning.ts`'s 7c CHART block (`:2564–2568`), `support/words.test.ts`'s 7c CHART block
+    (`:548–560`), and `traces/foundation.test.ts`'s CHART stubs block (`:356–361`);
+  - new suite: `traces/ui-models`.
+
+### The dry run (each gate raised alone, the quick tier, then lowered)
+
+- **`TRACES_BUILT`, all six kinds at once:** 213 of 215 passed in 192 s.
+  - The only mover is `traces/foundation` itself: its gate line (`:65`) and its two gates-down checks (`:199`, `:202`).
+  - No other quick suite reaches a final ship whose run holds a trace. The v7 fixtures migrate with none, the classic world
+    holds none, and the arm suites end their run 2s before a final ship.
+  - With the gate up, TRACE's stubs are still neutral, so only the lead-built effects play (the final rule, the root). A
+    REASSIGNMENT run 2 at its final ship reaches `nearSkillSeedSpot` and throws until TRACE builds it (fail loudly).
+  - Plan §5.3's expected movers ("the run-2 final ships the fixtures reach") did not move in the quick tier. The
+    BALANCE_ONLY suites and the e2e (`run2.mjs`) were not run.
+- **`LINEAGE_BUILT`:** 209 of 215 passed in 189 s. Every mover is LINEAGE's churn, and each is a run 2+ HOLLOW name:
+  - `ending/last-landing.test.ts:272` (`HOLLOW is both of them now (UNIT-046·047)` reads `[31]`: a run after a MERGE now
+    meets the stranger mid-run, R34);
+  - `wp8/run-flow.test.ts:108` (run 2's HOLLOW is UNIT-047) and `:204` (run 3's is UNIT-048);
+  - `wp8/ghost.test.ts:147` (run 2's HOLLOW is UNIT-047);
+  - `wp8/meta.test.ts:118` (the next run's HOLLOW is UNIT-047);
+  - `traces/foundation`: its gate line (`:68`), the gates-down books-and-strangers check (`:208`), and `:329` (the later
+    title's book is now `'last'`, since its last unit stood by).
+  - No quick suite reached the other books' throwing words.
+
+### Deviations
+
+1. **`rootUnits` lives in `systems/traces.ts`, not `state/selectors.ts`** (§2.4). Data modules load `state/selectors.ts` (one of
+   the import guard's pure helpers), and the rule reads the traces' gates. `traces.ts` is a pure leaf every reader can import.
+2. **The traces' seed rules are TRACE's `traceSeedMods` (trace-gifts.ts), called by `transmitNext`,** not `beam-seeds.ts
+   finalShipSeedMods(plan, traces)`.
+   - **Why:** they cover SPARE's seedless gift ship as well as the final ship, and they need the packet and the hop's own
+     `'traces'` stream for the wild seed's target. §6.2 also wants `threat/beam-seeds` byte-identical.
+   - `beam-seeds.ts`'s rolls are untouched. Its one addition is the pure target rule `rollExtraSeeds`.
+   - A delivery seed the wipe takes is no longer `seeded`: transmitNext filters `arrivalDeliveries` by the seeds that ride.
+     TRACE's wild seed should pass the delivered files in `excludeIds`.
+3. **`ArrivalReport.traceLines` is `TraceBootLine[]` (`{ kind; trace; text }`), not `string[]`, and `ArrivalReport.giftCharge`
+   joins it** (both inside the v8 bump).
+   - The boot plans each line by its kind, and its event and speaker follow the kind.
+   - The charge line, `zeroChargeArrival` and the overflow count the gift's charge with the rest.
+4. **A first ship has no arrival.** Its trace lines come from TRACE's `traceBootLines(state)` (the arrival's lines, or a first
+   ship's own: SUNSET's fallback), and adding its gift's charge at the boot is TRACE's job. Every later gift's charge goes
+   through `arrivalCharge`'s `giftCharge` (§2.4).
+5. **The boot plan places the new lines in `data/script.ts bootLinePlan`, not `map-boot.ts`** (the plan's file). Every other
+   kind is placed there; `map-boot.ts` words its own map lines only.
+6. **Six boot kinds, not five.**
+   - `'lineage-control'` (CONTROL's `UNIT-047 was reassigned successfully…`) is a kind of its own, because a boot line's
+     speaker follows its kind.
+   - `BOOT_LINE_MAX` is 30: three trace lines (on a final ship that is also STAY's fallback: thread, wild dish, supply) and
+     three lineage lines (two face lines, CONTROL's) can share one boot.
+7. **No Core-capacity seam.** TRACE applies MERGE's `+1 THREAD` to the Core's `capacity` as its line is said at the final
+   boot, as THREAD+ does. `coreThreads` already reads it, and nothing carries on from the final ship.
+8. **STAY's letter is `traceMessages(run): InboxMessage[]`**, not a `LetterSource`: those are letters to the unit ahead, with
+   their own light rule. `inbox.ts`'s memo keys on `run.traces`.
+9. **REASSIGNMENT's hunt** has two parts:
+   - `chooseVerb`'s `prefer`, a segment id. TRACE's `huntTarget(state)` decides it, gates included. `prefer` defaults to null,
+     so the suites' four-argument calls stand.
+   - `'near-skill'`, a new `SeedTarget`. `planThreat` sets it on the FINALE's seeds when `ThreatInput.traces.hunt`
+     (REASSIGNMENT held and built), so `FinalTraceInput` has three fields, not §2.4's two.
+10. **The fallbacks are always allowed for their kind.**
+    - SUNSET's first ship and STAY's final ship pass `placeExcluded` for that kind whatever they are. Run 1's arm has both
+      authored (ARES-VII, LAST LIGHT), so R31's "except where a rule names one" must not throw there.
+    - SPARE with no ship in layers 2–6 throws (fail loudly). None of the 200 test arms does.
+    - Two placed kinds never share a ship. STAY places first, since it draws nothing.
+11. **The classic world holds no traces** (`runTracesOf` returns none off the arm). It has no arm to place on, and it is never
+    archived as a lineage, so a suite's classic final ship plays as before whatever its last unit.
+12. **CONTACT's two places follow their rule now** (layers 5–7), not behind `ENDINGS_BUILT.contact`. A CONTACT ending can't be
+    chosen before 7d, so nothing places them yet; 7d keeps the rule.
+13. **`controlCompliant` moved to `data/endings.ts`**, a data leaf the pure trace rules import. `ending-rules.ts` re-exports it,
+    so the FINALE, the epilogue and their suites read it where they did.
+14. **`traceRefusal` checks by rule, not by re-rolling.** It checks the ending's kinds and wild seed (re-run), the last unit's
+    own ending, each placed kind's place count, one place per ship, and R31's exclusions. A re-roll would refuse a save
+    whose arm ship changed a field mid-run for some other reason.
+15. **`LogSegment.name` widens to `'???' | \`${string}.log\``** (the book's name once known), and `LOG_UI_TEXT.found` takes the
+    book's total.
+16. **`RunLineage.events` is new.** The archive's notable events reach `createRunState` only through it, and `run-save.ts
+    lineageOfRun` gives a resumed run its book's events.
+17. **The foundation moved some suites for the types only** (no behaviour moved):
+    - the `threatInputFor` / `ThreatInput` callers: `threat/plan`, `map/desk-models`, `map/packet-room`, `map/route-threat`;
+    - four hand-built arrivals: `map/delivery-packet`, `ui/threat-models`, `wp11/lastlight-sim`, `wp12/p3/repair-renewed`;
+    - `opening/calm-ships`'s log literal, `skills/packet`'s hop (`to`), and `wp2/say`'s `hollowLabel` argument;
+    - `survey/foundation`'s BOOT_LINE_MAX pin (now `≥ 24`), `save/codec`'s seven steps, and `ending/foundation`'s save
+      version (now `≥ 7`: its v6 fixtures migrate on to v8).
+
+### Notes for the tracks
+
+- **TRACE:**
+  - Raise a kind's gate once both its gain and its cost are built. The REASSIGNMENT gate needs `nearSkillSeedSpot` and
+    `huntTarget` first.
+  - Mark `places[].given` in the update that gives the gift.
+  - `HUNT_PREFER_WEIGHT` is yours.
+  - If the hunt needs a `.skl` that is not in `rmTargets`' tier, ask the lead to widen `chooseVerb`'s fair-target rule.
+- **LINEAGE:**
+  - Raise the gate last, and move the five suites listed above.
+  - The root is built already named as the last unit on the final ship (`rootUnitsOf`). If the face line should rename it as
+    it is said, ask the lead for a flag that `rootUnitsOf` reads.
+  - `hollowUnitsAfter` and `hollowName` stay for the gate-down path and the ghost words. The fix pass retires them with the
+    gate.
+- **CHART:** read `traceAt`, `run.traces.from`, `finalTraces` and `traceBuilt`. The card row goes after the trail row.
+- **The lead:** the contract review is next. §6.4's `traces.mjs` and `run2.mjs`'s stranger check are for the batch end.
