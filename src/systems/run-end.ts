@@ -1,4 +1,4 @@
-// Slice 4: Track TREE owns this file (docs/phase3/impl/slice-4-plan.md §5.2): UNSPENT and the tally's TRAINED n of 54
+// Slice 4: Track TREE owns this file (docs/phase3/impl/slice-4-plan.md §5.2): UNSPENT and the tally's TRAINED n of 50
 // (the words are TRAINING_TEXT's, Track UI's). Others ask by message.
 import type { GameState, RunEndCause, ShipOutcome, ShipResult } from '@state/schema';
 import { runScore, runLanded } from '@systems/run';
@@ -87,7 +87,7 @@ export interface RunEndModel {
 }
 
 // RUN END's `UNSPENT n` (the last ship's cycles and the bank left: they do nothing more, decision 18 deferred) and the RUN
-// TALLY's `TRAINED n of 54 · UNSPENT n` (the cycles' worth of the tree the run paid for: skill-tree.ts trainedCycles).
+// TALLY's `TRAINED n of 50 · UNSPENT n` (the cycles' worth of the tree the run paid for: skill-tree.ts trainedCycles).
 export interface RunEndSkills {
   trained: number;
   total: number;

@@ -13,7 +13,7 @@ import { SITES_TEXT as T } from '@data/sites-text';
 import { COLONISTS_PER_POD, SITES_RIM_BAR_CELLS, SURVEY_SWEEP_VERSION } from '@data/tuning';
 import { lzLetter } from '@data/survey-sites';
 import { surveyVersion, mappedPct, lzSiteOf, siteVisible, lzOnSite, candidatesFound, surveyNetOutcome } from '@state/survey-selectors';
-import { surveyRunning, swathHalfRad, siteStars, assignableLzs, dropSwathOn, type SiteStars } from '@systems/survey-model';
+import { surveyRunning, swathHalfRad, siteStars, assignableLzs, dropSwathOn, guessTell, type SiteStars } from '@systems/survey-model';
 import { getDropSolution } from '@systems/drop-cache';
 import { shipSummaryAt } from '@systems/map-run';
 import { openBranchesAt } from '@systems/skill-tree';
@@ -79,8 +79,13 @@ export interface GroundShown {
   stars: SiteStars;               // 0 while unknown (and a wreck's)
 }
 
-function groundShown(site: Readonly<SurveySite>, surveying: boolean): GroundShown {
-  if (!site.groundKnown) return { word: surveying || site.kind !== 'guess' ? T.row.groundUnknown : T.row.unsurveyed, known: null, stars: 0 };
+function groundShown(state: Readonly<GameState>, site: Readonly<SurveySite>, surveying: boolean): GroundShown {
+  if (!site.groundKnown) {
+    // Slice 8 (OPEN-DECISIONS 53): a guess the swath passed reads v1's rough tell, `FLAT ?` or `ROUGH ?`, still unrated.
+    const tell = guessTell(state, site);
+    if (tell !== null) return { word: tell === 'rough' ? T.row.tellRough : T.row.tellFlat, known: null, stars: 0 };
+    return { word: surveying || site.kind !== 'guess' ? T.row.groundUnknown : T.row.unsurveyed, known: null, stars: 0 };
+  }
   const stars = siteStars(site);
   if (site.ground === 'flat') return { word: T.row.flat(stars), known: 'flat', stars };
   return { word: T.row.bad(site.ground), known: site.ground, stars };
@@ -328,7 +333,7 @@ export function sitesWindowModel(state: Readonly<GameState>, selected: string | 
   const lzs = state.landing.lzs.map((lz): SitesRow => {
     const site = lzSiteOf(state.landing, lz.label);
     if (site === null) throw new Error(`sitesWindowModel: ${lz.label} stands on no site on a POOR planet`);
-    const ground = groundShown(site, aboard);
+    const ground = groundShown(state, site, aboard);
     const where = site.kind === 'guess' ? T.row.guess : siteLabel(site);
     return {
       kind: 'lz', key: lz.label, site: site.id, text: T.row.lz(lz.label, where, lz.pods, T.width[site.width], ground.word), ground,
@@ -338,7 +343,7 @@ export function sitesWindowModel(state: Readonly<GameState>, selected: string | 
   const free = freeSites(state);
   const chosen = free.find((site) => site.id === selected && site.kind !== 'wreck') ?? null;
   const sites = free.map((site): SitesRow => {
-    const ground = groundShown(site, aboard);
+    const ground = groundShown(state, site, aboard);
     if (site.kind === 'wreck') {
       return { kind: 'wreck', key: site.id, site: site.id, text: T.row.wreck(siteLabel(site)), ground, selectable: false, selected: false, moved: false };
     }

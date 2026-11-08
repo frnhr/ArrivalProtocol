@@ -191,6 +191,20 @@ export function assignableLzs(state: Readonly<GameState>, siteId: string): { lz:
     .map((lz) => ({ lz: lz.label, refusal: assignRefusal(state, lz.label, siteId) }));
 }
 
+// OPEN-DECISIONS 53 (slice 8, Track ECONOMY): v1's rough tell. A CONTROL guess the ship's own swath has passed (its centre's
+// cell mapped: `found`), its ground not rated yet, reads 'rough' when it is ROCKY or WET and 'flat' when it is FLAT; null for a
+// candidate or a wreck, a rated site, a guess the swath has not passed, a GOOD planet or no working SURVEY. It only tells: the
+// ground stays unknown (no reveal, no strip swap: knownBad and bestSwap stay v2's), and a move to a found candidate stays
+// blind (rating a candidate is v2's). The drop-dot swath (OPEN-DECISIONS 52) stays v2's, so at v1 only the ship's own swath
+// passes a guess.
+export type GuessTell = 'flat' | 'rough';
+
+export function guessTell(state: Readonly<GameState>, site: Readonly<SurveySite>): GuessTell | null {
+  if (site.kind !== 'guess' || !site.found || site.groundKnown) return null;
+  if (state.landing.survey.site !== 'poor' || surveyVersion(state) === 0) return null;
+  return site.ground === 'flat' ? 'flat' : 'rough';
+}
+
 // The LZ `lz` stands on ground the kid knows is bad (ROCKY or WET: R5, R11).
 export function knownBad(state: Readonly<GameState>, lz: string): boolean {
   const at = lzOf(state, lz);

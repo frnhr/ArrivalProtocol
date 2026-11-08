@@ -5,7 +5,7 @@
 //   is not asked to pick. Only on the arm, only at visit 1.
 // • The +2 CYCLES salvage card: dealt only with a tree (never on the classic world: its deals byte-identical), never into a
 //   final ship; picked, it becomes a 'salvage' grant at TRANSMIT ▸, never a carried card.
-// • RUN END: `UNSPENT n` and the RUN TALLY's `TRAINED n of 54 · UNSPENT n` (lost levels still count as trained); none on
+// • RUN END: `UNSPENT n` and the RUN TALLY's `TRAINED n of 50 · UNSPENT n` (lost levels still count as trained); none on
 //   the classic world.
 // • The archive (03 §3.11): LastUnit.skills at RUN END, each skill's file level and AUTOBURN's accuracy, through the real
 //   archive write and back through the parser.
@@ -121,17 +121,17 @@ const throws = (run: () => unknown): boolean => { try { run(); return false; } c
     draft.run.skills.earned[0]!.landed = 5;
     draft.run.skills.bought.push(...draft.run.skills.pending);
     draft.run.skills.grants.push({ source: 'story', cycles: 3, visit: 1, label: null });
-    draft.run.skills.bought.push({ skill: 'autoburn', kind: 'train', to: { version: 2, lock: 0 }, cost: 5, visit: 2 });
+    draft.run.skills.bought.push({ skill: 'autoburn', kind: 'train', to: { version: 2, lock: 0 }, cost: 4, visit: 2 });
     draft.run.skills.bought.push({ skill: 'autoburn', kind: 'lock', to: { version: 2, lock: 1 }, cost: 1, visit: 2 });
     draft.run.skills.pending = [];
   });
-  check('trainedCycles counts every level paid for at its price (v1 3 + v2 5 + LOCK 270 1 = 9), lost or not', trainedCycles(store.getState().run.skills) === 9);
+  check('trainedCycles counts every level paid for at its price (v1 3 + v2 4 + LOCK 270 1 = 8: v2 4 since slice 8), lost or not', trainedCycles(store.getState().run.skills) === 8);
   const bank = bankOf(store.getState().run.skills);
   store.update((draft) => { draft.run.phase = 'end'; draft.run.endCause = 'stayed'; });
   const model = runEndModel(store.getState());
-  check('RUN END: `UNSPENT n` and the tally\'s `TRAINED 9 of 54 · UNSPENT n`', model.skills !== null && model.skills.trained === 9
-    && model.skills.total === 54 && model.skills.unspent === bank && model.skills.unspentLine === `UNSPENT ${bank}`
-    && model.skills.tallyLine === `TRAINED 9 of 54 · UNSPENT ${bank}`, JSON.stringify(model.skills));
+  check('RUN END: `UNSPENT n` and the tally\'s `TRAINED 8 of 50 · UNSPENT n`', model.skills !== null && model.skills.trained === 8
+    && model.skills.total === 50 && model.skills.unspent === bank && model.skills.unspentLine === `UNSPENT ${bank}`
+    && model.skills.tallyLine === `TRAINED 8 of 50 · UNSPENT ${bank}`, JSON.stringify(model.skills));
   const classic = createStore<GameState>(withClassicWorld(() => createInitialState({ seed: 7 })));
   classic.update((draft) => { draft.run.phase = 'end'; draft.run.endCause = 'stayed'; });
   check('…the classic world has no tree line', runEndModel(classic.getState()).skills === null);

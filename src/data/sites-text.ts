@@ -58,6 +58,9 @@ export const SITES_TEXT = {
     // 01 §7's story find: never assignable.
     wreck: (label: string): string => `${label} · AN OLD POD. NOT OURS.`,
     groundUnknown: 'GROUND ?',
+    // Slice 8 (OPEN-DECISIONS 53): v1's rough tell on a guess its swath passed, not rated (survey-model.ts guessTell).
+    tellFlat: 'FLAT ?',
+    tellRough: 'ROUGH ?',
     unsurveyed: 'UNSURVEYED',
     flat: (stars: number): string => `FLAT ${starsOf(stars)}`,
     bad: (ground: BadGround): string => `${GROUND_WORD[ground]} ✕`,
