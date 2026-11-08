@@ -174,3 +174,15 @@ Status words:
     - It is behind its own gate and may ship dark.
 51. **ENDING CHOSEN stays at the final report's open, not at step 2** (R14). This deviates from 02 §4.
     - A reload during the FINALE replays the final ship, because the save can't hold a mid-landing state.
+
+## Slice 6, measured
+
+52. **SURVEY v2 fell well short of "within 3% of GOOD".** On 42 POOR ships it scored −14.0 points against GOOD,
+    and v3 −13.0. For comparison, no SURVEY scored −22.6 and v1 −18.6.
+    - **Why:** in a landing orbit the drop dot leads the ship by about 80°, and the swath lies under the ship (01 §3.13).
+      So the first window of an LZ the approach didn't map often comes before the swath reaches it: v2 revealed the bad
+      guess before the first pod on only 20 of 42 ships.
+    - **Decision:** BUILT in the slice 6 fix pass. During the landing, SURVEY v2+ also maps a swath around the drop
+      dot ("the sensors look where the pods will go"). This deviates from 01 §3.13's geometry.
+    - The alternatives were a strip row that holds a window while the ground is unknown, or letting an LZ move with
+      pods already down. Both were rejected: the first costs the kid time, the second changes scoring.
