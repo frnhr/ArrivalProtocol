@@ -12,7 +12,7 @@ import type { HollowChoice, HollowFate, YouChoice, EndingPiece } from '@/types/e
 // • contact (7d): CONTACT's row on the FINALE card and its piece in the count (R11: absent until raised).
 export const ENDINGS_BUILT: Readonly<{ twoStep: boolean; night: boolean; contact: boolean }> = {
   // Track FINALE raises this line.
-  twoStep: false,
+  twoStep: true,
   // Track NIGHT raises this line.
   night: false,
   // 7d's CONTACT raises this line.
