@@ -1,8 +1,9 @@
 // WP9 part 2: what the screens show of KESTREL, as data (the DOM only patches what these models return).
 // • The NAV PLOT's zone glyph and label (flight-hud plotZones), read from the sensed path: blind → grey
-//   `DEBRIS · RACK C · HIT?` counted to the nearest pass; the sensor repaired → red `DEBRIS · HITS RACK C` / `IN m:ss`
+//   (Track RETIRE: run 1's arm KESTREL, its debris on rack B where its pods are; the classic one's was rack C.)
+//   `DEBRIS · RACK B · HIT?` counted to the nearest pass; the sensor repaired → red `DEBRIS · HITS RACK B` / `IN m:ss`
 //   counted to the entry, with a hazard span on the path; an early IN correction → green `DEBRIS · CLEAR`, no span;
-//   never corrected → `HIT · RACK C` after contact; NO SIGNAL → nothing.
+//   never corrected → `HIT · RACK B` after contact; NO SIGNAL → nothing.
 // • The MIND's rack tag (rackZoneTags) agrees at every step: `DEBRIS?` / `DEBRIS m:ss` / none / `HIT −25%`.
 // • A belt (LAST LIGHT's kind, built here, flown in WP11): `BELT · m:ss INSIDE` / `≈n HITS ON RACKS A–B`, both racks
 //   tagged, the geiger's depth 0 at the edges and 1 midway.
@@ -13,7 +14,6 @@
 //   DAMAGED, GONE.
 // • The zone-forecast moment fires once (hit → clear) for the early correction, and the stamps' words.
 // • Every new line fits its place (≤ 70 characters on the strip; the plot's labels fit the plot's width).
-import '../../support/classic-world';
 import { check, finish } from '../../wp1/harness';
 import { createHarness9 } from '../harness9';
 import { getPrediction, getSensedPrediction } from '@systems/predict';
@@ -34,7 +34,7 @@ const state = () => h.store.getState();
 const tacNow = (): number => state().clock.tSec / state().level.tacticalWarp;
 const sensed = () => getSensedPrediction();
 const plot = () => plotZones(state(), sensed())[0];
-const tagC = () => rackZoneTags(state(), sensed()).find((tag) => tag.rack === 'C');
+const tagHit = () => rackZoneTags(state(), sensed()).find((tag) => tag.rack === 'B');
 const TIME = /^IN \d\d:\d\d$/;
 
 // --- Flying blind, then the sensor repaired, then the early correction ---------------------------------------------
@@ -42,11 +42,11 @@ const TIME = /^IN \d\d:\d\d$/;
   h.kestrel(3, { arrivalDamage: true, hollowAsleep: true });
   h.step();
   const blind = plot();
-  check('KESTREL arrives blind: the cloud is grey, `DEBRIS · RACK C · HIT?`, counted to its nearest pass',
+  check('KESTREL arrives blind: the cloud is grey, `DEBRIS · RACK B · HIT?`, counted to its nearest pass',
     capabilitiesNow(state()).plot.mode === 'uncertain' && blind?.verdict === 'unknown' && blind.tone === 'unknown'
-    && blind.lines[0] === 'DEBRIS · RACK C · HIT?' && TIME.test(blind.lines[1] ?? ''), JSON.stringify(blind));
-  const blindTag = tagC();
-  check('…rack C\'s tag in the MIND: `DEBRIS?` over the same countdown, grey', blindTag?.verdict === 'unknown'
+    && blind.lines[0] === 'DEBRIS · RACK B · HIT?' && TIME.test(blind.lines[1] ?? ''), JSON.stringify(blind));
+  const blindTag = tagHit();
+  check('…rack B\'s tag in the MIND: `DEBRIS?` over the same countdown, grey', blindTag?.verdict === 'unknown'
     && blindTag.lines[0] === RACK_TAG_TEXT.debrisUnknown && blindTag.lines[1] === blind?.lines[1]?.replace('IN ', '') && blindTag.tone === 'unknown',
   JSON.stringify(blindTag));
   check('…no other rack is tagged', rackZoneTags(state(), sensed()).length === 1);
@@ -58,11 +58,11 @@ const TIME = /^IN \d\d:\d\d$/;
   h.step();
   const hit = plot();
   const enterTac = ((getPrediction().zoneHits[0]!.enterInSec ?? 0) - (state().clock.tSec - getPrediction().asOfTSec)) / state().level.tacticalWarp;
-  check('the sensor repaired: red `DEBRIS · HITS RACK C` / `IN m:ss` counted to the entry, a hazard span on the drawn path',
-    hit?.verdict === 'hit' && hit.tone === 'danger' && hit.lines[0] === 'DEBRIS · HITS RACK C' && TIME.test(hit.lines[1] ?? '')
+  check('the sensor repaired: red `DEBRIS · HITS RACK B` / `IN m:ss` counted to the entry, a hazard span on the drawn path',
+    hit?.verdict === 'hit' && hit.tone === 'danger' && hit.lines[0] === 'DEBRIS · HITS RACK B' && TIME.test(hit.lines[1] ?? '')
     && Math.abs(Number(hit.lines[1]!.slice(3, 5)) * 60 + Number(hit.lines[1]!.slice(6, 8)) - enterTac) <= 1
     && sensed().hazardSpans.length === 1, `${JSON.stringify(hit?.lines)} entry ${enterTac.toFixed(1)} tac s`);
-  check('…rack C\'s tag: `DEBRIS` over the countdown, red', tagC()?.verdict === 'hit' && tagC()?.lines[0] === RACK_TAG_TEXT.debris && tagC()?.tone === 'danger');
+  check('…rack B\'s tag: `DEBRIS` over the countdown, red', tagHit()?.verdict === 'hit' && tagHit()?.lines[0] === RACK_TAG_TEXT.debris && tagHit()?.tone === 'danger');
 
   // The early correction: IN held until the strip says RELEASE.
   h.events.length = 0;
@@ -73,7 +73,7 @@ const TIME = /^IN \d\d:\d\d$/;
   const clear = plot();
   check('the early IN correction: green `DEBRIS · CLEAR`, no hazard span left', clear?.verdict === 'clear' && clear.tone === 'good'
     && clear.lines.join() === ZONE_PLOT_TEXT.debrisClear && sensed().hazardSpans.length === 0, JSON.stringify(clear));
-  check('…rack C\'s tag is gone (the rack is safe)', tagC() === undefined);
+  check('…rack B\'s tag is gone (the rack is safe)', tagHit() === undefined);
   const flips = h.events.filter((event) => event.name === 'zone-forecast').map((event) => event.payload as { from: string; to: string });
   check('…the forecast moment fired once: hit → clear (the CLEAR OF THE DEBRIS stamp and chime)', flips.length === 1 && flips[0]!.from === 'hit' && flips[0]!.to === 'clear',
     JSON.stringify(flips));
@@ -85,25 +85,25 @@ const TIME = /^IN \d\d:\d\d$/;
   });
   h.step();
   check('NO SIGNAL: no zone on the plot (the veil covers it), the rack tag blind', plotZones(state(), sensed()).length === 0
-    && tagC()?.verdict === 'unknown', JSON.stringify(tagC()));
+    && tagHit()?.verdict === 'unknown', JSON.stringify(tagHit()));
 }
 
-// --- Never corrected: the hit, then `HIT · RACK C` -------------------------------------------------------------------
+// --- Never corrected: the hit, then `HIT · RACK B` -------------------------------------------------------------------
 {
   h.kestrel(3, { hollowAsleep: true, sensorHealed: true });
   h.stepUntil(() => state().hazards.hitIds.length > 0, 200);
   // The predictor refreshes at most PREDICT_HZ: the label follows within a tenth of a second.
   for (let i = 0; i < 4; i++) h.step();
   const spent = plot();
-  check('never corrected: after contact the plot says `HIT · RACK C` (red)', spent?.verdict === 'spent' && spent.lines.join() === 'HIT · RACK C'
+  check('never corrected: after contact the plot says `HIT · RACK B` (red)', spent?.verdict === 'spent' && spent.lines.join() === 'HIT · RACK B'
     && spent.tone === 'danger', JSON.stringify(spent));
-  const spentTag = tagC();
-  check(`…rack C's tag: \`HIT\` over \`−${DEBRIS_HIT_DAMAGE}%\`, red, for the rest of the ship`, spentTag?.verdict === 'spent'
+  const spentTag = tagHit();
+  check(`…rack B's tag: \`HIT\` over \`−${DEBRIS_HIT_DAMAGE}%\`, red, for the rest of the ship`, spentTag?.verdict === 'spent'
     && spentTag.lines.join(' ') === `HIT −${DEBRIS_HIT_DAMAGE}%` && spentTag.tone === 'danger', JSON.stringify(spentTag));
   const hitEvent = h.events.find((event) => event.name === 'zone-hit')?.payload as { racks: string[]; hits: { rack: string }[] } | undefined;
   check('…the zone-hit event names the rack of every file it hit (the view flashes those rows)', hitEvent !== undefined
-    && hitEvent.hits.length > 0 && hitEvent.hits.every((item) => item.rack === 'C') && hitEvent.racks.join() === 'C');
-  check('…the stamp\'s words: `HIT · RACK C`', ZONE_STAMP_TEXT.hit(racksText(['C'])) === 'HIT · RACK C' && ZONE_STAMP_TEXT.clear === 'CLEAR OF THE DEBRIS');
+    && hitEvent.hits.length > 0 && hitEvent.hits.every((item) => item.rack === 'B') && hitEvent.racks.join() === 'B');
+  check('…the stamp\'s words: `HIT · RACK B`', ZONE_STAMP_TEXT.hit(racksText(['B'])) === 'HIT · RACK B' && ZONE_STAMP_TEXT.clear === 'CLEAR OF THE DEBRIS');
   h.store.update((d) => { d.run.phase = 'report'; });
   check('once the ship is over, no rack is tagged', rackZoneTags(state(), sensed()).length === 0);
 }
