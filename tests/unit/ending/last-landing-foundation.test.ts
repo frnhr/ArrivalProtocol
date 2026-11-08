@@ -159,10 +159,12 @@ check('…with no bay (R26): an empty bay does not refuse it, the cadence does',
 }
 h.store.update((draft) => { draft.landing.lastLanding = null; });
 
-// Track VIEW's stubs (its block: as built, it rewrites these lines; ending/last-landing-models is its own suite):
-check('VIEW\'s models are neutral: no header, no POD BAY row, no report row model, no credit tag',
-  lastLandingHeader(state()) === null && podBayRestoredRow(state()) === null && restoredReportRow({ restored: 200 } as never) === null
-  && restoredCreditTag({ pod: radioPod } as never) === '');
+// Track VIEW's stubs (its block; built, so ending/last-landing-models checks them on hand-built states): with no machine and
+// no restored pod they still paint nothing.
+check('VIEW\'s models with no LAST LANDING: no header, no POD BAY row, no report row model, no credit tag',
+  lastLandingHeader(state()) === null && podBayRestoredRow(state()) === null
+  && restoredReportRow({ restored: 0, pods: [{ pod: radioPod, restored: false }] } as never) === null
+  && restoredCreditTag({ pod: radioPod, restored: false } as never) === '');
 // (end of VIEW's stubs)
 
 finish();

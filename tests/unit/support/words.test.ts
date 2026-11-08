@@ -479,14 +479,25 @@ const SLICE7_BASE: Readonly<Record<string, unknown>> = {
 
 // --- 7b VIEW (data/last-landing-text.ts): Track VIEW adds its checks here --------------------------------------------------
 {
-  // A 10-letter family, two-digit pods and counts (16 pods: the largest ship).
+  // A 10-letter family, two-digit pods and counts (16 pods: the largest ship), every part of the report row at once (more
+  // than can happen: the parts sum to the restored count), a three-digit integrity.
   const VIEW_WORST: Readonly<Record<string, unknown>> = {
-    pod: 16, family: 'Montgomery', count: 16, restored: 16, landed: 16, offSite: 16, noGo: 16,
+    pod: 16, family: 'Montgomery', count: 16, left: 16, restored: 16, landed: 16, mislanded: 16, offSite: 16, noGo: 16, integrity: 100,
   };
   const lines = renderSlice6(LAST_LANDING_TEXT, [], 'LAST_LANDING_TEXT', { ...SLICE7_BASE, ...VIEW_WORST });
   const bad = lines.filter((text) => text.length > MAX_LINE_CHARS || RULES.some((rule) => rule.re.test(text)));
   check(`7b VIEW words: every line (${lines.length}) fits (≤ ${MAX_LINE_CHARS}) at its worst case and says no never-say word`,
     lines.length > 0 && bad.length === 0, JSON.stringify(bad));
+  // (The report draws the row's label on a line of its own, over its icons and counts (landing.css .kind-restored), so the
+  // line on screen is reportRow's alone, checked above; the `RESTORED BY MERGE · <text>` join is the stub's otherRows entry.)
+  const T = LAST_LANDING_TEXT;
+  check('…01 §3.17\'s words: the strip, the POD BAY row, the report row (a 0 part left out), the credit',
+    T.header === 'THE LAST LANDING' && T.skipHint === '[ENTER] SKIP TO THE END' && T.left(3, 4) === '3 OF 4 PODS TO LAND'
+    && T.left(1, 1) === '1 OF 1 POD TO LAND' && T.left(0, 4) === 'ALL 4 DOWN' && T.bayRow(4) === 'RESTORED 4'
+    && T.bayNote(80) === 'DRIVERS BY RADIO · 80%'
+    && T.reportRow({ restored: 4, landed: 3, mislanded: 0, offSite: 1, noGo: 0 }) === '4 RESTORED · 3 LANDED · 1 OFF-SITE'
+    && T.reportRow({ restored: 2, landed: 0, mislanded: 1, offSite: 0, noGo: 1 }) === '2 RESTORED · 1 MISLANDED · 1 NO-GO'
+    && T.credit === ' (restored)' && Object.keys(T.flier).join() === 'v1,v2,v3,blind');
 }
 
 // --- end of 7b VIEW --------------------------------------------------------------------------------------------------------
