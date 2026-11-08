@@ -411,6 +411,10 @@ plan's "Deviations (RETIRE)" has the details and the list.
     - The strip-asked kids now read the landing's L0 row (`EVERY POD IS DOWN — now DELETE THE ROOT`) as the ask. That
       ended item 66's `stuck:printing on LAST LIGHT` runs: 2 seeds each of COMPETENT, SLOPPY and LITERAL end.
     - `wp11/full-run` checks the arm's facts (tools by request, the forced boarding at CORMORANT, VESPER without SWAP).
-    - **Known gap for slice 8:** on the worked route the MERGE-saving kid reaches the choice with 9–13 charge (seeds 1,
-      2, 4), short of MERGE's 20. `full-run`'s "both endings reached" fails in `npm run balance` until the rebalance
-      (slice-3a risk 6: "the MERGE margin moves to the route").
+    - Measured on seeds 1–6 (`PT_SEEDS=6`), every kid's run ends:
+      - COMPETENT: 92% woke, won-merge 2, won-purge 3, flagship-lost 1;
+      - SLOPPY: 75% woke;
+      - LITERAL: MERGE's 20 charge at the choice in 3 of 5 runs.
+    - **Known gap for slice 8:** MERGE's margin is thin on the worked route (slice-3a risk 6: "the MERGE margin moves to the
+      route"). COMPETENT has the 20 charge in 2 of 5 runs (median 11). `full-run`'s quick seed 4 reaches the choice with
+      13, so its "the quick seed reached its MERGE" check fails in `npm run balance` until the rebalance.
