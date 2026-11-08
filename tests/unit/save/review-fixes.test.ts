@@ -31,6 +31,7 @@ import {
   stubStorage, pageOpen, storedSave, storedMeta, receiveToReport, toDesk, beamTo, finalReport, WORKED_ROUTE, type StubStorage,
 } from './save-fixture';
 import { run2Map, RUN1_LAST_UNIT } from '../world/run2-fixture';
+import { decideFinale } from '../support/finale';
 
 const SEED = 5;
 const store = createStore<GameState>(createInitialState({ seed: SEED }));
@@ -267,7 +268,7 @@ function run2Arm(): NonNullable<Meta['arm']> {
 // --- Minor 3: ENDING CHOSEN only with a save -------------------------------------------------------------------------------
 {
   const headless = createStore<GameState>(createInitialState({ seed: 3, phase: 'report' }));
-  headless.update((draft) => { draft.hollow.finale.phase = 'purged'; draft.memory.push(freeSegment(1, 999)); });
+  headless.update((draft) => { decideFinale(draft.hollow.finale, 'purge'); draft.memory.push(freeSegment(1, 999)); });
   let flushed = 0;
   let threw = '';
   try { writeEndingChosen(headless, () => { flushed++; }); } catch (error) { threw = (error as Error).message; }
@@ -277,7 +278,7 @@ function run2Arm(): NonNullable<Meta['arm']> {
   pageOpen(store, storage, SEED);
   receiveToReport(store);
   for (const slot of WORKED_ROUTE.slice(1)) beamTo(store, slot);
-  store.update((draft) => { draft.run.phase = 'report'; draft.hollow.finale.phase = 'purged'; draft.memory.push(freeSegment(1, 999)); });
+  store.update((draft) => { draft.run.phase = 'report'; decideFinale(draft.hollow.finale, 'purge'); draft.memory.push(freeSegment(1, 999)); });
   // abortAll frees what an op reserved; a block reserved by no op at all stays (the bug the check guards).
   threw = '';
   try { quiet(() => writeEndingChosen(store, () => { flushed++; })); } catch (error) { threw = (error as Error).message; }

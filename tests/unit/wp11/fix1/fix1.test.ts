@@ -17,7 +17,8 @@
 import { check, finish } from '../../wp1/harness';
 import { createHarness11 } from '../harness11';
 import { theRoot, bittenAgainDrivers, infectNow } from '@systems/hollow';
-import { chooseFinale, finaleEndingSec, finaleEndingShowing, finaleRunCause } from '@systems/finale';
+import { finaleEndingSec, finaleEndingShowing } from '@systems/finale';
+import { finaleRunCause } from '@systems/ending-rules';
 import { continueAfterReport } from '../../support/classic-flow';
 import { runEndModel } from '@systems/run-end';
 import { actionDelete, actionRepair, actionRefusal } from '@state/actions';
@@ -37,6 +38,7 @@ import {
 import type { GameState, FinaleEnding } from '@state/schema';
 import type { LastUnit } from '@systems/meta';
 import { toTheDuel } from '../duel';
+import { chooseEnding, finaleAtStep1, decidedAs } from '../../support/finale';
 
 const h = createHarness11(83);
 setLandingMode('manual');
@@ -97,9 +99,9 @@ function chooseWatching(choice: 'purge' | 'merge'): { refusal: string | null; se
   let seen: FinaleEnding | null = null;
   const atAi = state().clock.aiSec;
   const unsub = h.store.subscribe((s) => s.hollow.finale.phase, (phase) => {
-    if (phase === 'purged' || phase === 'merged') seen = state().hollow.finale.ending;
+    if (phase === 'done') seen = state().hollow.finale.ending;
   });
-  const refusal = chooseFinale(h.store, choice);
+  const refusal = chooseEnding(h.store, choice);
   unsub();
   return { refusal, seen, atAi };
 }
@@ -174,7 +176,7 @@ landInstantly(h.store);
   const end = h.wall() + 200;
   while (state().run.phase === 'landing' && h.wall() < end) {
     h.step();
-    if (unresolvedAt === null && state().hollow.finale.phase === 'unresolved') unresolvedAt = state().clock.aiSec;
+    if (unresolvedAt === null && decidedAs(state()) === 'followed') unresolvedAt = state().clock.aiSec;
   }
   const until = state().hollow.finale.unresolvedUntilAi;
   check('UNRESOLVED: its line holds the LANDING REPORT until it has typed (at HOLLOW\'s speed) and been read',
@@ -204,7 +206,7 @@ deleteRoot();
     if (state().hollow.verb !== null) telegraphs++;
   }
   check('a 1-thread Core with the root\'s DELETE on its thread: no verb is telegraphed in the whole duel',
-    threads === 1 && telegraphs === 0 && !events.includes('verb-telegraph') && state().hollow.finale.phase === 'choice',
+    threads === 1 && telegraphs === 0 && !events.includes('verb-telegraph') && finaleAtStep1(state()),
     `threads ${threads}, telegraph ticks ${telegraphs}, ${state().hollow.finale.phase}`);
   check('…each skipped turn counts as a moment, and no BLOCK counter moves', state().hollow.verbMoments > moments
     && state().hollow.verbsLanded === landed && state().hollow.verbsBlocked === blocked,
@@ -282,7 +284,7 @@ for (const choice of ['purge', 'merge'] as const) {
   deleteRoot();
   h.stepFor(ROOT_DELETE_SEC + 0.3);
   if (choice === 'merge') setCharge(MERGE_COST_CHARGE + 1);
-  const refusal = chooseFinale(h.store, choice);
+  const refusal = chooseEnding(h.store, choice);
   untilReport(40);
   continueAfterReport(h.store);
   const model = runEndModel(state());
@@ -296,7 +298,7 @@ check('the nobody-landed words fit one line', [RUN_END_NOBODY_LANDED.title, ...O
 // --- The lineage and the ghost -----------------------------------------------------------------------------------------
 {
   const unit = (landed: number): LastUnit => ({
-    number: 47, landed, shipName: 'LAST LIGHT', cause: 'won-purge', stats: { moves: 0, deletes: 0 }, hollowUnits: [46], trail: null, skills: null,
+    number: 47, landed, shipName: 'LAST LIGHT', cause: 'won-purge', stats: { moves: 0, deletes: 0 }, hollowUnits: [46], trail: null, skills: null, ending: null,
   });
   const lineage = lineageLine(unit(3200));
   check('the title\'s lineage after a PURGE names what the unit did, never the fleet', lineage === 'last: UNIT-047 · 3,200 landed · deleted it at LAST LIGHT'

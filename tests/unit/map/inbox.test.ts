@@ -29,7 +29,7 @@ function result(depth: number, landed: number, stars = 2): ShipResult {
     points: landed, colony: landed > 0 ? COLONIES[depth - 1]! : null,
     pods: [{
       pod: 1, family: 'Okafor', colonists: landed, fate: 'down', place: null, lz: landed > 0 ? 'LZ-A' : null, touch: null,
-      points: landed, parkedWhy: null, restored: false, featured: [{ name: 'Okafor, Ada', age: 11 }, { name: 'Okafor, Ben', age: 40 }],
+      points: landed, parkedWhy: null, restored: false, featured: [{ name: 'Okafor, Ada', age: 11, line: null }, { name: 'Okafor, Ben', age: 40, line: null }],
     }],
   };
 }

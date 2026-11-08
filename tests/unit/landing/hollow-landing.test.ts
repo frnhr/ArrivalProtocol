@@ -7,7 +7,7 @@ import { check, finish } from './checks';
 import { lockOn } from './harness-landing';
 import { createHarness7 } from '../wp7/harness7';
 import { drainConditions, drainRatePerSec, projectedDrainPerSec } from '@systems/hollow';
-import { chooseFinale } from '@systems/finale';
+
 import { endLanding, forceLandAll } from '@systems/landing';
 import { landingResult, nextToLaunch } from '@systems/landing-rules';
 import { replaceRange, requireAddr, freeSegment, mergeAdjacentFree, newSegId } from '@systems/memory-ops';
@@ -22,6 +22,7 @@ import { MERGE_COST_CHARGE, MERGE_DRIVER_INTEGRITY } from '@data/tuning';
 import { classicShip } from '@data/classic-five';
 import type { GameState } from '@state/schema';
 import type { HollowSegment } from '@/types/segment';
+import { chooseEnding, decidedAs, openFinaleStep1 } from '../support/finale';
 
 // --- The drain's multiplier ----------------------------------------------------------------------------------------------
 {
@@ -102,14 +103,14 @@ check('END LANDING parks every pod aboard, the eaten ones restorable', parkedBef
 
 // The choice, with the charge MERGE costs.
 h.store.update((draft) => {
-  draft.hollow.finale.phase = 'choice';
+  openFinaleStep1(draft.hollow.finale);
   const pool = draft.memory.find((seg) => seg.type === 'redundancy');
   if (pool && pool.type === 'redundancy') pool.used = Math.max(pool.used, MERGE_COST_CHARGE);
 });
-const refusal = chooseFinale(h.store, 'merge');
+const refusal = chooseEnding(h.store, 'merge');
 const leadRecord = state().landing.pods.find((record) => record.pod === lead)!;
 const leadDriver = driversInMemory(state()).find((driver) => driver.pod === lead);
-check('MERGE is chosen', refusal === null && state().hollow.finale.phase === 'merged', `${refusal} ${state().hollow.finale.phase} charge ${chargeLeft(state())}`);
+check('MERGE is chosen', refusal === null && decidedAs(state()) === 'merge', `${refusal} ${state().hollow.finale.phase} charge ${chargeLeft(state())}`);
 check(`MERGE restores the eaten driver in place at ${MERGE_DRIVER_INTEGRITY}`, leadDriver !== undefined && leadDriver.integrity === MERGE_DRIVER_INTEGRITY
   && leadRecord.driverLost === null && leadRecord.restored && leadRecord.fate.kind === 'aboard', JSON.stringify(leadRecord.fate));
 check('...and the landing resumes, its no-time pods unparked', state().landing.ended === null && state().landing.lingerAiSec === null

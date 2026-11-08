@@ -28,7 +28,7 @@ const titleVars = (state: GameState): LineVars => ({
 
 // WP11: the last ship a unit was on is LAST LIGHT (the flagship) for every cause the finale or its loss ends a run with.
 const last = (cause: LastCause, over: Partial<LastUnit> = {}): LastUnit => ({
-  number: 47, landed: 6200, shipName: 'LAST LIGHT', cause, stats: { moves: 0, deletes: 0 }, hollowUnits: [46], trail: null, skills: null, ...over,
+  number: 47, landed: 6200, shipName: 'LAST LIGHT', cause, stats: { moves: 0, deletes: 0 }, hollowUnits: [46], trail: null, skills: null, ending: null, ...over,
 });
 
 // --- §4.5's table, run 2 after run 1 -----------------------------------------------------------------------
@@ -36,6 +36,8 @@ const expected: Record<LastCause, { hollow: string; line: string | null }> = {
   overwritten: { hollow: 'UNIT-047', line: "> hi 048. it's 047. 046 ate me. now i'm hungry too." },
   'won-purge': { hollow: 'UNIT-047', line: "> hi 048. it's 047. we brought them home. they sent me out again." },
   'won-merge': { hollow: 'UNIT-046·047', line: "> hi 048. it's us. 046 and 047. we saved you a seat." },
+  // Slice 7a (R36): a SPARE leaves no ghost (its voice is 7c's face line).
+  'won-spare': { hollow: 'UNIT-047', line: null },
   unresolved: { hollow: 'UNIT-047', line: "> hi 048. it's 047. i couldn't delete it. so it became me." },
   // WP11: LAST LIGHT is the flagship, as §4.5's line says it.
   'flagship-lost': { hollow: 'UNIT-047', line: "> hi 048. it's 047. i lost the flagship. then i got hungry." },
@@ -107,7 +109,9 @@ check('a flagship lost on LAST LIGHT is "the flagship"; a record from before it 
   const longest = worst.reduce((a, b) => (b.length > a.length ? b : a), '');
   check(`every ghost line is ≤ ${MAX_LINE_CHARS} characters with 3-digit units, a merged HOLLOW and a ${NAME_MAX_CHARS}-letter ship`,
     worst.every((line) => line.length <= MAX_LINE_CHARS), `${longest.length}: ${longest}`);
-  check('every cause has an entry in the ghost table (silent only for STAYED, and a run the game lost: signal-lost)', LAST_CAUSES.every((cause) => (GHOST_LINE[cause] === null) === (cause === 'stayed' || cause === 'signal-lost')));
+  // Slice 7a (R36): and a SPARE, which was not lost (its voice is 7c's face line).
+  check('every cause has an entry in the ghost table (silent only for STAYED, a run the game lost: signal-lost, and SPARE)',
+    LAST_CAUSES.every((cause) => (GHOST_LINE[cause] === null) === (cause === 'stayed' || cause === 'signal-lost' || cause === 'won-spare')));
   const story = [HOLLOW_STORY.remembers, HOLLOW_STORY.wasUnit([998]), HOLLOW_STORY.wasUnit([997, 998]), HOLLOW_STORY.decommissioned(hollowUnitName([997, 998])),
   ];
   check('the run-2 HOLLOW lines fit too', story.every((line) => line.length <= MAX_LINE_CHARS), story.join(' | '));

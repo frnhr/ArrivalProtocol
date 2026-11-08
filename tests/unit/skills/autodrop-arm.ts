@@ -15,6 +15,7 @@ import { setLandingMode } from '../support/landing-instant';
 import { FIRST_RUN_LINEAGE } from '@systems/meta';
 import { freeSegment, mergeAdjacentFree } from '@systems/memory-ops';
 import { DRIVER_RULES } from '@data/script';
+import { decideFinale } from '../support/finale';
 
 export const ARM_SEED = 3;
 
@@ -50,7 +51,7 @@ export function armLanding(h: Harness7, route: readonly number[], opts: ArmLandi
   h.store.update((draft) => {
     draft.hollow.phase = 'dormant';
     draft.director.done.push(...QUIET);
-    if (draft.landing.finalShip) draft.hollow.finale.phase = 'purged';
+    if (draft.landing.finalShip) decideFinale(draft.hollow.finale, 'purge');
     for (const seg of draft.memory) {
       if (seg.role === 'thrust-ctrl' && 'integrity' in seg) seg.integrity = 100;
       if (opts.healDrivers !== false && seg.type === 'driver') seg.integrity = 100;

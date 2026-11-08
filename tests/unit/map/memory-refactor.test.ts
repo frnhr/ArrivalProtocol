@@ -33,13 +33,17 @@ for (const seed of [1, 7]) {
     const { mode, targetKm, claimed, waitingSinceTSec, flying, captured, holding, ...auto } = state.burn.auto;
     void mode; void targetKm; void claimed; void waitingSinceTSec; void flying; void captured; void holding;
     const burn = { ...state.burn, auto };
-    const { autodrop, survey, sitesRev, ...landingRest } = state.landing;
+    // Slice 7a's too (landing.lastLanding, the finale's v7 fields): a fresh finale is read back as WP11's.
+    const { autodrop, survey, sitesRev, lastLanding, ...landingRest } = state.landing;
+    void lastLanding;
+    const hollow = { ...state.hollow, finale: { phase: 'none', restoredInPlace: [], restoredHalf: [], ending: null, unresolvedUntilAi: null } };
+    if (state.hollow.finale.phase !== 'none') throw new Error('memory-refactor: a built world\'s finale is not fresh');
     const landing = { ...landingRest, lzs: landingRest.lzs.map(({ site, ...lz }) => { void site; return lz; }) };
     const { seedsMetAtDepth, ...threat } = state.run.threat;
     void autodrop; void seedsMetAtDepth; void survey; void sitesRev;
     const dump = JSON.stringify({
       memory: state.memory, level, landing, mission, burn, orbit: state.orbit,
-      threat, hollow: state.hollow,
+      threat, hollow,
     });
     // Generated ids (`free~12`) count from module load, so they are left out: the order of imports must not move a digest.
     // F2's one intended change to a built world: the colonist first name Sol is Suvi (05-story §3.11's name rule), read

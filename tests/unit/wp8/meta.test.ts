@@ -85,9 +85,9 @@ const progress = (over: Partial<RunProgress> = {}): RunProgress => ({
     version: META_VERSION, runs: 7, bestScore: 9123, endingsSeen: ['purge', 'merge'], tutorialDone: true,
     activeRun: null,
     lastUnit: {
-      number: 53, landed: 6200, shipName: 'VESPER', cause: 'overwritten', stats: { moves: 14, deletes: 3 }, hollowUnits: [51, 52], trail: null, skills: null,
+      number: 53, landed: 6200, shipName: 'VESPER', cause: 'overwritten', stats: { moves: 14, deletes: 3 }, hollowUnits: [51, 52], trail: null, skills: null, ending: null,
     },
-    armSeed: 5, arm: null, colonies: [], routes: [], events: [], traces: [], notes: { olderArchive: false, armReset: false },
+    armSeed: 5, arm: null, colonies: [], routes: [], events: [], notes: { olderArchive: false, armReset: false },
   };
   const store = stub();
   check('the round trip saves', saveMeta(store.provider, meta) === 'ok');
@@ -172,8 +172,12 @@ const progress = (over: Partial<RunProgress> = {}): RunProgress => ({
     && ended.runs === 1, JSON.stringify(ended));
   const worse = recordRunEnd(recordRunStart(ended, progress({ unit: 48 }), 0), { ...progress({ unit: 48 }), cause: 'stayed', score: 100 });
   check('a worse run keeps the best SCORE', worse.bestScore === 4101 && worse.runs === 2 && worse.lastUnit?.number === 48);
-  const merged = recordRunEnd(worse, { ...progress({ unit: 49 }), cause: 'won-merge', score: 0 });
-  check('a MERGE is an ending seen; its next-run bonus is retired (slice 3c, risk 3: the lineage never carries it)', merged.endingsSeen.includes('merge')
+  // Slice 7a (R3, R22): the ending record says what was seen (both pieces), never the cause.
+  const merged = recordRunEnd(worse, {
+    ...progress({ unit: 49 }), cause: 'won-merge', score: 0,
+    ending: { hollow: 'merge', you: 'reassignment', rootUnits: [48], finalSlot: null, finalShip: 'LAST LIGHT', finalYear: null, stay: null, kit: [], fuelPct: null, charge: 0 },
+  });
+  check('a MERGE is an ending seen (with its REASSIGNMENT); its next-run bonus is retired (slice 3c, risk 3: the lineage never carries it)', merged.endingsSeen.includes('merge') && merged.endingsSeen.includes('reassignment')
     && !('mergeBonus' in lineageOf(merged)) && !('mergeBonus' in merged));
   const lineage = lineageOf(ended);
   check('the lineage: UNIT-047 + runs on wave runs + 1', lineage.unitNumber === FIRST_UNIT_NUMBER + 1 && lineage.wave === 2 && lineage.lastUnit?.number === 47);

@@ -27,7 +27,7 @@ function resultOf(row: Readonly<Run1Result>, depth: number, outcome: ShipResult[
     colony: landed > 0 ? row.colony : null,
     pods: landed > 0 ? [{
       pod: 0, family: 'Okafor', colonists: 200, fate: 'down', place: 'lz', lz: 'LZ-A', touch: 'soft', points: 0, parkedWhy: null,
-      restored: false, featured: [{ ...row.writer }, { name: 'Nobody, Second', age: 40 }],
+      restored: false, featured: [{ ...row.writer, line: null }, { name: 'Nobody, Second', age: 40, line: null }],
     }] : [],
   };
 }

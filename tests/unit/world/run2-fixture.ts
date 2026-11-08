@@ -67,6 +67,11 @@ export const RUN1_TRAIL: UnitTrail = {
 export const RUN1_LAST_UNIT: LastUnit = {
   number: 47, landed: RUN1_RESULTS.reduce((sum, result) => sum + result.landed, 0), shipName: 'LAST LIGHT', cause: 'won-purge',
   stats: { moves: 0, deletes: 0 }, hollowUnits: [46], trail: RUN1_TRAIL, skills: null,
+  // Slice 7a (R16): run 1's PURGE as META 4 reads it, step 2 REASSIGNMENT.
+  ending: {
+    hollow: 'purge', you: 'reassignment', rootUnits: [46], finalSlot: RUN1_TRAIL.stops.at(-1)!.slot, finalShip: 'LAST LIGHT',
+    finalYear: RUN1_TRAIL.stops.at(-1)!.year, stay: null, kit: [], fuelPct: null, charge: 0,
+  },
 };
 
 // --- The update's rolls (§3.14) ------------------------------------------------------------------------------------------

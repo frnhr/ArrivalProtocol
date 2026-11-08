@@ -1,6 +1,6 @@
 // Track SAVE (slice 3c plan §6.1 save/archive-v2; §2.4): archive v2's record, pure and on stubbed storage.
 // • the strict parse, field by field: the stored arm (its ArmShips through the save's own checkArmShip, then
-//   validateShipDef), departures, colonies, routes, events, notes, traces, a retired field;
+//   validateShipDef), departures, colonies, routes, events, notes, a dropped and a retired field;
 // • migration in place: a foundation record (version 2) loses mergeBonus, its placeholder arm seed 0 becomes null (its run
 //   in progress then keeps no trail), and the page writes the migrated record back; another seed is kept;
 // • a v1 archive is not carried over: a fresh v2 with notes.olderArchive, written, said once (archiveNotesSaid clears it);
@@ -56,7 +56,9 @@ const broken: [string, (record: Raw) => void, string][] = [
   ['a route with a fractional slot', (record) => { record.routes = [{ run: 1, unit: 47, slots: [0, 2.5] }]; }, 'routes[0].slots[1]'],
   ['an event of an unknown kind', (record) => { record.events = [{ kind: 'party', slot: 0, shipName: 'X', value: 1 }]; }, 'events[0].kind'],
   ['notes with an unknown field', (record) => { record.notes.extra = true; }, 'notes has unknown fields'],
-  ['a trace (slice 7 places them)', (record) => { record.traces = [{}]; }, 'traces is not empty'],
+  // Slice 7a (META 4): `traces` is gone (a trace lasts one run: the last unit's ending), so one at version 4 is unknown;
+  // ending/foundation migrates a version-3 record's away.
+  ['traces at version 4 (dropped in 7a)', (record) => { record.traces = []; }, 'unknown fields (traces)'],
   ['mergeBonus at version 3 (retired)', (record) => { record.mergeBonus = false; }, 'unknown fields (mergeBonus)'],
 ];
 const wrong = broken.filter(([, change, why]) => {
@@ -64,7 +66,7 @@ const wrong = broken.filter(([, change, why]) => {
   change(record);
   return !corruptOf(record).includes(why);
 });
-check('the strict parse refuses, naming the field: the arm, its ships, departures, colonies, routes, events, notes, traces, a retired field',
+check('the strict parse refuses, naming the field: the arm, its ships, departures, colonies, routes, events, notes, a dropped and a retired field',
   wrong.length === 0, wrong.map(([what, change]) => { const record = structuredClone(good); change(record); return `${what}: ${corruptOf(record)}`; }).join(' | '));
 
 // --- Migration in place (2 → 3) -----------------------------------------------------------------------------------------------
@@ -117,7 +119,7 @@ const v2 = (armSeed: number): Raw => {
   old.arm.content.generator = armContent().generator - 1;
   old.arm.ships[3].pods = 99;   // made by other content: never read, never validated
   old.colonies = coloniesOf(RUN1_TRAIL);
-  old.lastUnit = { number: 47, landed: 11000, shipName: 'LAST LIGHT', cause: 'won-purge', stats: { moves: 0, deletes: 0 }, hollowUnits: [46], trail: RUN1_TRAIL, skills: null };
+  old.lastUnit = { number: 47, landed: 11000, shipName: 'LAST LIGHT', cause: 'won-purge', stats: { moves: 0, deletes: 0 }, hollowUnits: [46], trail: RUN1_TRAIL, skills: null, ending: null };
   old.routes = [{ run: 1, unit: 47, slots: RUN1_TRAIL.stops.map((stop) => stop.slot) }];
   old.runs = 2;
   old.activeRun = { unit: 48, startedAt: 0, shipName: 'ARES-VIII', landed: 0, stats: { moves: 0, deletes: 0 }, hollowUnits: [47], trail: { ...trail, unit: 48, run: 2 } };
@@ -139,7 +141,7 @@ const v2 = (armSeed: number): Raw => {
   pageOpen(store, storage, 9);
   receiveToReport(store);
   for (const slot of WORKED_ROUTE.slice(1)) beamTo(store, slot);
-  finalReport(store, 'merged');
+  finalReport(store, 'merge');
   continueAfterReport(store);
   const meta = parseMeta(storage.data.get(META_STORAGE_KEY)!);
   check('RUN END writes archive v2\'s record: UNIT-047 won-merge, its trail the worked route with the approach years, no run in progress',

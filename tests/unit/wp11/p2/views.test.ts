@@ -19,9 +19,7 @@ import { check, finish } from '../../wp1/harness';
 import { createHarness11 } from '../harness11';
 import { theRoot, infectNow } from '@systems/hollow';
 import { verbNow } from '@systems/hollow-verbs';
-import {
-  chooseFinale, finaleEndingSec, finaleEndingLineStartsSec, skipFinaleEnding, finaleEndingShowing, mergeTickCharge,
-} from '@systems/finale';
+import { finaleEndingSec, finaleEndingLineStartsSec, skipFinaleEnding, finaleEndingShowing, mergeTickCharge } from '@systems/finale';
 import { runEndModel, type RunEndModel } from '@systems/run-end';
 import { continueAfterReport } from '../../support/classic-flow';
 import { say } from '@systems/say';
@@ -41,6 +39,7 @@ import type { DriverSegment } from '@/types/segment';
 import type { ShipResult } from '@state/schema';
 import { isPodCode } from '../../support/pod-code';
 import { setLandingMode, landInstantly } from '../../support/landing-instant';
+import { chooseEnding, finaleAtStep1 } from '../../support/finale';
 
 const h = createHarness11(23);
 setLandingMode('manual');
@@ -171,7 +170,7 @@ check('say: a line with a look must be critical (a queued one would count down a
     && spikeLevels[0]! <= quantizeCorruption(DUEL_SPIKE_LEVEL_START) + 0.05 && spikeLevels[spikeLevels.length - 1]! >= quantizeCorruption(DUEL_SPIKE_LEVEL_END) - 0.1
     && spikeLevels[spikeLevels.length - 1]! > spikeLevels[0]!, spikeLevels.join(' '));
   const gone = bursts[bursts.length - 1];
-  check('…and the root\'s end is the biggest tear (ROOT_GONE_GLITCH_LEVEL), with no spike after it', state().hollow.finale.phase === 'choice'
+  check('…and the root\'s end is the biggest tear (ROOT_GONE_GLITCH_LEVEL), with no spike after it', finaleAtStep1(state())
     && gone?.level === quantizeCorruption(ROOT_GONE_GLITCH_LEVEL) && spikes.every((spike) => spike.wall <= gone.wall), JSON.stringify(gone));
   const after = h.events.length;
   h.stepFor(3);
@@ -187,7 +186,7 @@ check('say: a line with a look must be critical (a queued one would count down a
   const landEnd = h.wall() + 150;
   while (driversInMemory(state()).length > 0 && h.wall() < landEnd) h.step();
   check('every pod down while the choice stood (the report waits for the choice)', driversInMemory(state()).length === 0
-    && state().run.phase === 'landing' && state().hollow.finale.phase === 'choice');
+    && state().run.phase === 'landing' && finaleAtStep1(state()));
   h.stepFor(3);
   // LAST LIGHT is flown alone here: the run brought ships 1–4 into orbit before it (their results, as a run records
   // them), so PURGE's full claim is true (tests/unit/wp11/p2/purge-fleet.test.ts has a run that lost one).
@@ -197,9 +196,9 @@ check('say: a line with a look must be critical (a queued one would count down a
       restored: 0, parked: [], notLaunched: 0, landedInLz: 0, points: 0, stars: 0, fuelLeftPct: 0, ringMiss: null, survey: null, colony: null, pods: [],
     }));
   });
-  const refusal = chooseFinale(h.store, 'purge');
+  const refusal = chooseEnding(h.store, 'purge');
   const ending = state().hollow.finale.ending;
-  check('PURGE writes its typed ending', refusal === null && ending !== null && ending.choice === 'purge', String(refusal));
+  check('PURGE writes its typed ending', refusal === null && ending !== null && ending.choice.hollow === 'purge', String(refusal));
   if (!ending) throw new Error('views-test: no ending');
   const lines = ending.lines.map((line) => line.text);
   check('…the design\'s words, from live numbers', /^> rm unit_\d+ \.\.\. OK$/.test(lines[0]!) && /^LAST LIGHT · [\d,]+ colonists reached orbit\.$/.test(lines[1]!)
@@ -250,11 +249,11 @@ check('say: a line with a look must be critical (a queued one would count down a
     d.ui.memoryRev++;
   });
   const from = h.events.length;
-  const refusal = chooseFinale(h.store, 'merge');
+  const refusal = chooseEnding(h.store, 'merge');
   const ending = state().hollow.finale.ending;
   const lines = ending?.lines.map((line) => line.text) ?? [];
   check('MERGE writes its typed ending: the echo, `> hi. it\'s us.`, the colonists in orbit, the 400 it gave back, `we arrive together.`, CONTROL',
-    refusal === null && ending?.choice === 'merge' && /^> merge unit_\d+ -> unit_\d+ \.\.\. OK$/.test(lines[0]!) && lines[1] === "> hi. it's us."
+    refusal === null && ending?.choice.hollow === 'merge' && /^> merge unit_\d+ -> unit_\d+ \.\.\. OK$/.test(lines[0]!) && lines[1] === "> hi. it's us."
     && /^LAST LIGHT · [\d,]+ colonists reached orbit\.$/.test(lines[2]!) && lines[3] === '400 of them came back from inside it.'
     && lines[4] === 'we arrive together.' && /^Unit \d+ is non-compliant\. :\)$/.test(lines[5]!), JSON.stringify(lines));
   const bursts = eventsSince(from, 'glitch-burst').map((event) => (event.payload as { level: number }).level);

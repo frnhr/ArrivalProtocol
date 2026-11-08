@@ -31,6 +31,8 @@ import { RESIDENT_UI_TEXT } from '@data/resident-ui-text';
 // Slice 6: each track's word module, for its own block at the end (the imports are the lead's: one line each).
 import { SWATH_TEXT } from '@data/swath-text';
 import { SITES_TEXT } from '@data/sites-text';
+import { FINALE_TEXT } from '@data/finale-text';
+import { EPILOGUE_TEXT } from '@data/epilogue-text';
 
 const DATA = join(import.meta.dirname, '..', '..', '..', 'src', 'data');
 
@@ -162,7 +164,7 @@ check('the typed endings count colonists, never souls', endings.some((text) => t
   JSON.stringify(endings));
 check('RUN END over an empty flagship: nobody LANDED', /LANDED/.test(RUN_END_NOBODY_LANDED.title)
   && Object.values(RUN_END_NOBODY_LANDED.why).every((text) => /landed/.test(text) && !/woke/i.test(text)));
-const lineage = lineageLine({ number: 47, landed: 6200, shipName: 'VESPER', cause: 'overwritten', stats: { moves: 0, deletes: 0 }, hollowUnits: [46], trail: null, skills: null });
+const lineage = lineageLine({ number: 47, landed: 6200, shipName: 'VESPER', cause: 'overwritten', stats: { moves: 0, deletes: 0 }, hollowUnits: [46], trail: null, skills: null, ending: null });
 check("the title's lineage counts the colonists landed", lineage === 'last: UNIT-047 · 6,200 landed · overwritten at VESPER', String(lineage));
 check('SCAN STASIS finds the sleepers, not `0 pods`', scanFinding('stasis', 100) !== '0 pods' && /sleeper/.test(scanFinding('stasis', 100)));
 
@@ -415,5 +417,42 @@ function renderSlice6(value: unknown, out: string[], owner: string, extra: Reado
 }
 
 // --- end of 6 SITES --------------------------------------------------------------------------------------------------------
+
+// === Slice 7a (slice-7-plan §2.9): each track's pools, rendered at their worst case by slice 6's renderer (its parser and
+// its shared base), over the 7a base below (the lead's) and each track's own table inside its own block. Names at their
+// worst: a 12-letter ship (`morning_star`), a root of two units (`UNIT-046·047`), the longest colony (a 10-letter family's
+// `MONTGOMERY LANDING`).
+const SLICE7_BASE: Readonly<Record<string, unknown>> = {
+  hollow: 'UNIT-046·047', hollowWord: 'unit_046·047', ours: 'unit_047', shipWord: 'morning_star', colonyWord: 'montgomery_landing',
+  colony: 'MONTGOMERY LANDING', us: '047', year: 3060,
+};
+
+// --- 7a FINALE (data/finale-text.ts): Track FINALE adds its checks here ---------------------------------------------------
+{
+  const FINALE_WORST: Readonly<Record<string, unknown>> = {
+    have: 100, need: 3, drivers: 16, unit: 147, fate: 'FOLLOWED', title: 'A SHIP FOR 046·047, A HOME FOR ME',
+  };
+  const lines = renderSlice6(FINALE_TEXT, [], 'FINALE_TEXT', { ...SLICE7_BASE, ...FINALE_WORST });
+  const bad = lines.filter((text) => text.length > MAX_LINE_CHARS || RULES.some((rule) => rule.re.test(text)));
+  check(`7a FINALE words: every line (${lines.length}) fits (≤ ${MAX_LINE_CHARS}) at its worst case and says no never-say word`,
+    lines.length > 0 && bad.length === 0, JSON.stringify(bad));
+}
+
+// --- end of 7a FINALE ------------------------------------------------------------------------------------------------------
+
+
+
+// --- 7a NIGHT (data/epilogue-text.ts): Track NIGHT adds its checks here (PAYOFF_OF's cover of LINE_POOL among them) ----------
+{
+  const NIGHT_WORST: Readonly<Record<string, unknown>> = {
+    age: 800, people: '8,200,000', count: 12, unit: 'UNIT-148', gap: 35, found: 7, total: 7,
+  };
+  const lines = renderSlice6(EPILOGUE_TEXT, [], 'EPILOGUE_TEXT', { ...SLICE7_BASE, ...NIGHT_WORST });
+  const bad = lines.filter((text) => text.length > MAX_LINE_CHARS || RULES.some((rule) => rule.re.test(text)));
+  check(`7a NIGHT words: every line (${lines.length}) fits (≤ ${MAX_LINE_CHARS}) at its worst case and says no never-say word`,
+    lines.length > 0 && bad.length === 0, JSON.stringify(bad));
+}
+
+// --- end of 7a NIGHT -------------------------------------------------------------------------------------------------------
 
 finish();

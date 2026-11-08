@@ -71,7 +71,7 @@ function bayCtrl(integrity: number): Segment {
 function fakeState(opts: FakeOpts): GameState {
   const landing: LandingState = {
     lzs: opts.lzs, noGo: opts.noGo ?? [], forgiveness: opts.forgiveness ?? 'gentle', terrain: 'PLAINS', drag: false, finalShip: false, lead: 1,
-    hurt: [], colonyFirstRun: null, colony: null, pods: opts.pods,
+    hurt: [], colonyFirstRun: null, colony: null, pods: opts.pods, lastLanding: null,
     bay: { loaded: opts.loaded ?? BAY_SLOTS, reloadTac: 0, cadenceLeftTac: opts.cadenceLeftTac ?? 0 },
     loadNext: opts.loadNext ?? null, startedAtTSec: 0, ended: opts.ended ?? null, lingerAiSec: null, noDriverAiSec: 0,
     window: null, fuelAtEndPct: null, orbitEpoch: 0, decay: { lastKickTSec: null, kicks: 0, last: null }, goLow: null, declined: null, ghostBursts: 0,

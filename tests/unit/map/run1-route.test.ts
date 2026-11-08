@@ -23,7 +23,7 @@ import { followDirector } from '../wp2/harness2';
 import { pickChoice } from '@systems/say';
 import { DEAL_REFUSE } from '@systems/hollow-deal';
 import { chargeLeft } from '@state/selectors';
-import { chooseFinale } from '@systems/finale';
+
 import { FIRST_RUN_LINEAGE } from '@systems/meta';
 import { setLandingMode } from '../support/landing-instant';
 import { followLanding } from '../landing/harness-landing';
@@ -42,6 +42,7 @@ import type { GameState } from '@state/schema';
 import { actionRepair } from '@state/actions';
 import { getByRole } from '@state/selectors';
 import { getOpsBySeg } from '@systems/ops-core';
+import { chooseEnding, finaleAtStep1 } from '../support/finale';
 
 const WORKED: readonly number[] = [0, 2, 5, 11, 15, 19];
 // 02 §3.14's requests, desk by desk along the worked route (CORMORANT's would never arrive: none).
@@ -106,10 +107,10 @@ function flyRoute(route: readonly number[], record: (event: string, at: Readonly
           maxWall: 900,
           onTick: () => {
             h.defend11(SAVER);
-            if (picked || state().hollow.finale.phase !== 'choice') return;
+            if (picked || !finaleAtStep1(state())) return;
             picked = true;
             charge = chargeLeft(state());
-            chooseFinale(h.store, charge >= MERGE_COST_CHARGE ? 'merge' : 'purge');
+            chooseEnding(h.store, charge >= MERGE_COST_CHARGE ? 'merge' : 'purge');
           },
         });
       }

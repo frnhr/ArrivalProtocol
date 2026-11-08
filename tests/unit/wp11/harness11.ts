@@ -27,7 +27,7 @@ import type { PendingPlacement } from '@state/schema';
 import type { DriverSegment } from '@/types/segment';
 import { canStartOp, getOpsBySeg, cancelOp } from '@systems/ops-core';
 import { theRoot, rootDeleteRunning, hollowReach } from '@systems/hollow';
-import { chooseFinale, type FinaleChoice } from '@systems/finale';
+import { type FinaleChoice } from '@systems/finale';
 import { autoburnAvailable } from '@systems/autoburn';
 import { getPrediction, getSensedPrediction } from '@systems/predict';
 import { knownHitRacks } from '@systems/zones';
@@ -35,6 +35,7 @@ import { isHollow } from '@state/selectors';
 import { BAND_OK_MIN, BAND_FAILING_MIN } from '@data/tuning';
 import { pickChoice, entryTypedAtAi } from '@systems/say';
 import { DEAL_ACCEPT, DEAL_REFUSE } from '@systems/hollow-deal';
+import { chooseEnding, finaleAtStep1 } from '../support/finale';
 
 export const LAST_LIGHT = 4;
 
@@ -198,12 +199,12 @@ export function createHarness11(seed = 1, opts: { soulsFound?: boolean } = {}): 
     },
     finishFinale(choice, maxWall, defendOpts = {}) {
       const end = base.wall() + maxWall;
-      while (state().hollow.finale.phase !== 'choice' && state().run.phase === 'landing' && base.wall() < end) {
+      while (!finaleAtStep1(state()) && state().run.phase === 'landing' && base.wall() < end) {
         defend11(defendOpts);
         base.step();
       }
-      const reachedChoice = state().hollow.finale.phase === 'choice';
-      const refusal = reachedChoice ? chooseFinale(base.store, choice) : null;
+      const reachedChoice = finaleAtStep1(state());
+      const refusal = reachedChoice ? chooseEnding(base.store, choice) : null;
       while (state().run.phase === 'landing' && base.wall() < end) {
         defend11(defendOpts);
         base.step();

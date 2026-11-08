@@ -44,6 +44,7 @@ import { META_STORAGE_KEY, RUN_SAVE_KEY } from '@data/tuning';
 import {
   stubStorage, pageOpen, storedSave, storedMeta, receiveToReport, toDesk, beamTo, finalReport, comparable, WORKED_ROUTE, type StubStorage,
 } from './save-fixture';
+import { decidedAs } from '../support/finale';
 
 const CHILD = process.argv.indexOf('--child');
 
@@ -156,11 +157,11 @@ check('…a second reload replays it again (the boot and the flight write nothin
 
 // --- On to the final ship, then ENDING CHOSEN -----------------------------------------------------------------------------
 for (const slot of WORKED_ROUTE.slice(2)) beamTo(h.store, slot);
-finalReport(h.store, 'purged');
+finalReport(h.store, 'purge');
 const atEnd = comparable(state());
 reloadAndResume('ENDING CHOSEN');
 check('ENDING CHOSEN: LAST LIGHT\'s LANDING REPORT as it stood (the finale purged)', state().run.phase === 'report'
-  && state().hollow.finale.phase === 'purged' && isDeepStrictEqual(comparable(state()), atEnd), differs(comparable(state()), atEnd));
+  && decidedAs(state()) === 'purge' && isDeepStrictEqual(comparable(state()), atEnd), differs(comparable(state()), atEnd));
 const metaWrites = storage.log.filter((entry) => entry.key === META_STORAGE_KEY).length;
 continueAfterReport(h.store);
 const meta = storedMeta(storage);
@@ -198,7 +199,7 @@ for (let guard = 0; guard < 20 && !isEndSlot(state().run.map, currentSlot(state(
   toDesk(h.store);
   beamTo(h.store, reachableFrom(state().run.map, currentSlot(state().run))[0]!);
 }
-finalReport(h.store, 'purged');
+finalReport(h.store, 'purge');
 const run2End = comparable(state());
 reloadAndResume('run 2 ENDING CHOSEN', 48);
 check('run 2 ENDING CHOSEN: its final ship\'s LANDING REPORT as it stood', state().run.phase === 'report' && isDeepStrictEqual(comparable(state()), run2End),

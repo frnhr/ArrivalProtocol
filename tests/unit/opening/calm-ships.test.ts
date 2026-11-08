@@ -43,6 +43,7 @@ import {
 } from '@data/tuning';
 import type { GameState } from '@state/schema';
 import type { DriverSegment } from '@/types/segment';
+import { openFinaleStep1 } from '../support/finale';
 
 const h = createHarness7(1);
 mountStoryLog(h.store);
@@ -302,7 +303,7 @@ stepUntil(() => state().run.phase === 'flight', 30);
       `${JSON.stringify(state().run.log.found)} ${logSeg()?.name}`);
   }
   // LAST LIGHT's duel won: finale.ts moves to its choice at the root's last block (constructed here).
-  h.store.update((draft) => { draft.hollow.finale.phase = 'choice'; });
+  h.store.update((draft) => { openFinaleStep1(draft.hollow.finale); });
   h.stepFor(0.5);
   const lines = logEntryLines(12, { charge: 0 }) ?? [];
   const texts = logTexts();

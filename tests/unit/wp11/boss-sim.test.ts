@@ -56,8 +56,9 @@ import { classicShip } from '@data/classic-five';
 import { byDepth } from '../depth';
 import { setLandingMode } from '../support/landing-instant';
 import { followLanding } from '../landing/harness-landing';
-import { chooseFinale } from '@systems/finale';
+
 import { phase2HollowOf } from '../support/hollow-world';
+import { chooseEnding, finaleAtStep1 } from '../support/finale';
 
 // --- A. Fairness, pure ------------------------------------------------------------------------------------------------
 
@@ -315,7 +316,7 @@ function mvProblem(memory: Segment[], verb: Extract<Verb, { kind: 'mv' }>): stri
 
 // Weights: the last unit's habits.
 {
-  const mover = verbWeights({ number: 47, landed: 0, shipName: 'X', cause: 'overwritten', stats: { moves: 30, deletes: 0 }, hollowUnits: [46], trail: null, skills: null });
+  const mover = verbWeights({ number: 47, landed: 0, shipName: 'X', cause: 'overwritten', stats: { moves: 30, deletes: 0 }, hollowUnits: [46], trail: null, skills: null, ending: null });
   const fresh = verbWeights(null);
   check('A: weights: MV = 1 + moves/10, RM = 1 + deletes/10 (a first run: 1 and 1)', mover.mv === 4 && mover.rm === 1 && fresh.mv === 1 && fresh.rm === 1,
     JSON.stringify({ mover, fresh }));
@@ -467,7 +468,7 @@ coast(15);
   mergeAdjacentFree(memory);
   h.store.update((d) => {
     d.ui.memoryRev++;
-    d.run.lastUnit = { number: 47, landed: 0, shipName: 'X', cause: 'overwritten', stats: { moves: 999, deletes: 0 }, hollowUnits: [46], trail: null, skills: null };
+    d.run.lastUnit = { number: 47, landed: 0, shipName: 'X', cause: 'overwritten', stats: { moves: 999, deletes: 0 }, hollowUnits: [46], trail: null, skills: null, ending: null };
   });
   const verb = telegraphNow();
   // The ship's first verb, an MV this time: it counts from 4 too (the first of either kind).
@@ -524,7 +525,7 @@ h.step();
         maxWall: 900,
         onTick: () => {
           h.defend11();
-          if (!reachedChoice && state().hollow.finale.phase === 'choice') { reachedChoice = true; chooseFinale(h.store, 'purge'); }
+          if (!reachedChoice && finaleAtStep1(state())) { reachedChoice = true; chooseEnding(h.store, 'purge'); }
         },
       });
     } else {

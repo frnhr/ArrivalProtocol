@@ -15,13 +15,14 @@ import { fleetHome } from '@systems/run-score';
 import { endFlight } from '@systems/orbit-sim';
 import { runEndModel } from '@systems/run-end';
 import { theRoot } from '@systems/hollow';
-import { chooseFinale } from '@systems/finale';
+
 import { actionDelete } from '@state/actions';
 import { RUN_END_PURGE_SHORT, RUN_END_TITLE, RUN_END_WHY, lineageLine } from '@data/script';
 import { HOLLOW_FINALE } from '@data/hollow-text';
 import { ROOT_DELETE_SEC, MAX_LINE_CHARS } from '@data/tuning';
 import { CLASSIC_FIVE } from '@data/classic-five';
 import type { GameState, ShipResult } from '@state/schema';
+import { chooseEnding, finaleAtStep1 } from '../../support/finale';
 
 const SEED = 19;
 const h = createHarness11(SEED, { soulsFound: false });
@@ -91,7 +92,7 @@ const root = theRoot(state().memory);
 check('…its ORBIT LOCK opens the root', root !== null && !root.locked && state().hollow.finale.phase === 'duel');
 if (root) actionDelete(h.store, root);
 h.stepFor(ROOT_DELETE_SEC + 0.5);
-check('…its DELETE leaves the choice, PURGE is taken', state().hollow.finale.phase === 'choice' && chooseFinale(h.store, 'purge') === null);
+check('…its DELETE leaves the choice, PURGE is taken', finaleAtStep1(state()) && chooseEnding(h.store, 'purge') === null);
 {
   const lines = state().hollow.finale.ending?.lines.map((line) => line.text) ?? [];
   check('the typed ending says how many ships made it, not that the fleet is home', lines.includes('4 of 5 ships made it home.')
@@ -110,7 +111,7 @@ continueAfterReport(h.store);
   // WP11 fix round 1 (the experience review): the next title's lineage line said `brought the fleet home` after this run.
   const lineage = lineageLine({
     number: state().run.unitNumber, landed: model.landed, shipName: 'LAST LIGHT', cause: 'won-purge', stats: { moves: 0, deletes: 0 }, hollowUnits: [46],
-    trail: null, skills: null,
+    trail: null, skills: null, ending: null,
   });
   check('…and the next title\'s lineage names what the unit did, never the fleet (`deleted it at LAST LIGHT`)',
     lineage !== null && lineage.endsWith('· deleted it at LAST LIGHT') && !/fleet/.test(lineage), String(lineage));

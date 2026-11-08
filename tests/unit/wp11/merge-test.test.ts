@@ -20,7 +20,8 @@
 import { check, finish } from '../wp1/harness';
 import { createHarness11 } from './harness11';
 import { theRoot, landVerb, mvSpots, infectNow } from '@systems/hollow';
-import { chooseFinale, finaleChoiceRefusal, finaleRunCause } from '@systems/finale';
+import { finaleChoiceRefusal } from '@systems/finale';
+import { finaleRunCause } from '@systems/ending-rules';
 import { startRun, lossPlan } from '@systems/run';
 import { continueAfterReport } from '../support/classic-flow';
 import { runEndModel } from '@systems/run-end';
@@ -41,6 +42,7 @@ import type { GameState } from '@state/schema';
 import type { HollowSegment, DriverSegment } from '@/types/segment';
 import { MEMORY_LAYOUTS } from '@data/memory';
 import { toTheDuel } from './duel';
+import { chooseEnding, finaleAtStep1, decidedAs } from '../support/finale';
 
 const h = createHarness11(31);
 setLandingMode('manual');
@@ -129,7 +131,7 @@ check(`the root's DELETE runs ${ROOT_DELETE_SEC} AI s: still running a second be
 h.stepFor(1.3);
 const last = state().memory.find((seg): seg is HollowSegment => isHollow(seg) && seg.last === true);
 check(`…done at ${ROOT_DELETE_SEC} s: one last block stands, the choice is on, HOLLOW sleeps`, theRoot(state().memory) === null && last !== undefined
-  && last.size === 1 && state().hollow.finale.phase === 'choice' && state().hollow.phase === 'dormant' && state().hollow.biteInSec === null,
+  && last.size === 1 && finaleAtStep1(state()) && state().hollow.phase === 'dormant' && state().hollow.biteInSec === null,
   `${(state().clock.aiSec - deleteStartedAi).toFixed(2)} s, ${state().hollow.finale.phase}, ${state().hollow.phase}`);
 check('…its last block is LOCKED to every tool and INSPECT names it', last !== undefined && last.locked
   && targetRefusal(last, { state: state(), activeKind: 'delete', pickedSource: null }) !== null && hollowInspectState(last) === HOLLOW_INSPECT.last
@@ -138,10 +140,10 @@ check('…and the TERMINAL echoed the root\'s end', state().log.entries.some((en
 
 setCharge(14);
 const before = JSON.stringify(state().memory.map((seg) => seg.id));
-const refusal = chooseFinale(h.store, 'merge');
+const refusal = chooseEnding(h.store, 'merge');
 check('MERGE below 20: refused `NEEDS 20 CHARGE (you have 14)`, nothing changes', refusal === `NEEDS ${MERGE_COST_CHARGE} CHARGE (you have 14)`
   && finaleChoiceRefusal(state(), 'merge') === refusal && JSON.stringify(state().memory.map((seg) => seg.id)) === before
-  && state().hollow.finale.phase === 'choice' && chargeLeft(state()) === 14, String(refusal));
+  && finaleAtStep1(state()) && chargeLeft(state()) === 14, String(refusal));
 check('…PURGE is still open', finaleChoiceRefusal(state(), 'purge') === null);
 setCharge(30);
 // Where the two blocks stand at the choice (the duel's verbs kept coming every 4 s during the root's DELETE: an MV may
@@ -149,8 +151,8 @@ setCharge(30);
 const c13Block = blockOf('POD 11');
 const c13At = c13Block ? addrOf(c13Block.id) : -1;
 const c14At = blockOf('POD 12') ? addrOf(blockOf('POD 12')!.id) : -1;
-const merged = chooseFinale(h.store, 'merge');
-check('MERGE with 30: chosen, 20 charge spent', merged === null && chargeLeft(state()) === 30 - MERGE_COST_CHARGE && state().hollow.finale.phase === 'merged',
+const merged = chooseEnding(h.store, 'merge');
+check('MERGE with 30: chosen, 20 charge spent', merged === null && chargeLeft(state()) === 30 - MERGE_COST_CHARGE && decidedAs(state()) === 'merge',
   `${merged} charge ${chargeLeft(state())}`);
 check(`…POD 11's driver back in place (its block's address), at ${MERGE_DRIVER_INTEGRITY}`, soul('POD 11')?.integrity === MERGE_DRIVER_INTEGRITY && addrOf(soul('POD 11')!.id) === c13At,
   `${soul('POD 11')?.integrity} at ${soul('POD 11') ? addrOf(soul('POD 11')!.id) : '-'} (block was at ${c13At})`);
@@ -166,11 +168,11 @@ check('…no block of HOLLOW is left in memory, the memory is whole', !state().m
 // WP12 p3 (the lead's note of 22:40): CONTROL's verdict waits until the typed ending is over (the card types it
 // as its last line); said at the choice, the header's ticker spoiled the ending. Checked below, at the WAKE REPORT.
 const mergeVerdict = (): boolean => state().log.entries.some((entry) => /is non-compliant\. :\)$/.test(entry.text));
-check('…the finale records it, and the TERMINAL says it; CONTROL waits for the typed ending', JSON.stringify([...state().hollow.finale.restoredInPlace].sort((a, b) => a - b)) === JSON.stringify([11, 12])
-  && JSON.stringify(state().hollow.finale.restoredHalf) === JSON.stringify([13])
+check('…the finale records it, and the TERMINAL says it; CONTROL waits for the typed ending', JSON.stringify([...state().hollow.finale.restored].sort((a, b) => a - b)) === JSON.stringify([11, 12])
+  && !state().hollow.finale.restored.includes(13)
   && state().log.entries.some((entry) => /^> merge unit_\d+ -> unit_\d+ \.\.\. OK$/.test(entry.text))
   && !mergeVerdict());
-check('…a second choice is refused', chooseFinale(h.store, 'purge') !== null);
+check('…a second choice is refused', chooseEnding(h.store, 'purge') !== null);
 
 // Land the rest, the LANDING REPORT, RUN END.
 landInstantly(h.store);
@@ -190,7 +192,7 @@ continueAfterReport(h.store);
 check('RUN END: won-merge, the victory tone', state().run.phase === 'end' && state().run.endCause === 'won-merge' && runEndModel(state()).tone === 'victory',
   `${state().run.endCause} ${state().run.phase}`);
 // Slice 3c SAVE (plan risk 3, decided): MERGE's next-run thread retires; archive v2 keeps no mergeBonus.
-check('…the archive keeps endingsSeen [merge] (and no mergeBonus: retired in 3c)', !('mergeBonus' in archiveMeta()) && JSON.stringify(archiveMeta().endingsSeen) === '["merge"]'
+check('…the archive keeps endingsSeen [merge, reassignment] (slice 7a: both pieces; no mergeBonus: retired in 3c)', !('mergeBonus' in archiveMeta()) && JSON.stringify(archiveMeta().endingsSeen) === '["merge","reassignment"]'
   && archiveMeta().lastUnit?.cause === 'won-merge', JSON.stringify(archiveMeta()));
 
 // The next run: no bonus any more (slice 3c, risk 3; deleted in the review fixes).
@@ -213,9 +215,9 @@ archiveRunStarted(h.store);
 eat(['POD 11']);
 deleteRoot();
 h.stepFor(ROOT_DELETE_SEC + 0.3);
-check('PURGE scenario: the choice is on', state().hollow.finale.phase === 'choice');
+check('PURGE scenario: the choice is on', finaleAtStep1(state()));
 setCharge(5);
-check('…PURGE takes no charge and needs none', chooseFinale(h.store, 'purge') === null && chargeLeft(state()) === 5 && state().hollow.finale.phase === 'purged');
+check('…PURGE takes no charge and needs none', chooseEnding(h.store, 'purge') === null && chargeLeft(state()) === 5 && decidedAs(state()) === 'purge');
 check('…every block of HOLLOW left memory; POD 11\'s driver stays lost (eaten)', !state().memory.some(isHollow)
   && podRecord(state(), 11).driverLost === 'eaten'
   && state().log.entries.some((entry) => /^> rm unit_\d+ \.\.\. OK$/.test(entry.text))
@@ -227,8 +229,8 @@ while (state().run.phase === 'landing' && h.wall() < purgeEnd) h.step();
 check('…CONTROL said `… stand by for reassignment. :)` once the typed ending was over',
   state().log.entries.some((entry) => /stand by for reassignment\. :\)$/.test(entry.text)));
 continueAfterReport(h.store);
-check('…RUN END won-purge, victory; the archive adds purge (no mergeBonus kept: retired in 3c)', state().run.endCause === 'won-purge' && runEndModel(state()).tone === 'victory'
-  && JSON.stringify(archiveMeta().endingsSeen) === '["purge"]' && !('mergeBonus' in archiveMeta()), JSON.stringify(archiveMeta()));
+check('…RUN END won-purge, victory; the archive adds purge and reassignment (slice 7a; no mergeBonus kept: retired in 3c)', state().run.endCause === 'won-purge' && runEndModel(state()).tone === 'victory'
+  && JSON.stringify(archiveMeta().endingsSeen) === '["purge","reassignment"]' && !('mergeBonus' in archiveMeta()), JSON.stringify(archiveMeta()));
 
 // --- UNRESOLVED ---------------------------------------------------------------------------------------------------------
 closeArchive();
@@ -249,7 +251,7 @@ check('UNRESOLVED scenario: with no Rm, the strip says nothing can delete the ro
 landInstantly(h.store);
 const unresolvedEnd = h.wall() + 200;
 while (state().run.phase === 'landing' && h.wall() < unresolvedEnd) h.step();
-check('…the landing ended with the root standing: the ship ends unresolved, then the LANDING REPORT', state().hollow.finale.phase === 'unresolved' && state().run.phase === 'report'
+check('…the landing ended with the root standing: the ship ends unresolved, then the LANDING REPORT', decidedAs(state()) === 'followed' && state().run.phase === 'report'
   && finaleRunCause(state()) === 'unresolved', `${state().hollow.finale.phase} ${state().run.phase}`);
 continueAfterReport(h.store);
 check('…RUN END unresolved, sombre', state().run.endCause === 'unresolved' && runEndModel(state()).tone === 'sombre');
@@ -274,7 +276,7 @@ check('every driver gone before the root: the landing ends, and the ship waits f
   state().run.phase === 'landing' && /DELETE THE ROOT/.test(h.shown()?.text ?? ''), `${state().run.phase} ${h.shown()?.text}`);
 deleteRoot();
 h.stepFor(ROOT_DELETE_SEC + 0.3);
-chooseFinale(h.store, 'purge');
+chooseEnding(h.store, 'purge');
 const zeroEnd = h.wall() + 30;
 while (state().run.phase === 'landing' && h.wall() < zeroEnd) h.step();
 continueAfterReport(h.store);
@@ -303,7 +305,7 @@ const threadsWorn = threadsTotal();
 const deleteRunning = getOpsBySeg(theRoot(state().memory)?.id ?? '').some((operation) => operation.kind === 'delete');
 h.stepFor(ROOT_DELETE_SEC - 2 + 0.3);
 check('the Core worn to 30 mid-duel (fewer threads): the running DELETE keeps its thread, and the root is gone on time',
-  threadsWorn < threadsBefore && deleteRunning && theRoot(state().memory) === null && state().hollow.finale.phase === 'choice',
+  threadsWorn < threadsBefore && deleteRunning && theRoot(state().memory) === null && finaleAtStep1(state()),
   `threads ${threadsBefore} → ${threadsWorn}, ${state().hollow.finale.phase}`);
 // The flagship lost before the duel: every way of losing it ends the run, none transmits.
 {

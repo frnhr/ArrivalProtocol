@@ -116,8 +116,8 @@ const edit = (raw: string, change: (save: Raw) => void): string => {
 check('not JSON → not-json', kind('{ this is not a run save') === 'not-json');
 check('another save version → version', kind(edit(desk, (save) => { save.saveVersion = RUN_SAVE_VERSION + 1; })) === 'version');
 // Slice 4: the first step (1 → 2, the skill tree; its fixtures are migrated in tests/unit/skills/foundation.test.ts).
-check('migrateRunSave knows five steps (1 → 2, slice 4; 2 → 3, its review; 3 → 4, slices 4c–4e; 4 → 5, slice 5; 5 → 6, slice 6), and leaves an unknown version for check 2',
-  Object.keys(RUN_SAVE_MIGRATIONS).join() === '1,2,3,4,5' && isDeepStrictEqual(migrateRunSave({ saveVersion: 0 }), { saveVersion: 0 }));
+check('migrateRunSave knows six steps (1 → 2, slice 4; 2 → 3, its review; 3 → 4, slices 4c–4e; 4 → 5, slice 5; 5 → 6, slice 6; 6 → 7, slice 7a), and leaves an unknown version for check 2',
+  Object.keys(RUN_SAVE_MIGRATIONS).join() === '1,2,3,4,5,6' && isDeepStrictEqual(migrateRunSave({ saveVersion: 0 }), { saveVersion: 0 }));
 // 2 → 3: a v2 save (burn.auto without flying / captured) steps up with both empty and decodes; a v3 save burning with its
 // burn in hand reads (4c's mid-flight saves).
 const v2 = edit(desk, (save) => { save.saveVersion = 2; delete save.payload.slices.burn.auto.flying; delete save.payload.slices.burn.auto.captured; });
@@ -211,7 +211,7 @@ check('a route that does not match the point → route (the point, the depth, th
   kind(edit(desk, (save) => { save.point = 'ending-chosen'; save.resume.point = 'ending-chosen'; save.payload.phase = 'report'; save.payload.run.phase = 'report'; })) === 'route'
   && kind(edit(desk, (save) => { save.payload.run.shipIndex = 3; save.resume.depth = 4; })) === 'route'
   && kind(edit(desk, (save) => { save.payload.run.ships.pop(); save.payload.run.skills.earned.pop(); })) === 'route');
-check('ENDING CHOSEN with an undecided finale → route', kind(edit(ending.raw, (save) => { save.payload.slices.hollow.finale.phase = 'choice'; })) === 'route');
+check('ENDING CHOSEN with an undecided finale → route', kind(edit(ending.raw, (save) => { save.payload.slices.hollow.finale.phase = 'step1'; })) === 'route');
 check('a ship that does not build → ship', kind(edit(desk, (save) => { save.payload.run.map.arm[3].pods = 99; })) === 'ship');
 
 // --- The archive's view (stale) ------------------------------------------------------------------------------------------

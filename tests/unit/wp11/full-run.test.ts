@@ -42,7 +42,7 @@ import { DEAL_REFUSE } from '@systems/hollow-deal';
 import { resetReport } from '@systems/reset';
 import { chargeLeft } from '@state/selectors';
 import { MERGE_COST_CHARGE } from '@data/tuning';
-import { chooseFinale } from '@systems/finale';
+
 import type { GameState } from '@state/schema';
 import { byDepth } from '../depth';
 import { setLandingMode } from '../support/landing-instant';
@@ -64,6 +64,7 @@ import { STAR_CHARGE_BONUS, BAND_OK_MIN } from '@data/tuning';
 import { classicShip, CLASSIC_HOPS, CLASSIC_WORLD_SLOTS } from '@data/classic-five';
 import { solLy } from '@systems/map-geometry';
 import { MEMORY_LAYOUTS } from '@data/memory';
+import { chooseEnding, finaleAtStep1 } from '../support/finale';
 
 const FINAL_LANDING_SEC = Number(process.env.FINAL_LANDING_SEC ?? 48);
 // FINAL_LANDING: 'strip' (default: LAST LIGHT's landing by the strip) or 'stand' (FINAL_LANDING_SEC, then instant).
@@ -247,21 +248,21 @@ function toReport(choice: 'purge' | 'merge'): boolean {
       maxWall: 900,
       onTick: () => {
         h.defend11(defendOpts);
-        if (picked || state().hollow.finale.phase !== 'choice') return;
+        if (picked || !finaleAtStep1(state())) return;
         picked = true;
         chargeAtChoice = chargeLeft(state());
         const hollow = state().hollow;
         verbsAtChoice = { moments: hollow.verbMoments, telegraphed: hollow.verbsLanded + hollow.verbsBlocked, landed: hollow.verbsLanded, blocked: hollow.verbsBlocked };
-        chooseFinale(h.store, choice === 'merge' && chargeLeft(state()) >= MERGE_COST_CHARGE ? 'merge' : 'purge');
+        chooseEnding(h.store, choice === 'merge' && chargeLeft(state()) >= MERGE_COST_CHARGE ? 'merge' : 'purge');
       },
     });
   } else if (state().run.shipIndex === LAST_LIGHT) {
     const end = h.wall() + 600;
-    while (state().hollow.finale.phase !== 'choice' && state().run.phase === 'landing' && !state().run.coreLost && h.wall() < end) {
+    while (!finaleAtStep1(state()) && state().run.phase === 'landing' && !state().run.coreLost && h.wall() < end) {
       h.defend11(defendOpts);
       h.step();
     }
-    if (state().hollow.finale.phase === 'choice') {
+    if (finaleAtStep1(state())) {
       chargeAtChoice = chargeLeft(state());
       const hollow = state().hollow;
       verbsAtChoice = { moments: hollow.verbMoments, telegraphed: hollow.verbsLanded + hollow.verbsBlocked, landed: hollow.verbsLanded, blocked: hollow.verbsBlocked };

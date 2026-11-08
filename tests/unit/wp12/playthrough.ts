@@ -49,7 +49,7 @@ import { pickChoice } from '@systems/say';
 import { DEAL_REFUSE } from '@systems/hollow-deal';
 import { pickCard } from '@systems/draft';
 import { transmitNext } from '@systems/run';
-import { chooseFinale } from '@systems/finale';
+
 import { getOps, getOpsBySeg, canStartOp } from '@systems/ops-core';
 import {
   exposedDrivers, threateningSeeds, theRoot, rootDeleteRunning, hollowReach,
@@ -70,6 +70,7 @@ import type { GameState, ObjectiveLine, PendingPlacement, ShipOutcome } from '@s
 import type { Segment } from '@/types/segment';
 import type { UpgradeId } from '@data/upgrades';
 import { CLASSIC_FIVE } from '@data/classic-five';
+import { chooseEnding, finaleAtStep1 } from '../support/finale';
 
 export type PlayerId = 'COMPETENT' | 'SLOPPY' | 'LITERAL';
 
@@ -642,14 +643,14 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
       shipCall = false;
       mindTick();
       const now = state();
-      if (!chose && now.hollow.finale.phase === 'choice') {
+      if (!chose && finaleAtStep1(now)) {
         chose = true;
         record.chargeAtChoice = chargeLeft(now);
         const hollow = now.hollow;
         record.verbs = { telegraphed: hollow.verbsLanded + hollow.verbsBlocked, landed: hollow.verbsLanded, blocked: hollow.verbsBlocked };
         stepFor(player.reactionSec);
         const pick = player.mergeOnEven && playedFor === 'merge' && chargeLeft(state()) >= MERGE_COST_CHARGE ? 'merge' : 'purge';
-        const refusal = chooseFinale(harness.store, pick);
+        const refusal = chooseEnding(harness.store, pick);
         if (refusal !== null) throw new Error(`playthrough: the finale refused ${pick} (${refusal})`);
       }
     }

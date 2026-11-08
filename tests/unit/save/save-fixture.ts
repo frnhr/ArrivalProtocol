@@ -6,6 +6,8 @@ import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import type { MetaStorage, StorageProvider } from '@systems/storage';
 import type { RunSave } from '@/types/save';
+import type { HollowFate } from '@/types/ending';
+import { decideFinale } from '../support/finale';
 import { closeArchive } from '@systems/meta';
 import { closeRunSave, writeEndingChosen } from '@systems/save-write';
 import { openPageStorage, pageTitleState } from '@systems/run-save';
@@ -99,11 +101,12 @@ export function beamTo(store: Store<GameState>, slot: number): void {
 export { toDesk };
 
 // The final ship's LANDING REPORT with a decided finale, as systems/landing.ts finishLanding opens it (ENDING CHOSEN).
-export function finalReport(store: Store<GameState>, finale: 'purged' | 'merged' | 'unresolved' = 'purged'): void {
+// Slice 7a: decided by its step 1 and REASSIGNMENT (support/finale.ts decideFinale).
+export function finalReport(store: Store<GameState>, fate: HollowFate = 'purge'): void {
   store.update((draft) => {
     draft.run.phase = 'report';
     draft.burn.status = 'locked';
-    draft.hollow.finale.phase = finale;
+    decideFinale(draft.hollow.finale, fate);
   });
   writeEndingChosen(store, sayOwedVerdict);
 }
