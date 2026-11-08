@@ -1,5 +1,162 @@
 /* Slice 6: Track SITES owns this file (docs/phase3/impl/slice-6-plan.md §2.14, §6.2): the SITES window, the survey's plot
-   layer, the GROUND TRACK's candidate brackets and unmapped ground, the stamps. Imported by main.ts after resident.css.
+   layer, the GROUND TRACK's candidate brackets and unmapped ground, the AHEAD line's site line and TRAINING's SURVEY demos.
+   Imported by main.ts after resident.css.
    The FOUNDATION's one rule: the SITES window and its dock item (index.html, class survey-only) stay hidden until SITES
-   shows them (body.survey, as body.landing shows the POD BAY). */
+   shows them (body.survey, set by SitesWindow while a POOR planet is flown, as body.landing shows the POD BAY). */
 body:not(.survey) .survey-only { display: none !important; }
+
+/* ── The SITES window: the foot of the left column, under COMMS (which gives it the room, keeping two lines of radio).
+ *    With SKILLS docked there too (a short desk) it sits above SKILLS. ── */
+.desktop > .tools-view { --sites-h: clamp(170px, 36%, 300px); }
+.sites-win {
+  left: var(--gutter);
+  bottom: var(--gutter);
+  width: var(--col-left-w);
+  max-height: var(--sites-h);
+  display: flex;
+  flex-direction: column;
+}
+.desktop > .tools-view:not(.tools-tabs-mode):has(> .sites-win:not([hidden])) .comms-win {
+  height: clamp(110px, calc(100% - var(--comms-top) - 2 * var(--gutter) - var(--sites-h)), 340px);
+}
+.desktop > .tools-view[data-skills-dock="left"]:not(.tools-tabs-mode):has(> .skills-win:not([hidden])) .sites-win {
+  bottom: calc(2 * var(--gutter) + var(--skills-left-h));
+  --sites-h: 170px;
+}
+.desktop > .tools-view[data-skills-dock="left"]:not(.tools-tabs-mode):has(> .skills-win:not([hidden])):has(> .sites-win:not([hidden])) .comms-win {
+  height: clamp(110px, calc(100% - var(--comms-top) - 3 * var(--gutter) - var(--skills-left-h) - 170px), 340px);
+}
+.sites-body { padding: 8px 10px 10px; min-height: 0; overflow-y: auto; scrollbar-width: thin; display: flex; flex-direction: column; gap: 4px; }
+.sw-head { display: flex; align-items: baseline; gap: 8px; }
+.sw-title { flex: 1 1 auto; min-width: 0; font-size: 10px; letter-spacing: 0.14em; color: var(--accent-bright); }
+.sw-pause {
+  flex: 0 0 auto;
+  border: 1px solid var(--edge-bright);
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  padding: 1px 5px;
+  cursor: pointer;
+}
+.sw-pause:hover { border-color: var(--accent); color: var(--accent-bright); }
+.sw-pause.paused { color: var(--warn); border-color: var(--warn); }
+.sw-pause[hidden] { display: none; }
+/* The rim, mapped from 0 rad: ▓ mapped, ░ not yet. */
+.sw-rim { font-size: 9px; line-height: 10px; letter-spacing: 0; color: var(--accent); white-space: nowrap; overflow: hidden; opacity: 0.85; }
+.sw-status { font-size: 9.5px; letter-spacing: 0.12em; }
+.sw-status.tone-good { color: var(--good); }
+.sw-status.tone-warn { color: var(--warn); }
+.sw-status.tone-dim { color: var(--text-dim); }
+.sw-section { margin-top: 4px; font-size: 9px; letter-spacing: 0.2em; color: var(--text-dim); border-bottom: 1px dashed var(--edge); padding-bottom: 2px; }
+.sw-list { display: flex; flex-direction: column; gap: 2px; }
+.sw-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 9.5px;
+  line-height: 1.35;
+  letter-spacing: 0.02em;
+  padding: 1px 4px;
+}
+.sw-row-text { flex: 1 1 auto; min-width: 0; }
+.sw-ground { flex: 0 0 auto; white-space: nowrap; }
+.sw-stars { font-size: 11px; letter-spacing: 0.05em; }
+button.sw-row { cursor: pointer; }
+button.sw-row:hover { border-color: var(--edge-bright); background: rgba(255, 167, 38, 0.05); }
+.sw-row.selected { border-color: var(--accent); background: rgba(255, 167, 38, 0.1); }
+.sw-row.kind-lz { color: var(--accent-bright); }
+.sw-row.kind-lz.moved .sw-row-text { color: var(--good); }
+.sw-row.kind-wreck { color: var(--text-dim); font-style: italic; }
+.sw-ground { color: var(--text-dim); }
+.sw-row[data-ground="flat"] .sw-ground { color: var(--good); }
+.sw-row[data-ground="rocky"] .sw-ground, .sw-row[data-ground="wet"] .sw-ground { color: var(--warn); }
+.sw-row.kind-lz[data-ground="rocky"], .sw-row.kind-lz[data-ground="wet"] { border-left: 2px solid var(--warn); }
+.sw-pills { display: flex; flex-wrap: wrap; gap: 4px; padding: 2px 0 4px 10px; }
+.sw-pill {
+  border: 1px solid var(--accent);
+  background: rgba(255, 167, 38, 0.12);
+  color: var(--accent-bright);
+  font: inherit;
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  padding: 2px 7px;
+  border-radius: 9px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sw-pill:hover:not(:disabled) { background: var(--accent); color: var(--bg); }
+.sw-pill.refused { border-color: var(--edge-bright); background: transparent; color: var(--text-dim); cursor: not-allowed; white-space: normal; text-align: left; border-radius: 3px; }
+.sw-empty, .sw-hint { font-size: 9.5px; letter-spacing: 0.1em; color: var(--text-dim); }
+.sw-hint { color: var(--accent-dim); }
+.sw-empty[hidden], .sw-hint[hidden] { display: none; }
+
+/* ── The NAV PLOT's survey layer (plot-survey.ts) ── */
+.np-swath { fill: var(--accent); fill-opacity: 0.1; stroke: var(--accent); stroke-opacity: 0.35; stroke-width: 0.6; animation: np-swath-breathe 2.4s ease-in-out infinite; pointer-events: none; }
+@keyframes np-swath-breathe { 50% { fill-opacity: 0.18; } }
+.np-swath-foot { fill: none; stroke: var(--accent-bright); stroke-width: 2.2; stroke-linecap: butt; filter: drop-shadow(0 0 2px var(--accent)); pointer-events: none; }
+.np-rim-unmapped { fill: none; stroke: var(--text-dim); stroke-width: 1.2; stroke-dasharray: 0.6 1.6; pointer-events: none; }
+.np-rim-mapped { fill: none; stroke: var(--accent); stroke-opacity: 0.75; stroke-width: 1.2; pointer-events: none; }
+.np-site { fill: none; stroke: var(--accent-bright); stroke-dasharray: 1.4 1.2; stroke-linecap: butt; opacity: 0.85; }
+.np-site.look-wreck { stroke: var(--text-dim); stroke-dasharray: 0.6 1.2; }
+.np-site.look-bad { stroke: var(--warn); opacity: 0.6; }
+.np-site.selected { stroke: var(--good); stroke-dasharray: none; opacity: 1; filter: drop-shadow(0 0 2px var(--good)); }
+.np-site-hit { fill: none; stroke: transparent; cursor: pointer; pointer-events: stroke; }
+.navplot-svg .np-site-label { fill: var(--accent-bright); cursor: pointer; }
+.navplot-svg .np-site-label.look-wreck { fill: var(--text-dim); }
+.navplot-svg .np-site-label.look-bad { fill: var(--warn); }
+.navplot-svg .np-site-label.selected { fill: var(--good); }
+.np-survey-lz { fill: none; stroke: var(--accent-dim); stroke-width: 2.4; stroke-linecap: butt; pointer-events: none; }
+.np-survey-lz.bad { stroke: var(--warn); }
+.navplot-svg .np-survey-lz-label { fill: var(--accent); }
+.navplot-svg .np-survey-lz-label.bad { fill: var(--warn); }
+.navplot-svg .np-lz-glyph { fill: var(--text-dim); font-weight: 700; pointer-events: none; }
+.navplot-svg .np-lz-glyph.bad { fill: var(--warn); animation: np-glyph-reveal 1.4s ease-out 1; }
+@keyframes np-glyph-reveal { 0%, 30% { font-size: calc(14px * var(--np-label-scale, 1)); filter: drop-shadow(0 0 4px var(--warn)); } }
+body.reduced-motion .np-swath, body.reduced-motion .navplot-svg .np-lz-glyph.bad { animation: none; }
+
+/* ── The GROUND TRACK: the rim SURVEY has not mapped (`░` on the overview line), the free sites' brackets (clickable) ── */
+.gt-planet > .gt-p-unmapped { background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--text-dim) 55%, transparent) 0 1px, transparent 1px 3px); }
+.gt-planet > .gt-p-lz[data-site]:not([data-site=""]) { background: none; border: 1px dotted var(--accent-bright); box-sizing: border-box; cursor: pointer; }
+.gt-bracket.look-candidate { pointer-events: auto; cursor: pointer; }
+.gt-bracket.look-candidate .gt-b-label { color: var(--accent-bright); opacity: 0.85; }
+.gt-bracket.look-candidate:hover { border-color: var(--good); }
+
+/* ── The desk: the AHEAD row's site line, and TRAINING's SURVEY demos (TrainingWindow.ts demoSvg 'find', 'rate', 'sweep') ── */
+.tr-ahead-line.tr-ahead-site { color: var(--desk-warn); letter-spacing: 0.08em; }
+.tr-demo-rim { fill: none; stroke: var(--desk-dim); stroke-width: 1.2; stroke-dasharray: 0.8 1.8; }
+.tr-demo-mapped { fill: none; stroke: var(--desk-accent); stroke-width: 1.6; stroke-dasharray: 80; }
+.tr-demo-swath { fill: var(--desk-accent); fill-opacity: 0.16; stroke: var(--desk-accent); stroke-opacity: 0.5; stroke-width: 0.6; }
+.tr-demo-site { fill: none; stroke: var(--desk-bright); stroke-width: 2.4; stroke-dasharray: 1.6 1.2; }
+.tr-demo-site.bad { stroke: var(--desk-warn); }
+.tr-demo-site.good { stroke: var(--desk-good); stroke-dasharray: none; }
+.tr-demo-tag { fill: var(--desk-bright); font-family: 'VT323', monospace; font-size: 10px; letter-spacing: 0.04em; }
+.tr-demo-tag.bad { fill: var(--desk-warn); }
+.tr-demo-tag.good { fill: var(--desk-good); }
+.tr-demo-pip { fill: var(--desk-accent); stroke: var(--desk-accent); stroke-width: 0.8; }
+.tr-demo-pip.free { fill: none; }
+.tr-demo-find .tr-demo-swath, .tr-demo-sweep .tr-demo-swath { transform-origin: 60px 40px; animation: tr-swath-turn 4s linear infinite; }
+.tr-demo-find .tr-demo-mapped, .tr-demo-sweep .tr-demo-mapped { animation: tr-map 4s linear infinite; }
+.tr-demo-find .tr-demo-site, .tr-demo-find .tr-demo-tag { animation: tr-turn-2 4s ease-in-out infinite; }
+.tr-demo-rate .tr-demo-site.bad, .tr-demo-rate .tr-demo-tag.bad { animation: tr-flyby-out 4s ease-in-out infinite; }
+.tr-demo-rate .tr-demo-site.good, .tr-demo-rate .tr-demo-tag.good { animation: tr-loop-in 4s ease-in-out infinite; }
+.tr-demo-sweep .tr-demo-pip.held { animation: tr-flyby-out 4s ease-in-out infinite; }
+@keyframes tr-swath-turn { from { transform: rotate(0deg); } to { transform: rotate(-360deg); } }
+/* The rim maps behind the wedge (its path starts under the wedge's start and runs the way it turns). */
+@keyframes tr-map { from { stroke-dashoffset: 80; } to { stroke-dashoffset: 0; } }
+
+/* ── Phone: SITES is a tab (ToolsTabs' `sites`); its pills wrap at 360 px, and its rows wrap rather than scroll sideways. ── */
+@media (max-width: 768px) {
+  .sites-win { max-height: none; }
+  .sw-row { font-size: 11px; white-space: normal; overflow-wrap: anywhere; }
+  .sw-pills { padding-left: 4px; }
+  .sw-pill { font-size: 10.5px; padding: 4px 9px; white-space: normal; }
+  .sw-rim { font-size: 8px; }
+}
