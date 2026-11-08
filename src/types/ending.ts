@@ -58,13 +58,37 @@ export interface EndingRecord {
 // Slice 7b: Track DROP may change the fields below (not `pods` and `drivers`, which the lead's seams read: selectors
 // launchDrivers, landing.ts launchDriver, landing-hud parkedBeacons): it never reaches a save, so no bump follows. It asks
 // the lead by message, who makes the edit (this file is the lead's).
+// Track DROP (7b) added `startTSec` … `stuckAiSec` (its Deviations; no save effect) and reads `cadenceLeftSec` in tactical s.
 export interface LastLandingState {
   pods: number[];                       // restored pods, in pod order
   drivers: DriverSegment[];             // by radio, at MERGE_DRIVER_INTEGRITY; never in memory (R24)
   flier: 'v1' | 'v2' | 'v3' | 'blind';  // decided at the start (R27)
   orbitsFlown: number;                  // AUTODROP's orbits so far (LAST_LANDING_AUTODROP_ORBITS)
-  cadenceLeftSec: number;               // game s until the next launch may go (R26)
+  // Tactical s of world time until the next launch may go (R26), counted down as the bay's cadence is (landing.ts bayAfter):
+  // 01's "2.0 s between launches … so the rhythm reads" is the bay's rhythm at TACTICAL (Track DROP's Deviation 1).
+  cadenceLeftSec: number;
   skipped: boolean;                     // [ENTER] asked (R28)
+  startTSec: number;                    // game s THE LAST LANDING started: AUTODROP's orbits count from here
+  // Game s AUTODROP stops flying (start + LAST_LANDING_AUTODROP_ORBITS periods); null for a blind flier. From then a pod it
+  // has not placed drops blind in the next window (R27).
+  autodropUntilTSec: number | null;
+  // v1 and blind (one pod per window, in pass order): every window whose centre is at or before this game time has had its
+  // turn, and `turns` windows have (each blind turn draws its moment from its own 'last-landing:<turn>' stream).
+  passedTSec: number;
+  turns: number;
+  target: LastLandingTarget | null;     // v1 and blind: the window the next pod goes in, and when
+  stuckAiSec: number;                   // AI s nothing could fly (no drop dot, no in-band window): it ends the landing
+}
+
+// One pod's turn (v1 or blind): its window's LZ and centre (game s), the moment it launches (v1: the centre plus AUTODROP's
+// learned offset, inside the pod's sure part; blind: uniform within ±(W/2 + BLIND_MARGIN_KM) of the centre) and the last
+// moment it may still go (past it, the window's turn is over unused).
+export interface LastLandingTarget {
+  lz: string;
+  centreTSec: number;
+  atTSec: number;
+  untilTSec: number;
+  blind: boolean;
 }
 
 // The run end's three screens after CONTINUE (R19): the RUN TALLY, the EPILOGUE, the FINAL CARD (ui.runEndStage, unsaved:

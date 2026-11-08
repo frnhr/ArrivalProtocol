@@ -86,8 +86,8 @@ lockOn(h);
 const state = (): ReturnType<typeof h.store.getState> => h.store.getState();
 
 // Track DROP's stubs (its block: as built, it rewrites these lines; ending/last-landing is its own suite):
-check('DROP\'s stubs: startLastLanding and skipLastLanding throw, the \'merge\' resolver answers null',
-  /not built \(Track DROP/.test(threw(() => startLastLanding(h.store, [1]))) && /not built \(Track DROP/.test(threw(() => skipLastLanding(h.store)))
+check('DROP\'s machine, built: startLastLanding only from MERGE\'s verdict, skipLastLanding only while it runs, the \'merge\' resolver null without it',
+  /not 'verdict'/.test(threw(() => startLastLanding(h.store, [1]))) && /not running/.test(threw(() => skipLastLanding(h.store)))
   && lastLandingController(state()) === null);
 // (end of DROP's stubs)
 
@@ -112,6 +112,8 @@ const radioPod = memoryDriver.pod;
 const record = state().landing.pods.find((candidate) => candidate.pod === radioPod)!;
 const machine = (cadenceLeftSec: number): LastLandingState => ({
   pods: [radioPod], drivers: [restoredDriver(record)], flier: 'blind', orbitsFlown: 0, cadenceLeftSec, skipped: false,
+  // Track DROP's fields (its Deviations: the machine's own clocks and turns), at rest.
+  startTSec: state().clock.tSec, autodropUntilTSec: null, passedTSec: state().clock.tSec, turns: 0, target: null, stuckAiSec: 0,
 });
 h.store.update((draft) => { draft.landing.lastLanding = machine(0); });
 check('a driver both by radio and in memory is a bug: the launch throws', /both by radio and in memory/.test(threw(() => forceLandAll(h.store))));
