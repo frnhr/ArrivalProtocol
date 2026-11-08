@@ -2,7 +2,7 @@
 // 7, slot 9: WARDEN, `reported faulty`, 7 pods) built store-free (support/residents armShipSlices) with the kind raised:
 // • the ghost source (residentGhostSpec) in every phase, in the landing (R4), deleting (an op on the ops core), angry; the
 //   composite's choice and ghostBy against a healthy and a failing Thrust Ctrl, controllerGhost kept (review M5);
-// • the pushes (R3): the resident's under the arm's failing controller (71%), the DELETING and ANGRY specs over it;
+// • the pushes (R3, slice 8 §2.5): the resident's under the arm's failing controller (48%), DELETING over it, ANGRY over a degraded one;
 // • the lock cap ceil(pods ÷ 4) ≤ 3; the lock's live text; the THRUST CTRL pip's override and jump (review B2);
 // • the DEAL's file: hollow.ts rmTargets' first (imported since the review fix pass, M4), and its word;
 // • the tool rules (R25): SCAN IT FIRST, MOVE and COPY refused, the tools' own rules after a SCAN; SCAN on the driver a lock
@@ -69,22 +69,24 @@ const thrustOf = (state: GameState): Segment => state.memory.find((seg) => seg.r
   const flat = gannet((state) => { awake(state); wardenOf(state).integrity = 0; });
   check('…nor from a file at 0%', residentGhostSpec(flat) === null);
   const failing = gannet((state) => { awake(state); (thrustOf(state) as { integrity: number }).integrity = 30; });
+  // Slice 8 (§2.5): at amp 0.10 an angry resident (95% of a failing controller) no longer outpushes a failing one, so the
+  // composite's resident branch is checked against a degraded controller (Thrust Ctrl 60%: 0.0075 per tac s).
   const failingAngry = gannet((state) => {
     awake(state);
-    (thrustOf(state) as { integrity: number }).integrity = 30;
+    (thrustOf(state) as { integrity: number }).integrity = 60;
     state.resident.corrupted!.angryUntilAi = state.clock.aiSec + 5;
   });
   const f = capabilitiesNow(failing).thrustCtrl;
   const fa = capabilitiesNow(failingAngry).thrustCtrl;
-  check('a failing Thrust Ctrl outpushes it (the composite fires the controller\'s); angry, the resident outpushes the controller, '
+  check('a failing Thrust Ctrl outpushes it (the composite fires the controller\'s); angry, the resident outpushes a degraded controller, '
     + 'and controllerGhost keeps the controller\'s for the SWAP-only readers (review M5)',
     f.ghostBy === 'controller' && f.ghost === ARM_GHOST_BY_BAND.failing && fa.ghostBy === 'resident' && fa.ghost === RESIDENT_GHOST_ANGRY
-    && fa.controllerGhost === ARM_GHOST_BY_BAND.failing && ghostWithoutSwap(failingAngry) === ghostWithoutSwap(failing),
+    && fa.controllerGhost === ARM_GHOST_BY_BAND.degraded && ghostWithoutSwap(failingAngry) === ghostWithoutSwap(failing),
     `${f.ghostBy} ${fa.ghostBy}`);
   const ratio = ghostPush(RESIDENT_GHOST) / ghostPush(ARM_GHOST_BY_BAND.failing!);
-  check(`R3: its push is ${(ratio * 100).toFixed(0)}% of the arm's failing controller's; DELETING and ANGRY push harder than it`,
-    ratio < 1 && Math.abs(ratio - 0.714) < 0.01 && ghostPush(RESIDENT_GHOST_DELETING) > ghostPush(ARM_GHOST_BY_BAND.failing!)
-    && ghostPush(RESIDENT_GHOST_ANGRY) > ghostPush(ARM_GHOST_BY_BAND.failing!) && ghostPush(RESIDENT_GHOST_ANGRY) === 2 * ghostPush(RESIDENT_GHOST),
+  check(`R3, slice 8 §2.5: its push is ${(ratio * 100).toFixed(0)}% of the arm's failing controller's (about half); DELETING pushes harder than it, ANGRY twice its own`,
+    ratio < 1 && Math.abs(ratio - 0.476) < 0.01 && ghostPush(RESIDENT_GHOST_DELETING) > ghostPush(ARM_GHOST_BY_BAND.failing!)
+    && ghostPush(RESIDENT_GHOST_ANGRY) > ghostPush(ARM_GHOST_BY_BAND.degraded!) && ghostPush(RESIDENT_GHOST_ANGRY) === 2 * ghostPush(RESIDENT_GHOST),
     `${ghostPush(RESIDENT_GHOST).toFixed(4)} / ${ghostPush(ARM_GHOST_BY_BAND.failing!).toFixed(4)}`);
 }
 

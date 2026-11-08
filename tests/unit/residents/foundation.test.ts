@@ -196,8 +196,8 @@ const look = (segs: readonly Segment[]): string => segs.map((seg) => `${seg.type
     calm.ghost === null && calm.ghostBy === null && firing.ghost !== null && firing.ghostBy === 'controller' && residentGhostSpec(hurt) === null
     && calm.controllerGhost === null && firing.controllerGhost === firing.ghost);
   const ratio = ghostPush(RESIDENT_GHOST) / ghostPush(ARM_GHOST_BY_BAND.failing!);
-  check(`the resident's push is ${(ratio * 100).toFixed(0)}% of the arm's failing controller's (R3: under it, 04's "about two thirds")`,
-    ratio < 1 && Math.abs(ratio - 0.714) < 0.01, ratio.toFixed(3));
+  check(`the resident's push is ${(ratio * 100).toFixed(0)}% of the arm's failing controller's (R3: under it; slice 8 §2.5: about half)`,
+    ratio < 1 && Math.abs(ratio - 0.476) < 0.01, ratio.toFixed(3));
   // The classic world's own branch (Track RETIRE: it goes with the classic five), on the classic ARES-VII hurt the same way.
   const classicHurt = withClassicWorld(() => createInitialState({ seed: 3 }));
   const classicThrust = classicHurt.memory.find((seg) => seg.role === 'thrust-ctrl');

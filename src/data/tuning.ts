@@ -2230,16 +2230,19 @@ export const RESIDENT_START_INTEGRITY = 40;
 // something that grew there, not deleted like a file.
 export const RESIDENT_DELETE_BASE_SEC = 1.0;
 export const RESIDENT_DELETE_PER_BLOCK_SEC = 0.5;
-// The engine bursts (plan R3, [FRAN]): 04's 14 tac s and 1 tac s, at the arm's limp amp (ARM_GHOST_BY_BAND: 0.15, Fran's
-// halving of slice 3b) instead of 04's 25%. Its push (0.15 ÷ 14 = 0.0107 per tac s) is 71% of the arm's failing
-// controller (0.015): 04's "about two thirds of an unfixed VESPER" on the arm's own scale. capabilities.ts checks it stays
-// under the failing controller's. To reverse: amp 0.25.
-export const RESIDENT_GHOST: Readonly<GhostSpec> = { meanIntervalTac: 14, amp: 0.15, durTac: 1.0, stickChance: 0 };
+// The engine bursts (plan R3, [FRAN]): 04's 14 tac s and 1 tac s, at amp 0.10 instead of 04's 25%. Its push (0.10 ÷ 14 =
+// 0.0071 per tac s) is 48% of the arm's failing controller (0.015): about half an unfixed VESPER. capabilities.ts checks it
+// stays under the failing controller's. Slice 8 (§2.5, OD 24): down from slice 5's 0.15 (the arm's limp amp, 71%), at which
+// an ignored resident stranded 3 of 10 flights (GANNET, seeds 3–11, strip and sloppy kids) at 0% FUEL; at 0.10 every ignored
+// flight locks its orbit (FUEL 2% mean, 18 points under no resident), and every answer lands within 2 points of no resident.
+// The intervals stay, so anger still doubles the rate. To reverse: amp 0.15 (0.07 would leave 5% FUEL in 8 of 10 ignored
+// flights, but only 6 points of pressure; slice-8-plan "Deviations (Track THREAT)").
+export const RESIDENT_GHOST: Readonly<GhostSpec> = { meanIntervalTac: 14, amp: 0.10, durTac: 1.0, stickChance: 0 };
 // While a DELETE runs on it (04: "a burst every 4 tac s meanwhile"): the 6 s DELETE costs about 1.5 bursts, so it is felt,
 // but never a reason not to.
-export const RESIDENT_GHOST_DELETING: Readonly<GhostSpec> = { meanIntervalTac: 4, amp: 0.15, durTac: 1.0, stickChance: 0 };
+export const RESIDENT_GHOST_DELETING: Readonly<GhostSpec> = { meanIntervalTac: 4, amp: 0.10, durTac: 1.0, stickChance: 0 };
 // After REFUSE or a timeout (04 §3.12): twice as often, for RESIDENT_ANGRY_SEC.
-export const RESIDENT_GHOST_ANGRY: Readonly<GhostSpec> = { meanIntervalTac: 7, amp: 0.15, durTac: 1.0, stickChance: 0 };
+export const RESIDENT_GHOST_ANGRY: Readonly<GhostSpec> = { meanIntervalTac: 7, amp: 0.10, durTac: 1.0, stickChance: 0 };
 export const RESIDENT_ANGRY_SEC = 30;
 // The locks (04 §3.12): phase 2's verb drill. The first 30 AI s after the wake, then every 40 (room for the flight between
 // them), each telegraphed for 3 s.

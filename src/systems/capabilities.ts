@@ -346,7 +346,7 @@ function validateCapabilityTables(): void {
     throw new Error('capabilities: ARM_GHOST_BY_BAND must push less than GHOST_BY_BAND, and less again in the degraded band');
   }
   // Slice 5 (plan R3): a corrupted resident pushes less than the arm's failing controller it is meant to be gentler than
-  // (04 §3.12: "about two thirds of an unfixed VESPER").
+  // (04 §3.12; slice 8 §2.5: about half an unfixed VESPER).
   if (!(push(RESIDENT_GHOST) < push(ARM_GHOST_BY_BAND.failing))) {
     throw new Error('capabilities: RESIDENT_GHOST must push less than ARM_GHOST_BY_BAND.failing');
   }
