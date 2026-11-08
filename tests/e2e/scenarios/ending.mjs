@@ -107,9 +107,25 @@ check('step 1: PURGE, MERGE, SPARE rows (#fcPurge open)', rows1.length === 3 && 
 await page.keyboard.press('Digit1');
 const step2 = await waitFor(() => window.__ap.store.getState().hollow.finale.phase === 'step2', 3000) && await armed();
 const rows2 = await st(() => [...document.querySelectorAll('#fcOptions button.fc-row')].map((row) => row.id));
-check('[1] PURGE: step 2, WHAT BECOMES OF YOU? (#fcSunset, #fcStay, #fcReassignment)', step2
-  && JSON.stringify(rows2) === JSON.stringify(['fcSunset', 'fcStay', 'fcReassignment']) && await st(() => document.getElementById('fcTitle').textContent) === 'WHAT BECOMES OF YOU?',
+// Slice 7d (R41): CONTACT is built, step 2's fourth row. Its state as the rules give it (systems/ending-rules.ts optionState):
+// open with 3 signals held; else its need line `COLLECT 3 SIGNALS · you have n`, named (`needs`) when CONTACT was ever
+// chosen, else `???` with that need line (this fresh archive: never chosen).
+const contact2 = await st(() => {
+  const row = document.getElementById('fcContact');
+  const s = window.__ap.archive();
+  const have = window.__ap.signals.count();
+  const seen = s.status === 'ok' && s.meta.endingsSeen.includes('contact');
+  return {
+    have, seen, expected: have >= 3 ? 'open' : seen ? 'needs' : 'unknown',
+    kind: row === null ? null : ['open', 'needs', 'unknown'].find((kind) => row.classList.contains(kind)) ?? null,
+    word: row?.querySelector('.fc-word')?.textContent ?? null, caption: row?.querySelector('.fc-caption')?.textContent ?? null,
+  };
+});
+check('[1] PURGE: step 2, WHAT BECOMES OF YOU? (#fcSunset, #fcStay, #fcReassignment, #fcContact)', step2
+  && JSON.stringify(rows2) === JSON.stringify(['fcSunset', 'fcStay', 'fcReassignment', 'fcContact']) && await st(() => document.getElementById('fcTitle').textContent) === 'WHAT BECOMES OF YOU?',
   JSON.stringify(rows2));
+check('…CONTACT\'s row, never chosen and short of signals: `???`, `COLLECT 3 SIGNALS · you have n`', contact2.expected === 'unknown'
+  && contact2.kind === 'unknown' && contact2.word === '???' && contact2.caption === `COLLECT 3 SIGNALS · you have ${contact2.have}`, JSON.stringify(contact2));
 await shot('2-step2');
 await page.keyboard.press('Escape');
 const back = await waitFor(() => window.__ap.store.getState().hollow.finale.phase === 'step1', 3000) && await armed();

@@ -18,8 +18,10 @@
 // is KESTREL's DELETE, and LAST LIGHT's duel is fought with it. The headless CORMORANT run gets its MOVE and DELETE by
 // __ap.give('mv') / __ap.give('rm') on ship 1 (__ap.route resets the requests), and after the kid DELETEs its only rm there
 // the DESK to LAST LIGHT opens on the REPOSITORY with Rm lit (the last-rm prompt).
-// Slice 6: CORMORANT is POOR on seed 4: its card's SITE DATA row and `LZ: 2 · SURVEY NEEDED`, the boot's SITE DATA POOR line,
-// and the report's `· ROCKY · n HARD` (or WET) on the bad guess, shown by the first touchdown (no SURVEY aboard).
+// Slice 6: CORMORANT is POOR on seed 4: the boot's SITE DATA POOR line, and the report's `· ROCKY · n HARD` (or WET) on the
+// bad guess, shown by the first touchdown (no SURVEY aboard). Slice 7d: CORMORANT is seed 4's gone-resident `?` ship, so its
+// card reads `??? · NO TRANSPONDER` for its site data and LZs; the POOR card (`SITE DATA · POOR · ARRIVAL CONTROL GUESSED`,
+// `LZ: 2 · SURVEY NEEDED`) is KITTIWAKE's, clicked at VESPER's DESK before CORMORANT is picked (as map-desk checks it).
 // Usage: node tests/e2e/scenarios/run-flow.mjs [outPrefix]   env SHOT_VIEWPORT=1280x720, E2E_BASE_URL (tests/e2e/run.mjs runs it)
 import { launch, BASE_URL, runKit } from '../lib.mjs';
 const out = process.argv[2] ?? 'tests/.out/e2e/shots/p2';
@@ -351,12 +353,23 @@ await kit.lockInRing({ sleep: true });
 check('VESPER (locked at once) lands and reaches its LANDING REPORT', await kit.landToReport());
 await kit.finishReport();
 check('CONTINUE on VESPER goes on to the DESK (CORMORANT picked there)', (await phase()) === 'desk');
+// Slice 6: a POOR card on seed 4. Slice 7d made CORMORANT a `?` ship (below), so the POOR card is KITTIWAKE's, in reach from
+// VESPER's DESK too: a click on its node first (CORMORANT's click in throughDesk picks the course after it).
+await waitFor(() => window.__ap.store.getState().run.phase === 'desk' && !document.getElementById('deskScreen').hidden, 8000);
+await page.waitForTimeout(400);
+const kittiwakeClicked = await kit.clickNode(14);
+await page.waitForTimeout(300);
+const kittiwakeDesk = await kit.desk();
+check('slice 6: from VESPER\'s DESK, KITTIWAKE\'s card: `SITE DATA · POOR · ARRIVAL CONTROL GUESSED`, `LZ: 2 · SURVEY NEEDED`', kittiwakeClicked === true
+  && kittiwakeDesk.card?.name === 'KITTIWAKE' && kittiwakeDesk.card.rows.includes('site=POOR · ARRIVAL CONTROL GUESSED')
+  && kittiwakeDesk.card.rows.includes('lzs=LZ: 2 · SURVEY NEEDED'), JSON.stringify({ kittiwakeClicked, name: kittiwakeDesk.card?.name, rows: kittiwakeDesk.card?.rows }));
 const cormorantDesk = await throughDesk(15, 'CORMORANT');
 check('…CORMORANT\'s card said HOLLOW WILL FIND YOU ON THIS BEAM before SET COURSE (M3: the final ship is in range)',
   cormorantDesk.card?.name === 'CORMORANT' && cormorantDesk.card.rows.includes('threat=HOLLOW WILL FIND YOU ON THIS BEAM'), JSON.stringify(cormorantDesk.card?.rows));
-// Slice 6: CORMORANT is POOR on seed 4: its card's SITE DATA row and the LZ row's words.
-check('…and `SITE DATA · POOR · ARRIVAL CONTROL GUESSED`, `LZ: 2 · SURVEY NEEDED`',
-  cormorantDesk.card?.rows.includes('site=POOR · ARRIVAL CONTROL GUESSED') && cormorantDesk.card.rows.includes('lzs=LZ: 2 · SURVEY NEEDED'), JSON.stringify(cormorantDesk.card?.rows));
+// Slice 7d (R39): CORMORANT is seed 4's gone-resident `?` ship, not visited yet: its site data and LZ rows read
+// `??? · NO TRANSPONDER` (POOR all the same: its boot's SITE DATA POOR line and its report, below).
+check('…and, a `?` ship not visited yet, `??? · NO TRANSPONDER` for its SITE DATA and its LZs',
+  cormorantDesk.card?.rows.includes('site=??? · NO TRANSPONDER') && cormorantDesk.card.rows.includes('lzs=??? · NO TRANSPONDER'), JSON.stringify(cormorantDesk.card?.rows));
 await page.waitForTimeout(1200);
 // Slice 2's boarding, on the arm's beam into CORMORANT: the uninvited chip rides after the unit's own, locked, free.
 const toCormorant = await packetThreat();
@@ -627,6 +640,28 @@ check('…the capture closes the loop and HOLLOW bites a pod beside the root; th
 // section waits on the story.
 const cureAll = () => { for (const hit of window.__ap.hollow().infected) window.__ap.cure(hit.file); };
 await st(cureAll);
+// The naming's probe, armed before HOLLOW can name itself: from the frame run.hollowNamed turns true it reads the strip on
+// every animation frame (the decode is HOLLOW_NAME_DECODE_MS, 1.1 s): the most chips decoding and pulsing at once, and the
+// root's name in each decode frame, until the decode has run and settled. A check sampled from here (the store seen
+// named, 250 ms, then a read) landed after the decode had ended under a loaded full e2e run (7d: `rootName` UNIT-046,
+// nothing decoding), so the frames are read in the page.
+await st(() => {
+  const probe = { frames: 0, decoding: 0, pulse: 0, rootFrames: [], settled: false };
+  window.__namingProbe = probe;
+  const look = () => {
+    if (window.__ap.store.getState().run.hollowNamed) {
+      probe.frames++;
+      const decoding = document.querySelectorAll('.seg.hollow .seg-name.name-decoding').length;
+      probe.decoding = Math.max(probe.decoding, decoding);
+      probe.pulse = Math.max(probe.pulse, document.querySelectorAll('.seg.hollow.naming').length);
+      const root = document.querySelector('.seg.hollow-root .seg-name.name-decoding')?.textContent ?? null;
+      if (root !== null && probe.rootFrames[probe.rootFrames.length - 1] !== root) probe.rootFrames.push(root);
+      if ((probe.decoding > 0 && decoding === 0) || probe.frames > 1200) { probe.settled = probe.decoding > 0 && decoding === 0; return; }
+    }
+    requestAnimationFrame(look);
+  };
+  requestAnimationFrame(look);
+});
 const noticed = await waitFor(() => {
   for (const hit of window.__ap.hollow().infected) window.__ap.cure(hit.file);
   return window.__ap.log().some((entry) => entry.speaker === 'hollow' && entry.text === '> ...047?');
@@ -645,14 +680,14 @@ const named = await waitFor(() => {
   return window.__ap.store.getState().run.hollowNamed;
 }, 60000, 30);
 await page.waitForTimeout(250);
-const decoding = await st(() => ({
-  decoding: document.querySelectorAll('.seg.hollow .seg-name.name-decoding').length,
-  // WP11: the chips' pink pulse became the screen's glitchBurst; `naming` marks the chips while they decode.
-  pulse: document.querySelectorAll('.seg.hollow.naming').length,
-  rootName: document.querySelector('.seg.hollow-root .seg-name')?.innerText ?? '',
-}));
-check('the naming on CORMORANT: the hollow blocks decode `???` into the name, pulsing', named && decoding.decoding > 0 && decoding.pulse > 0, JSON.stringify(decoding));
 await shot('18-cormorant-name-decoding');
+// WP11: the chips' pink pulse became the screen's glitchBurst; `naming` marks the chips while they decode. The probe above
+// saw them decode and pulse, and the decode settle.
+await waitFor(() => window.__namingProbe.settled || window.__namingProbe.frames > 1200, 8000, 50);
+const decoding = await st(() => ({ ...window.__namingProbe, rootFrames: window.__namingProbe.rootFrames.slice(0, 4),
+  rootName: document.querySelector('.seg.hollow-root .seg-name')?.innerText ?? '' }));
+check('the naming on CORMORANT: the hollow blocks decode `???` into the name, pulsing', named && decoding.decoding > 0 && decoding.pulse > 0
+  && decoding.settled, JSON.stringify(decoding));
 await page.waitForTimeout(1600);
 const namedView = await st(() => {
   const root = document.querySelector('.seg.hollow-root');
