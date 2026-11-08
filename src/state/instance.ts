@@ -29,5 +29,5 @@ const save = openPageStorage(browserStorage, seed);
 // the title card; RECEIVE TRANSMISSION boots the unit and starts the flight (systems/boot), RESUME the saved run
 // (systems/run-save.ts resumeRun).
 // The page plays the galaxy map (slice 3a): the run's arm from its seed and its run number (systems/map-run.ts createRunMap,
-// as NEW RUN's startRun does); the classic five stay the suites' fixture and __ap.ship's.
+// as NEW RUN's startRun does).
 export const store = createStore<GameState>(pageTitleState(seed, save, window.matchMedia('(prefers-reduced-motion: reduce)').matches));

@@ -18,7 +18,6 @@ import {
 import { runScore, runLanded } from '@systems/run-score';
 import { emit, NO_PAYLOAD } from '@systems/events';
 import { GHOST_LINE } from '@data/hollow-text';
-import { CLASSIC_FIVE } from '@data/classic-five';
 import { AUTHORED_SHIP_NAMES, FINAL_SHIP_NAMES } from '@data/ship-names';
 import { shipDefOf, validateShipDef } from '@data/ships';
 import { trailOf, ghostPlaceReached, mapHistoryOf, coloniesOf, notableEvents, visitsOfTrail } from '@systems/lineage';
@@ -42,13 +41,13 @@ export { LAST_CAUSES, MetaCorrupt, parseLastUnit } from '@systems/meta-parse';
 export type { MetaStorage, StorageProvider } from '@systems/storage';
 export { browserStorage } from '@systems/storage';
 // The ghost's place moved to systems/lineage.ts (slice 3c plan §2.8 item 6: pure, and read by the chart too).
-export { ghostShipIndex, ghostPlaceReached } from '@systems/lineage';
+export { ghostPlaceReached } from '@systems/lineage';
 
 // The archive (§4.5, §9 WP8 item 4): the one thing that outlives a run. A local record of how many units
 // ARRIVAL CONTROL has sent, the best SCORE, the endings seen, the run in progress and how the last unit
 // ended. The next run reads it: you are UNIT-047 + runs on wave runs + 1; HOLLOW is UNIT-046 on run 1 and a relay stranger
 // after it (slice 7c, R34: systems/traces.ts midRunHollowUnits), and a lost last unit's ghost greets you at a later boot:
-// the ship where that unit's run ended, never ship 1 (ghostShipIndex; data/hollow-text.ts).
+// in or past the layer where that unit was lost, never ship 1 (ghostPlaceReached; data/hollow-text.ts).
 //
 // • Run accounting: RECEIVE TRANSMISSION on a run's title is RUN START (archiveRunStarted): runs + 1, and
 //   activeRun is set. Each later ship's start brings activeRun up to date (where the unit is, who woke, its
@@ -97,7 +96,7 @@ export { ghostShipIndex, ghostPlaceReached } from '@systems/lineage';
 // mid-ship can still be named on the next title (WP8 deviation: the fields after startedAt). Archive v2: `landed` (was
 // `woke`), and the trail so far in place of 3a's layer / worldSlot (slice 3c foundation deviation: the trail, not a bare
 // route, so an abandoned run's stops keep their outcomes and colonies, and its route is the stops' slots). The stop of the
-// ship being flown has outcome null. null on the classic world (it keeps no trail).
+// ship being flown has outcome null.
 export interface ActiveRun {
   unit: number;
   startedAt: number;
@@ -235,7 +234,7 @@ function parseActiveRun(value: unknown): ActiveRun | null {
 // 3 → 4 (slice 7a, slice-7-plan R3, R16): truthful, so an old archive gets exactly the next run it had before slice 7:
 // • lastUnit.ending: a won or unresolved unit had one step, and CONTROL stood it by for reassignment (`purgeControl`; the
 //   MERGE ghost's `we saved you a seat`), so 'won-purge' → PURGE, 'won-merge' → MERGE, 'unresolved' → followed, each with
-//   REASSIGNMENT; who the root was is the HOLLOW it faced, the final ship its trail's last stop (none on a classic record
+//   REASSIGNMENT; who the root was is the HOLLOW it faced, the final ship its trail's last stop (none on a migrated record
 //   with no trail: its name only), and nothing else was kept (no STAY, no kit, no FUEL, no charge). Every other cause: null.
 // • endingsSeen keeps its values and gains 'reassignment' when it holds any (the old endings stood the unit by), or when
 //   the last unit's run was UNRESOLVED (R16 reads it as stood by; review m5: as recordRunEnd records a 'followed' end).
@@ -419,7 +418,7 @@ export interface RunProgress {
   landed: number;
   stats: UnitStats;
   hollowUnits: readonly number[];
-  trail: UnitTrail | null;   // the run so far (systems/lineage.ts trailOf); null on the classic world
+  trail: UnitTrail | null;   // the run so far (systems/lineage.ts trailOf); null on a migrated record
 }
 
 export function recordRunStart(meta: Readonly<Meta>, progress: RunProgress, now: number): Meta {
@@ -450,7 +449,7 @@ export interface RunEnd extends RunProgress {
   cause: LastCause;
   score: number;
   // The world update's next arm (02 §3.12), or null (or left out: a record a suite writes for its lineage alone) to keep the
-  // stored one (the classic world is never updated).
+  // stored one.
   nextArm?: ArmState | null;
   // The run's notable events (systems/lineage.ts notableEvents; at most NOTABLE_EVENTS_MAX are kept); left out, none.
   events?: readonly NotableEvent[];
@@ -534,7 +533,7 @@ export function recordAbandon(meta: Readonly<Meta>, nextArm: ArmState | null, ca
 
 // The world update for an abandoned run (3c plan risk 13: from the archive's arm, the one the run started on): its trail's
 // stops are the visits (a colony where someone landed in an LZ; the ship it was on, never ended, none). null when the run
-// can't be placed on an arm: it kept no trail (the classic world, a content reset, a migrated foundation archive), the
+// can't be placed on an arm: it kept no trail (a content reset, a migrated foundation archive), the
 // archive has no arm seed to rebuild run 1's arm from, the stored arm is not that run's, or the trail is another run's.
 export function abandonUpdate(meta: Readonly<Meta>): ArmUpdate | null {
   const trail = meta.activeRun?.trail ?? null;
@@ -663,9 +662,8 @@ export function playsTutorial(run: Readonly<Pick<RunState, 'tutorial'>>): boolea
 // is read as HOLLOW would say any other ship's name, lowercase.
 // The arm's final ships have their own names (LAST LIGHT on run 1, then data/ship-names.ts FINAL_SHIP_NAMES by run).
 function lostShipWords(shipName: string): string {
-  const ship = CLASSIC_FIVE.find((candidate) => candidate.name === shipName);
   const finalName = shipName === AUTHORED_SHIP_NAMES[AUTHORED_SHIP_NAMES.length - 1] || FINAL_SHIP_NAMES.includes(shipName);
-  return ship?.final === true || finalName ? 'the flagship' : shipName.toLowerCase();
+  return finalName ? 'the flagship' : shipName.toLowerCase();
 }
 
 // The ghost's line for a unit `us` whose last unit was `lastUnit` (§4.5's table), or null: the first run has
@@ -677,10 +675,9 @@ export function ghostLine(us: number, lastUnit: LastUnit | null): string | null 
 }
 
 // The ghost's line on this run's current boot, or null: the run has a ghost (ghostLine), it has not spoken yet this run,
-// and this ship is at or past where it speaks (ghostPlaceReached). `map` is optional so the archive's own suites can ask
-// with a bare run (the classic rule).
+// and this ship is at or past where it speaks (ghostPlaceReached).
 export function ghostLineDue(
-  run: Readonly<Pick<RunState, 'unitNumber' | 'lastUnit' | 'shipIndex' | 'ghostSpoken'> & Partial<Pick<RunState, 'map'>>>,
+  run: Readonly<Pick<RunState, 'unitNumber' | 'lastUnit' | 'shipIndex' | 'ghostSpoken' | 'map'>>,
 ): string | null {
   if (run.ghostSpoken || run.lastUnit === null || !ghostPlaceReached(run, run.lastUnit)) return null;
   return ghostLine(run.unitNumber, run.lastUnit);
@@ -849,14 +846,14 @@ export function archiveTutorialDone(store: Store<GameState>): void {
 // RUN END (systems/run.ts endRun), one step (02 §3.11): the world update runs on the arm the run played (3c plan risk 13:
 // its own map) with its route's ships done, the archive keeps the last unit, its trail, colonies, route and events and the
 // next arm, and the run learns who comes next (run.next, RUN END's bridging line). The update runs with or without an
-// archive (a headless arm run gets its run.next too); the classic world is never updated. The run save is cleared by the
+// archive (a headless run gets its run.next too). The run save is cleared by the
 // caller (systems/run.ts endRun, right after: save-write.ts sits below this file).
 // Never throws from the update (review fix, minor 2: a throw here left RUN END half-ended, the phase never set): an update
 // that throws is said loudly on the console, and the next arm is a fresh roll for the next run from this run's start year
 // with its final-ship lineage (runEndUpdate), said once on the title (notes.armReset).
 export function archiveRunEnded(store: Store<GameState>, cause: RunEndCause): void {
   const state = store.getState();
-  const after = state.run.map.world === 'arm' ? runEndUpdate(state.run) : null;
+  const after = runEndUpdate(state.run);
   if (hasArchive(state)) {
     const current = requireSession();
     const ended = recordRunEnd(current.meta, {

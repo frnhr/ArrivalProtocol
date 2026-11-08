@@ -182,7 +182,7 @@ export function surveyPlotModel(
 
 // The SHIP CARD's SITE DATA row for `slot` (desk.ts cardModel's reserved 'site' row, R15): `SITE DATA · GOOD`, `POOR ·
 // ARRIVAL CONTROL GUESSED` (warn), and after the ship `POOR · LZ-B MOVED` (good) / `SURVEYED, KEPT` / `NOT SURVEYED` (review
-// m11: a POOR ship played before v6 has no record, and reads NOT SURVEYED, never GOOD). null: no row (the classic five).
+// m11: a POOR ship played before v6 has no record, and reads NOT SURVEYED, never GOOD). null: no row.
 export interface SurveyCardRow {
   label: string;
   value: string;
@@ -192,7 +192,7 @@ export interface SurveyCardRow {
 export function surveyCardRow(state: Readonly<GameState>, slot: number): SurveyCardRow | null {
   const map = state.run.map;
   // The row is POOR site data's (plan R19: the card rows wait on SURVEY_BUILT.poor with the rest of it).
-  if (map.world !== 'arm' || !SURVEY_BUILT.poor) return null;
+  if (!SURVEY_BUILT.poor) return null;
   const row = (value: string, tone: SurveyCardRow['tone'] = 'plain'): SurveyCardRow => ({ label: T.card.label, value, tone });
   const site = siteDataOf({ site: shipSummaryAt(map, slot).reserved?.site ?? 'good' });
   if (site === 'good') return row(T.card.good);
@@ -209,10 +209,10 @@ export function surveyCardRow(state: Readonly<GameState>, slot: number): SurveyC
 
 // TRAINING's AHEAD row's second line for the selected ship `slot` (training-model.ts TrainingModel.aheadSite, R15): `SITE
 // DATA POOR · SURVEY FINDS BETTER SITES` when SURVEY's branch is open at this desk, or the unit holds it or is training it,
-// else `SITE DATA POOR · ARRIVAL CONTROL GUESSED THE LZs`; null on a GOOD ship, none selected, or the classic five.
+// else `SITE DATA POOR · ARRIVAL CONTROL GUESSED THE LZs`; null on a GOOD ship or none selected.
 export function surveyAheadLine(state: Readonly<GameState>, slot: number | null): string | null {
   const map = state.run.map;
-  if (slot === null || map.world !== 'arm') return null;
+  if (slot === null) return null;
   if (siteDataOf({ site: shipSummaryAt(map, slot).reserved?.site ?? 'good' }) !== 'poor') return null;
   const open = openBranchesAt(state, visitNow(state.run)).includes('survey')
     || fileLevel(state.memory, 'survey') !== null || state.run.skills.pending.some((purchase) => purchase.skill === 'survey');

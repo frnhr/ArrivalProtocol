@@ -7,7 +7,7 @@
 // • the CONTINUE path: ship 1 flown to its WAKE REPORT with the pool spent → HALCYON with max(12, 6·★).
 import { check, finish } from '../../wp1/harness';
 import { createHarness7 } from '../harness7';
-import { continueAfterLoss, continueAfterReport } from '../../support/classic-flow';
+import { continueAfterLoss, continueAfterReport } from '../../support/desk';
 import { packUnit, layoutCarried, arrivalCharge } from '@systems/carry';
 import { receiveTransmission } from '@systems/boot';
 import { installTool } from '@systems/licences';
@@ -17,13 +17,14 @@ import { actionRepair } from '@state/actions';
 import { chargeLeft, getByRole, getRedundancy } from '@state/selectors';
 import { transmitModel } from '@systems/transmit';
 import { CHARGE_ARRIVAL_FLOOR, STAR_CHARGE_BONUS } from '@data/tuning';
-import { classicShip, CLASSIC_HOPS } from '@data/classic-five';
-import { nominalShipThreat } from '@systems/threat-plan';
+import { phase2HalcyonDef } from '../../support/hollow-world';
 import { layoutOf } from '@data/memory';
+import { fixtureVerdict, fixtureHop } from '../../support/arm-ship';
 
 const h = createHarness7(5, { soulsFound: false });
 const state = () => h.store.getState();
-const halcyon = classicShip(1);
+// Track RETIRE: HALCYON as phase 2 had it (FULL: support/hollow-world), on the worked route's link into it.
+const halcyon = phase2HalcyonDef();
 
 // Spends the pool for real: one point left, a REPAIR on a hurt file, the op ends with NO CHARGE and the
 // pool's blocks become free space.
@@ -50,13 +51,13 @@ const memoryValid = (): boolean => {
   h.store.update((d) => { d.run.phase = 'flight'; d.run.simulationRetryUsed = true; });
   spendAllCharge();
   check('the pool is gone from memory once its last point is spent', getRedundancy(state()) === undefined);
-  const packet = packUnit(state().memory, CLASSIC_HOPS[halcyon.slot]!.linkBlocks, []);
+  const packet = packUnit(state().memory, fixtureHop(1).linkBlocks, []);
   check('…the packet carries no pool (charge null, 0 carried)', packet.charge === null && packet.chargeCarried === 0);
   const blocks = arrivalCharge(packet.chargeCarried, STAR_CHARGE_BONUS).blocks;
   let layoutError = '';
   let pool: ReturnType<typeof getRedundancy> | null = null;
   try {
-    const layout = layoutCarried(packet, blocks, halcyon, nominalShipThreat(1));
+    const layout = layoutCarried(packet, blocks, halcyon, fixtureVerdict(1));
     const found = layout.racks.segs.find((seg) => seg.type === 'redundancy');
     pool = found && found.type === 'redundancy' ? found : null;
   } catch (error) { layoutError = (error as Error).message; }

@@ -31,7 +31,7 @@ export { huntedSkill };
 
 // Does the root hunt on this ship (REASSIGNMENT held and built, on the final ship)?
 export function huntsHere(state: Readonly<Pick<GameState, 'run'>>): boolean {
-  return state.run.map.world === 'arm' && finalTraces(state.run).reassignment && onFinalShip(state.run);
+  return finalTraces(state.run).reassignment && onFinalShip(state.run);
 }
 
 // The file HOLLOW's RM goes for first now (a segment id), or null: no hunt (no REASSIGNMENT trace, not the final ship, no

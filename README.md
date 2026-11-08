@@ -12,12 +12,14 @@ rendering; the readouts carry the drama.
 - **SHIP (amber):** fly a two-body orbital capture. Turn the predicted path green, inside the launch band, then
   land the colony's pods on the planet's landing zones. Presets, hold SPACE to burn, a guidance line that always names the next step, and a director that paces
   time (CRUISE, TACTICAL, SKIP).
-- **MIND (blue):** 384 blocks of memory in six racks. Your tools are files (SCAN, REPAIR, MOVE, DELETE, COPY, SWAP).
-  HOLLOW eats the file next to it; four free blocks stop it.
+- **MIND (blue):** up to 384 blocks of memory in up to six racks (a ship's memory class: FULL, COMPACT or TIGHT). Your
+  tools are files (SCAN, REPAIR, MOVE, DELETE, COPY, SWAP); REPAIR comes with the run, the rest by request from ARRIVAL
+  CONTROL's repository. HOLLOW eats the file next to it; four free blocks stop it.
 - The two halves pull on each other: burning feeds HOLLOW, damaged files weaken the engine and the instruments, and the
   orbit's fit decides where the pods can be launched from.
-- One run is five ships (ARES-VII, HALCYON, KESTREL, VESPER, LAST LIGHT), each adding one rule, and it ends in a duel
-  with HOLLOW and a choice: PURGE or MERGE.
+- One run crosses one arm of 20 worlds, 5–8 ships of it chosen at the DESK between ships (run 1's arm is authored; ARES-VII,
+  HALCYON, KESTREL, VESPER and LAST LIGHT are its five written ships), and it ends at the final ship in a duel with HOLLOW
+  and a choice: PURGE or MERGE. The next run flies the same arm, moved on.
 
 `DESIGN.md` is the short design; `docs/design-v2.md` is the full one; `docs/playtest-checklist.md` walks a full run.
 `docs/PHASE3.md` is the direction for the next phase.

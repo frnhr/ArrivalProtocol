@@ -31,7 +31,6 @@ import { buildShipMemory, FRESH_UNIT_RACK_E, FRESH_UNIT_RACK_F, MEMORY_LAYOUTS }
 import { assertMemoryInvariants, segmentStarts } from '@systems/memory-ops';
 import { tallyPreview, beamSeedsInMemory } from '@state/threat-selectors';
 import { integrityState } from '@state/selectors';
-import { nominalShipThreat } from '@systems/threat-plan';
 import { SEEDS_ONLY_DEF } from '@data/threats';
 import { SEED_WORDS_POOL, THREAT_TEXT, eccSeedsLine } from '@data/threat-text';
 import { SEED_ALERT_ID } from '@systems/alerts';
@@ -50,6 +49,7 @@ import { createInitialState as fixtureState } from '@state/initial';
 import { currentShip } from '@systems/map-run';
 import type { BeamSeedSource } from '@/types/threat';
 import type { LinkNoise } from '@/types/threat';
+import { fixtureVerdict } from '../support/arm-ship';
 
 const KESTREL = 2;
 // Track RETIRE: run 1's arm KESTREL (COMPACT: the unit's racks E–F from block 192), its link the worked route's hop from
@@ -113,7 +113,7 @@ function freshPacket(): Packet {
   const chargeBefore = packet.chargeCarried;
   packet.seeds = rollBeamSeeds(packet, KESTREL_SEEDS, true, createRng(7));
   check('seeds ride free: neither the files\' blocks nor the charge that crosses change', packet.filesBlocks === filesBefore && packet.chargeCarried === chargeBefore);
-  const layout = layoutCarried(packet, packet.chargeCarried, kestrel, nominalShipThreat(KESTREL), '???');
+  const layout = layoutCarried(packet, packet.chargeCarried, kestrel, fixtureVerdict(KESTREL), '???');
   const segs = layout.racks.segs;
   const at = segs.findIndex((seg) => seg.name === 'Telemetry');
   const [gap, seed, wall] = [segs[at + 1], segs[at + 2], segs[at + 3]];
@@ -135,7 +135,7 @@ function freshPacket(): Packet {
   const crowded: Packet = { ...packet, seeds: [...packet.seeds, { targetId: packet.rackE.find((s) => s.role === 'autopilot')!.id, targetName: 'Autopilot', words: 'x', disguise: null }] };
   const filler: Segment = { id: 'big-skill', name: 'Filler', type: 'skill', size: room - packet.filesBlocks - CHARGE_ARRIVAL_FLOOR - BEAM_SEED_LAYOUT_BLOCKS - 2, integrity: 100 } as unknown as Segment;
   crowded.rackE = [...crowded.rackE, filler];
-  const tight = layoutCarried(crowded, 40, kestrel, nominalShipThreat(KESTREL), '???');
+  const tight = layoutCarried(crowded, 40, kestrel, fixtureVerdict(KESTREL), '???');
   check('the charge floor comes before the seeds: the first seed fits, the charge above the floor gets what is left',
     tight.chargeBlocks >= CHARGE_ARRIVAL_FLOOR && tight.racks.segs.filter((s) => s.type === 'hollow').length === 1, `charge ${tight.chargeBlocks}`);
   check('…the seed with no room is a stray (the no-room rule)', tight.racks.strays?.length === 1 && tight.seeds.length === 2);

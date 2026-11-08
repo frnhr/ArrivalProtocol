@@ -20,15 +20,12 @@ import { patchInstalls } from '@systems/repository';
 
 export type MapBootLineKind = 'sleep' | 'receiver-closed' | 'receiver' | 'ecc-sleep' | 'site-data';
 
-// The hop that brought the unit to this ship, on the arm (null on a first ship and on the classic world, whose hops are
-// fixtures with no years: always switch on `world` before currentStop).
+// The hop that brought the unit to this ship (null on a first ship).
 function arrivalHop(state: Readonly<GameState>) {
-  if (state.run.map.world !== 'arm') return null;
   return currentStop(state.run).hop;
 }
 
-// Which map lines this boot types. The classic world's hops have no years, so ECC corrects nothing and nothing here shows
-// on its boots. On the arm: 'sleep' on every ship a beam reached (the route's stop has a hop; the unit slept from arrival
+// Which map lines this boot types: 'sleep' on every ship a beam reached (the route's stop has a hop; the unit slept from arrival
 // to approach), 'receiver' on a TIGHT ship (a small ship has a small receiver: the room is the first thing it says), and
 // 'ecc-sleep' when ECC corrected anything.
 export function mapBootLines(state: Readonly<GameState>): MapBootLineKind[] {
@@ -36,8 +33,8 @@ export function mapBootLines(state: Readonly<GameState>): MapBootLineKind[] {
   const hop = arrivalHop(state);
   if (hop !== null && state.run.arrival !== null) lines.push('sleep');
   // Slice 5 (04 §3.15, plan R9): every resident ship, of a kind this build plays (the slice's def is null otherwise).
-  if (state.run.map.world === 'arm' && state.resident.def !== null) lines.push('receiver-closed');
-  if (state.run.map.world === 'arm' && state.level.memoryClass === 'TIGHT') lines.push('receiver');
+  if (state.resident.def !== null) lines.push('receiver-closed');
+  if (state.level.memoryClass === 'TIGHT') lines.push('receiver');
   const corrected = state.run.arrival?.eccCorrected ?? 0;
   if (corrected > 0) lines.push('ecc-sleep');
   // Slice 6 (02 §4, plan §2.4): `> SITE DATA POOR · ARRIVAL CONTROL GUESSED 2 LZs` on a planet that plays POOR (the slice's
@@ -73,8 +70,7 @@ export function mapBootLineText(kind: MapBootLineKind, state: Readonly<GameState
 }
 
 // The overflow line on the arm (01 §3.16: `> CHARGE OVERFLOW · 26 LOST · NO ROOM ON WAYFARER`): phase 2's line names the
-// ship whose room it was. data/script.ts's 'overflow' line reads it on the arm (Track DESK's patch; the classic world keeps
-// phase 2's words).
+// ship whose room it was. data/script.ts's 'overflow' line reads it (Track DESK's patch).
 export function mapOverflowLineText(state: Readonly<GameState>): string {
   const lost = state.run.arrival?.chargeOverflowLost ?? 0;
   if (lost <= 0) throw new Error('mapOverflowLineText: no charge overflowed');
@@ -95,7 +91,7 @@ export function mapOverflowLineText(state: Readonly<GameState>): string {
 // a second patch among them (review nit: each patch had a line of its own, so three patches and a file made four lines; a
 // second patch upgrades nothing the first did not, and its folded line still installs it).
 export function deliveryBootLines(state: Readonly<GameState>): ArrivalDelivery[][] {
-  const deliveries = state.run.map.world === 'arm' ? state.run.arrival?.deliveries ?? [] : [];
+  const deliveries = state.run.arrival?.deliveries ?? [];
   if (deliveries.length <= DELIVERY_BOOT_LINES_MAX) return deliveries.map((delivery) => [delivery]);
   const firstPatch = deliveries.find((delivery) => delivery.file === 'repair-v2');
   const head = firstPatch === undefined ? [] : [firstPatch];

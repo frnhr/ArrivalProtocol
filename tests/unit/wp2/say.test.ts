@@ -12,7 +12,7 @@ import {
 import type { TextCtx } from '@systems/director';
 import type { Speaker } from '@state/schema';
 import { MAX_LINE_CHARS, NAME_MAX_CHARS } from '@data/tuning';
-import { CLASSIC_FIVE } from '@data/classic-five';
+import { createRunMap } from '@systems/map-run';
 import { createInitialState } from '@state/initial';
 
 const ctx: TextCtx = { vars: WORST_CASE_VARS };
@@ -46,7 +46,8 @@ for (const { where, text } of rendered) {
 // The worst-case placeholders really are the worst case.
 check('worst case: unit 999 renders as UNIT-999', unitName(WORST_CASE_VARS.unit) === 'UNIT-999');
 check('worst case: the ship name is NAME_MAX_CHARS long', WORST_CASE_VARS.ship.length === NAME_MAX_CHARS);
-check('worst case: every real ship name fits NAME_MAX_CHARS', CLASSIC_FIVE.every((ship) => ship.name.length <= NAME_MAX_CHARS), CLASSIC_FIVE.map((ship) => ship.name).join(', '));
+const run1Names = createRunMap({ wave: 1 }, 1).arm.map((ship) => ship.name);
+check('worst case: every real ship name fits NAME_MAX_CHARS (run 1\'s arm)', run1Names.every((name) => name.length <= NAME_MAX_CHARS), run1Names.join(', '));
 check('worst case: HOLLOW named is longer than ???', WORST_CASE_VARS.hollow.length >= hollowLabel({ ...createInitialState({ seed: 1 }).run, hollowUnits: [998], hollowNamed: false }).length);
 
 // §3.5: stamps are terse capitals without "!".

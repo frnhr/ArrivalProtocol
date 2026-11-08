@@ -2,7 +2,7 @@
 // about a second. Nothing here is a resident's behaviour (the tracks' suites own that); it checks the contract they build on:
 // • what this build plays: one `built` check per kind, each on its own line (Track WARDEN edits `corrupted`'s, Track KIN
 //   `left`'s and `sleeping`'s);
-// • ShipDef.resident from the map's reservations (run 1, seed 7: the plan's §1.2 table), none on the classic five, the first
+// • ShipDef.resident from the map's reservations (run 1, seed 7: the plan's §1.2 table), the first
 //   or the final ship; the rack-A files per kind under withResidentsBuilt (after Cargo Ctrl, a WALL's width free behind them,
 //   the slice's one machine, the same files on every build), and none while a kind is not built;
 // • the RECEIVER CLOSED boot line (after the sleep line, before the unpack, amber) on a built resident's ship only;
@@ -16,7 +16,6 @@
 //   and its SHIP DONE records LOOKOUT and decodes; the codec's v5 refusals (an open lock, an offered DEAL, an offering
 //   sleeper, a machine of another kind, a met resident off the route or not the map's, too many signals);
 // • the FOUNDATION's words fit the strip.
-import { withClassicWorld } from '../support/classic-fixture';
 import { readFileSync } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
 import { fileURLToPath } from 'node:url';
@@ -34,14 +33,13 @@ import { RESIDENT_TEXT, RESIDENT_REFUSAL, pinnedRefusal } from '@data/resident-t
 import { WARDEN_TEXT } from '@data/warden-text';
 import { KIN_TEXT } from '@data/kin-text';
 import { RACK_A, layoutOf } from '@data/memory';
-import { CLASSIC_FIVE } from '@data/classic-five';
 import { TYPE_LABELS } from '@data/type-labels';
 import { LAUNCH_REFUSAL_TEXT } from '@data/landing-text';
-import { shipDefAt, shipLaunchYear, classicRunMap } from '@systems/map-run';
+import { shipDefAt, shipLaunchYear } from '@systems/map-run';
 import { receiverClosed } from '@systems/delivery-rule';
 import { mapBootLines } from '@systems/map-boot';
 import { bootLinePlan, bootLine, bootLineTone, speakerTag } from '@data/script';
-import { capabilitiesNow, ghostPush, ghostWithoutSwap } from '@systems/capabilities';
+import { capabilitiesNow, ghostPush } from '@systems/capabilities';
 import { residentGhostSpec, residentDealOnThisShip, lockedDrivers } from '@state/resident-selectors';
 import { isLaunchable, driverCanEverLaunch, driversThatCanEverLaunch, launchQueue, landingView, launchRefusal } from '@systems/landing-rules';
 import { mountSay, sayChoice, openChoiceEntry, choiceTimerRunning, withdrawChoice, CHANNEL_OF, lineTypeCps } from '@systems/say';
@@ -90,12 +88,11 @@ const map7 = run1Map(SEED);
     '15 CORMORANT left/unknown LOOKOUT', '16 PROVIDENCE corrupted/unknown PILOT',
   ];
   check('ShipDef.resident is the map\'s reservation (run 1, seed 7: plan §1.2\'s table, the fragments on the notes)', isDeepStrictEqual(table, want), table.join(' | '));
-  check('…none on the first or the final ship, nor on the classic five', shipDefAt(map7, 0).resident === null && shipDefAt(map7, 19).resident === null
-    && CLASSIC_FIVE.every((ship) => ship.resident === null));
+  check('…none on the first or the final ship', shipDefAt(map7, 0).resident === null && shipDefAt(map7, 19).resident === null);
   check('receiverClosed stays false on every slot (R10: no closed receiver spoils a sleeper or a surprise on the map)',
     map7.arm.every((ship) => !receiverClosed(map7, ship.slot)));
-  check('shipLaunchYear: run 1\'s ships launched in 2240 (05 §3.6: `aboard since 2240`); the classic world has none (review m7)',
-    map7.arm.every((ship) => shipLaunchYear(map7, ship.slot) === 2240) && throws(() => shipLaunchYear(classicRunMap(1, 0, 1), 0)));
+  check('shipLaunchYear: run 1\'s ships launched in 2240 (05 §3.6: `aboard since 2240`); a slot the arm does not have throws',
+    map7.arm.every((ship) => shipLaunchYear(map7, ship.slot) === 2240) && throws(() => shipLaunchYear(map7, map7.arm.length)));
   check('the sleeper\'s offer answers to R, H and T (review m1: no \'game\' key)', SLEEPER_JOB_KEYS.drops === 'R'
     && SLEEPER_JOB_KEYS.wall === 'H' && SLEEPER_JOB_KEYS.mend === 'T');
 }
@@ -198,11 +195,6 @@ const look = (segs: readonly Segment[]): string => segs.map((seg) => `${seg.type
   const ratio = ghostPush(RESIDENT_GHOST) / ghostPush(ARM_GHOST_BY_BAND.failing!);
   check(`the resident's push is ${(ratio * 100).toFixed(0)}% of the arm's failing controller's (R3: under it; slice 8 §2.5: about half)`,
     ratio < 1 && Math.abs(ratio - 0.476) < 0.01, ratio.toFixed(3));
-  // The classic world's own branch (Track RETIRE: it goes with the classic five), on the classic ARES-VII hurt the same way.
-  const classicHurt = withClassicWorld(() => createInitialState({ seed: 3 }));
-  const classicThrust = classicHurt.memory.find((seg) => seg.role === 'thrust-ctrl');
-  if (classicThrust?.type === 'ship') classicThrust.integrity = 30;
-  check('…ghostWithoutSwap reads only a controller\'s bursts (the classic world: never)', !ghostWithoutSwap(classicHurt));
 }
 
 // --- The landing: POD LOCKED (R7) ------------------------------------------------------------------------------------------------

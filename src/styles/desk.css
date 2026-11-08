@@ -516,7 +516,6 @@ body.reduced-motion .title-save-btn.primary { animation: none; }
 
 /* ── The REPOSITORY (RepositoryWindow): AVAILABLE rows with their ETA and tag, IN TRANSIT, RESTRICTED (locked) ── */
 .desk-repo { display: flex; flex-direction: column; gap: 4px; padding-top: 10px; }
-.rp-classic { margin-top: 30px; text-align: center; font-size: 11px; letter-spacing: 0.16em; color: var(--desk-dim); }
 .rp-warn {
   padding: 6px 8px; border: 1px solid var(--desk-warn); color: var(--desk-warn);
   font-size: 11px; letter-spacing: 0.1em; font-weight: 700;

@@ -64,7 +64,7 @@ const hearNothing = (): void => { heard.wake = []; heard.woken = []; heard.job =
 // ARES-VII → PETREL → CURLEW, CURLEW's boot played into its flight; then calm, and DELETE and MOVE given.
 setLandingMode('manual');
 h.newRun(SEED);
-startRun(h.store, SEED, FIRST_RUN_LINEAGE, 'arm');
+startRun(h.store, SEED, FIRST_RUN_LINEAGE);
 if (!receiveTransmission(h.store)) throw new Error('sleeper: not on the title');
 until(() => st().run.phase === 'flight', 30);
 for (const slot of [1, 7]) {

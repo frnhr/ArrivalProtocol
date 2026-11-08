@@ -308,8 +308,8 @@ export function lineVars(state: Readonly<GameState>, pred: Prediction): LineVars
     colonists: state.mission.colonists,
     podsTotal: state.landing.pods.length,
     podsDown: state.landing.pods.filter((record) => record.fate.kind === 'down').length,
-    // The title's line (05 §3.12): the final ship's distance from SOL (an end slot's world: 180 LY on run 1, and on the
-    // classic world, whose LAST LIGHT sits at New Haven too) and the run's start year.
+    // The title's line (05 §3.12): the final ship's distance from SOL (an end slot's world: 180 LY on run 1) and the
+    // run's start year.
     distanceLy: solLy(END_SLOTS[0]!),
     year: state.run.map.startYear,
     nextApsis: pred.burnPoint?.event === 'apo' ? '▲' : '▼',
@@ -702,7 +702,6 @@ export function arrivalParts(carried: number, starCredit: number, stars: number,
 
 export const TRANSMIT_TEXT = {
   title: 'TRANSMIT',
-  next: (ship: string, colonists: number, ly: number): string => `NEXT: ${ship} · ${formatCount(colonists)} COLONISTS · ${ly} LY`,
   // The link's own line. `roomBinds`: the next ship's room will squeeze the charge (slice 3a): it all crosses, but it does
   // not all fit there, so the line says CROSSES, not FITS (the review's M1). Files over the link (B1) say so.
   packet: (link: number, files: number, held: number, carried: number, roomBinds = false): string => {
@@ -1023,10 +1022,9 @@ export function bootLinePlan(state: Readonly<GameState>, skillLines: number): Bo
   const receiver: BootLineKind[] = map.includes('receiver') ? ['receiver'] : [];
   const eccSleep: BootLineKind[] = map.includes('ecc-sleep') ? ['ecc-sleep'] : [];
   const siteData: BootLineKind[] = map.includes('site-data') ? ['site-data'] : [];
-  // 3b: the mail and HOLLOW's reading line (arm only: the classic world has neither), around the log key line.
-  const arm = state.run.map.world === 'arm';
-  const reading: BootLineKind[] = arm && readingLineDue(state) ? ['reading'] : [];
-  const inbox: BootLineKind[] = arm && newMessagesAtBoot(state).length > 0 ? ['inbox'] : [];
+  // 3b: the mail and HOLLOW's reading line, around the log key line.
+  const reading: BootLineKind[] = readingLineDue(state) ? ['reading'] : [];
+  const inbox: BootLineKind[] = newMessagesAtBoot(state).length > 0 ? ['inbox'] : [];
   // Slice 7c: the traces' lines (Track TRACE's) and the lineage's (Track LINEAGE's); none until their tracks build them.
   const traces: BootLineKind[] = traceBootLines(state).map((line) => line.kind);
   const lineage: BootLineKind[] = [
@@ -1059,7 +1057,7 @@ export function bootLinePlan(state: Readonly<GameState>, skillLines: number): Bo
 // says by itself. From the arrival report (what the layout put down: the sum less the overflow), not the live pool.
 function zeroChargeArrival(state: Readonly<GameState>): boolean {
   const arrival = state.run.arrival;
-  if (arrival === null || state.run.map.world !== 'arm' || layoutOf(state).chargeFloor !== 0) return false;
+  if (arrival === null || layoutOf(state).chargeFloor !== 0) return false;
   const laid = arrival.chargeCarried + arrival.starCredit + arrival.cardCharge + arrival.giftCharge + arrival.chargeFloorAdded - arrival.chargeOverflowLost;
   return laid === 0;
 }
@@ -1144,7 +1142,7 @@ export function bootLine(kind: BootLineKind, state: Readonly<GameState>, vars: L
     case 'overflow':
       if (arrival === null) throw new Error('bootLine: an overflow line on a ship nothing transmitted to');
       // On the arm the line names the ship whose room had none left (01 §3.16, map-boot.ts).
-      return state.run.map.world === 'arm' ? mapOverflowLineText(state) : chargeOverflowLine(arrival.chargeOverflowLost);
+      return mapOverflowLineText(state);
     case 'skill': throw new Error('bootLine: a skill line is the boot\'s own (skill-files.ts SkillBootLine)');
     case 'hollow': {
       const line = bootHollowLine(state);
@@ -2051,7 +2049,7 @@ const MISSING_TOOL_RULES: readonly GuideRule[] = [
     priority: 'tutorial',
     once: true,
     maxShownSec: SEED_LESSON_SHOW_SEC,
-    activeWhen: (ctx) => ctx.state.run.map.world === 'arm' && isLive(ctx) && seedsInMemory(ctx.state.memory).length > 0
+    activeWhen: (ctx) => isLive(ctx) && seedsInMemory(ctx.state.memory).length > 0
       && !hasUsableTool(ctx.state.memory, 'delete', 'counts'),
     text: () => REPO_TEXT.noRm,
   },
@@ -2061,7 +2059,7 @@ const MISSING_TOOL_RULES: readonly GuideRule[] = [
     priority: 'tutorial',
     once: true,
     maxShownSec: SEED_LESSON_SHOW_SEC,
-    activeWhen: (ctx) => ctx.state.run.map.world === 'arm' && debrisWillHitDrivers(ctx) && !hasUsableTool(ctx.state.memory, 'move', 'counts'),
+    activeWhen: (ctx) => debrisWillHitDrivers(ctx) && !hasUsableTool(ctx.state.memory, 'move', 'counts'),
     text: () => REPO_TEXT.noMv,
   },
 ];
@@ -2194,7 +2192,7 @@ function atThrustCtrlFile(ctx: DirectorCtx): boolean {
 // Slice 3b (plan risk 1; review: one reading of "has Swap"): the THRUST CTRL pip's way leads to SWAP, which on the arm comes
 // only from the repository (on the worked route it is 4 years late for VESPER). Both steps wait for a Swap aboard
 // (selectors swapAboard: a usable file, a copy being eaten included, WP10 fix round 1); with none, the no-Swap line speaks
-// instead (repository.ts noSwapForGhost). The classic world licenses SWAP with the first burst, so its lessons are unchanged.
+// instead (repository.ts noSwapForGhost).
 function swapInHand(ctx: DirectorCtx): boolean {
   return swapAboard(ctx.state);
 }
@@ -2265,7 +2263,7 @@ const GHOST_NOSWAP_LESSON = 'ghost-noswap';
 // REPAIR is in hand's reach and some charge is left.
 function thrustRepairPossible(ctx: DirectorCtx): boolean {
   const file = getByRole(ctx.state, 'thrust-ctrl');
-  return file !== null && repairableShipFile(ctx.state, file) && file.integrity < repairCeiling(ctx.state, file)
+  return file !== null && repairableShipFile(file) && file.integrity < repairCeiling(file)
     && hasUsableTool(ctx.state.memory, 'repair', 'counts') && chargeLeft(ctx.state) >= 1;
 }
 

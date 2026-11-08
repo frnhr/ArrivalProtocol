@@ -23,7 +23,7 @@ import {
 
 // The INBOX (05-story §3.3–§3.5, §4; slice-3b-plan §2.4): messages are DERIVED, never queued. inboxMessages builds them
 // from the route, run.ships (colony, landed, featured), the map and the lineage, up to the current stop. Stored state is
-// only run.inbox.read and run.log.toldReading, which 3c saves. The arm only: the classic world has no mail.
+// only run.inbox.read and run.log.toldReading, which 3c saves.
 // Two timing rules (the foundation's review follow-up):
 // • broadcasts (the welcome, the policy reminders, the arm-complete letter) ride the unit's own beam: they are read at the
 //   boot they belong to, RECEIVED = sent + the ship's distance from SOL;
@@ -70,7 +70,6 @@ function derivationKey(run: Readonly<RunState>): string {
 
 // Every message the unit has received so far this run, oldest boot first (within a boot, by year received).
 export function inboxMessages(state: Readonly<GameState>): InboxMessage[] {
-  if (state.run.map.world !== 'arm') return [];
   const key = derivationKey(state.run);
   if (key !== memoKey) {
     memo = deriveMessages(state.run);
@@ -369,7 +368,6 @@ export function markMessageRead(store: Store<GameState>, id: string): void {
 // first instance of letters to the unit ahead"), read by 047, who is not 46. From run 2: one letter per colony of the last
 // unit's route (systems/lineage.ts letterSourcesFromTrail, from the archive's trail), at most one per colony per run.
 export function letterSources(run: Readonly<RunState>): LetterSource[] {
-  if (run.map.world !== 'arm') return [];
   if (run.map.run !== 1) return letterSourcesFromTrail(run);
   const meridian = UNIT_046_TRAIL.find((mark) => mark.colony === 'MERIDIAN');
   if (meridian === undefined || meridian.colony === null) throw new Error('letterSources: 046\'s written trail lost MERIDIAN');

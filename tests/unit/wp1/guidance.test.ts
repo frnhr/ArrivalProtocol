@@ -12,7 +12,7 @@ import { validateShipDef, type ShipDef } from '@data/ships';
 import { stateFromElements, elementsFromState, type Vec2 } from '@/types/orbit';
 import type { PresetMode, SasMode } from '@state/schema';
 import { MAX_LINE_CHARS } from '@data/tuning';
-import { CLASSIC_FIVE } from '@data/classic-five';
+import { fixtureShip } from '../support/arm-ship';
 
 const harness = createHarness(21);
 const store = harness.store;
@@ -180,7 +180,7 @@ check('formatTac rounds up to whole seconds', formatTac(163.25) === '2:44' && fo
 
 // --- Ship validation ---------------------------------------------------------------------------
 {
-  const base = CLASSIC_FIVE[0]!;
+  const base = fixtureShip(0);
   const broken = (patch: (ship: ShipDef) => void): boolean => {
     const ship = structuredClone(base) as ShipDef;
     patch(ship);

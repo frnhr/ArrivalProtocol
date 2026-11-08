@@ -1,8 +1,8 @@
 // Slice 5 (Track KIN, a lead patch requested: see slice-5-plan.md "Deviations (Track KIN)"): the zone checks data/ships.ts
 // runs at load, moved out of systems/zones.ts unchanged. data/ships.ts imported systems/zones for them, and that system's
 // imports (state/actions → systems/residents → the residents' modules) put every resident module inside data/ships.ts's own
-// load: a resident module that reached data/classic-five.ts then ran classic-five's load-time checks before data/ships.ts had
-// run. Pure: no system imports.
+// load: a resident module that reached the classic five's data (retired since, Track RETIRE) then ran its load-time checks
+// before data/ships.ts had run. Pure: no system imports.
 import type { ShipFlightDef } from '@data/ships';
 import type { ZoneDef } from '@/types/zone';
 import type { MemoryLayout } from '@/types/map';

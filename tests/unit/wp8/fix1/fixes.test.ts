@@ -10,13 +10,15 @@
 // • A write failing mid-run: one TERMINAL line `ARCHIVE OFFLINE — this unit's memory will not be kept`.
 // • A FIREWALL to place: the strip's line (`MOVE your FIREWALL (FW) into the GAP next to ???`, the MOVE chip,
 //   then the FW chip), the MOVE preview's `SEALS THIS SIDE ✓` over the GAP, and the line done once it holds.
-import '../../support/classic-world';
+// Track RETIRE (phase 3): on the arm. Run 1 is the authored arm; every later page's run is a fresh roll of its own, so the
+// desk sets course along that arm's shortest climbing route (support/desk climbingRoutes), and the ship after ship 1 is
+// that roll's (on seed 15's run, a TIGHT ship: the FIREWALL lesson is checked on phase 2's HALCYON racks laid on it).
 import { phase2Halcyon } from '../../support/hollow-world';
 import { check, finish } from '../../wp1/harness';
 import { createHarness7 } from '../../wp7/harness7';
 import { receiveTransmission, skipBoot, bootSkipWaits } from '@systems/boot';
-import { startRun, lossPlan } from '@systems/run';
-import { continueAfterLoss } from '../../support/classic-flow';
+import { startRun, lossPlan, continueAfterLoss as runContinueAfterLoss, type LossPlan } from '@systems/run';
+import { setCourseFromDesk, climbingRoutes } from '../../support/desk';
 import { endFlight } from '@systems/orbit-sim';
 import { infectNow } from '@systems/hollow';
 import { pickCard } from '@systems/draft';
@@ -35,7 +37,6 @@ import { ARES_RUN1_FAMILIES } from '@data/souls';
 import { ARCHIVE_TEXT, FIREWALL_RULES, LICENCE_LINES, LINES, bootLicensesRepair } from '@data/script';
 import { TOOL_HINT_TARGET, firewallHintTarget } from '@data/fs-tools';
 import { META_STORAGE_KEY } from '@data/tuning';
-import { CLASSIC_FIVE } from '@data/classic-five';
 import type { GameState } from '@state/schema';
 import type { FreeSegment } from '@/types/segment';
 
@@ -52,8 +53,9 @@ const h = createHarness7(41, { soulsFound: false });
 const state = () => h.store.getState();
 const log = (): GameState['log']['entries'] => state().log.entries;
 
-// A page load: the archive opened again (a leftover run becomes 'abandoned': slice 3c's open sequence, with no run save on
-// the classic world), and the title's run from it.
+// A page load: the archive opened again (a leftover run becomes 'abandoned': slice 3c's open sequence, with no run save
+// here), and the title's run from it, with its route (the shortest climbing one on the run's arm).
+let route: number[] = [];
 function loadPage(seed: number): void {
   closeArchive();
   openRunArchive(() => storage);
@@ -61,6 +63,16 @@ function loadPage(seed: number): void {
   h.newRun(seed);
   startRun(h.store, seed, archiveLineage());
   h.store.update((d) => { d.archive = { status: 'ok' }; });
+  const routes = climbingRoutes(state().run.map);
+  if (routes[0] === undefined) throw new Error(`loadPage: run ${state().run.map.run}'s arm has no route to a final ship`);
+  route = routes[0];
+}
+
+// CONTINUE after a lost ship; when it opens the desk, course is set to the route's next stop.
+function continueAfterLoss(store: typeof h.store): LossPlan {
+  const plan = runContinueAfterLoss(store);
+  if (store.getState().run.phase === 'desk') setCourseFromDesk(store, route[store.getState().run.map.route.length]!);
+  return plan;
 }
 
 function boot(): void {
@@ -118,14 +130,15 @@ const licence = control.indexOf(LICENCE_LINES.repair);
 check('REPAIR came with the boot, and CONTROL says hello first, then the licence', state().run.licences.includes('repair')
   && hello >= 0 && licence > hello, control.join(' | '));
 
-// The ghost's beat, at HALCYON's boot (the last unit was left on ARES-VII): the strip does not offer a skip while it types.
+// The ghost's beat, at ship 2's boot (HALCYON on the classic five; the last unit was left on ARES-VII): the strip does not
+// offer a skip while it types.
 h.store.update((d) => { d.run.simulationRetryUsed = true; });
 h.store.mutate((d) => { d.orbit.x = d.level.planet.R + 20; d.orbit.y = 0; d.orbit.vx = -3; d.orbit.vy = 0.05; });
 h.stepUntil(() => h.status() !== 'approaching', 10);
 continueAfterLoss(h.store);
 h.transmit();
 h.stepFor(0.3);
-check('HALCYON: while the ghost types, a skip waits, and the strip says so (no [SPACE] skip offered)', state().run.shipIndex === 1
+check('ship 2: while the ghost types, a skip waits, and the strip says so (no [SPACE] skip offered)', state().run.shipIndex === 1
   && bootSkipWaits(state()) && state().director.shown?.text === LINES.bootingGhost() && state().director.shown?.keys.length === 0,
   JSON.stringify(state().director.shown));
 h.stepFor(1);
@@ -137,10 +150,10 @@ check('…once it has had its say, the strip offers the skip again (at once)', s
 h.stepUntil(() => state().run.phase === 'flight', 20);
 
 // --- RUN END's own write fails: OFFLINE before RUN END paints ---------------------------------------------------
-// To HALCYON by EMERGENCY, then on by another each ship, to the last one (WP9: KESTREL; WP10: VESPER, read off the
-// fleet), where the Core eaten ends the run: OVERWRITTEN on the last ship.
+// To ship 2 by EMERGENCY, then on by another each ship, to the route's final ship, where the Core eaten ends the run:
+// OVERWRITTEN on the final ship.
 h.store.update((d) => { d.run.simulationRetryUsed = true; });
-while (state().run.shipIndex < CLASSIC_FIVE.length - 1) {
+while (state().run.map.route.length < route.length) {
   h.store.mutate((d) => { d.orbit.x = d.level.planet.R + 20; d.orbit.y = 0; d.orbit.vx = -3; d.orbit.vy = 0.05; });
   h.stepUntil(() => h.status() !== 'approaching', 10);
   continueAfterLoss(h.store);
@@ -156,7 +169,7 @@ h.stepUntil(() => state().run.coreLost, 10);
 continueAfterLoss(h.store);
 offPhase();
 check('RUN END\'s write fails: the status is already OFFLINE when the phase turns \'end\' (RUN END paints its line then)',
-  state().run.phase === 'end' && statusAtEnd === 'offline', String(statusAtEnd));
+  state().landing.finalShip && state().run.phase === 'end' && statusAtEnd === 'offline', `${state().level.shipName} · ${String(statusAtEnd)}`);
 
 // --- A write fails mid-run: one TERMINAL line -------------------------------------------------------------------
 failWrites = false;
@@ -175,7 +188,7 @@ check('a ship start whose write fails: OFFLINE, and the TERMINAL says `ARCHIVE O
 failWrites = false;
 
 // --- A FIREWALL to place --------------------------------------------------------------------------------------------
-// Back to a fresh page, ARES-VII crashed into an EMERGENCY with FIREWALL.sys picked, onto HALCYON.
+// Back to a fresh page, ship 1 crashed into an EMERGENCY with FIREWALL.sys picked, onto ship 2.
 loadPage(15);
 boot();
 h.store.update((d) => { d.run.simulationRetryUsed = true; });
@@ -185,13 +198,15 @@ continueAfterLoss(h.store);
 h.store.update((d) => { d.run.transit!.offer = [{ id: 'firewall', title: 'FIREWALL.sys', effect: '', why: '', boosted: false }]; });
 pickCard(h.store, 'firewall');
 h.transmit();
-h.stepUntil(() => state().run.phase === 'flight', 20);
-// Phase 3 slice 2: HALCYON is calm now; the lesson is checked on its phase-2 racks and HOLLOW (support/hollow-world.ts).
+// The arm's later boots say more (the receiver's sleep, the ghost's beat, the INBOX): up to 40 s.
+h.stepUntil(() => state().run.phase === 'flight', 40);
+// Phase 3 slice 2: HALCYON is calm now; the lesson is checked on its phase-2 racks and HOLLOW (support/hollow-world.ts), laid
+// on this run's ship 2.
 phase2Halcyon(h.store);
 const firewallRule = FIREWALL_RULES.find((rule) => rule.id === 'firewall-place')!;
 const tabRule = FIREWALL_RULES.find((rule) => rule.id === 'firewall-place-tab')!;
 const ctxNow = (): DirectorCtx => buildDirectorCtx(state(), getPrediction(), { events: new Set(), phaseEntered: null, mindQuietSec: 0, flash: null });
-check('HALCYON before MOVE: no FIREWALL line yet (nothing to place it with)', !firewallRule.activeWhen(ctxNow()) && !tabRule.activeWhen(ctxNow()));
+check('ship 2 before MOVE: no FIREWALL line yet (nothing to place it with)', !firewallRule.activeWhen(ctxNow()) && !tabRule.activeWhen(ctxNow()));
 installTool(h.store, 'move');
 h.store.update((d) => { d.ui.mode = 'tools'; });
 // Slice 2 (risk 11): the ghost no longer names HOLLOW at ship 1, and this run's HOLLOW has not named itself yet: `???`.
@@ -216,7 +231,7 @@ const gap = memory[rootIndex - 1] as FreeSegment;
 const firewall = memory.find(isFirewall)!;
 const farFree = memory.filter((seg): seg is FreeSegment => seg.type === 'free').sort((a, b) => b.size - a.size)[0]!;
 check('the MOVE preview over the GAP against the root says the FIREWALL seals that side; anywhere else it does not',
-  // Final fix pass: the preview takes the racks a hazard zone is known to hit; HALCYON has none.
+  // Final fix pass: the preview takes the racks a hazard zone is known to hit; none here (phase 2's HALCYON had none).
   movePreview(state(), firewall, { regionSegIds: [gap.id], col: 0 }, [])?.seals === true
     && movePreview(state(), firewall, { regionSegIds: [farFree.id], col: 0 }, [])?.seals === false);
 actionMove(h.store, firewall, { regionSegIds: [gap.id], col: 0 });

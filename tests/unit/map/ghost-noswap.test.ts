@@ -6,7 +6,6 @@
 //   while a burst ran, a third of a second at CRUISE, and never won the strip);
 // • from then on a SKIP is refused (`ENGINE FAULT — NO SKIP`) and no burst is flown through in a SKIP;
 // • a Swap aboard lifts both (the WP10 rules again: the lesson, and a SKIP flies through later bursts).
-import { withClassicWorld } from '../support/classic-fixture';
 import { check, finish } from '../landing/checks';
 import { createHarness11 } from '../wp11/harness11';
 import { startRun } from '@systems/run';
@@ -25,10 +24,9 @@ import { capabilitiesNow, ghostRefusesSkip } from '@systems/capabilities';
 import { actionRepair } from '@state/actions';
 import { getByRole, chargeLeft } from '@state/selectors';
 import { getOpsBySeg } from '@systems/ops-core';
-import { targetRefusal } from '@systems/tool-targets';
-import { createInitialState, createResidentState } from '@state/initial';
+import { createResidentState } from '@state/initial';
 import { TOOL_REFUSAL } from '@data/tool-text';
-import { ARM_GHOST_BY_BAND, GHOST_BY_BAND, THRUST_CTRL_REPAIR_MAX, RESIDENT_GHOST_ANGRY } from '@data/tuning';
+import { ARM_GHOST_BY_BAND, THRUST_CTRL_REPAIR_MAX, RESIDENT_GHOST_ANGRY } from '@data/tuning';
 import type { Segment } from '@/types/segment';
 const noSwapLines = ['tut-ghost-noswap', 'tut-ghost-noswap-tab', 'tut-ghost-noswap-fly'];
 import type { GameState } from '@state/schema';
@@ -36,7 +34,7 @@ import type { GameState } from '@state/schema';
 const h = createHarness11(1, { soulsFound: false });
 const st = (): Readonly<GameState> => h.store.getState();
 h.newRun(3);
-startRun(h.store, 3, FIRST_RUN_LINEAGE, 'arm');
+startRun(h.store, 3, FIRST_RUN_LINEAGE);
 receiveTransmission(h.store);
 h.stepUntil(() => st().run.phase === 'flight', 15);
 const asks = ['mv', null] as const;
@@ -73,9 +71,11 @@ while (h.wall() < until) { h.step(); if (['tut-ghost-noswap', 'tut-ghost-noswap-
 check('right after the alarm the strip shows the no-Swap line, naming the repair (review: it never won the strip)', shownNoSwap, st().director.shown?.text ?? 'none');
 check('…its words say what to do, in one strip row', [REPO_TEXT.noSwap, REPO_TEXT.noSwapTab, REPO_TEXT.noSwapFly].every((line) => line.length <= MAX_LINE_CHARS)
   && /REPAIR THRUST CTRL/.test(REPO_TEXT.noSwap) && /\[TAB\]/.test(REPO_TEXT.noSwapTab));
+// Phase 2's failing controller pushed 30% (its table went with the classic five, Track RETIRE).
+const PHASE2_FAILING_AMP = 0.3;
 check('the limp (Fran\'s decision): the arm\'s failing controller fires ARM_GHOST_BY_BAND\'s gentler bursts, half phase 2\'s push',
   capabilitiesNow(st()).thrustCtrl.band === 'failing' && capabilitiesNow(st()).thrustCtrl.ghost === ARM_GHOST_BY_BAND.failing
-  && ARM_GHOST_BY_BAND.failing!.amp === GHOST_BY_BAND.failing!.amp / 2);
+  && ARM_GHOST_BY_BAND.failing!.amp === PHASE2_FAILING_AMP / 2);
 check('…and none once the orbit is locked or accepted (the landing)', capabilitiesNow({ ...st(), run: { ...st().run, phase: 'landing' } }).thrustCtrl.ghost === null);
 h.stepUntil(() => st().burn.ghost === null, 5);
 check('…and the moment stands between bursts', st().burn.ghost === null && noSwapForGhost(st()));
@@ -137,13 +137,6 @@ check('…the bursts calm by band: the degraded twitch (rarer and weaker), not s
 for (let i = 0; i < 4; i++) h.step();
 check('…the no-Swap lines step aside, and SKIP is offered again (the twitch is flown through)', !noSwapLines.includes(st().director.shown?.id ?? '')
   && skipBlockReason(st(), currentPrediction()) !== SKIP_REFUSAL_ENGINE_FAULT, `${st().director.shown?.text} | ${skipBlockReason(st(), currentPrediction())}`);
-{
-  const classic = withClassicWorld(() => createInitialState({ seed: 4, shipIndex: 3, carried: 'fresh' }));
-  const file = classic.memory.find((seg) => seg.type === 'ship' && seg.role === 'thrust-ctrl')!;
-  check('the classic world keeps phase 2: its VESPER fires GHOST_BY_BAND, and REPAIR refuses Thrust Ctrl (SWAP OR DELETE IT)',
-    capabilitiesNow(classic).thrustCtrl.ghost === GHOST_BY_BAND.failing
-    && targetRefusal(file, { state: classic, activeKind: 'repair', pickedSource: null }) === TOOL_REFUSAL.shipFile);
-}
 
 installTool(h.store, 'swap');
 check('a Swap aboard: no no-Swap moment, and the SKIP is no longer refused for the engine',

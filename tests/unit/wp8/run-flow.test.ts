@@ -15,7 +15,7 @@ import { check, finish } from '../wp1/harness';
 import { createHarness7 } from '../wp7/harness7';
 import { receiveTransmission, skipBoot } from '@systems/boot';
 import { startRun } from '@systems/run';
-import { continueAfterLoss, continueAfterReport } from '../support/classic-flow';
+import { continueAfterLoss, continueAfterReport } from '../support/desk';
 import { infectNow } from '@systems/hollow';
 import { setIntegrity } from '@state/actions';
 import {

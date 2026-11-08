@@ -66,7 +66,7 @@ export function resumeLineText(resume: Readonly<ResumeLine>): string {
 }
 
 // The launch line's parts from run 2 (the map's history: the gap and the valve's years the update rolled, the last unit's
-// number), or null (run 1, the classic world, a run whose last unit the archive no longer names).
+// number), or null (run 1, a run whose last unit the archive no longer names).
 export function titleLaunch(state: Readonly<Pick<GameState, 'run'>>): TitleLaunch | null {
   const launch = launchOf(state.run);
   const last = state.run.map.history.lastUnitNumber;

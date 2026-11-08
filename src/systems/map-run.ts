@@ -6,11 +6,8 @@ import { freshArmState, armContent } from '@systems/map-update';
 import type { ArmState } from '@/types/lineage';
 import { rollNoiseClouds } from '@systems/map-noise';
 import { FIRST_SLOT } from '@data/arm';
-import type { Hop, RouteStop, RunMapState, ShipSummary } from '@/types/map';
+import type { Hop, RunMapState, ShipSummary } from '@/types/map';
 import type { MapHistory } from '@/types/lineage';
-import type { LinkNoise } from '@/types/threat';
-import { CLASSIC_FIVE, CLASSIC_HOPS, CLASSIC_FACTS, classicShip } from '@data/classic-five';
-import { layoutFor, shipColonists, POD_RACK_KEYS } from '@data/memory';
 import { WORLDS } from '@data/arm';
 import { RUN_START_YEAR, COLONISTS_PER_POD, RUN1_SHIP_LAUNCH_YEAR } from '@data/tuning';
 import { currentSlot, armShipAt, worldSlotOf, noiseRng } from '@systems/map-streams';
@@ -24,54 +21,8 @@ export {
 // The run on its map (phase 3 slice 3a, slice-3a-plan §2.2, §2.5): which ship the unit is on and how a ship's ShipDef is
 // found (the route position and the random streams live in systems/map-streams.ts, re-exported here). Every read that
 // means "which ship" goes through currentShip(state) or shipDefAt(map, slot), never an index into a fleet: on the arm the
-// route's position (run.shipIndex = depth − 1) and the ship's slot differ. Each function switches on run.map.world once;
-// the classic world (data/classic-five.ts) is slot = index with today's rng keys, so its suites stay bit-identical.
+// route's position (run.shipIndex = depth − 1) and the ship's slot differ. (Track RETIRE retired the classic five's world.)
 // Track GEN owns this file after the foundation (createRunMap, the arm's shipDefAt).
-
-// --- The classic world --------------------------------------------------------------------------------------------------
-
-// The beam's noise into a classic ship, from its threat facts (the hop's own field; the facts drive the seeds).
-function classicNoise(slot: number): LinkNoise {
-  const seeds = CLASSIC_FACTS[slot]!.beamSeeds;
-  if (seeds.kind === 'none') return 0;
-  return seeds.kind === 'noise' ? seeds.noise : seeds.later;
-}
-
-// The one hop into classic ship `to` (from the ship before it: the classic world has one route). Its years are fixture
-// years: the unit arrives as the ship does (no slack, so no ECC), so the suites' hits are phase 2's.
-export function classicHop(from: number, to: number, leaveYear: number): Hop {
-  const def = CLASSIC_HOPS[to];
-  if (from !== to - 1 || !def) throw new Error(`classicHop: the classic world has no hop ${from} → ${to}`);
-  const layout = layoutFor(classicShip(to).memoryClass);
-  const arriveYear = leaveYear + def.distanceLy;
-  return {
-    from, to, distanceLy: def.distanceLy, linkBlocks: def.linkBlocks, transitHits: def.transitHits, eccFixes: 0,
-    leaveYear, arriveYear, approachYear: arriveYear, slackYears: 0, noise: classicNoise(to), inRange: true,
-    memoryClass: layout.cls, room: layout.roomForUnit, chargeFloor: layout.chargeFloor,
-  };
-}
-
-// The classic route to ship `index`: every ship before it, in order (slot = index, depth = index + 1).
-export function classicRoute(index: number, startYear: number = RUN_START_YEAR): RouteStop[] {
-  if (!(Number.isInteger(index) && index >= 0 && index < CLASSIC_FIVE.length)) throw new Error(`classicRoute: no classic ship ${index}`);
-  const route: RouteStop[] = [{ slot: 0, depth: 1, hop: null }];
-  let year = startYear;
-  for (let slot = 1; slot <= index; slot++) {
-    const hop = classicHop(slot - 1, slot, year);
-    year = hop.approachYear;
-    route.push({ slot, depth: slot + 1, hop });
-  }
-  return route;
-}
-
-// The classic world's map with the unit on ship `shipIndex`. `run` is the run number (the lineage's wave).
-export function classicRunMap(seed: number, shipIndex: number, run: number): RunMapState {
-  const route = classicRoute(shipIndex);
-  return {
-    version: MAP_STATE_VERSION, world: 'classic', run, armSeed: seed >>> 0, startYear: RUN_START_YEAR, arm: [], noise: [], route,
-    galaxyYear: route.at(-1)!.hop?.approachYear ?? RUN_START_YEAR, pendingExtra: null, history: structuredClone(EMPTY_HISTORY),
-  };
-}
 
 // The map a NEW RUN starts on (systems/run.ts startRun, state/instance.ts's first page): the run number is the lineage's
 // wave (1 on run 1).
@@ -122,13 +73,8 @@ export function createRunMap(
 
 // --- Where the unit is -------------------------------------------------------------------------------------------------
 
-// The map with the unit arriving on `slot` by `hop` (startShip). The classic world's route is fixed, so a jump
-// (__ap.ship) lands on that ship's whole route; on the arm the stop is pushed onto the route.
+// The map with the unit arriving on `slot` by `hop` (startShip): the stop is pushed onto the route.
 export function mapAtShip(map: Readonly<RunMapState>, slot: number, hop: Hop | null): RunMapState {
-  if (map.world === 'classic') {
-    const route = classicRoute(slot, map.startYear);
-    return { ...structuredClone(map) as RunMapState, route, galaxyYear: route.at(-1)!.hop?.approachYear ?? map.startYear, pendingExtra: null };
-  }
   if (hop === null || hop.to !== slot) throw new Error(`mapAtShip: the arm needs the hop that reaches slot ${slot}`);
   const next = structuredClone(map) as RunMapState;
   next.route.push({ slot, depth: map.route.length + 1, hop });
@@ -148,33 +94,16 @@ export function mapAtFirstShip(map: Readonly<RunMapState>): RunMapState {
 
 // --- Which ship ---------------------------------------------------------------------------------------------------------
 
-// The ShipDef in `slot`: the classic five by index; on the arm, the ship built from its ArmShip (data/ships.ts shipDefOf,
-// pure and memoized: Track GEN).
+// The ShipDef in `slot`: the ship built from its ArmShip (data/ships.ts shipDefOf, pure and memoized: Track GEN).
 export function shipDefAt(map: Readonly<RunMapState>, slot: number): ShipDef {
-  if (map.world === 'classic') return classicShip(slot);
   return shipDefOf(armShipAt(map, slot));
 }
 
-// What the desk, the PACKET, the strip and the RUN TALLY may read of the ship in `slot` (review follow-up B1): on the
-// classic world from its ShipDef, on the arm from its ArmShip and world, so nothing that shows a ship needs it built
-// (shipDefAt on the arm waits for Track GEN's shipDefOf). The desk models read only this.
+// What the desk, the PACKET, the strip and the RUN TALLY may read of the ship in `slot` (review follow-up B1): from its
+// ArmShip and world, so nothing that shows a ship needs it built. The desk models read only this.
 export function shipSummaryAt(map: Readonly<RunMapState>, slot: number): ShipSummary {
   const worldSlot = worldSlotOf(map, slot);
   const world = WORLDS[worldSlot]!;
-  if (map.world === 'classic') {
-    const ship = classicShip(slot);
-    return {
-      slot, worldSlot, name: ship.name, world: ship.world, kind: ship.kind, template: ship.template,
-      modifiers: [...ship.modifiers],
-      layer: ship.layer, pods: ship.pods, colonists: shipColonists(ship), memoryClass: ship.memoryClass, final: ship.final,
-      approachYear: classicRoute(slot, map.startYear).at(-1)!.hop?.approachYear ?? map.startYear, late: false,
-      lzCount: ship.landing.lzs.length, forgiveness: ship.landing.forgiveness, terrain: ship.landing.terrain,
-      noGoWords: ship.landing.noGo.map((arc) => arc.word),
-      debrisRack: ship.zones.flatMap((zone) => (zone.kind === 'debris' ? POD_RACK_KEYS.filter((rack) => rack === zone.rack) : []))[0]
-        ?? null,
-      authored: null, reserved: null,
-    };
-  }
   const ship = armShipAt(map, slot);
   return {
     slot, worldSlot, name: ship.name, world: world.name, kind: ship.kind, template: ship.template,
@@ -192,20 +121,17 @@ export function currentShip(state: Readonly<Pick<GameState, 'run'>>): ShipDef {
   return shipDefAt(state.run.map, currentSlot(state.run));
 }
 
-// Every ship the run counts as its fleet (RUN END's rows, the colonists it could have landed, PURGE's `n OF m SHIPS`):
-// the classic world's five (phase 2's whole fleet, NOT REACHED rows included); on the arm, the ships visited (02 §4: the
-// RUN TALLY has a row per visited ship; Track DESK owns the tally).
+// Every ship the run counts as its fleet (RUN END's rows, the colonists it could have landed, PURGE's `n OF m SHIPS`): the
+// ships visited (02 §4: the RUN TALLY has a row per visited ship; Track DESK owns the tally).
 export function fleetOf(map: Readonly<RunMapState>): readonly ShipDef[] {
-  if (map.world === 'classic') return CLASSIC_FIVE;
   return map.route.map((stop) => shipDefAt(map, stop.slot));
 }
 
 // The year an arm ship launched from SOL (slice 5, review m7; 05 §3.6: WARDEN's `aboard since 2240`, the sleeper's years
 // asleep): run 1's ships in RUN1_SHIP_LAUNCH_YEAR, a ship a later run rolled as much later as that run started (its
 // timedAgainstStart: the start year it was rolled against, written only at its roll; a re-timed ship is a new roll). Throws
-// on the classic world (its fixtures have no years) and on a slot the arm does not have.
+// on a slot the arm does not have.
 export function shipLaunchYear(map: Readonly<RunMapState>, slot: number): number {
-  if (map.world !== 'arm') throw new Error('shipLaunchYear: the classic world has no launch years');
   const ship = map.arm[slot];
   if (ship === undefined) throw new Error(`shipLaunchYear: no ship in slot ${slot}`);
   return RUN1_SHIP_LAUNCH_YEAR + (ship.timedAgainstStart - RUN_START_YEAR);

@@ -14,7 +14,6 @@
 // • the TERMINAL's voices and the untimed choice; the lock's reticle (its second, its share, `LOCK 3`); the sleeper's breath;
 // • the stamps (the surprise's wake with its tear, DELETED, CURED, `SIGNAL · 1/2`: CONTACT's price, SIGNALS_FOR_CONTACT) and the PACKET's leftover deck.
 // Every word's worst case is support/words.test's block 5 FACE.
-import { withClassicWorld } from '../support/classic-fixture';
 import { SIGNALS_FOR_CONTACT } from '@data/tuning';
 import { check, finish } from '../landing/checks';
 import type { GameState, LogChoice } from '@state/schema';
@@ -81,7 +80,6 @@ withResidentsBuilt(ALL, () => {
 withResidents(NO_RESIDENTS, () => {
   check('card: a kind this build does not play reads `none` (the ship will hold no files of it)', value(deskAt([0, 2]), 9) === T.card.none);
 });
-check('card: no row on the classic world', residentCardRow(withClassicWorld(() => createInitialState({ seed: 7, phase: 'desk' })), 1) === null);
 
 // --- The chart's ▓░ glyph (R18) -----------------------------------------------------------------------------------------
 withResidentsBuilt(ALL, () => {

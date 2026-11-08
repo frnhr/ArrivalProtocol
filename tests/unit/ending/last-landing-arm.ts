@@ -40,7 +40,7 @@ function toArmCard(h: Harness11): void {
   const state = (): Readonly<GameState> => h.store.getState();
   flyOnce(h, 'last-landing arm card', () => {
     h.newRun(ARM_SEED);
-    startRun(h.store, ARM_SEED, FIRST_RUN_LINEAGE, 'arm');
+    startRun(h.store, ARM_SEED, FIRST_RUN_LINEAGE);
     receiveTransmission(h.store);
     h.store.update((d) => { d.run.phase = 'report'; });
     const asks = ['mv', 'rm', 'swap', 'cp', null] as const;

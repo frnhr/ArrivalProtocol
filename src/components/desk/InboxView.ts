@@ -11,8 +11,8 @@ import { INBOX_TEXT } from '@data/inbox-text';
 // list above a reader. The list has FROM, SUBJECT and RECEIVED, the newest boot first, unread in bold; a click opens a
 // message in the reader (and marks it read: systems/inbox.ts markMessageRead) with its two stamps, `SENT 2522 · RECEIVED
 // 2651` (the gap is light travel), its tag (`FOR UNIT-046`) and its body. Mail with no address is in HOLLOW's pink with a
-// light glitch (reduced motion: a steady dim, game.css). Built from systems/inbox.ts inboxMessages only; the classic world
-// has no mail. The host repaints it when the mail or the read marks change (paint()).
+// light glitch (reduced motion: a steady dim, game.css). Built from systems/inbox.ts inboxMessages only.
+// The host repaints it when the mail or the read marks change (paint()).
 
 export interface InboxView {
   root: HTMLElement;
@@ -73,16 +73,15 @@ export function mountInboxView(store: Store<GameState>, variant: 'desk' | 'fligh
 
   function paint(): void {
     const state = store.getState();
-    const arm = state.run.map.world === 'arm';
     // Newest boot first: the mail that just came is at the top.
     const messages = [...inboxMessages(state)].reverse();
     const read = state.run.inbox.read;
     if (openId !== null && !messages.some((message) => message.id === openId)) openId = null;
-    const key = `${arm}|${messages.map((message) => message.id).join(',')}|${read.join(',')}|${openId ?? ''}`;
+    const key = `${messages.map((message) => message.id).join(',')}|${read.join(',')}|${openId ?? ''}`;
     if (key === shownKey) return;
     shownKey = key;
     empty.hidden = messages.length > 0;
-    empty.textContent = arm ? INBOX_TEXT.window.empty : INBOX_TEXT.window.classic;
+    empty.textContent = INBOX_TEXT.window.empty;
     listHead.hidden = messages.length === 0;
     list.replaceChildren(...messages.map((message) => rowNode(message, !read.includes(message.id), message.id === openId)));
     const message = messages.find((candidate) => candidate.id === openId);

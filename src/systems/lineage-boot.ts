@@ -2,8 +2,7 @@
 // Slice 7c: Track LINEAGE owns this file (docs/phase3/impl/slice-7-plan.md §2.4, §4.3, §5.3; R34–R36). data/script.ts
 // bootLinePlan calls the three line rules on every boot (the plan is made once, at the boot's first tick, and each line is
 // rendered from the live state as it is typed), so each rule reads only what the boot does not change. Pure but for
-// lineageBootLineSaid; module state: none. Every line waits for data/traces.ts LINEAGE_BUILT, and plays on the arm only (the
-// classic world's boots are frozen, and it holds no traces).
+// lineageBootLineSaid; module state: none. Every line waits for data/traces.ts LINEAGE_BUILT.
 // =====================================================================================================================
 // The lineage's boot lines (05 §3.5): the relay stranger's `> another one. they keep sending you.` on the boot of the ship
 // it boards on (R34), and on the final ship after a REASSIGNMENT trace the last unit's face taking the root over (its
@@ -25,16 +24,12 @@ import { FRESH_UNIT_CHARGE } from '@data/memory';
 // 'lineage-control' (CONTROL's, at most one), 'stranger' (HOLLOW's, at most one).
 export type LineageBootLineKind = 'face' | 'lineage-control' | 'stranger';
 
-function lineagePlays(state: Readonly<GameState>): boolean {
-  return state.run.map.world === 'arm';
-}
-
 // The last unit's face is due at this boot (R35): the final ship, after a REASSIGNMENT trace (held and built: the root is the
 // last unit there, systems/traces.ts rootUnitsOf). Its ending, or null.
 function faceFrom(state: Readonly<GameState>): NonNullable<GameState['run']['traces']['from']> | null {
   const run = state.run;
   const from = run.traces.from;
-  if (!lineagePlays(state) || from === null || !onFinalShip(run) || !finalTraces(run).reassignment) return null;
+  if (from === null || !onFinalShip(run) || !finalTraces(run).reassignment) return null;
   return from;
 }
 
@@ -61,7 +56,7 @@ export function faceBootLines(state: Readonly<GameState>): string[] {
 export function lineageControlLine(state: Readonly<GameState>): string | null {
   const from = faceFrom(state);
   if (from !== null) return LINEAGE_TEXT.reassigned(from.unit);
-  if (!lineagePlays(state) || !onFinalShip(state.run) || !finalTraces(state.run).wild) return null;
+  if (!onFinalShip(state.run) || !finalTraces(state.run).wild) return null;
   return LINEAGE_TEXT.nonCompliant;
 }
 
@@ -70,7 +65,7 @@ export function lineageControlLine(state: Readonly<GameState>): string | null {
 // whose root the last unit's face takes over (its line would answer the face).
 export function strangerBootLine(state: Readonly<GameState>): string | null {
   const arrival = state.run.arrival;
-  if (!lineagePlays(state) || arrival === null || arrival.boarded === null) return null;
+  if (arrival === null || arrival.boarded === null) return null;
   if (strangerOf(state.run.hollowUnits) === null || faceFrom(state) !== null) return null;
   return LINEAGE_TEXT.stranger;
 }

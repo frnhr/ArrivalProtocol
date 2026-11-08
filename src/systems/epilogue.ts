@@ -69,7 +69,7 @@ export interface FinalCardModel {
   endingsLine: string;                 // `ENDINGS n/6`
   rows: { hollow: FinalCardPiece[]; you: FinalCardPiece[] };
   next: string[];                      // the `NEXT RUN:` lines (7c's traceNextLines; [] in 7a, R12)
-  bridge: { line: string; tail: string } | null;    // RUN END's bridging line, moved here (null on the classic world)
+  bridge: { line: string; tail: string } | null;    // RUN END's bridging line, moved here (null: no update to tell)
   newRun: string;
 }
 
@@ -139,9 +139,7 @@ function coloniesOf(state: Readonly<GameState>, year: number): EpilogueColony[] 
     const colony = result.colony;
     const age = year - shipSummaryAt(run.map, result.slot).approachYear;
     const people = colonyPeople(down, age);
-    const sleepers = run.map.world === 'arm'
-      ? run.residents.met.filter((met) => met.slot === result.slot && met.kind === 'sleeping' && met.fate === 'woken')
-      : [];
+    const sleepers = run.residents.met.filter((met) => met.slot === result.slot && met.kind === 'sleeping' && met.fate === 'woken');
     const payoffs = [payoffOf(result, colony), ...sleepers.map((met) => EPILOGUE_TEXT.sleeper(met.name, colony))];
     return [{ slot: result.slot, colony, age, people, lines: colonyLines(EPILOGUE_TEXT.colony(colony, age, formatCount(people)), payoffs) }];
   });
@@ -222,8 +220,7 @@ function controlLine(state: Readonly<GameState>, record: Readonly<EndingRecord> 
   return controlCompliant(record.hollow, record.you) ? EPILOGUE_TEXT.control.compliant(unit) : EPILOGUE_TEXT.control.nonCompliant(unit);
 }
 
-// The next unit (R20), by the gap the bridging line names (the world update's gap and the time valve's years); none on the
-// classic world (it is never updated).
+// The next unit (R20), by the gap the bridging line names (the world update's gap and the time valve's years).
 function nextLine(state: Readonly<GameState>): string | null {
   const next = state.run.next;
   if (next === null) return null;
@@ -289,7 +286,7 @@ export function finalCardOf(state: Readonly<GameState>, meta: Readonly<Meta> | n
   };
   const built = builtPieces();
   const found = built.filter((p) => seen.includes(p) || now.includes(p)).length;
-  const next = run.map.world === 'arm' ? runEndNext(run.next, null) : null;
+  const next = runEndNext(run.next, null);
   return {
     kicker: RUN_END_TEXT.kicker(unitName(run.unitNumber), run.wave),
     title: record === null ? causeTitle(state, run.endCause) : endingTitle(record),

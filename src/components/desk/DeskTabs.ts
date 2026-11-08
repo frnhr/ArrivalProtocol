@@ -16,9 +16,7 @@ export type DeskTab = 'card' | DeskWindowId;
 
 export interface DeskTabsView {
   root: HTMLElement;
-  // `arm`: the REPOSITORY, TRAINING and INBOX tabs exist on the arm only (the review's nit: the classic world has none of
-  // them, so its card keeps the CARD tab alone as its title).
-  paint: (open: DeskWindowId | null, badges: Readonly<DeskTabBadges>, arm: boolean) => void;
+  paint: (open: DeskWindowId | null, badges: Readonly<DeskTabBadges>) => void;
 }
 
 const TABS: readonly { id: DeskTab; label: string }[] = [
@@ -56,9 +54,8 @@ export function buildDeskTabs(): DeskTabsView {
   });
   return {
     root,
-    paint: (open, badges, arm) => {
+    paint: (open, badges) => {
       for (const { id, button, badge } of buttons) {
-        button.hidden = id !== 'card' && !arm;
         button.classList.toggle('on', (open ?? 'card') === id);
         const text = badgeText(id, badges);
         badge.hidden = text === null;

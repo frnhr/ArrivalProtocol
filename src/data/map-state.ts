@@ -8,7 +8,7 @@ import type { MapHistory } from '@/types/lineage';
 // refuse a map of another shape loudly instead of reading it half.
 export const MAP_STATE_VERSION = 1;
 
-// Nothing before this run (run 1, the classic world, a suite's map). Frozen: a map that wants its own history clones it
+// Nothing before this run (run 1, a suite's map). Frozen: a map that wants its own history clones it
 // (structuredClone), so a literal that shares this one can never be written through by accident.
 export const EMPTY_HISTORY: MapHistory = Object.freeze({
   gap: 0,

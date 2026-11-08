@@ -1,7 +1,6 @@
 // Slice 3a DESK: the words round the map (02-map §4, 01-landing §4, 05 §3.12): the header crumb's galaxy year on the arm
 // (`UNIT-047 / KESTREL · 2467 / FLYBY`) and its desk and TRANSMIT crumbs, the MIND header's `MEMORY 384 · FULL`, and the
 // title line `UNIT-047 · YEAR 2300 · FINAL SHIP 180 LY OUT`; the desk's opening once per visit (the review's m3, m4).
-import { withClassicWorld } from '../support/classic-fixture';
 import { check, finish } from '../landing/checks';
 import { createStore } from '@state/store';
 import type { GameState } from '@state/schema';
@@ -19,10 +18,6 @@ import { BEAM_OUT_BLACKOUT_SEC } from '@data/tuning';
 
 // The title and the desk read no flight prediction (headerCrumbs returns before it; the title's vars are the run's).
 const NO_PRED = { zoneHits: [], burnPoint: null } as unknown as Prediction;
-// The classic world's own branch (Track RETIRE: it goes with the classic five).
-const classic = withClassicWorld(() => createInitialState({ seed: 4, shipIndex: 0, phase: 'title' }));
-check('classic world: the crumb has no year (its years are fixtures)', headerCrumbs(classic, NO_PRED).year === null && headerCrumbs(classic, NO_PRED).ship === 'ARES-VII');
-check('the MIND header: MEMORY 384 · FULL (the classic ARES-VII)', memoryClassLabel(classic) === 'MEMORY 384 · FULL');
 const store = createStore<GameState>(createInitialState({ seed: 4, shipIndex: 0, phase: 'title' }));
 let crumbs = headerCrumbs(store.getState(), NO_PRED);
 check('the MIND header on the arm: MEMORY 320 · COMPACT (run 1\'s ARES-VII)', memoryClassLabel(store.getState()) === 'MEMORY 320 · COMPACT',

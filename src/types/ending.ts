@@ -36,13 +36,13 @@ export interface EndingRecord {
   you: YouChoice;
   // Who the root was (run.hollowUnits on the final ship): SPARE's `<UNIT>'S CACHE`, the face lines, 046·047 after a MERGE.
   rootUnits: number[];
-  // The final ship's arm slot; null on the classic world (it has no arm) and on a migrated record that kept no trail.
+  // The final ship's arm slot; null on a migrated record that kept no trail.
   finalSlot: number | null;
   finalShip: string;
-  // The final ship's approach year (the face line's wait, R35), on either world (the classic map has real years too: review
-  // m6); null only on a migrated record that kept no trail (the wait then reads its floor).
+  // The final ship's approach year (the face line's wait, R35; review m6); null only on a migrated record that kept no
+  // trail (the wait then reads its floor).
   finalYear: number | null;
-  // STAY's colony (its supply packet, R31): the ship's slot (its route index on the classic world), the colony's name and
+  // STAY's colony (its supply packet, R31): the ship's slot, the colony's name and
   // the year it was founded (that ship's approach year, on either world). null for every other step 2.
   stay: { slot: number; colony: string; year: number } | null;
   // The fs-tool kinds the unit ended with (a usable copy in memory at the FINALE's confirm): SUNSET's gift (R32).

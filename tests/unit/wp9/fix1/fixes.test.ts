@@ -16,7 +16,7 @@
 import { check, finish } from '../../wp1/harness';
 import { fixtureShip } from '../../support/arm-ship';
 import { createHarness9, KESTREL } from '../harness9';
-import { continueAfterReport } from '../../support/classic-flow';
+import { continueAfterReport } from '../../support/desk';
 import { toggleDrop, transmitModel } from '@systems/transmit';
 import { arrivalDamage } from '@systems/carry';
 import { getPrediction, getSensedPrediction } from '@systems/predict';

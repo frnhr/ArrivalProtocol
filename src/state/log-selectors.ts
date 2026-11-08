@@ -23,11 +23,10 @@ export function createRunLog(book: LogBook = { kind: '046' }): RunLogState {
 // HOLLOW's `> you're reading my log. good. read it slowly.` is due at this boot (05 §3.5; slice-3b-plan §1.1 item 19): once
 // a run, at the first boot after entry 05 is read (run.log.read has 5, run.log.toldReading is still false). data/script.ts
 // bootLinePlan places the 'reading' line from it, before the log key line; systems/boot.ts sets toldReading as it is said.
-// The arm only (the classic world's boots are frozen, and 3b gives it no new line).
 export const READING_LINE_AFTER_ENTRY = 5;
 export function readingLineDue(state: Readonly<GameState>): boolean {
   const log = state.run.log;
-  return state.run.map.world === 'arm' && log.read.includes(READING_LINE_AFTER_ENTRY) && !log.toldReading;
+  return log.read.includes(READING_LINE_AFTER_ENTRY) && !log.toldReading;
 }
 
 // The kid knows what the file is (slice-2-plan risk 5): scanned, or a key found. The chip's name derives from this, not
@@ -114,8 +113,8 @@ export function logEntriesAtBoot(solLy: number, isFinal: boolean, shape: Readonl
 }
 
 // The entries this boot's keys open, before the run's found ones are taken out (data/script.ts bootLogEntries): by the
-// current ship's world's distance from SOL (the classic five sit on their arm worlds, 8, 29, 55, 107 and 180 LY, so they
-// read the rings too), and the final ship's two. The review follow-up M3: script.ts calls this, never re-derives the rule.
+// current ship's world's distance from SOL, and the final ship's two. The review follow-up M3: script.ts calls this, never
+// re-derives the rule.
 export function bootLogKeys(state: Readonly<Pick<GameState, 'run'>>): number[] {
   const slot = currentSlot(state.run);
   return logEntriesAtBoot(solLy(worldSlotOf(state.run.map, slot)), isEndSlot(state.run.map, slot), bookShape(state.run.log.book));

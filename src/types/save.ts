@@ -87,7 +87,7 @@ export interface SaveState {
 // no run in progress (the save's run already ended), 'superseded' when its run in progress is another (another tab's, or a
 // run started in this page after the save went OFFLINE; review fix, minor 7); 'resume-threw' from the resume itself.
 export type SaveRefusalKind =
-  | 'not-json' | 'version' | 'content' | 'shape' | 'classic' | 'route' | 'ship' | 'stale' | 'superseded' | 'archive' | 'resume-threw';
+  | 'not-json' | 'version' | 'content' | 'shape' | 'route' | 'ship' | 'stale' | 'superseded' | 'archive' | 'resume-threw';
 
 export interface SaveRefusal {
   kind: SaveRefusalKind;

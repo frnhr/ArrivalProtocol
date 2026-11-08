@@ -14,8 +14,7 @@ import { RUN_SAVE_KEY } from '@data/tuning';
 // `{ provider, status }` mirroring the archive's. The status goes ok → offline on the first read or write that throws
 // (QuotaExceeded included) and on a save that can't be built or encoded (a bug, said loudly on the console): nothing more
 // is written this page and 'save-lost' is emitted (a TERMINAL line, a buzz, the footer's NO SAVE), and play goes on. A
-// headless world (GameState.save.status 'none') never writes, so the suites are untouched; the classic world is never
-// saved.
+// headless world (GameState.save.status 'none') never writes, so the suites are untouched.
 // A leaf below run.ts and boot.ts (slice 3c foundation deviation, the plan's cycle guard): they call writeRunSave at the
 // points; resume and abandon (systems/run-save.ts) import run.ts, never the other way.
 //
@@ -113,13 +112,13 @@ function goOffline(store: Store<GameState> | null, why: string, error: unknown):
 }
 
 // Whether a save point writes now (the one gate every point goes through): the page has a working save (not 'none' in a
-// headless world, not 'offline' or 'cant-resume'), on the arm (the classic world is never saved). The archive must vouch for
+// headless world, not 'offline' or 'cant-resume'). The archive must vouch for
 // it (a save is resumed only when the archive's run in progress is its run, so one written while the archive is corrupt,
 // played without or offline could never be resumed): while it can't, the save goes OFFLINE here, the one place it mirrors
 // the archive (review fix M1: saves used to stop silently, with no NO SAVE and no TERMINAL line).
 function writable(store: Store<GameState>): boolean {
   const state = store.getState();
-  if (state.save.status !== 'ok' || state.run.map.world !== 'arm' || session === null || session.status !== 'ok') return false;
+  if (state.save.status !== 'ok' || session === null || session.status !== 'ok') return false;
   if (state.archive.status === 'ok') return true;
   goOffline(store, `the archive is ${state.archive.status}: a save it can't vouch for could never be resumed`, null);
   return false;
@@ -156,7 +155,7 @@ const DECIDED: readonly GameState['hollow']['finale']['phase'][] = ['done'];
 // sayOwedVerdict: CONTROL's verdict waits for the typed ending, and a resumed world has no module state to say it from), so
 // the save's log has it. The clock stays as it was (the report's own pause rule). Slice 7a keeps it here, after THE LAST
 // LANDING, not at step 2's confirm (slice-7-plan R14: a save there would resume into a landing in progress).
-// Only when a save will be written (review fix, minor 3): with no save this page (headless, offline, the classic world) none
+// Only when a save will be written (review fix, minor 3): with no save this page (headless, offline) none
 // of it runs, and the finale says its verdict in its own time. A block still reserved after the abort is a bug: said on the
 // console, and the save goes OFFLINE rather than crash the final LANDING REPORT.
 export function writeEndingChosen(store: Store<GameState>, flushOwed: (store: Store<GameState>) => void): void {

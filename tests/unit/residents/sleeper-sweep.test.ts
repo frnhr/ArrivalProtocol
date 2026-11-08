@@ -67,7 +67,7 @@ let noKitPct: number | null = null;
 // kit allows until one wakes it. Returns the way that worked, or null.
 function wakeByKit(seed: number): string | null {
   h.newRun(seed);
-  startRun(h.store, seed, FIRST_RUN_LINEAGE, 'arm');
+  startRun(h.store, seed, FIRST_RUN_LINEAGE);
   receiveTransmission(h.store);
   h.stepUntil(() => st().run.phase === 'flight', 30);
   for (const slot of ROUTE) {
@@ -106,7 +106,7 @@ function wakeByKit(seed: number): string | null {
 for (const SEED of SEEDS) {
 if (KIT === 'route') woken.push(wakeByKit(SEED) === null ? 0 : 100);
 h.newRun(SEED);
-startRun(h.store, SEED, FIRST_RUN_LINEAGE, 'arm');
+startRun(h.store, SEED, FIRST_RUN_LINEAGE);
 receiveTransmission(h.store);
 h.stepUntil(() => st().run.phase === 'flight', 30);
 for (const slot of ROUTE) {
@@ -151,7 +151,7 @@ if (HOLLOW_ROW) {
   // The HOLLOW row: the same ship, the beam's seed kept and a seed planted behind the first driver, with HOLLOW's seeds-only
   // config (as __ap.seed lays one on a calm ship), flown by hand with and without HOLD A WALL.
   h.newRun(SEED);
-  startRun(h.store, SEED, FIRST_RUN_LINEAGE, 'arm');
+  startRun(h.store, SEED, FIRST_RUN_LINEAGE);
   receiveTransmission(h.store);
   h.stepUntil(() => st().run.phase === 'flight', 30);
   for (const slot of ROUTE) {

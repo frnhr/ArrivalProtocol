@@ -14,7 +14,6 @@
 //   non-compliant kind built; down, none of it plays (so the suite reads the same before and after TRACE's merge);
 // • the classic world plays none; the ghost lines of R36 (won and UNRESOLVED silent, the lost causes kept);
 // • every lineage line at its worst case (≤ 70: three-digit units, two-unit roots, a three-digit wait).
-import { withClassicWorld } from '../support/classic-fixture';
 import { check, finish } from '../landing/checks';
 import { createStore, type Store } from '@state/store';
 import type { GameState } from '@state/schema';
@@ -215,18 +214,6 @@ const lineageKinds: readonly BootLineKind[] = ['face', 'lineage-control', 'stran
     sunset.run.traces.extraSeed && withGates({ sunset: true }, () => lineageControlLine(sunset) === LINEAGE_TEXT.nonCompliant && lineageControlLine(calmState) === null)
     && withGates({ sunset: false }, () => lineageControlLine(sunset) === null)
     && withGates({ reassignment: true }, () => lineageControlLine(withEnding(endingOf('purge', 'reassignment'))) !== LINEAGE_TEXT.nonCompliant));
-}
-
-// --- The classic world plays none --------------------------------------------------------------------------------------------
-{
-  const lineage = lineageAfter(2, lastUnitOf(47, endingOf('purge', 'reassignment')));
-  const classic = withClassicWorld(() => createInitialState({ seed: 3, lineage }));
-  // As if HOLLOW had boarded on a beam into it (the classic world's own boots never said a stranger's line).
-  const arrival = { boarded: { blocks: 10, cause: 'forced' } } as unknown as NonNullable<GameState['run']['arrival']>;
-  const boarded: GameState = { ...classic, run: { ...classic.run, arrival } };
-  check('the classic world: no face, no CONTROL line, no stranger\'s line (its boots are frozen, it holds no traces), HOLLOW still the stranger',
-    classic.run.map.world === 'classic' && JSON.stringify(classic.run.hollowUnits) === '[31]' && withGates({ reassignment: true, sunset: true }, () => faceBootLines(classic).length === 0
-      && lineageControlLine(classic) === null && strangerBootLine(boarded) === null));
 }
 
 // --- R36: the ghost lines ---------------------------------------------------------------------------------------------------

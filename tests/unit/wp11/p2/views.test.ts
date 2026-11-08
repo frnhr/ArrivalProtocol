@@ -21,7 +21,7 @@ import { theRoot, infectNow } from '@systems/hollow';
 import { verbNow } from '@systems/hollow-verbs';
 import { finaleEndingSec, finaleEndingLineStartsSec, skipFinaleEnding, finaleEndingShowing, mergeTickCharge, finaleVerdictLines } from '@systems/finale';
 import { runEndModel, type RunEndModel } from '@systems/run-end';
-import { continueAfterReport } from '../../support/classic-flow';
+import { continueAfterReport } from '../../support/desk';
 import { say } from '@systems/say';
 import { actionDelete } from '@state/actions';
 import { driversInMemory, finalePending, quantizeCorruption } from '@state/selectors';

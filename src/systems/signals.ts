@@ -42,7 +42,7 @@ export function contactPaid(run: Readonly<Pick<RunState, 'residents'>>): boolean
 // --- The `▓▓░▓` file -------------------------------------------------------------------------------------------------------
 
 function armShip(run: Readonly<Pick<RunState, 'map'>>, slot: number): ArmShip | null {
-  const ship = run.map.world === 'arm' ? run.map.arm[slot] : undefined;
+  const ship = run.map.arm[slot];
   return ship === undefined || ship === null ? null : ship;
 }
 
@@ -99,9 +99,9 @@ export function oldColonyOf(run: Readonly<Pick<RunState, 'seed' | 'map'>>, slot:
 
 // The old colony `?` ship's letter, read at its boot once the route reaches it (systems/inbox.ts deriveMessages, with the
 // route's other mail): from the colony, by its founding unit, SENT ???? (the colony's clock is not the receiver's), RECEIVED
-// in the ship's approach year. None while the `?` ships are down, or on the classic world.
+// in the ship's approach year. None while the `?` ships are down.
 export function unknownMessages(run: Readonly<Pick<RunState, 'seed' | 'map'>>): InboxMessage[] {
-  if (!UNKNOWN_EVENTS_BUILT || run.map.world !== 'arm') return [];
+  if (!UNKNOWN_EVENTS_BUILT) return [];
   const out: InboxMessage[] = [];
   for (const stop of run.map.route) {
     const ship = armShipAt(run.map, stop.slot);

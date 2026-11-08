@@ -1,7 +1,7 @@
 // Phase 3 slice 3a (the galaxy map): the page plays run 1's arm, so ship 1 is the arm's ARES-VII (COMPACT: five racks,
 // A B C E F, each in two rows); its report's CONTINUE opens the DESK (slice 4: the first pick by taps on TRAINING; then a
 // tap on HALCYON's node, a tap on SET COURSE), then
-// the PACKET with the LOG READER on top. HALCYON's BEAM OUT and KESTREL stay the classic ships (__ap.ship); one arm ship
+// the PACKET with the LOG READER on top. HALCYON's BEAM OUT and KESTREL are run 1's on the worked route (__ap.ship); one arm ship
 // more, PETREL (TIGHT: four racks, A B C E) by __ap.slot(1), is checked in blue: its four racks with no free-tail row, files whole, the
 // header and the strip, nothing spilling sideways.
 // Phase 3 slice 2: ARES-VII is calm (no scripted bite to cure before the landing); ship 1's report opens the LOG READER
@@ -543,8 +543,9 @@ await st(() => { window.__ap.saveClear(); window.__ap.archiveClear(); });
 
 // --- BEAM OUT on a phone (WP7 verify: its line was cut and both buttons sat in hidden tabs) --------------------------
 // Slice 3c: the run save goes first, so the reload abandons the run in progress (as every reload did before the save)
-// instead of offering RESUME.
-await st(() => window.__ap.saveClear());
+// instead of offering RESUME. Track RETIRE: and the archive, so the page plays run 1 (__ap.ship jumps along run 1's worked
+// route only; a later run's arm is a fresh roll).
+await st(() => { window.__ap.saveClear(); window.__ap.archiveClear(); });
 await page.goto(BASE_URL + '?debug&seed=4', { waitUntil: 'networkidle' });
 await page.tap('#titleReceive');
 await waitFor(() => window.__ap.store.getState().run.phase === 'flight', 20000);
@@ -575,10 +576,7 @@ await onScreen('BEAM OUT transmitting', '#beamBar');
 await shot('16-beaming');
 
 // --- KESTREL: the debris countdown in the header, the plot's labels (WP12 fix round 1) -------------------------------
-// Slice 3c: a fresh archive and no run save. The run in progress here is run 2 on the classic HALCYON (__ap.ship), which a
-// reload can't place on the arm when it abandons it, and the page then fails to open (a src bug at the time of writing:
-// `createRunMap: the stored arm is for run 2, the lineage's wave is 3`; the e2e run2 scenario checks the player's path to
-// it, a corrupt save on run 2). This section is about KESTREL on a phone, so it starts from run 1.
+// Slice 3c: a fresh archive and no run save, so the page plays run 1 again (__ap.ship jumps along run 1's worked route).
 await st(() => { window.__ap.archiveClear(); window.__ap.saveClear(); });
 await page.goto(BASE_URL + '?debug&seed=4', { waitUntil: 'networkidle' });
 await page.tap('#titleReceive');

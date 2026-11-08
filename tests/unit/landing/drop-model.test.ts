@@ -28,7 +28,8 @@ import {
   LANDING_DROP_LINES, LANDING_END_TEXT, LANDING_LESSONS_1B, LAUNCH_REFUSAL_TEXT, LAUNCH_CONFIRM_TEXT,
 } from '@data/landing-text';
 import { DELETE_EFFECT } from '@data/tool-text';
-import { classicShip, CLASSIC_FIVE } from '@data/classic-five';
+import { fixtureShip } from '../support/arm-ship';
+import { ARES_VII_LANDING, VESPER_LANDING, LAST_LIGHT_LANDING } from '@data/authored-ships';
 import {
   BAY_SLOTS, COLONISTS_PER_POD, DOT_WIDE_LESSON_SEC, LANDING_NONE_LEFT_SEC, LANDING_TACTICAL_WARP, LZ_WIDTH_KM, MAX_LINE_CHARS,
   NO_GO_NEAR_EDGE_KM, OFF_SITE_SCORE_BY_CLASS,
@@ -201,7 +202,9 @@ function runtimeOf(def: ShipLandingDef): { lzs: LzState[]; noGo: NoGoArcState[] 
   const classes = Object.keys(OFF_SITE_SCORE_BY_CLASS) as LandingState['forgiveness'][];
   const zero = classes.every((cls) => podPoints('no-go', 'soft', cls, COLONISTS_PER_POD) === 0 && podPoints('no-go', 'hard', cls, COLONISTS_PER_POD) === 0);
   check(`a pod in a no-go arc scores 0 on every class (${classes.join(', ')}), soft or hard`, zero && classes.length === 3);
-  const armed = CLASSIC_FIVE.filter((ship) => ship.landing.noGo.length > 0);
+  // Track RETIRE: run 1's authored five (the arm's VESPER keeps phase 2's arcs and centres, 6 · 5 · 5 pods).
+  const authored = [0, 1, 2, 3, 4].map((index) => fixtureShip(index));
+  const armed = authored.filter((ship) => ship.landing.noGo.length > 0);
   check('VESPER and LAST LIGHT carry the no-go arcs (LAVA ×2, CLIFFS)', armed.map((ship) => ship.landing.noGo.map((arc) => arc.word).join('+')).join(', ')
     === 'LAVA+LAVA, CLIFFS', armed.map((ship) => ship.name).join(', '));
   for (const ship of armed) {
@@ -218,7 +221,7 @@ function runtimeOf(def: ShipLandingDef): { lzs: LzState[]; noGo: NoGoArcState[] 
   }
   // The reach (risk 13): VESPER's LZ-B ends at 183.38°, its lava starts at 184.9° (90 km on). A dot centred at 183.0° (in
   // the bracket) reaches the lava at ±117 km (Sensor Interp degraded at 6,000 km) but not at ±78 (healthy).
-  const vesper = runtimeOf(classicShip(3).landing);
+  const vesper = runtimeOf(VESPER_LANDING);
   const wide = noGoInReach(vesper.noGo, dotAt(183.0, 117).dot!, R);
   check('noGoInReach: VESPER\'s LZ-B edge, ±117 km reaches the LAVA, ±78 km does not', wide?.word === 'LAVA'
     && noGoInReach(vesper.noGo, dotAt(183.0, 78).dot!, R) === null);
@@ -236,14 +239,15 @@ function runtimeOf(def: ShipLandingDef): { lzs: LzState[]; noGo: NoGoArcState[] 
     const apart = Math.min(Math.abs(arc.centreDeg - lz.centreDeg), 360 - Math.abs(arc.centreDeg - lz.centreDeg));
     return (apart - arc.widthDeg / 2 - (LZ_WIDTH_KM[lz.width] / 2 / R) / DEG) * DEG * R;
   })));
-  const vesper = classicShip(3);
-  const last = classicShip(4);
+  // The authored blocks (data/authored-ships.ts): VESPER's written 12-pod landing, LAST LIGHT's 16.
+  const vesper = { landing: VESPER_LANDING };
+  const last = { landing: LAST_LIGHT_LANDING };
   const passes = (def: ShipLandingDef, pods: number): boolean => { try { validateLandingDef('t', def, pods, R); return true; } catch { return false; } };
   check('VESPER and LAST LIGHT pass the 150 km rule (their nearest arcs 88–90 km from a bracket edge)',
     passes(vesper.landing, 12) && passes(last.landing, 16) && near(gapKm(vesper.landing), 88, 3) && near(gapKm(last.landing), 88, 3),
     `${gapKm(vesper.landing).toFixed(0)} km, ${gapKm(last.landing).toFixed(0)} km`);
   // ARES-VII's WIDE LZ-A (160°) ends at 164.22°; a 4° arc's near edge 200 km (3.38°) past it is centred at 169.6°.
-  const ares = classicShip(0).landing;
+  const ares = ARES_VII_LANDING;
   const arcAt = (gapKmWanted: number): ShipLandingDef => ({ ...ares, noGo: [{ centreDeg: 160 + (LZ_WIDTH_KM.wide / 2 / R) / DEG + gapKmWanted / R / DEG + 2, widthDeg: 4, word: 'LAVA' }] });
   check(`a crafted arc 200 km from the nearest bracket edge throws; 140 km passes (NO_GO_NEAR_EDGE_KM ${NO_GO_NEAR_EDGE_KM})`,
     !passes(arcAt(200), 3) && passes(arcAt(140), 3) && near(gapKm(arcAt(200)), 200, 0.5));
@@ -292,7 +296,7 @@ function runtimeOf(def: ShipLandingDef): { lzs: LzState[]; noGo: NoGoArcState[] 
 
 // --- Every DROP line fits the strip, with worst-case values -----------------------------------------------------------
 {
-  const words = CLASSIC_FIVE.flatMap((ship) => ship.landing.noGo.map((arc) => arc.word));
+  const words = [0, 1, 2, 3, 4].flatMap((index) => fixtureShip(index).landing.noGo.map((arc) => arc.word));
   const longestWord = words.reduce((a, b) => (b.length > a.length ? b : a), 'LAVA');
   const lz = 'LZ-D';
   const lines = [

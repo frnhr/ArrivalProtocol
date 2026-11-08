@@ -13,7 +13,6 @@
 //   this check only; 4a builds AUTOBURN alone).
 // • Graded damage's watcher (03 §3.5): 'skill-version' on a step down and back up while flying, silent on a ship's first
 //   tick and at the desk, and a file under REPAIR (offline) reads OFF.
-import { withClassicWorld } from '../support/classic-fixture';
 import { check, finish } from '../landing/checks';
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
@@ -151,13 +150,6 @@ offTrained();
   setCourse(fresh, 2);
   sendNow(fresh);
   check('no capture yet: `> SKILL TRAINED: AUTOBURN.skl v1 · UNTRAINED 40%`', skillBootLines(fresh.getState())[0]?.text === '> SKILL TRAINED: AUTOBURN.skl v1 · UNTRAINED 40%');
-  const classic = createStore<GameState>(withClassicWorld(() => createInitialState({ seed: 7 })));
-  classic.update((draft) => { draft.run.phase = 'report'; });
-  toDesk(classic);
-  giveSkillFile(classic, 'autoburn', 1);
-  check('the classic world has no tree: trainCell and RESTORE refuse (closed), and a given file is never announced',
-    trainCell(classic, 'autoburn', lock(1)) === 'closed' && restoreSkill(classic, 'autoburn') === 'closed'
-      && openBranchesAt(classic.getState(), visitNow(classic.getState().run)).length === 0);
 }
 
 // --- The 'after-seeds' latch ----------------------------------------------------------------------------------------------

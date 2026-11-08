@@ -46,7 +46,7 @@ const NT = UNKNOWN_TEXT.card.noTransponder;
 
 setLandingMode('manual');
 h.newRun(SEED);
-startRun(h.store, SEED, FIRST_RUN_LINEAGE, 'arm');
+startRun(h.store, SEED, FIRST_RUN_LINEAGE);
 if (!receiveTransmission(h.store)) throw new Error('events: not on the title');
 h.stepUntil(() => st().run.phase === 'flight', 30);
 const to = (slot: number): void => {

@@ -23,7 +23,7 @@ export interface TracePlace {
 
 // The run's traces (RunState.traces, saved): rolled once at RUN START from the last unit's ending (R30) on the run's own
 // 'traces' stream (R4: no stored arm moves). `from` is null when the last unit left no ending (run 1, a lost or abandoned
-// last run, a v7 run resumed under v8, the classic world): then there are no traces this run.
+// last run, a v7 run resumed under v8): then there are no traces this run.
 export interface RunTraces {
   from: { unit: number; ending: EndingRecord } | null;
   kinds: TraceKind[];           // the ending's step-1 and step-2 traces, in that order ('followed' has none)

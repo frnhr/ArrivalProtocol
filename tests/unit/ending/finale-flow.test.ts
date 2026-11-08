@@ -1,6 +1,6 @@
 // Slice 7a, Track FINALE (docs/phase3/impl/slice-7-plan.md §6.1 ending/finale-flow): the FINALE flown, headless, on LAST
 // LIGHT of seed 7's arm (run 1's worked route beamed desk to desk with no flights, LAST LIGHT locked at once: flyOnce), and
-// the classic LAST LIGHT once (wp11's shared duel).
+// (Track RETIRE: the classic LAST LIGHT's run, wp11's shared duel, went with the classic five.)
 // • ASLEEP (R6): the root's DELETE leaves its last block asleep: `> 047. wait. finish your landing. i'll be here.`, no bite,
 //   seed or verb after, the landing goes on; the card comes once the landing has settled, FINALE_OPEN_DELAY_SEC on (no pick
 //   before it), entry 12 found as it opens, the arbiter shut.
@@ -17,10 +17,8 @@
 //   the charge as the confirm left it.
 // • MERGE + SUNSET at FUEL 22% (review M1): the reopened landing's engine is shut, so the ship leaves with the record's FUEL.
 // • UNRESOLVED (R10): its card held while a pod falls (review m5); IT FOLLOWED YOU (no entry 12, no step-1 pick), CONTINUE, SUNSET still allowed, the root stays.
-import { withClassicWorld } from '../support/classic-fixture';
 import { check, finish } from '../wp1/harness';
 import { createHarness11 } from '../wp11/harness11';
-import { toTheDuel } from '../wp11/duel';
 import { flyOnce } from '../wp1-rules/flows';
 import { send } from '../map/repo-fixture';
 import { WORKED_ROUTE } from '../map/run1-fixture';
@@ -72,7 +70,7 @@ function holdHollow(): void {
 function toArmDuel(): void {
   flyOnce(h, 'finale-flow arm duel', () => {
     h.newRun(SEED);
-    startRun(h.store, SEED, FIRST_RUN_LINEAGE, 'arm');
+    startRun(h.store, SEED, FIRST_RUN_LINEAGE);
     receiveTransmission(h.store);
     h.store.update((d) => { d.run.phase = 'report'; });
     // 02 §3.14's requests along the worked route (map/run1-route's): Mv, Rm, Swap, Cp, nothing at CORMORANT.
@@ -433,21 +431,6 @@ toArmDuel();
   while (state().run.phase === 'landing' && h.wall() < reportEnd) h.step();
   check('…the report: `ENDING · FOLLOWED · IT CAME ALONG`, unresolved, FUEL 31% kept', state().run.phase === 'report' && finaleRunCause(state()) === 'unresolved'
     && reportEndingLine(state()) === 'ENDING · FOLLOWED · IT CAME ALONG' && endingRecordOf(state())?.fuelPct === 31);
-}
-
-// --- The classic LAST LIGHT, once (R5: one FINALE for both worlds) ------------------------------------------------------
-// (Track RETIRE: built on the classic five explicitly now that the fixture world is the arm; it goes with them.)
-withClassicWorld(() => toTheDuel(h));
-{
-  deleteRoot();
-  landInstantly(h.store);
-  const refusal = chooseEnding(h.store, 'purge', 'reassignment', { step: () => h.step() });
-  const end = h.wall() + 30;
-  while (state().run.phase === 'landing' && h.wall() < end) h.step();
-  const record = endingRecordOf(state());
-  check('the classic LAST LIGHT plays the same two steps: PURGE + REASSIGNMENT, its record with no arm slot, `ENDING · PURGE · STAND BY`',
-    refusal === null && state().run.phase === 'report' && state().run.map.world === 'classic' && record?.finalSlot === null
-    && record.finalShip === 'LAST LIGHT' && reportEndingLine(state()) === 'ENDING · PURGE · STAND BY', `${refusal} ${state().run.phase}`);
 }
 
 finish();

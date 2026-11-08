@@ -346,7 +346,7 @@ export interface ArrivalReport {
   chargeOverflowLost: number; // charge that did not fit memory and was lost (loudly)
   scripted: TransitHit[];   // the ship's own arrival damage (§6.9: KESTREL's sensor, VESPER's Thrust Ctrl)
   // Phase 3 slice 3a: the hits ECC corrected while the unit slept (02 §3.3: the hop's transit hits plus the extras, minus
-  // what landed). 0 on the classic world (no slack) and on ship 1; the boot's ECC block says it (systems/map-boot.ts).
+  // what landed). 0 on ship 1; the boot's ECC block says it (systems/map-boot.ts).
   eccCorrected: number;
   // Phase 3 slice 2 (04 §3.4, §3.8): the beam seeds laid out behind their targets (the boot's ECC seeds line names each),
   // and HOLLOW's root when it boarded on this beam (the 108% unpack line, the boarding moment). Empty / null otherwise.
@@ -354,7 +354,7 @@ export interface ArrivalReport {
   boarded: { blocks: number; cause: 'trace' | 'forced' } | null;
   // Phase 3 slice 3b (02 §3.9): the deliveries that crossed on this hop, oldest first, as laid out (their files' ids). The
   // boot's `> DELIVERY:` lines, the patch's install (systems/delivery-boot.ts receiveDeliveryAtBoot) and the untried kinds
-  // read it. Empty on the classic world and on ship 1.
+  // read it. Empty on ship 1.
   deliveries: ArrivalDelivery[];
   // Slice 4 (plan §2.14): the skill files that crossed, as laid out: trained or restored at the desk, packed lower (PACK
   // AS), carried as they were, or granted (slice 5). The boot's TRAINED / RETRAINED lines read it. Empty on ship 1.
@@ -391,7 +391,7 @@ export interface ArrivalSeed {
 // The TRANSMIT screen (WP7 part 2) reads it; transmitNext sends it.
 export interface TransitPlan {
   toShipIndex: number;      // the destination's position on the route (its depth − 1)
-  toSlot: number;           // the destination's slot (systems/map-run.ts shipDefAt): the classic world's index
+  toSlot: number;           // the destination's slot (systems/map-run.ts shipDefAt)
   hop: Hop;                 // the beam to it (systems/map-hop.ts): its link, hits, ECC, years and the destination's room
   linkBlocks: number;       // hop.linkBlocks (the draft and the PACKET read it here)
   filesBlocks: number;
@@ -411,7 +411,7 @@ export interface TransitPlan {
   threat: ShipThreat;
   // Phase 3 slice 3b (02 §3.9, plan §2.3): the deliveries that ride this hop (systems/repository.ts deliveriesForHop at
   // goTransmit; the PACKET's SEND ON toggles them). The ones not sent on are files of the packet (systems/draft.ts
-  // planPacket is the one adder), so the link, the room, the draft and the gate count them once. Empty on the classic world.
+  // planPacket is the one adder), so the link, the room, the draft and the gate count them once. 
   deliveries: DeliveryChip[];
   // Slice 4 (4b, 03 §3.3 round-2 decision 10): the skill files the PACKET packs at a lower level (PACK AS v1), by segment id.
   // ◀ CHART forgets it like the drops. The packed copy keeps its integrity and infection, at the lower version's size.
@@ -445,7 +445,7 @@ export interface RunState {
   unitNumber: number;       // 47 on run 1 (UNIT-047), 47 + runs after (WP8: the archive counts them)
   wave: number;             // the fleet wave: 1 on run 1, runs + 1 after
   // How the last unit's run ended, from the archive (§4.5; null on the first run): its ghost greets this
-  // unit at the boot of the ship where that run ended, never ship 1 (systems/meta.ts ghostShipIndex), and HOLLOW is it
+  // unit at the first boot in or past the layer where it was lost, never ship 1 (systems/meta.ts ghostPlaceReached), and HOLLOW is it
   // (hollowUnits).
   lastUnit: LastUnit | null;
   // The last unit's ghost has typed its line at a boot this run (systems/boot.ts, systems/meta.ts ghostLineDue): it speaks
@@ -462,13 +462,11 @@ export interface RunState {
   // wave but taught nothing, so the next one still gets the STASIS step and the ENGINE I/O lesson.
   tutorial: boolean;
   // The unit's position on the route (depth − 1): 0 on ship 1 (the tutorial checks). Which ship that is lives in
-  // `map` (systems/map-run.ts currentShip); on the classic world it is also the slot.
+  // `map` (systems/map-run.ts currentShip).
   shipIndex: number;
   // The run's map (phase 3 slice 3a, types/map.ts): the world, the arm, the route so far, the galaxy year.
   map: RunMapState;
-  // The fs-tool kinds that have reached the unit this run (§3.2, §6.5). On the classic world each is a licence ARRIVAL
-  // CONTROL issued (it installs the tool's files once; they carry with the unit, so a licence is never issued twice:
-  // systems/licences.ts installTool throws on a second). Phase 3 slice 3b changes the meaning on the arm (plan §2.2):
+  // The fs-tool kinds that have reached the unit this run (§3.2, §6.5; phase 3 slice 3b's meaning, plan §2.2):
   // SCAN at the start, REPAIR by its first-look rule, every other kind by its first delivery from the repository (a later
   // delivery of a kind already here is a spare copy and changes nothing here; deliveries never call installTool).
   licences: FsToolKind[];
@@ -481,7 +479,7 @@ export interface RunState {
   coreLost: boolean;
   // The skill tree's history (phase 3 slice 4, types/skill.ts RunSkillState; replaces phase 2's skillTrainedOn): what each
   // ship earned, the grants, what was bought and what this desk has pending. The bank and the levels are derived from it
-  // and memory (systems/skill-tree.ts). Kept on every world (the classic world earns but has no desk to spend at).
+  // and memory (systems/skill-tree.ts). 
   skills: RunSkillState;
   // The ship whose boot reissued REPAIR (WP12, the lead's ruling of 2026-10-21 06:20): the unit arrived with no
   // working copy of it, so ARRIVAL CONTROL renewed the licence (systems/licences.ts renewRepairAtBoot); CONTROL says
@@ -508,7 +506,7 @@ export interface RunState {
   repo: RunRepoState;
   inbox: RunInboxState;
   // Phase 3 slice 3c: the next unit, as the world update at RUN END worked it out (RUN END's bridging line `UNIT-048 LEFT
-  // SOL 3 YEARS AFTER YOU, IN 2303`). null until the run ends, and on the classic world (never updated).
+  // SOL 3 YEARS AFTER YOU, IN 2303`). null until the run ends.
   next: NextLaunch | null;
   // Phase 3 slice 5 (plan §2.2): every resident met (one record per resident ship ended, systems/residents.ts
   // residentShipEnd) and the signal fragments found in departed residents' notes.
@@ -630,7 +628,7 @@ export interface FinaleState {
   // Step 1's pick and step 2's (R7: a pick until step 2's confirm applies both; set for good from 'verdict' on).
   hollow: HollowFate | null;
   you: YouChoice | null;
-  // STAY's ship (R9): its slot on the arm, its route index on the classic world. null for every other step 2.
+  // STAY's ship (R9): its slot on the arm. null for every other step 2.
   stay: number | null;
   // The pods MERGE gave back (7a: their drivers restored in place, R15; 7b: by radio). Only pods whose driver was eaten.
   restored: number[];

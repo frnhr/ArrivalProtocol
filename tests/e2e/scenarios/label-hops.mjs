@@ -6,7 +6,8 @@
 // • HALCYON's opener burn (the older START BURN jitter, minor 4): no hop; and at its far zoom, before the burn and after
 //   it, no marker label on the small ring (and the planet inside it) or on the drawn path (round 1's fix 12).
 // • Slice 3a (the galaxy map): the page plays run 1's arm, so ship 1 is the arm's ARES-VII (COMPACT, five racks); HALCYON
-//   stays the classic one (__ap.ship(1)); and one arm ship more, PETREL (TIGHT: four racks, A B C E), by __ap.slot(1): its
+//   is run 1's on the worked route (__ap.ship(1); Track RETIRE retired the classic one it used to be); and one arm ship
+//   more, PETREL (TIGHT: four racks, A B C E), by __ap.slot(1): its
 //   opener at the far zoom and under a burn (no label on the ring, the planet or the path, no hop), and the MIND strip
 //   laid out in its class's four racks, inside the screen.
 // A side change: the label's centre jumps over 10 px between two 50 ms samples, or its text-anchor changes.
@@ -46,7 +47,8 @@ for (const viewport of viewports) {
     return false;
   };
 
-  // `index` 1–4: a classic ship by __ap.ship; `armSlot`: a ship of run 1's arm by __ap.slot from ARES-VII.
+  // `index` 1–4: run 1's authored ship by __ap.ship (the worked route); `armSlot`: a ship of run 1's arm by __ap.slot from
+  // ARES-VII.
   async function startShip(index, armSlot = null) {
     // A fresh run 1 (slice 3c: no archive and no run save, cleared before leaving the last page too, so it never opens on
     // the last run's save).

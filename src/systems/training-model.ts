@@ -427,7 +427,7 @@ export function trainingModel(state: Readonly<GameState>): TrainingModel {
     moreLater: picked ? TRAINING_TEXT.moreLater : null,
     ahead: aheadLine(state, slot),
     aheadSite: surveyAheadLine(state, slot),
-    preview: run.map.world === 'arm' ? previewFor(state, slot) : null,
+    preview: previewFor(state, slot),
     lastUnitLine: lastSkills === null || lastSkills.length === 0 ? null
       : TRAINING_TEXT.lastUnit(lastSkills.map((record) => TRAINING_TEXT.cellName(TRAINING_TEXT.skills[record.skill].name, record.version))),
     hold: hold === null ? null : Math.min(1, Math.max(0, hold / TRAINING_HOLD_SEC)),

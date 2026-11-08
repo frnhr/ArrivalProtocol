@@ -11,9 +11,6 @@
 //   freed), a broken patch, Repair.bak before REPAIR's first look (REPAIR still comes by its rule) and a delivered
 //   Repair.bak never cancelling the renewal;
 // • the boot's delivery lines in order, the patch first and never folded, folded past 3;
-// • the classic world's boot plans byte-equal to the pre-3b tree's (classic-boot-plans.txt, from 28ddee8).
-import { withClassicWorld } from '../support/classic-fixture';
-import { readFileSync } from 'node:fs';
 import { check, finish } from '../landing/checks';
 import type { Store } from '@state/store';
 import type { GameState, ArrivalReport } from '@state/schema';
@@ -29,8 +26,7 @@ import { licenceSchedule, isLicensed } from '@systems/licences';
 import { reachableFrom, hopBetween } from '@systems/map-hop';
 import { currentSlot, isEndSlot } from '@systems/map-streams';
 import { assertMemoryInvariants } from '@systems/memory-ops';
-import { createInitialState } from '@state/initial';
-import { bootLinePlan, bootLine } from '@data/script';
+import { bootLinePlan } from '@data/script';
 import { layoutOf } from '@data/memory';
 import { REPO_FILES } from '@data/repository';
 import { REPO_TEXT, REPO_FILE_TEXT } from '@data/repo-text';
@@ -201,7 +197,7 @@ const repairs = (store: Store<GameState>) => at(store).memory.filter((seg) => se
   const bak = at(early).run.arrival!.deliveries[0]!;
   check('Repair.bak before REPAIR\'s first look: delivered as a spare (not first of kind), REPAIR still unlicensed',
     bak.file === 'repair-bak' && !bak.firstOfKind && !isLicensed(at(early), 'repair') && !at(early).hollow.untriedTools.includes('repair'));
-  const schedule = licenceSchedule(at(early).run.shipIndex, 'arm');
+  const schedule = licenceSchedule();
   check('…the arm\'s schedule is REPAIR\'s rule alone, and it is due: REPAIR still comes', schedule.length === 1 && schedule[0]!.kind === 'repair' && schedule[0]!.due(at(early)));
 
   const renew = armRun();
@@ -306,32 +302,6 @@ const repairs = (store: Store<GameState>) => at(store).memory.filter((seg) => se
   check(`the preview equals the layout over ${mixes} random mixes (the send's own assert, delivery seeds included), and every rule held`,
     bad.length === 0 && sent === mixes, bad.slice(0, 5).join(' | '));
   check('…the mixes exercised seeds on deliveries and transit hits on them', seeded > 0 && hitOnDelivery > 0, `${seeded} seeded, ${hitOnDelivery} hit`);
-}
-
-// --- The classic world's boot plans, byte-equal to the pre-3b tree's --------------------------------------------------------
-{
-  const pinned = readFileSync(new URL('./classic-boot-plans.txt', import.meta.url), 'utf8').trimEnd();
-  const out: string[] = [];
-  for (let index = 0; index <= 4; index++) {
-    for (const variant of ['bare', 'hits'] as const) {
-      const base = withClassicWorld(() => createInitialState({ seed: 4, shipIndex: index, carried: 'fresh', phase: 'boot' }));
-      // A classic arrival that somehow carried a delivery still boots as phase 2's (the classic world has no repository).
-      const arrival: ArrivalReport | null = index === 0 ? null : {
-        hits: variant === 'hits' ? [{ segId: 'x', fileName: 'Telemetry', role: 'telemetry', from: 100, to: 70 }] : [],
-        chargeCarried: 30, starCredit: variant === 'hits' ? 12 : 0, stars: variant === 'hits' ? 2 : 0, card: null, cardCharge: 0,
-        chargeFloorAdded: 0, chargeOverflowLost: 0, scripted: [], eccCorrected: 0, seeds: [], boarded: null,
-        deliveries: variant === 'hits' ? [{ key: 'rq1', file: 'mv', segIds: ['x'], arrivedYear: 2400, firstOfKind: true, seeded: false }] : [],
-        skills: [], traceLines: [], giftCharge: 0,
-      };
-      const state = { ...base, run: { ...base.run, arrival } } as GameState;
-      for (const skill of [false, true]) {
-        const lines = bootLinePlan(state, skill ? 1 : 0).map((kind) => (kind === 'skill' ? 'skill' : `${kind}: ${bootLine(kind, state, {} as never)}`));
-        out.push(`${index} ${variant} ${skill} ${lines.join(' | ')}`);
-      }
-    }
-  }
-  check('the classic five\'s boot plans and lines are byte-equal to the pre-3b tree\'s (20 plans)', out.join('\n') === pinned,
-    out.find((line, i) => line !== pinned.split('\n')[i]) ?? '');
 }
 
 finish();

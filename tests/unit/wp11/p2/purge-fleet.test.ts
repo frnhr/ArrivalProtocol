@@ -3,8 +3,8 @@
 // TRANSMIT onward, `lossPlan`); VESPER locked; LAST LIGHT locked, its root DELETEd, PURGE. Then:
 // • the typed ending's fleet line names how many ships made it (`4 of 5 ships made it home.`), not `the fleet is home.`;
 // • RUN END's title and line say the same in PURGE's voice (`LAST LIGHT · 4 OF 5 HOME`, `You deleted it. 4 of 5
-//   ships made it home.`), still the victory tone (the flagship's colonists landed); (WP11 fix round 1: the title was
-//   `… 4 OF 5 CLASSIC_FIVE MADE IT`, which broke onto two lines; and the title's lineage after it never claims the fleet);
+//   ships made it home.`), still the victory tone (the flagship's colonists landed); (WP11 fix round 1: the title once named the
+//   whole fixed fleet, which broke onto two lines; and the title's lineage after it never claims the fleet);
 // • the words fit one line with the worst numbers; a fleet that all made it keeps the full claim (the model alone).
 // Slice 7a (R6, R13): PURGE is taken on the two-step card once the landing has settled, and its typed ending is the short
 // verdict: it makes no fleet claim at all (the count is RUN END's, below, and the epilogue's).
@@ -12,7 +12,7 @@ import { check, finish } from '../../wp1/harness';
 import { createHarness11 } from '../harness11';
 import { receiveTransmission } from '@systems/boot';
 import { lossPlan } from '@systems/run';
-import { continueAfterReport, continueAfterLoss } from '../../support/classic-flow';
+import { continueAfterReport, continueAfterLoss } from '../../support/desk';
 import { fleetHome } from '@systems/run-score';
 import { endFlight } from '@systems/orbit-sim';
 import { runEndModel } from '@systems/run-end';

@@ -1943,7 +1943,7 @@ Track RETIRE, on branch `retire` from baffe52. OPEN-DECISIONS items 85–88 hold
   - `wp7/p2-models`, `wp8/fix1/fixes`: their models' numbers are the classic route's (22 LY, link 120). `wp8/fix1` also
     plays runs 2 and later, whose second ship is a TIGHT roll.
 
-### Phase 3, not started
+### Phase 3, as planned at the fourth pass (done: see "Fifth pass / phase 3" below)
 
 - Gate: the 4 above are gone.
 - Then delete:
@@ -1968,3 +1968,122 @@ None was run, as asked. No scenario uses `?world=classic`; these use `__ap.ship(
 - `skills-4cde-sentry`: `__ap.ship(2)` and `(3)`.
 
 Phase 3's `__ap.ship` change breaks all four. Nothing on this branch touches them.
+
+### Fifth pass / phase 3
+
+On branch `retire-final` from cfd99df. Done: the last 4 suites moved, and phase 3 in full. Quick suites: 226, every one
+on the arm (the classic world no longer exists). Checks: 5,795 → 5,752; every one of the 43 is listed below.
+
+**The last four (phase 2):**
+
+- `landing/review-1b` (43 → 38):
+  - M2's five checks are deleted as classic-only, as decided. They were a SKIP stopping on the landing's first burst, that
+    burst at TACTICAL and at LANDING_BURN_POWER, L7b's `SWAP THRUST CTRL` row, and the SWAP that silences it. The arm's
+    engine fires nothing once the orbit is locked (`capabilities.ts ghostSpecOf`); `landing/engine-landing` checks that.
+  - **L7b is unreachable on the arm, so it is removed.** Its `ghostSwap` needs Thrust Ctrl's own ghost during the landing,
+    and `ghostSpecOf` returns null there. A corrupted resident fires in flight only (`residentGhostSpec`). Removed: the row,
+    `LandingContext.ghostSwap`, `ghostLine` and `LANDING_GHOST_LINES`. `landing/table`'s seven L7b checks went with the row
+    (98 → 91). `LandingState.ghostBursts` stays, because it is a save field, but on the arm it is always 0.
+  - The two lift checks are re-measured on phase 2's twelve-pod KESTREL (`phase2Ship`). The arm's six pods land in three
+    windows with 5.6 orbits still to go, so the lift is never due (▼ 5,093 km). With twelve pods the lift is offered at 4.0
+    orbits, after four windows have closed, and between windows.
+- `opening/ghost-placement` (16 → 16):
+  - UNIT-047 is lost (overwritten) at CORMORANT on run 1's worked route, so its grey cross is at slot 15, layer 6.
+  - Run 2 flies `routeThroughBoarding`: the shortest route that climbs a layer per hop (`support/desk climbingRoutes`, new),
+    with HOLLOW's forced boarding on the beam into the stop in the cross's layer. On seed 31 that is 0-2-9-15-19, and CURLEW
+    boards. The ships before the boarding keep one check each.
+  - Re-expressed for the arm:
+    - the boarding boot says the receiver's sleep line between the ghost and the 108% unpack;
+    - HOLLOW's notice is read from the tick it is told, because on the arm its verbs (`> infect pod08`) also speak in
+      HOLLOW's voice.
+- `wp7/p2-models` (54 → 54), re-measured on the worked route:
+  - the headline is `NEXT: HALCYON · 1,000 COLONISTS · 21 LY · 31 YRS EARLY`, LINK 123;
+  - AUTOBURN.skl rides last in the packet, locked `TRAINED HERE`;
+  - ECC corrects one of the three hits. The two that land take Sensor Interp to 60, under HALCYON's own 62, so the ECC line
+    is the only flash;
+  - RUN END's fleet is the route's: 11,000 on the worked route; FINAL SHIP LOST on HALCYON reads 1,400 / 1,600. Ranks are
+    absolute.
+- `wp8/fix1/fixes` (23 → 23):
+  - Each later page's run sails its own arm's shortest climbing route.
+  - The FIREWALL lesson's ship 2 on seed 15's run is a TIGHT roll (SKYLARK), so `phase2Ship` learned TIGHT: when the
+    packet is larger than rack E it starts at its AI Core, and FULL's rack F is laid out free behind it.
+  - That boot says more on the arm (the receiver, the ghost, the INBOX), so it gets 40 s instead of 20.
+
+**Deleted in src**, all because the arm is the only world now:
+
+- `data/classic-five.ts` and `data/classic-slots.ts`.
+- `classicRunMap`, `classicRoute` and `classicHop`, and every `world` branch: about 120 guards in about 40 files, among
+  them the desk, the INBOX and REPOSITORY windows and the desk tabs.
+- `useClassicFixture`, `inFixtureWorld` and `fixtureWorldNow`.
+- The classic licence schedule: `licenceSchedule()` is REPAIR's rule alone, and `TimedLicence` is gone.
+- `GHOST_BY_BAND`. Its load-time check now compares ARM_GHOST_BY_BAND's bands with each other.
+- `ghostShipIndex`. The ghost speaks by the grey cross's layer, and `ghostLineDue` takes the run's map.
+- `fixedShipFacts`, `nominalRunThreat` and `nominalShipThreat`. Ship 1 now uses `firstShipFacts`, `firstShipThreat` and
+  `firstShipRunThreat`. A later ship's nominal verdict comes from its route (`arm-fixture nominalAlong`, and
+  `support/arm-ship fixtureVerdict` in the suites).
+- `freshUnitRacks`'s classic defaults: the link and the verdict are now required.
+- `rankBasis`'s classic scaling (`rankBasis()` is RANK_FLEET_COLONISTS), and `fleetColonists`'s classic default map.
+- `trailOf`'s null: it always has a trail now.
+- The `world` fields of `TransmitModel` (`arm`), `RepoModel` and `ChartModel`.
+- `repairableShipFile`'s and `repairCeiling`'s run parameter.
+- Dead classic text: `TRANSMIT_TEXT.next`, `MAP_TEXT.chart.notNext`, `INBOX_TEXT.window.classic`,
+  `REPO_TEXT.window.classic` with its `.rp-classic` style, and the codec's `'classic'` refusal kind and its words
+  (OPEN-DECISIONS 87).
+
+**The codec (item 87):** `RunMapState.world` is the literal `'arm'`, and the codec's `oneOf('arm')` refuses any other value as
+`shape`. `save/codec` checks that a hand-edited `world: 'classic'` payload is refused cleanly
+(`shape: payload.run.map.world 'classic' is not one of arm`), not thrown. The encode-throws check on a classic map is deleted
+(29 → 28), because the type makes that map impossible.
+
+**`__ap.ship(n)`** is run 1's authored ship n along the worked route, through `debugRoute`. It works on run 1 only and
+throws on a later run's arm. `__ap.board` forces the boarding on the route as it stands.
+
+**Tests:**
+
+- Deleted with their classic-only branches. Each one tested no repository, no tree, no traces, no mail, the fixture years,
+  phase 2's desk, rank scaling or ghost rule, or the boot plans:
+  - `skills/cycles` 3; `skills/training-flow` 1;
+  - `map/desk-chrome` 2, `map/inbox` 2, `map/repository` 2, `map/beacon-row` 1, `map/desk-models` 1, `map/ghost-noswap` 1,
+    `map/run-tally` 1;
+  - `map/delivery-packet` 1 (the boot plans, with `map/classic-boot-plans.txt`);
+  - `map/world-slots` 4 (the classic places, route and summary);
+  - `traces/lineage` 1, `traces/foundation` 1, `world/lineage` 1;
+  - `ending/finale-flow` 1, `ending/foundation` 1;
+  - `residents/ui-models` 1, `residents/foundation` 1, `survey/foundation` 1;
+  - `wp8/ghost` 4 (`ghostShipIndex`).
+  - Classic clauses were also dropped from checks that otherwise stay: `traces/ui-models`, `traces/foundation`,
+    `world/lineage` and `residents/foundation`.
+- Moved, or re-expressed on the arm:
+  - `skills/cycles`'s grantCycles check now uses an arm store.
+  - `threat/plan`'s fixed five became the worked route's nominal threat (27 → 28): calm, calm, seeds, seeds, CORMORANT
+    boarding forced with WALLS (10), and LAST LIGHT's FINALE with the DEAL (16).
+  - `wp8/ghost`'s three `ghostLineDue` checks run on the worked route, lost at VESPER.
+  - `landing/rules`: the authored five carry 3 / 5 / 6 / 16 / 16 pods, 9,200 colonists. The classic five carried 3 / 5 /
+    12 / 12 / 16, 9,600.
+  - `landing/drop-model` reads the authored blocks.
+  - `landing/flow`'s receiver check uses each ship's own class.
+  - `wp5/layout` builds ARES-VII laid out FULL.
+  - `wp7/carry` and `wp7/fix1/empty-charge` use `phase2HalcyonDef` on the worked link (123).
+  - `save/review-fixes`'s repro-phone2 writes an activeRun with its trail taken out, the shape the classic jump left.
+  - The import guard's second root is `data/run1-arm.ts`.
+- Helpers:
+  - `support/arm-ship` gains `fixtureHop` and `fixtureVerdict`.
+  - `support/classic-flow`'s arm half moved to `support/desk`; `support/classic-world` and `support/classic-fixture` are
+    deleted.
+  - `harness9`, `harness10` and `wp11/duel` lost their classic branches.
+
+**e2e:** each scenario was run alone with Chromium (/opt/pw-browsers/chromium), and all pass:
+
+- `beam-blue` 26: the FULL leg is run 1's VESPER (`__ap.ship(3)`) now;
+- `label-hops` 40;
+- `phone` 127: its BEAM OUT section also clears the archive, so it plays run 1;
+- `skills-4cde-sentry` 11.
+
+**Left, on purpose:**
+
+- `DraftContext.salvageOnly` and `.tree` are always true in the game. The pool's non-salvage cards are now dealt only to the
+  pure draft suites' bare contexts. Trimming the pool is balance data, so it is left for slice 8.
+- `worldSlotOf` and `isEndSlot` keep their map parameter (on the arm, a slot is its world), to avoid churn in about 20
+  callers.
+- `ShipSummary.reserved` stays nullable.
+- `ghostBurstsThisPhase`'s landing half stays; it is dead on the arm (see L7b above).

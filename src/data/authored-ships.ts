@@ -3,9 +3,8 @@ import type { ShipLandingDef } from '@/types/landing';
 import type { PodRackName } from '@/types/map';
 
 // THE AUTHORED FIVE's written blocks (Track RETIRE, slice-4cde-plan §9.2 phase 1): the parts of ARES-VII, HALCYON, KESTREL,
-// VESPER and LAST LIGHT that run 1's arm writes as they are (data/run1-arm.ts RUN1_AUTHORED), and that were read from the
-// classic five until the retirement. Phase 2's ships, written once, here; data/classic-five.ts imports them back, so the
-// classic five stay byte-identical while the suites still fly them. Data only: no system, no load-time check.
+// VESPER and LAST LIGHT that run 1's arm writes as they are (data/run1-arm.ts RUN1_AUTHORED): phase 2's ships, written
+// once, here (the classic five that read them too are retired). Data only: no system, no load-time check.
 
 // ARES-VII, Kepler-186f: one WIDE site for 3 pods on a GENTLE plain. LZ-A at 160° places the first window about 1–4 minutes
 // of TACTICAL after a typical lock near ▼ (ω ≈ −34°, the dot about 80° ahead), the spec's `LZ-A in 3:40`.

@@ -23,7 +23,7 @@ import { createHarness11 } from '../harness11';
 import { theRoot, bittenAgainDrivers, infectNow } from '@systems/hollow';
 import { finaleEndingSec, finaleEndingShowing, continueFollowed, pickStep2 } from '@systems/finale';
 import { finaleRunCause } from '@systems/ending-rules';
-import { continueAfterReport } from '../../support/classic-flow';
+import { continueAfterReport } from '../../support/desk';
 import { runEndModel } from '@systems/run-end';
 import { actionDelete, actionRepair, actionRefusal } from '@state/actions';
 import { reserveThread, releaseThread, threadsTotal, canStartOp, getOps, cancelOp } from '@systems/ops-core';

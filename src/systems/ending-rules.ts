@@ -47,8 +47,8 @@ export function emptyShip(state: Readonly<GameState>): EmptyShip {
 }
 
 // A ship whose colony STAY may mount (R9): every ship of this run whose pods landed ★ ON TARGET (its ShipResult.pods; the
-// final ship by its live tally), newest first: `> mount <colony>` on the row names the first. `slot`: the arm slot (the
-// route index on the classic world); `year`: its approach year (routeYear).
+// final ship by its live tally), newest first: `> mount <colony>` on the row names the first. `slot`: the arm slot;
+// `year`: its approach year (routeYear).
 export interface StayCandidate {
   slot: number;
   shipName: string;
@@ -246,7 +246,7 @@ export function endingRecordAt(state: Readonly<GameState>, hollow: HollowFate, y
     you,
     // Slice 7c (R35): who the root was, the last unit itself after a REASSIGNMENT trace (systems/traces.ts rootUnits).
     rootUnits: rootUnits(state),
-    finalSlot: state.run.map.world === 'arm' ? slot : null,
+    finalSlot: slot,
     finalShip: state.level.shipName,
     finalYear: state.run.map.galaxyYear,
     stay: stayed,

@@ -66,7 +66,7 @@ export function deliveryFiles(chips: readonly DeliveryChip[], memory: readonly S
 // ARRIVAL CONTROL's recommendation for this desk (02 §3.8, first rule that matches; need only, never the ETA). The order is
 // data (RECOMMEND_RULES, as licences.ts's LicenceRule). "Has" is a working copy (usable and not being eaten: what will
 // still be there at the next ship, as noWorkingRm judges) or a request in transit or waiting (plan risk 4). null: none
-// (`You have everything you need :)`), on the classic world, and when nothing sent now can reach the unit before its run
+// (`You have everything you need :)`), and when nothing sent now can reach the unit before its run
 // ends (review M3: a tag on a file that will never arrive; the window says `Nothing can reach you in time now`).
 interface RecommendRule {
   file: RepoFileId;
@@ -105,14 +105,13 @@ export const RECOMMEND_RULES: readonly RecommendRule[] = [
 ];
 
 export function recommendation(state: Readonly<GameState>): RepoFileId | null {
-  if (state.run.map.world !== 'arm' || nothingArrives(state)) return null;
+  if (nothingArrives(state)) return null;
   return RECOMMEND_RULES.find((rule) => rule.due(state))?.file ?? null;
 }
 
 // What the first desk of a run on `map` recommends while the unit has none of the files (the welcome names it, so the two
 // never disagree: inbox.ts): Swap on runs 2+ with an ENGINE FAULT ship in reach of ship 1, else Mv.
 export function firstDeskRecommendation(map: Readonly<RunMapState>): RepoFileId {
-  if (map.world !== 'arm') throw new Error('firstDeskRecommendation: there is no repository on the classic route');
   return map.run > 1 && shipAhead(map, map.route[0]!.slot, REPO_SWAP_LOOKAHEAD_LAYERS, engineFaultAt) ? 'swap' : 'mv';
 }
 
@@ -121,7 +120,6 @@ export function firstDeskRecommendation(map: Readonly<RunMapState>): RepoFileId 
 // tag would point at a file that will never arrive.
 export function nothingArrives(state: Readonly<GameState>): boolean {
   const map = state.run.map;
-  if (map.world !== 'arm') return false;
   const from = currentSlot(state.run);
   const destinations = isEndSlot(map, from) ? [] : reachableFrom(map, from);
   return destinations.length > 0 && destinations.every((to) => deliveryForecast(map, from, to).kind === 'never');
@@ -215,7 +213,6 @@ export interface RepoRestrictedRow {
 }
 
 export interface RepoModel {
-  world: RunMapState['world'];        // 'classic': the window says NO REPOSITORY ON THE CLASSIC ROUTE, every list empty
   selected: number | null;            // the destination the ETAs are for (ui.deskSelected)
   pick: RepoFileId | null;
   recommended: RepoFileId | null;
@@ -233,9 +230,6 @@ export interface RepoModel {
 export function repoModel(state: Readonly<GameState>, selected: number | null): RepoModel {
   const map = state.run.map;
   const pick = state.run.repo.pick;
-  if (map.world !== 'arm') {
-    return { world: map.world, selected, pick, recommended: null, recommendLine: null, forecast: null, eta: null, available: [], inTransit: [], restricted: [] };
-  }
   const from = currentSlot(state.run);
   const recommended = recommendation(state);
   const target = selected !== null && reachable(map, from, selected) ? selected : null;
@@ -266,7 +260,7 @@ export function repoModel(state: Readonly<GameState>, selected: number | null): 
   });
   const restricted = RESTRICTED_ROWS.map((row): RepoRestrictedRow => ({ id: row.id, name: row.name, why: row.why }));
   return {
-    world: map.world, selected, pick, recommended,
+    selected, pick, recommended,
     recommendLine: recommended !== null ? null : nothingArrives(state) ? REPO_TEXT.window.nothingCanReach : REPO_TEXT.window.nothingToRecommend,
     forecast, eta: forecast === null || targetName === null ? null : etaText(forecast, targetName), available, inTransit, restricted,
   };
@@ -288,7 +282,6 @@ function etaText(forecast: DeliveryForecast, ship: string): string {
 export function setRequest(store: Store<GameState>, file: RepoFileId | null): void {
   const state = store.getState();
   if (state.run.phase !== 'desk') throw new Error(`setRequest: not on the DESK (phase ${state.run.phase})`);
-  if (state.run.map.world !== 'arm') throw new Error('setRequest: there is no repository on the classic route');
   if (file !== null && !Object.hasOwn(REPO_FILES, file)) throw new Error(`setRequest: '${String(file)}' is not in the catalogue (restricted rows are never sent)`);
   store.update((draft) => { draft.run.repo.pick = file; });
 }
@@ -315,11 +308,10 @@ export interface OutlookEntry {
 }
 
 // The outlook on the hop from `from` (the current ship) to `to`, oldest request first, the pick last. A destination the
-// unit cannot reach still has an outlook (the card shows TOO LATE ships): the rule is the years, not the reach. Empty on the
-// classic world. A request still in transit carries its lateness at the current ship (advanceRequests keeps it so).
+// unit cannot reach still has an outlook (the card shows TOO LATE ships): the rule is the years, not the reach. A
+// request still in transit carries its lateness at the current ship (advanceRequests keeps it so).
 export function hopOutlook(state: Readonly<GameState>, from: number, to: number): OutlookEntry[] {
   const map = state.run.map;
-  if (map.world !== 'arm') return [];
   if (from !== currentSlot(state.run)) throw new Error(`hopOutlook: from slot ${from}, but the unit is at slot ${currentSlot(state.run)}`);
   const hop = hopBetween(map, from, to);
   const depth = map.route.length + 1;
@@ -383,10 +375,9 @@ export function markFirstOfKind(
 // The deliveries that ride the hop from → toSlot, as chips, in the outlook's order (oldest first, the pick last): waiting
 // ('sent-on'), caught up ('caught-up') and the pick in time ('new'). `threat` is the ladder's verdict for the destination:
 // no seed rides into a calm ship (04 §3.4); nor on a first of kind or the patch; else DELIVERY_SEED_CHANCE by the hop's
-// noise. None on the classic world.
+// noise.
 export function deliveriesForHop(state: Readonly<GameState>, from: number, toSlot: number, threat: Readonly<Pick<ShipThreat, 'act'>>): DeliveryChip[] {
   const map = state.run.map;
-  if (map.world !== 'arm') return [];
   const noise = hopBetween(map, from, toSlot).noise;
   const source = { pick: 'new', 'in-transit': 'caught-up', waiting: 'sent-on' } as const;
   const chips: DeliveryChip[] = hopOutlook(state, from, toSlot).filter((entry) => entry.rides).map((entry) => ({
@@ -404,11 +395,11 @@ export function deliverySeedChance(threat: Readonly<Pick<ShipThreat, 'act'>>, no
   return (chip) => (threat.act === 'calm' || chip.firstOfKind || chip.file === 'repair-v2' ? 0 : DELIVERY_SEED_CHANCE[noise]);
 }
 
-// The last-rm prompt (04 §3.3, round 3): on the arm, the unit has had DELETE, has no working rm now, and none is on its way
+// The last-rm prompt (04 §3.3, round 3): the unit has had DELETE, has no working rm now, and none is on its way
 // (an Rm in transit already answers it: plan risk 4's reading, so the prompt does not nag a kid who asked). The desk then
 // opens on the REPOSITORY with Rm lit.
 export function lastRmPrompt(state: Readonly<GameState>): boolean {
-  return state.run.map.world === 'arm' && state.run.licences.includes('delete') && noWorkingRm(state) && !inFlight(state, 'rm');
+  return state.run.licences.includes('delete') && noWorkingRm(state) && !inFlight(state, 'rm');
 }
 
 // The desk tab a desk visit opens on (null: the SHIP CARD): the REPOSITORY for the last-rm prompt. openDesk sets
@@ -480,8 +471,8 @@ export function patchInstalls(arrival: Readonly<Pick<ArrivalReport, 'hits'>>, de
 }
 
 // The strip's no-Swap line's moment (plan risk 1; slice 3b review item 1): the engine has fired by itself on this ship (in
-// this phase) and keeps firing with no Swap aboard to stop it (capabilities ghostWithoutSwap: the arm only, so never on the
-// classic world, where SWAP arrives with the first burst). Not only while a burst runs: a burst lasts a third of a second
+// this phase) and keeps firing with no Swap aboard to stop it (capabilities ghostWithoutSwap). Not only while a burst
+// runs: a burst lasts a third of a second
 // at CRUISE, too short for the strip ever to show the line (the review: it never won the strip).
 export function noSwapForGhost(state: Readonly<GameState>): boolean {
   return ghostBurstsThisPhase(state) > 0 && ghostWithoutSwap(state);

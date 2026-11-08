@@ -17,7 +17,7 @@ import { createHarness7 } from '../../wp7/harness7';
 import { transmitModel } from '@systems/transmit';
 import { pickCard } from '@systems/draft';
 import { transmitNext } from '@systems/run';
-import { continueAfterLoss } from '../../support/classic-flow';
+import { continueAfterLoss } from '../../support/desk';
 import { installTool } from '@systems/licences';
 import { skillsModel, arrivalFuelTrimPct, type SkillRow } from '@systems/skills';
 import { receiveTransmission } from '@systems/boot';

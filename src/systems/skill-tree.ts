@@ -113,8 +113,8 @@ export function demoKindOf(id: SkillId): DemoKind | null {
 
 // --- The desk ----------------------------------------------------------------------------------------------------------
 
-// What holds SET COURSE (plan §2.5): on the arm, the run's first desk waits for the required first pick. Later desks, and
-// the classic world (no tree), never block. Any skill already paid for (bought, or pending at this desk) clears it: the
+// What holds SET COURSE (plan §2.5): the run's first desk waits for the required first pick. Later desks never block.
+// Any skill already paid for (bought, or pending at this desk) clears it: the
 // pick made, or a migrated run that kept phase 2's free AUTOBURN (the foundation review's note), which would otherwise be
 // asked to buy what it holds. setCourse throws on it (run.ts); the DESK shows `CHOOSE YOUR FIRST SKILL`.
 export type DeskBlocker = 'first-pick';
@@ -127,7 +127,7 @@ export function deskBlocker(state: Readonly<GameState>): DeskBlocker | null {
 // The run's first desk on the arm (visit 1: the desk after ship 1), the one predicate (review m14: the desk's steps read the
 // route's length, the tree the ships ended; they agree today, a debug jump or a migrated route could split them).
 export function isFirstDesk(run: Readonly<Pick<GameState['run'], 'map' | 'ships'>>): boolean {
-  return run.map.world === 'arm' && visitNow(run) === 1;
+  return visitNow(run) === 1;
 }
 
 // The required first pick is still owed (03 §3.1–§3.2): the first desk, and no skill paid for yet. deskBlocker (at the desk),
@@ -240,7 +240,6 @@ export function shipMetSeeds(state: Readonly<GameState>, tally: Readonly<ThreatT
 // arm has site data.
 function poorAhead(state: Readonly<GameState>): boolean {
   const map = state.run.map;
-  if (map.world !== 'arm') return false;
   // Through the POOR gate (review m2: data/survey.ts siteDataOf), so SURVEY opens only for planets that play POOR.
   return reachableFrom(map, currentSlot(state.run)).some((slot) => siteDataOf({ site: map.arm[slot]?.reserved.site ?? 'good' }) === 'poor');
 }
@@ -258,8 +257,6 @@ function latchedRuleDue(state: Readonly<GameState>, id: SkillId, visit: number):
 //   due, the next ship needs SURVEY (a POOR planet is reachable): it opens first, SENTRY the visit after.
 // Pure: run.ts openDesk latches a newly due one.
 export function openBranchesAt(state: Readonly<GameState>, visit: number): SkillId[] {
-  // The classic world has no tree (plan §7 R10): its suites give skills through tests/unit/support/skills.ts.
-  if (state.run.map.world !== 'arm') return [];
   const latched = state.run.skills.opened;
   const open = new Set<SkillId>();
   for (const id of SKILL_IDS) {

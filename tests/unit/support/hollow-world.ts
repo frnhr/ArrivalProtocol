@@ -113,15 +113,26 @@ export function phase2Halcyon(store: Store<GameState>, cfg: HollowDef = phase2Ho
 // HALCYON or KESTREL as phase 2 had it, on the ship being flown: its racks A–D rebuilt with phase 2's pod racks and an
 // 8-block root (the unit's racks E–F kept as they are; no driver arrives hurt), its landing slice for those drivers, and
 // HOLLOW's config `cfg` (phase 2's def for that ship, its stage, unless given), asleep. The unit's files must start at
-// rack E.
+// rack E, or below it at the AI Core on a TIGHT ship (FULL's rack F is then filled free).
 export function phase2Ship(store: Store<GameState>, index: 1 | 2, cfg: HollowDef = phase2HollowOf(index)): void {
   const state = store.getState();
   const starts = segmentStarts(state.memory);
-  // The unit's files where the ship's class put them (rack E: block 256 on FULL, 192 on COMPACT); they move to FULL's.
-  const unitAt = starts.indexOf(layoutOf(state).unitStart);
+  // The unit's files where the ship's class put them (rack E: block 256 on FULL, 192 on COMPACT); they move to FULL's. On a
+  // TIGHT ship (one rack for the unit) a packet larger than rack E starts below it, at its AI Core.
+  const coreAt = state.memory.findIndex((seg) => seg.type === 'core');
+  const unitStart = layoutOf(state).unitStart;
+  const unitAt = coreAt >= 0 && starts[coreAt]! < unitStart ? coreAt : starts.indexOf(unitStart);
   if (unitAt < 0) throw new Error('phase2Ship: the unit\'s files do not start at rack E');
   const ship = phase2ShipDef(index, currentShip(state));
-  const carried = { startAddr: MEMORY_LAYOUTS.FULL.unitStart, segs: state.memory.slice(unitAt).map((seg) => structuredClone(seg)) };
+  // A TIGHT ship (a later run's roll) gives the unit rack E only: FULL's rack F is laid out free behind it.
+  const segs = state.memory.slice(unitAt).map((seg) => structuredClone(seg));
+  const unitBlocks = segs.reduce((sum, seg) => sum + seg.size, 0);
+  const fullUnitBlocks = MEMORY_LAYOUTS.FULL.totalBlocks - MEMORY_LAYOUTS.FULL.unitStart;
+  if (unitBlocks < fullUnitBlocks) {
+    segs.push(freeSegment(fullUnitBlocks - unitBlocks));
+    mergeAdjacentFree(segs);
+  }
+  const carried = { startAddr: MEMORY_LAYOUTS.FULL.unitStart, segs };
   const memory = buildShipMemory(ship, carried, childRng(state.run.seed, index, ship.memory.drivers.familiesSeedStream), false, hollowLabel(state.run), { blocks: ROOT_BLOCKS }, []);
   const landing = createLandingState(ship.landing, memory, { finalShip: false, lead: ship.memory.drivers.lead, hurt: [], planetR: state.level.planet.R });
   store.update((draft) => {

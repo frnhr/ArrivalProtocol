@@ -81,10 +81,10 @@ export interface ChartNode {
   reason: string | null;    // the hover reason (`TOO LATE BY 18 YRS`, `31 YRS EARLY`, `VISITED · ORBIT LOCKED`)
   onlyFromHere: boolean;    // in reach now and from no ship in reach after it (02 §2: ALBATROSS on the first desk)
   // The last unit gets to this world first (`UNIT-047 GETS THERE FIRST`, 046's on run 1) until the galaxy year passes its
-  // stop there; null otherwise (and on the classic world).
+  // stop there; null otherwise.
   taken: string | null;
   // Slice 3c (02 §4): a waiting ship's `2ND RUN ON THE CHART` / `3RD`, a new one's `REPORTED HOME` on the run's first desk
-  // (from run 2; null on run 1 and the classic world). The hover tip says it.
+  // (from run 2; null on run 1). The hover tip says it.
   history: string | null;
   // `REPORTED HOME` beside the year on the run's first desk (the walk's "new nodes tagged REPORTED HOME"), else null.
   tag: string | null;
@@ -154,7 +154,6 @@ export interface ChartRing {
 }
 
 export interface ChartModel {
-  world: RunMapState['world'];
   galaxyYear: number;
   current: number;
   nodes: ChartNode[];
@@ -209,7 +208,7 @@ export interface CardModel {
   sub: string;              // `Tessaly · 5 PODS`
   colonists: string;        // `1,000 COLONISTS`
   tags: string[];           // `ARK`, `FINAL SHIP`
-  schedule: string | null;  // `31 YRS EARLY` / `TOO LATE BY 18 YRS` (null on the classic world: no years); the TIMELINE has the years
+  schedule: string | null;  // `31 YRS EARLY` / `TOO LATE BY 18 YRS` (null with no hop to show); the TIMELINE has the years
   scheduleTone: 'plain' | 'good' | 'warn';
   cost: string | null;      // `4 HITS · 3 FIXED WHILE YOU SLEEP → 1 LANDS` (ships in reach)
   rows: CardRow[];
@@ -245,22 +244,20 @@ export function deskTarget(state: Readonly<GameState>): number | null {
   return state.ui.deskSelected;
 }
 
-// Every slot on the map, in slot order (the classic five, or the arm's ships).
+// Every slot on the map, in slot order.
 function mapSlots(map: Readonly<RunMapState>): number[] {
-  return map.world === 'classic' ? [0, 1, 2, 3, 4] : map.arm.map((ship) => ship.slot);
+  return map.arm.map((ship) => ship.slot);
 }
 
-// The ship in `slot`'s approach year, as the map has it (the classic world's fixture years too).
+// The ship in `slot`'s approach year, as the map has it.
 function approachOf(map: Readonly<RunMapState>, slot: number): number {
   return shipSummaryAt(map, slot).approachYear;
 }
 
 // Ships in reach now that no ship in reach on the way to them can reach (02 §2: `ONLY FROM HERE: from any layer-2 ship
 // you'd be TOO LATE`): a ship two layers out with ships in reach between, none of which can still get there in time.
-// Skip it now and it is gone. A ship in the next layer has nothing between, so it is never flagged; the classic world
-// has one route, so nothing is ever only from here.
+// Skip it now and it is gone. A ship in the next layer has nothing between, so it is never flagged.
 export function onlyFromHere(map: Readonly<RunMapState>, from: number): number[] {
-  if (map.world === 'classic') return [];
   const offered = reachableFrom(map, from);
   return offered.filter((target) => {
     const between = offered.filter((via) => layerOf(via) < layerOf(target));
@@ -270,7 +267,7 @@ export function onlyFromHere(map: Readonly<RunMapState>, from: number): number[]
 
 // A node's state and its hover reason, seen from the ship being left at the galaxy year.
 function nodeState(
-  state: Readonly<GameState>, slot: number, from: number, offered: readonly number[],
+  state: Readonly<GameState>, slot: number, from: number,
 ): { state: ChartNodeState; reason: string | null; hop: Hop | null } {
   const map = state.run.map;
   if (slot === from) return { state: 'current', reason: MAP_TEXT.chart.here, hop: null };
@@ -282,16 +279,12 @@ function nodeState(
   const summary = shipSummaryAt(map, slot);
   if (summary.approachYear <= map.galaxyYear) return { state: 'past', reason: MAP_TEXT.chart.past(summary.approachYear), hop: null };
   const outward = layerOf(worldSlotOf(map, slot)) > layerOf(worldSlotOf(map, from));
-  // The classic world's ships ahead of the next one are not on any beam from here (one route): out of range.
-  if (map.world === 'classic' && !offered.includes(slot)) {
-    return { state: 'out-of-range', reason: MAP_TEXT.chart.notNext, hop: null };
-  }
   const hop = hopBetween(map, from, slot);
   if (!outward) return { state: 'out-of-range', reason: MAP_TEXT.chart.behind, hop };
   if (!hop.inRange) return { state: 'out-of-range', reason: MAP_TEXT.chart.outOfRange(hop.distanceLy), hop };
   if (hop.slackYears < 0) return { state: 'too-late', reason: MAP_TEXT.chart.tooLate(-hop.slackYears), hop };
-  if (map.world === 'arm' && hop.slackYears < URGENT_SLACK_YEARS) return { state: 'urgent', reason: MAP_TEXT.chart.urgent(hop.slackYears), hop };
-  return { state: 'reachable', reason: map.world === 'arm' ? MAP_TEXT.chart.early(hop.slackYears) : null, hop };
+  if (hop.slackYears < URGENT_SLACK_YEARS) return { state: 'urgent', reason: MAP_TEXT.chart.urgent(hop.slackYears), hop };
+  return { state: 'reachable', reason: MAP_TEXT.chart.early(hop.slackYears), hop };
 }
 
 function worldXY(map: Readonly<RunMapState>, slot: number): { x: number; y: number } {
@@ -300,12 +293,12 @@ function worldXY(map: Readonly<RunMapState>, slot: number): { x: number; y: numb
 }
 
 // The last unit's trail as the chart draws it (systems/lineage.ts unitTrailOf: 046's written one on run 1, the archive's
-// from run 2), at the map's galaxy year; null on the classic world and when the run has no trail. A stop is passed once
+// from run 2), at the map's galaxy year; null when the run has no trail. A stop is passed once
 // the galaxy year is past its year (so a colony is never `0 YEARS OLD`). The grey cross sits TrailLost.pastLy past the
 // world it was lost at, along the leg that led there (05: `a grey cross past Calder`).
 export function chartTrail(run: Readonly<Pick<GameState['run'], 'lastUnit' | 'map'>>): ChartTrail | null {
   const map = run.map;
-  const trail = map.world === 'arm' ? unitTrailOf(run) : null;
+  const trail = unitTrailOf(run);
   if (trail === null) return null;
   const unit = unitName(trail.unit);
   const marks = trail.stops.map((stop): TrailMark => {
@@ -370,7 +363,6 @@ export function trail046(map: Readonly<RunMapState>): TrailMark[] {
 // Older units' colonies (02 §4: faint green dots), never the trail's own (its marks say them): one dot per world, named by
 // its newest colony, once the galaxy year has reached it (systems/lineage.ts olderColonies).
 export function olderColonyDots(map: Readonly<RunMapState>, trail: Readonly<Pick<UnitTrail, 'unit' | 'run'>> | null): OlderColonyDot[] {
-  if (map.world !== 'arm') return [];
   const older = olderColonies(map).filter((colony) => trail === null || colony.unit !== trail.unit || colony.run !== trail.run);
   const bySlot = new Map<number, ColonyRecord[]>();
   for (const colony of older) bySlot.set(colony.slot, [...(bySlot.get(colony.slot) ?? []), colony]);
@@ -384,9 +376,9 @@ export function olderColonyDots(map: Readonly<RunMapState>, trail: Readonly<Pick
 }
 
 // A ship's history on the chart and its card (02 §4), from run 2: a waiting ship's runs on the chart, a new one's REPORTED
-// HOME (`firstDesk`: the run's first desk only, on the chart; the card always says it). null on run 1 and the classic world.
+// HOME (`firstDesk`: the run's first desk only, on the chart; the card always says it). null on run 1.
 function shipHistory(map: Readonly<RunMapState>, slot: number, firstDesk: boolean): string | null {
-  if (map.world !== 'arm' || map.run <= 1) return null;
+  if (map.run <= 1) return null;
   const ship = armShipAt(map, slot);
   if (ship.runsOnChart > 1) return MAP_TEXT.chart.runOnChart(ship.runsOnChart);
   return firstDesk && ship.reportedRun === map.run ? MAP_TEXT.chart.reportedHome : null;
@@ -409,7 +401,7 @@ export function chartModel(state: Readonly<GameState>): ChartModel {
   const nodes = mapSlots(map).map((slot): ChartNode => {
     const ship = shipSummaryAt(map, slot);
     const { x, y } = worldXY(map, slot);
-    const seen = nodeState(state, slot, from, offered);
+    const seen = nodeState(state, slot, from);
     const world = worldSlotOf(map, slot);
     const taken = trail?.marks.some((mark) => mark.kind === 'taken' && mark.slot === world) === true;
     const history = shipHistory(map, slot, firstDesk);
@@ -429,10 +421,10 @@ export function chartModel(state: Readonly<GameState>): ChartModel {
   });
   const lines = offered.map((to): ChartLine => {
     const hop = hopBetween(map, from, to);
-    return { from, to, noise: hop.noise, urgent: map.world === 'arm' && hop.slackYears < URGENT_SLACK_YEARS };
+    return { from, to, noise: hop.noise, urgent: hop.slackYears < URGENT_SLACK_YEARS };
   });
   return {
-    world: map.world, galaxyYear: map.galaxyYear, current: from, nodes, lines, clouds: map.noise.map((cloud) => ({ ...cloud })),
+    galaxyYear: map.galaxyYear, current: from, nodes, lines, clouds: map.noise.map((cloud) => ({ ...cloud })),
     route: map.route.map((stop) => stop.slot), trail, older: olderColonyDots(map, trail === null ? null : unitTrailOf(state.run)),
     rings: chartRings(map, from), selected: state.ui.deskSelected,
   };
@@ -481,9 +473,8 @@ export function cardModel(state: Readonly<GameState>, slot: number): CardModel {
   const from = currentSlot(state.run);
   const ship = shipSummaryAt(map, slot);
   const offered = reachableFrom(map, from);
-  const seen = nodeState(state, slot, from, offered);
+  const seen = nodeState(state, slot, from);
   const isReachable = offered.includes(slot);
-  const arm = map.world === 'arm';
   const tags = [...(ship.kind === 'ark' ? [MAP_TEXT.card.ark] : []), ...(ship.final ? [MAP_TEXT.card.finalShip] : [])];
   const rows: CardRow[] = [];
   const row = (key: CardRow['key'], label: string, value: string, tone: CardRow['tone'] = 'plain'): void => {
@@ -494,10 +485,10 @@ export function cardModel(state: Readonly<GameState>, slot: number): CardModel {
 
   // The hop (the beam from the ship being left), for every ship but that one: the card shows TOO LATE and OUT OF RANGE
   // ships too, and prints the beam only when it is in range (Hop.inRange).
-  const hop = slot === from ? null : (seen.hop ?? (map.world === 'classic' && !isReachable ? null : hopBetween(map, from, slot)));
+  const hop = slot === from ? null : (seen.hop ?? hopBetween(map, from, slot));
   // The ladder's verdict for this beam, from the run's threat with this ship's tally done: HOLLOW's line and the seeds the
   // beam may bring (the PACKET's own rule: systems/map-noise.ts seedAllowance), for any beam in range.
-  const verdict = hop !== null && (isReachable || (arm && hop.inRange))
+  const verdict = hop !== null && (isReachable || hop.inRange)
     ? planThreat(threatInputFor(state.run.threat, mapFacts(map, from, slot, depth), state.run.stats.deal !== null, finalTraceInput(state.run)))
     : null;
   // The fit line only for a ship SET COURSE can go to (an out-of-range or TOO LATE hop has no packet to fit).
@@ -515,10 +506,10 @@ export function cardModel(state: Readonly<GameState>, slot: number): CardModel {
   // 3b: what the requests (and this desk's pick) do on this hop (02 §4's DELIVERIES row, the TIMELINE's marks), from the one
   // outlook rule, for a ship SET COURSE can go to (review m1: as repoModel; a ship behind the unit or out of range is
   // never sent toward, so its card promised nothing).
-  const outlook = arm && hop !== null && isReachable ? hopOutlook(state, from, slot) : [];
+  const outlook = hop !== null && isReachable ? hopOutlook(state, from, slot) : [];
   // Review item 1 (d): an ENGINE FAULT ship with no Swap aboard and none riding this hop (the pick included) says so under
   // its KNOWN PROBLEMS, so the kid can route around it or ask for Swap first.
-  if (arm && isReachable && ship.modifiers.includes('engine-fault') && !swapAboard(state)
+  if (isReachable && ship.modifiers.includes('engine-fault') && !swapAboard(state)
     && !outlook.some((entry) => entry.file === 'swap' && entry.rides)) {
     row('noswap', '', REPO_TEXT.card.noSwapInTime, 'warn');
   }
@@ -570,7 +561,7 @@ export function cardModel(state: Readonly<GameState>, slot: number): CardModel {
   let schedule: string | null = null;
   let scheduleTone: CardModel['scheduleTone'] = 'plain';
   let timeline: CardTimeline | null = null;
-  if (arm && hop !== null) {
+  if (hop !== null) {
     const late = hop.slackYears < 0;
     schedule = late ? MAP_TEXT.card.late(-hop.slackYears) : MAP_TEXT.card.early(hop.slackYears);
     scheduleTone = late ? 'warn' : hop.slackYears < URGENT_SLACK_YEARS ? 'warn' : 'good';
@@ -579,7 +570,7 @@ export function cardModel(state: Readonly<GameState>, slot: number): CardModel {
       text: MAP_TEXT.card.timeline(hop.leaveYear, hop.arriveYear, hop.approachYear),
       marks: timelineMarks(outlook, hop),
     };
-  } else if (arm && slot === from) {
+  } else if (slot === from) {
     schedule = MAP_TEXT.card.here(ship.approachYear);
   }
 
@@ -680,7 +671,7 @@ export function deskSteps(state: Readonly<GameState>): DeskStep[] {
 export type DeskEnter = 'train' | 'set-course';
 
 export function deskEnter(state: Readonly<GameState>): DeskEnter {
-  if (state.run.phase !== 'desk' || state.run.map.world !== 'arm') return 'set-course';
+  if (state.run.phase !== 'desk') return 'set-course';
   if (state.ui.trainingHoldSec !== null) return 'train';
   if (!trainingArmed(state)) return 'set-course';
   return trainingModel(state).detail?.action ? 'train' : 'set-course';
@@ -712,8 +703,7 @@ export function deskOpeningBeat(state: Readonly<GameState>): DeskOpeningBeat {
 // The opening desk's departures block (02 §4; 3c plan §3 step 4): the ships of the last arm that are no longer this unit's
 // to take, said in the future tense (`PETREL · ANOTHER CORE IS ON ITS WAY`), at most LEAVE_BLOCK_MAX_LINES then `+n MORE`.
 // The ships the last unit flew are its trail's marks, and the first ship's leaving is said nowhere (02 §3.12), so only
-// the ships that moved on are listed. `all` is every line (the block's hover). null past the run's first desk, on run 1
-// and on the classic world.
+// the ships that moved on are listed. `all` is every line (the block's hover). null past the run's first desk and on run 1.
 export interface DeskDepartures {
   title: string;
   lines: string[];
@@ -723,7 +713,7 @@ export interface DeskDepartures {
 
 export function deskDepartures(state: Readonly<GameState>): DeskDepartures | null {
   const map = state.run.map;
-  if (map.world !== 'arm' || map.run <= 1 || map.route.length !== 1) return null;
+  if (map.run <= 1 || map.route.length !== 1) return null;
   return departuresBlock(map.history.departures);
 }
 
@@ -794,12 +784,10 @@ export function cycleShip(store: Store<GameState>, step: 1 | -1): number {
 // --- The desk's tabs (phase 3 slice 3b; 02 §4: R / I; slice-3b-plan §5.2 item 1) --------------------------------------
 
 // The tab beside the chart: the SHIP CARD (null), the REPOSITORY, TRAINING (slice 4, [T]) or the INBOX. Escape goes back
-// to the card. The REPOSITORY and TRAINING live on the arm only (the classic world has no repository and no tree): asking
-// for either there is a bug in the caller.
+// to the card.
 export function openDeskWindow(store: Store<GameState>, id: DeskWindowId | null): void {
   const state = store.getState();
   if (state.run.phase !== 'desk') throw new Error(`openDeskWindow: not on the DESK (phase ${state.run.phase})`);
-  if (id === 'training' && state.run.map.world !== 'arm') throw new Error('openDeskWindow: the classic world has no TRAINING');
   if (state.ui.deskWindow === id) return;
   store.update((draft) => {
     draft.ui.deskWindow = id;
@@ -904,7 +892,7 @@ export function toggleRequest(store: Store<GameState>, file: RepoFileId): RepoFi
 }
 
 // The tab badges (02 §4: badges for unread mail): the INBOX's unread count; the REPOSITORY's names this desk's request,
-// or `:)` while CONTROL recommends a file and none is asked for. null shows none (and on the classic world, always).
+// or `:)` while CONTROL recommends a file and none is asked for. null shows none.
 // Slice 4: TRAINING's names the cycles while any are unspent (`6 CYCLES`, 03 §4: the badge pulses while they are).
 export interface DeskTabBadges {
   repository: string | null;
@@ -913,7 +901,6 @@ export interface DeskTabBadges {
 }
 
 export function deskTabBadges(state: Readonly<GameState>): DeskTabBadges {
-  if (state.run.map.world !== 'arm') return { repository: null, training: null, inbox: null };
   const pick = state.run.repo.pick;
   const unread = inboxUnread(state).length;
   const bank = bankOf(state.run.skills);

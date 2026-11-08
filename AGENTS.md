@@ -22,8 +22,9 @@ by HOLLOW, the previous wave's caretaker. Everything is UI: windows, terminals, 
 ## Commands
 
 - `npm run dev` — Vite dev server on port 5173 (in a headless VM: `npm run dev -- --host 0.0.0.0 --open false`).
-  Add `?debug` to the URL for a warp ladder and the console helper `__ap` (`__ap.ship(1)`…`__ap.ship(4)` jump to
-  HALCYON … LAST LIGHT, `__ap.newRun()`, `__ap.archiveClear()`).
+  Add `?debug` to the URL for a warp ladder and the console helper `__ap` (`__ap.ship(1)`…`__ap.ship(4)` jump to run 1's
+  HALCYON … LAST LIGHT along the worked route, run 1 only; `__ap.route([...])`, `__ap.slot(s)`, `__ap.newRun()`,
+  `__ap.archiveClear()`).
 - `npm run typecheck` — strict TypeScript (`tsc --noEmit`).
 - `npm run build` — type check + production bundle to `dist/`.
 - `npm test` — the unit tier (`tests/unit/`, under 5 minutes, enforced): every headless suite plus a strict tsc over
@@ -33,7 +34,7 @@ by HOLLOW, the previous wave's caretaker. Everything is UI: windows, terminals, 
   source and test file, so a re-run of an unchanged tree skips them; `AP_FLY_ONCE=fresh` flies them). The runner fails the run over 300 s or
   any suite over 90 s: a suite that outgrows that samples more coarsely in quick depth, it does not raise the budget.
   `node tests/unit/run.mjs wp9 -sim` runs the suites whose path contains `wp9`, minus those containing `sim`. A suite
-  whose header carries `// BALANCE_ONLY: <why>` (the classic full run, the 200-seed playthrough, LEAD-1's sentinels) runs
+  whose header carries `// BALANCE_ONLY: <why>` (the full run, the 200-seed playthrough, LEAD-1's sentinels) runs
   only at full depth: the quick run lists it as SKIP.
 - `npm run test:e2e` — the e2e tier (`tests/e2e/`): Playwright scripts that drive the game in Chromium, against a Vite
   server the runner starts itself (`E2E_BASE_URL` to use a running one). The playthrough plays a whole run by the
@@ -89,9 +90,11 @@ These are non-negotiable design tokens, defined as CSS custom properties in `src
   hops (link, hits, ECC, noise), memory classes FULL / COMPACT / TIGHT, the DESK (STAR CHART, SHIP CARD, SET COURSE)
   between ships, the PACKET's room bar and the RUN TALLY. A state built with no map (the headless suites')
   is run 1's arm, the unit on authored ship n along the worked route (`state/initial.ts`, `systems/arm-fixture.ts`; Track
-  RETIRE, `docs/phase3/impl/slice-4cde-plan.md` "Deviations (RETIRE)"). The old five ships survive as a frozen fixture
-  (`src/data/classic-five.ts`, `__ap.ship(n)`) for the suites not moved yet (`tests/unit/support/classic-world.ts`);
-  `__ap.route`, `__ap.slot` and `__ap.course` drive the arm.
+  RETIRE, `docs/phase3/impl/slice-4cde-plan.md` "Deviations (RETIRE)"). The classic world (phase 2's frozen five, the old
+  fixture) is gone: the arm is the only world (`RunMapState.world` stays the literal `'arm'`; the save codec refuses any
+  other value as `shape`). `__ap.ship(n)`, `__ap.route`, `__ap.slot` and `__ap.course` drive the arm; a suite flies a
+  ship alone with `tests/unit/support/arm-ship.ts` (`fixtureShip`, `fixtureHop`, `fixtureVerdict`, `WORKED_KIT`),
+  phase 2's FULL geometry with `support/hollow-world.ts phase2Ship`, and sails the desk with `support/desk.ts`.
 - The repository and the INBOX (slice 3b): one request per beam from ARRIVAL CONTROL's repository (tools, spares, the
   REPAIR v2 patch); requests travel by light, so far out they trail the unit or never arrive (`src/systems/
   delivery-rule.ts`); deliveries ride the packet as chips (SEND ON), can carry seeds, and are the only source of tools
@@ -126,18 +129,18 @@ These are non-negotiable design tokens, defined as CSS custom properties in `src
   LANDING ORBIT (`systems/autoburn-v3.ts`, `data/autoburn-modes.ts MODE_RULES`): the highest round orbit where every LZ
   with room gets a sure window, a dashed ghost circle with its label, held with top-ups away from the windows, `GOES
   LOWER` when a bite widens a drop. The save is v4 (one bump for the batch).
-- A full run (phase 2's, now the classic fixture): five ships (ARES-VII, HALCYON, KESTREL, VESPER, LAST LIGHT), each
-  with its own rule, TRANSMIT between
-  them (a link budget, transit damage, one card of three to carry), soft fails instead of reloads, RUN END with score,
-  rank and ending (PURGE or MERGE), and a small local archive (unit number, wave, the last unit as next run's ghost).
+- A full run (phase 2's, now on the arm): ships with their own rules (run 1's authored ARES-VII, HALCYON, KESTREL, VESPER
+  and LAST LIGHT among them), TRANSMIT between them (a link budget, transit damage, one card of three to carry), soft
+  fails instead of reloads, RUN END with score, rank and ending (PURGE or MERGE), and a small local archive (unit number,
+  wave, the last unit as next run's ghost).
 - The threat ladder (phase 3 slice 2, `docs/phase3/04-threats.md`): ARES-VII and HALCYON are calm (driver arrival
   damage, transit hits, the `???` file that is `046.log`); KESTREL brings a seed on the beam (rm it, or it reports home
   on the TRACE meter); HOLLOW boards one hop from the final ship (or at TRACE 3) and fights
   there; the final ship is the FINALE with THE DEAL. The ladder is data (`src/systems/threat-plan.ts`), fed by the map.
 - SHIP: a two-body orbital capture with a predicted path coloured by outcome, presets, hold-to-burn, a guidance line
   that always names the next step, director-paced time (CRUISE / TACTICAL / SKIP), hazard zones (debris, a belt).
-- MIND: 384 blocks in six racks, tools that are files (SCAN, REPAIR, MOVE, DELETE, COPY, SWAP, licensed through the
-  run), REPAIR CHARGE, HOLLOW (bites, walls, seeds, THE DEAL, verbs, the root duel), and the pod drivers.
+- MIND: up to 384 blocks in up to six racks (the memory class), tools that are files (SCAN, REPAIR, MOVE, DELETE, COPY,
+  SWAP: REPAIR licensed in the run, the rest by request), REPAIR CHARGE, HOLLOW (bites, walls, seeds, THE DEAL, verbs, the root duel), and the pod drivers.
 - LANDING (phase 3 slice 1a, `docs/phase3/01-landing.md`): after ORBIT LOCK each pod (200 colonists, flown by an
   8-block driver file in the MIND) is launched with [L] while the drop dot is inside a landing zone's bracket; the bay
   holds 4, SKIP jumps to the next window, a GROUND TRACK and a POD BAY window show it, and a LANDING REPORT scores
@@ -159,10 +162,9 @@ These are non-negotiable design tokens, defined as CSS custom properties in `src
 1. **Fran's playtest**: one full run by `docs/playtest-checklist.md`.
 2. **Phase 3** (`docs/PHASE3.md`, specs in `docs/phase3/`): landing, the calm opening and the galaxy map (slices 1a, 1b, 2
    and 3a built; plans and deviations in `docs/phase3/impl/`), 3b (the repository, deliveries, the INBOX), 3c (the save,
-   archive v2, the arm carried between runs) and the skill tree's batches 4a+4b and 4c–4e also built. Next: retire the
-   classic world (`slice-4cde-plan.md` §9: the parity probe, then the suites' migration, then the deletion; after Fran's
-   playtest of slice 4), then slice 5 (residents and the grants), 6 (SURVEY), 7 (REASSIGNMENT, MERGE's pods, SUNSET, the
-   endings) and 8 (the rebalance).
+   archive v2, the arm carried between runs) and the skill tree's batches 4a+4b and 4c–4e also built, and the classic world
+   retired (`slice-4cde-plan.md` §9, "Deviations (RETIRE)"). Then slice 5 (residents and the grants), 6 (SURVEY), 7
+   (REASSIGNMENT, MERGE's pods, SUNSET, the endings) and 8 (the rebalance).
 3. **The refactors parked until after the playtest** (discuss the split before writing code): `src/data/script.ts`
    into its text and its director rules, `src/styles/game.css` by surface, `tuning.ts` and `script.ts` grouped by
    domain.

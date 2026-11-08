@@ -136,7 +136,6 @@ export function armContent(): ArmState['content'] {
 // What the update reads of the arm a run played (RUN END's update reads the run's own map, plan risk 13). The final ship
 // on the chart is the arm's last final (02 §3.4's floor); the serial comes from the map's history.
 export function armStateOfMap(map: Readonly<RunMapState>): UpdateInput['from'] {
-  if (map.world !== 'arm') throw new Error('armStateOfMap: the classic world is never updated');
   const final = map.arm[END_SLOTS[0]!];
   if (final === undefined || final.kind !== 'final') throw new Error('armStateOfMap: the arm has no final ship in its end slot');
   return {
@@ -397,8 +396,8 @@ export function updateArm(
 }
 
 // RUN END's one step, the pure half (plan §2.4 "Run end"): the arm the run played (its own map, risk 13) and its route →
-// the next arm, and the bridging line's numbers (`UNIT-048 LEFT SOL 3 YEARS AFTER YOU, IN 2303`). The classic world is never
-// updated (it throws). Track SAVE's archiveRunEnded records `update.next` and sets run.next.
+// the next arm, and the bridging line's numbers (`UNIT-048 LEFT SOL 3 YEARS AFTER YOU, IN 2303`). Track SAVE's
+// archiveRunEnded records `update.next` and sets run.next.
 export function updateAfterRun(
   run: Readonly<Pick<RunState, 'map' | 'ships' | 'unitNumber'>>, dice?: (pass: UpdatePass) => UpdateDice,
 ): { update: ArmUpdate; next: NextLaunch } {

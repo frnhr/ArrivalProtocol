@@ -347,7 +347,7 @@ export function mountLandingReport(store: Store<GameState>): () => void {
     const state = store.getState();
     cyclesEl.hidden = true;
     topUpEl.hidden = true;
-    if (report === null || state.run.map.world !== 'arm' || report.aboard <= 0) return 0;
+    if (report === null || report.aboard <= 0) return 0;
     const cycles = cyclesReport(
       shipCycles({ slot: currentSlot(state.run), points: report.points, colonistsAboard: report.aboard }),
       report.lastShip, state.run.ships.length === 0,

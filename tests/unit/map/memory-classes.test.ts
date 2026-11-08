@@ -16,12 +16,12 @@ import { createRng } from '@systems/rng';
 import { freshArm } from '@systems/map-generator';
 import { validateShipDef } from '@data/ships';
 import { buildShipMemory, layoutFor, FRESH_UNIT_RACK_E, FRESH_UNIT_RACK_F, type CarriedRacks } from '@data/memory';
-import { classicShip } from '@data/classic-five';
-import { nominalShipThreat } from '@systems/threat-plan';
+import { LAST_LIGHT_POD_RACKS, LAST_LIGHT_LEAD } from '@data/authored-ships';
 import { RUN_START_YEAR } from '@data/tuning';
 import { byDepth } from '../depth';
 import { run1Map } from './run1-fixture';
 import type { RunMapState } from '@/types/map';
+import { fixtureVerdict, fixtureShip } from '../support/arm-ship';
 
 const throws = (fn: () => void): boolean => { try { fn(); return false; } catch { return true; } };
 const json = (value: unknown): string => JSON.stringify(value);
@@ -35,9 +35,9 @@ check('…a layer-7 light ship (5, TIGHT, slot) → `P P P _40` / `P _2 S _1 P _
 check('…a layer-5 standard ship (8, COMPACT, slot) → `P×6 _16` / `P _2 S _1 P _45` (01: B 6, C `P _2 R14 _1 P _31`)',
   json(layoutPods(8, 'COMPACT', true, false).podRacks) === json({ B: 'P P P P P P _16', C: 'P _2 S _1 P _45' }));
 check('…the final ship (16, FULL) is LAST LIGHT\'s written layout, the lead POD 12 at GAP 1',
-  json(layoutPods(16, 'FULL', true, true)) === json({ podRacks: classicShip(4).memory.podRacks, lead: classicShip(4).memory.drivers.lead }));
+  json(layoutPods(16, 'FULL', true, true)) === json({ podRacks: LAST_LIGHT_POD_RACKS, lead: LAST_LIGHT_LEAD }));
 check('…a layer 4–7 ark (16, FULL, slot) holds an R14 with 47 free; a layer-3 ark (15, no slot) fills B, C then D',
-  json(layoutPods(16, 'FULL', true, false).podRacks) === json(classicShip(4).memory.podRacks)
+  json(layoutPods(16, 'FULL', true, false).podRacks) === json(LAST_LIGHT_POD_RACKS)
   && json(layoutPods(15, 'FULL', false, false).podRacks) === json({ B: 'P P P P P P P _8', C: 'P P P P P P P _8', D: 'P _56' }));
 check('…it refuses what no class holds: 9 pods on COMPACT, a final ship with no slot, rack C too full for the root',
   throws(() => layoutPods(9, 'COMPACT', true, false)) && throws(() => layoutPods(16, 'FULL', false, true)));
@@ -62,7 +62,7 @@ check('a layer-4 ship needs a root slot (HOLLOW may board on any beam into it)',
 const debrisOn = (ship: ShipDef, rack: string): ShipDef => ({
   ...ship, modifiers: [...ship.modifiers, 'debris'],
   zones: [{ kind: 'debris', id: 'test-debris', centre: { onInboundAtR: 14000 }, r: 900, rack, laterRacks: [rack] }],
-  flight: { ...classicShip(2).flight },
+  flight: { ...fixtureShip(2).flight },
 });
 check('a DEBRIS cloud may only name a rack the ship has (D on a COMPACT ship is refused, B is fine)',
   throws(() => validateShipDef(debrisOn(halcyon, 'D'))) && !throws(() => validateShipDef(debrisOn(halcyon, 'B'))));
@@ -79,7 +79,7 @@ function unit(files: number, charge: number): Segment[] {
   if (filler > 0) segs.push({ id: 'filler', name: 'Filler', type: 'upgrade', upgrade: 'fuel', size: filler, desc: 'test' } as unknown as Segment);
   return segs;
 }
-const calm = nominalShipThreat(1);
+const calm = fixtureVerdict(1);
 function arrive(ship: ShipDef, files: number, charge: number, link = 131): { packet: Packet; laid: number; fit: ReturnType<typeof roomFit>; floorAdded: number } {
   const packet = packUnit(unit(files, charge), link, []);
   const layout = layoutFor(ship.memoryClass);

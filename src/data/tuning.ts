@@ -588,7 +588,7 @@ export const COPY_LESSON_SHOW_SEC = 15;
 // lines and a verb's countdown still come first.
 export const LESSON_LEAD_IN_SEC = 6;
 // What an uncommanded burst did to ▼ (`▼ DRIFT −120 km` beside ▼ and in the LOWEST readout, in red) stands this many AI s
-// after the burst (WP10 review: one burst lowers ▼ by tens of km, about 120 km at GHOST_BY_BAND's 30%, a pixel or two on
+// after the burst (WP10 review: one burst lowers ▼ by tens of km, about 120 km at phase 2's 30%, a pixel or two on
 // the plot, so "▼ drifts" was nowhere to be seen). A burst within this time of the last one adds to the same drift, so a
 // run of them (a SKIP flying through) counts up. It outlasts the first burst's alarm line (GHOST_ALARM_MIN_SEC) by a second.
 export const GHOST_DRIFT_SHOW_SEC = 4;
@@ -699,22 +699,12 @@ export const ENGINE_JITTER_BY_BAND: Readonly<Record<Band, number>> = { ok: 0, de
 export const REACTOR_CAP_BY_BAND: Readonly<Record<Band, number>> = { ok: 1, degraded: 0.85, failing: 0.6, dead: 0.3, missing: 0.3 };
 export const REACTOR_THREAD_SHARE = 0.25;
 
-// Thrust Ctrl (C2): a failing controller fires the engine by itself now and then, a dead one
-// as often and sometimes it sticks until SPACE is pressed. Means are in tactical seconds so the
-// rate reads the same at any warp; durTac 1.0 is one clear "whump". ok and degraded: never.
-// WP12 (the 200-seed playthrough, tests/unit/wp12; the lead's steer of 03:10 to move a careless kid's losses from the Core
-// to the flight): at §3.3's 15% every 25 tac s VESPER's bursts were a nuisance, so a kid who never SWAPs still locked
-// VESPER (87.5%), stayed on through its whole tool hunt, and lost REPAIR to the seeds in half the runs; on LAST LIGHT
-// it then had nothing to fight with and the run ended OVERWRITTEN (sloppy runs completed: 63.5%). At 30% every 10 tac
-// s VESPER is the ship that kid loses (89%: the engine it never fixed takes the FUEL) while a kid who follows the pip
-// lesson after the second burst loses about two bursts and locks (COMPETENT and the strip-literal kid: 100%, FUEL ★
-// kept); sloppy runs completed 85.5%. A dead controller keeps at least a failing one's rate and strength.
-export const GHOST_BY_BAND: Readonly<Partial<Record<Band, GhostSpec>>> = {
-  failing: { meanIntervalTac: 10, amp: 0.3, durTac: 1.0, stickChance: 0 },
-  dead: { meanIntervalTac: 10, amp: 0.3, durTac: 1.0, stickChance: 0.3 },
-};
+// Thrust Ctrl (C2): a failing controller fires the engine by itself now and then, a dead one as often and sometimes it
+// sticks until SPACE is pressed. Means are in tactical seconds so the rate reads the same at any warp; durTac 1.0 is one
+// clear "whump". ok: never. Phase 2 (WP12's 200-seed playthrough) fired 30% of thrust every 10 tac s on a failing or dead
+// controller, with SWAP licensed at the first burst; that table went with the classic five (Track RETIRE).
 // Slice 3b, Fran's decision (DECISIONS.md "During implementation"): on the arm SWAP comes only by request, so an ENGINE
-// FAULT ship is often met with no Swap aboard, and GHOST_BY_BAND's bursts (2.5% of VESPER's tank each, 27–40 of them on
+// FAULT ship is often met with no Swap aboard, and phase 2's bursts (2.5% of VESPER's tank each, 27–40 of them on
 // its coast) emptied the tank whatever the kid did. The arm's engine LIMPS instead: half the push at the same rate while
 // Thrust Ctrl is failing or dead (amp 0.15: about 1.1% a burst), and REPAIR on Thrust Ctrl (up to
 // THRUST_CTRL_REPAIR_MAX, the degraded band) leaves a twitch: the same push every 20 tac s, half the failing band's
@@ -1754,8 +1744,7 @@ export const LOG_READER_CPS = 42;
 // (docs/phase3/02-map.md §3.1–§3.6; slice-3a-plan §4.2). Every rule is integer arithmetic with half-up rounding
 // (Math.round on a positive number: slice-3a-plan §2.3's finding, so LAST LIGHT lands on 3020).
 
-// The galaxy year a run starts in (02 §3.1: `UNIT-047 · YEAR 2300`): ARES-n's approach, the first ship's year. The
-// classic world counts its fixture years from it too (systems/map-run.ts classicRoute), so the two read alike.
+// The galaxy year a run starts in (02 §3.1: `UNIT-047 · YEAR 2300`): ARES-n's approach, the first ship's year.
 export const RUN_START_YEAR = 2300;
 // The beam's reach (02 §3.3): every one-layer hop (the longest is 45 LY) and most two-layer hops (31 of 42), never three
 // layers (the shortest is 70 LY), so every route has 5–8 ships.
@@ -1846,8 +1835,8 @@ export const POOR_SITE_ODDS_LATE = 1 / 2;
 export const SLEEPER_CHANCE = 0.45;
 export const HIDDEN_RESIDENT_ODDS = 1 / 2;
 // --- 3a GEN, Track GEN's additions ---
-// ENGINE FAULT (02 §3.5): Thrust Ctrl arrives at 31% (VESPER's, WP10/WP12: the ghost thrust's rate and strength in
-// GHOST_BY_BAND were tuned against a failing controller at this number).
+// ENGINE FAULT (02 §3.5): Thrust Ctrl arrives at 31% (VESPER's, WP10/WP12: the ghost thrust's rate and strength were
+// tuned against a failing controller at this number).
 export const ENGINE_FAULT_THRUST_INTEGRITY = 31;
 // The pod-rack rule (01 §3.16): a rack takes at most 7 drivers (56 of 64 blocks), so rack B keeps a WALL's worth of free
 // blocks and two drivers are left to flank the root slot in rack C. The slot reads `P _2 S _1 P`: the root sits between a
@@ -2078,7 +2067,7 @@ export const RESTORE_FRACTION = 0.5;
 export const SKILL_MAX_BLOCKS = 12;
 // The `+2 CYCLES` salvage card (02 §3.10): about half a ship's pay for skipping a file or charge, so it is a real choice
 // against FIREWALL or +12 CHARGE without buying a v2 outright. Never dealt into the final ship (no desk follows: plan §7
-// R12), nor on the classic world (no tree).
+// R12).
 export const CYCLES_CARD_CYCLES = 2;
 
 // --- 4 FLIGHT (owned by Track FLIGHT; it edits values only in this block): AUTOBURN v1–v3's flying (03 §3.6–§3.7) -------

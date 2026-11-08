@@ -384,7 +384,7 @@ export function mountTrainingWindow(store: Store<GameState>): TrainingWindowView
 
   function paint(): void {
     const state = store.getState();
-    if (state.run.phase !== 'desk' || state.run.map.world !== 'arm') return;
+    if (state.run.phase !== 'desk') return;
     const model = trainingModel(state);
     const key = structureKey(model, openBranch);
     if (key !== lastKey) {

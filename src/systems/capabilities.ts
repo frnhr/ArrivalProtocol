@@ -11,7 +11,7 @@ import { threadsBusy } from '@systems/ops-core';
 import { residentGhostSpec } from '@state/resident-selectors';
 import { SKILL_IDS } from '@data/skills';
 import {
-  ENGINE_POWER_BY_BAND, ENGINE_JITTER_BY_BAND, REACTOR_CAP_BY_BAND, REACTOR_THREAD_SHARE, GHOST_BY_BAND, ARM_GHOST_BY_BAND,
+  ENGINE_POWER_BY_BAND, ENGINE_JITTER_BY_BAND, REACTOR_CAP_BY_BAND, REACTOR_THREAD_SHARE, ARM_GHOST_BY_BAND,
   SENSOR_FUZZ_KM_PER_POINT, PLOT_STALE_TAC, TELEMETRY_SCRAMBLE_BELOW, INTEGRITY_MAX, RESIDENT_GHOST,
   MAX_LINE_CHARS, COMMS_GARBLE_BY_BAND, FUEL_TRIM_DV_BONUS_FRAC,
   BAY_CADENCE_BY_BAND, SENSOR_DROP_FACTOR_BY_BAND, PLOTTER_DROP_FACTOR_BY_BAND, DRIVER_DROP_FACTOR_BY_BAND,
@@ -332,18 +332,16 @@ function validateCapabilityTables(): void {
     }
     previous = cadence;
   }
-  for (const [name, table] of [['GHOST_BY_BAND', GHOST_BY_BAND], ['ARM_GHOST_BY_BAND', ARM_GHOST_BY_BAND]] as const) {
-    for (const [band, ghost] of Object.entries(table)) {
-      if (!ghost) continue;
-      if (!(ghost.meanIntervalTac > 0 && ghost.amp > 0 && ghost.durTac > 0 && ghost.stickChance >= 0 && ghost.stickChance <= 1)) {
-        throw new Error(`capabilities: ${name}.${band} is not a valid ghost spec`);
-      }
+  for (const [band, ghost] of Object.entries(ARM_GHOST_BY_BAND)) {
+    if (!ghost) continue;
+    if (!(ghost.meanIntervalTac > 0 && ghost.amp > 0 && ghost.durTac > 0 && ghost.stickChance >= 0 && ghost.stickChance <= 1)) {
+      throw new Error(`capabilities: ARM_GHOST_BY_BAND.${band} is not a valid ghost spec`);
     }
   }
-  // The limp is gentler than phase 2's ghost, and calmer as the controller heals (slice 3b, Fran's decision).
+  // The limp is calmer as the controller heals (slice 3b, Fran's decision).
   const push = (spec: Readonly<GhostSpec> | undefined): number => (spec === undefined ? 0 : spec.amp / spec.meanIntervalTac);
-  if (!(push(ARM_GHOST_BY_BAND.degraded) < push(ARM_GHOST_BY_BAND.failing) && push(ARM_GHOST_BY_BAND.failing) < push(GHOST_BY_BAND.failing))) {
-    throw new Error('capabilities: ARM_GHOST_BY_BAND must push less than GHOST_BY_BAND, and less again in the degraded band');
+  if (!(push(ARM_GHOST_BY_BAND.degraded) < push(ARM_GHOST_BY_BAND.failing))) {
+    throw new Error('capabilities: ARM_GHOST_BY_BAND must push less in the degraded band than in the failing one');
   }
   // Slice 5 (plan R3): a corrupted resident pushes less than the arm's failing controller it is meant to be gentler than
   // (04 §3.12; slice 8 §2.5: about half an unfixed VESPER).
@@ -443,12 +441,10 @@ export function deriveCapabilities(state: Readonly<GameState>, threadsBusy: numb
   };
 }
 
-// What a Thrust Ctrl in `band` fires (null: nothing). The classic world keeps phase 2's GHOST_BY_BAND (SWAP arrives with
-// its first burst). The arm's engine limps (slice 3b, Fran's decision): ARM_GHOST_BY_BAND, gentler, a twitch left in the
-// degraded band a field repair reaches, and nothing once the orbit is locked or accepted (the landing), so the pods' orbit
-// is not decayed by it.
+// What a Thrust Ctrl in `band` fires (null: nothing). The engine limps (slice 3b, Fran's decision): ARM_GHOST_BY_BAND,
+// gentler than phase 2's ghost, a twitch left in the degraded band a field repair reaches, and nothing once the orbit is
+// locked or accepted (the landing), so the pods' orbit is not decayed by it.
 function ghostSpecOf(state: Readonly<GameState>, band: Band): GhostSpec | null {
-  if (state.run.map.world !== 'arm') return GHOST_BY_BAND[band] ?? null;
   if (state.run.phase === 'landing') return null;
   return ARM_GHOST_BY_BAND[band] ?? null;
 }
@@ -545,10 +541,9 @@ export function planningThrustCap(state: Readonly<GameState>, caps: Capabilities
   return Math.min(ENGINE_POWER_BY_BAND[integrityBand(integrity)], caps.reactor.reactorCap);
 }
 
-// The engine fires by itself and nothing aboard can stop it (slice 3b review, item 1): on the arm, Thrust Ctrl is failing or
-// dead (a ghost source, whatever put it there: ENGINE FAULT, a transit hit, a bite) and no Swap is aboard (selectors
-// swapAboard), with fuel left for a burst. On the arm SWAP comes only by request, so a kid can meet this with no cure; the
-// classic world licenses SWAP with the first burst and never meets it. The strip's no-Swap line (repository.ts
+// The engine fires by itself and nothing aboard can stop it (slice 3b review, item 1): Thrust Ctrl is failing or dead (a
+// ghost source, whatever put it there: ENGINE FAULT, a transit hit, a bite) and no Swap is aboard (selectors swapAboard),
+// with fuel left for a burst. SWAP comes only by request, so a kid can meet this with no cure. The strip's no-Swap line (repository.ts
 // noSwapForGhost) and the flight's ENGINE FAULT SKIP refusal (pace.ts) both read it. Slice 5 (plan R5, review M5): only
 // Thrust Ctrl's own ghost (controllerGhost, whether or not a resident outpushes it): SWAP does not stop a resident, so a
 // resident alone never raises the no-Swap line or refuses a SKIP, and a broken controller always does.
@@ -562,5 +557,5 @@ export function ghostRefusesSkip(state: Readonly<GameState>): boolean {
 
 export function ghostWithoutSwap(state: Readonly<GameState>): boolean {
   const ctrl = capabilitiesNow(state).thrustCtrl;
-  return state.run.map.world === 'arm' && state.burn.fuelPct > 0 && ctrl.controllerGhost !== null && !swapAboard(state);
+  return state.burn.fuelPct > 0 && ctrl.controllerGhost !== null && !swapAboard(state);
 }

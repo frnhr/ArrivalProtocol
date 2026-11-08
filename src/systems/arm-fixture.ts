@@ -9,7 +9,7 @@ import type { RunMapState, RouteStop } from '@/types/map';
 import type { RunThreatState, ShipThreat } from '@/types/threat';
 import { hopBetween } from '@systems/map-hop';
 import { mapFacts, nominalRouteThreat } from '@systems/map-facts';
-import { planThreat, threatInputFor, createRunThreat, NO_FINAL_TRACES } from '@systems/threat-plan';
+import { planThreat, threatInputFor, createRunThreat, firstShipThreat, NO_FINAL_TRACES } from '@systems/threat-plan';
 import type { ShipResult } from '@state/schema';
 import { shipDefAt } from '@systems/map-run';
 import { COLONISTS_PER_POD } from '@data/tuning';
@@ -48,11 +48,7 @@ export function mapAlong(map: Readonly<RunMapState>, slots: readonly number[]): 
 // The run's threat before the last of `slots` (the nominal route's up to the stop before it), and the verdict for it on that
 // route: what a ship built straight onto the route starts with (createInitialState, __ap.ship).
 export function nominalAlong(map: Readonly<RunMapState>, slots: readonly number[]): { before: RunThreatState; verdict: ShipThreat } {
-  if (slots.length === 1) {
-    const before = createRunThreat();
-    const facts = { depth: 1, isFinal: false, oneHopFromFinal: false, beamSeeds: { kind: 'none' as const } };
-    return { before, verdict: planThreat(threatInputFor(before, facts, false, NO_FINAL_TRACES)) };
-  }
+  if (slots.length === 1) return { before: createRunThreat(), verdict: firstShipThreat() };
   const before = nominalRouteThreat(map, slots.slice(0, -1));
   const facts = mapFacts(map, slots[slots.length - 2]!, slots[slots.length - 1]!, slots.length);
   return { before, verdict: planThreat(threatInputFor(before, facts, false, NO_FINAL_TRACES)) };

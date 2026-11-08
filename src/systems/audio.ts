@@ -1355,7 +1355,7 @@ function cueHollowBoard(mix: Graph, t0: number): void {
 // The engine lights with nobody on the throttle (C2, §5.3 moment 11): a relay clacking twice (the controller
 // misfiring), then the ignition's dull whump: a falling sub thump under a burst of dark noise, like the rumble
 // catching for a moment. The rumble itself follows the burst's thrust (setEngineLevel); at a failing controller's
-// strength (GHOST_BY_BAND, 30%) it is low, and a burst at CRUISE lasts under half a second, so this is what says "the
+// strength (ARM_GHOST_BY_BAND, 15%) it is low, and a burst at CRUISE lasts under half a second, so this is what says "the
 // engine just fired". The ship's first burst
 // is heavier and ducks the mix, so it lands under the klaxon.
 function cueGhostIgnite(mix: Graph, t0: number, first: boolean): void {

@@ -26,11 +26,11 @@ import { WORLDS } from '@data/arm';
 
 // The runtime ship (phase 3 slice 3a, slice-3a-plan §2.2): everything one ship's world is built from (state/initial.ts
 // createShipSlices, data/memory.ts buildShipMemory, systems/carry.ts layoutCarried, the landing slice). It is never
-// stored and never hand-written outside data/classic-five.ts (the frozen five, the suites' fixture world): a ship of the
-// arm is built from its ArmShip by shipDefOf (Track GEN: the template's flight block, omega0 replaced, the modifiers as
+// stored and never hand-written: a ship of the arm is built from its ArmShip by shipDefOf (Track GEN: the template's
+// flight block, omega0 replaced, the modifiers as
 // zones and arrival damage, the landing, the class and the pods). What a ship does NOT hold: how the unit gets there (the
 // link, the hits, the distance: the map's Hop, systems/map-hop.ts), the threat facts of the beam into it (systems/
-// map-facts.ts; the classic world's CLASSIC_FACTS) and the licences (systems/licences.ts; CLASSIC_LICENCES).
+// map-facts.ts) and the tools (the repository, systems/repository.ts; REPAIR's licence, systems/licences.ts).
 // Units: km, km/s, km/s², μ in km³/s²; radii from the planet centre. Global rules live in tuning.ts.
 
 export interface ShipStart {
@@ -95,9 +95,8 @@ export interface ShipDef {
   id: string;
   name: string;
   world: string;
-  // Where the ship sits (02-map §3.2): its arm slot (the classic five: their index), its layer (01-landing §3.15's table:
-  // it sets the rolled driver arrival damage, data/driver-damage.ts; the classic five carry the run-1 route's 1, 2, 3, 5,
-  // 8), and its approach year (null on the classic world, which has no years).
+  // Where the ship sits (02-map §3.2): its arm slot, its layer (01-landing §3.15's table: it sets the rolled driver
+  // arrival damage, data/driver-damage.ts), and its approach year.
   slot: number;
   layer: number;
   approachYear: number | null;
@@ -108,7 +107,7 @@ export interface ShipDef {
   modifiers: readonly ModifierId[];
   memoryClass: MemoryClass;
   pods: number;
-  // The final ship (02-map §3.6: a ship in an end slot; the classic five's LAST LIGHT). Losing it ends the run (FINAL
+  // The final ship (02-map §3.6: a ship in an end slot). Losing it ends the run (FINAL
   // SHIP LOST, §4.3); its ORBIT LOCK opens the root duel and its finale (PURGE or MERGE) ends the run.
   final: boolean;
   flight: ShipFlightDef;
@@ -123,9 +122,9 @@ export interface ShipDef {
   // checked by validateLandingDef, which slice 3's roller reuses.
   landing: ShipLandingDef;
   // The resident AI the map rolled for this ship (slice 5, 04 §3.11; ArmShip.reserved.resident with its fragments), whether
-  // or not this build plays its kind (data/residents.ts builtResident decides). null: none, and always on the classic five.
+  // or not this build plays its kind (data/residents.ts builtResident decides). null: none.
   resident: ShipResidentDef | null;
-  // The site data the map rolled (slice 6, 02 §3.5: ArmShip.reserved.site; 'good' on the classic five), whether or not this
+  // The site data the map rolled (slice 6, 02 §3.5: ArmShip.reserved.site), whether or not this
   // build plays POOR (data/survey.ts siteDataOf decides).
   site: SiteData;
 }

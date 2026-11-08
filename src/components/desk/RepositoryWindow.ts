@@ -11,8 +11,8 @@ import { REPO_TEXT } from '@data/repo-text';
 //   a second click clears it);
 // • IN TRANSIT: the requests behind the unit (`Swap · 4 YRS BEHIND YOU`), green when they catch up at the selected ship;
 // • RESTRICTED: the locked rows and why (`Train it yourself :)`).
-// After the last rm was lost the desk opens here with Rm lit and the warning on top (04 §3.3, round 3). The classic world
-// has no repository: one line says so. DeskScreen owns the clicks (data-file) and the keys.
+// After the last rm was lost the desk opens here with Rm lit and the warning on top (04 §3.3, round 3).
+// DeskScreen owns the clicks (data-file) and the keys.
 
 function etaTone(model: Readonly<RepoModel>): string {
   return model.forecast === null ? 'none' : model.forecast.kind;
@@ -35,11 +35,6 @@ function availableNode(row: Readonly<RepoRow>, index: number): HTMLButtonElement
 }
 
 export function renderRepository(host: HTMLElement, model: Readonly<RepoModel>): void {
-  host.dataset.world = model.world;
-  if (model.world !== 'arm') {
-    host.replaceChildren(make('div', 'rp-classic', REPO_TEXT.window.classic));
-    return;
-  }
   const parts: HTMLElement[] = [];
   if (model.available.some((row) => row.focus)) parts.push(make('div', 'rp-warn', REPO_TEXT.window.lastRm));
   if (model.recommended === null && model.recommendLine !== null) parts.push(make('div', 'rp-control', model.recommendLine));

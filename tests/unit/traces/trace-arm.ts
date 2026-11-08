@@ -58,7 +58,7 @@ export function trailOn(map: Readonly<RunMapState>, yearsBefore = 40): UnitTrail
 export function startRun2(
   store: Store<GameState>, step: () => void, seed: number, lastUnit: LastUnit | null, playBoot = false,
 ): void {
-  startRun(store, seed, lineage2(lastUnit), 'arm');
+  startRun(store, seed, lineage2(lastUnit));
   receiveTransmission(store);
   if (playBoot) bootOut(store, step);
   store.update((draft) => { draft.run.phase = 'report'; });

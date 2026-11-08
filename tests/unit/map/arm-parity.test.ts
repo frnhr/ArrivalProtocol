@@ -87,7 +87,7 @@ function flyShip(): void {
 }
 
 h.newRun(SEED);
-startRun(h.store, SEED, FIRST_RUN_LINEAGE, 'arm');
+startRun(h.store, SEED, FIRST_RUN_LINEAGE);
 receiveTransmission(h.store);
 h.stepUntil(() => state().run.phase === 'flight', 15);
 record('boot');

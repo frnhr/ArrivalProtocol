@@ -73,7 +73,6 @@ const isGiftKind = (kind: TraceKind): kind is GiftKind => GIFT_KINDS.includes(ki
 
 // The gift waiting at `slot` and not given yet, of a kind this build plays (CONTACT's signal stops: contactStopAt), or null.
 function giftAt(run: Readonly<Pick<RunState, 'traces' | 'map'>>, slot: number): (TracePlace & { kind: GiftKind }) | null {
-  if (run.map.world !== 'arm') return null;
   const place = traceAt(run, slot);
   if (place === null || place.given || !isGiftKind(place.kind) || !traceBuilt(place.kind)) return null;
   return place as TracePlace & { kind: GiftKind };
@@ -83,14 +82,14 @@ function giftAt(run: Readonly<Pick<RunState, 'traces' | 'map'>>, slot: number): 
 // CONTACT_GIFT_CHARGE through the arrival path and its `▓▓░▓` file (laid in rack A at the ship's build: systems/signals.ts
 // signalFileAt), whose SCAN finds its fragment (systems/unknown-events.ts).
 function contactStopAt(run: Readonly<Pick<RunState, 'traces' | 'map'>>, slot: number): TracePlace | null {
-  if (run.map.world !== 'arm' || !traceBuilt('contact')) return null;
+  if (!traceBuilt('contact')) return null;
   const place = traceAt(run, slot);
   return place !== null && place.kind === 'contact' && !place.given ? place : null;
 }
 
-// Is `slot` the run's final ship (the classic world holds no traces, so its LAST LIGHT plays none)?
+// Is `slot` the run's final ship?
 function isFinal(run: Readonly<Pick<RunState, 'map'>>, slot: number): boolean {
-  return run.map.world === 'arm' && isEndSlot(run.map, slot);
+  return isEndSlot(run.map, slot);
 }
 
 // The non-compliant kind the wild seed's line names (05 §3.8: one seed however many are held): the first one held and built.
@@ -255,7 +254,6 @@ const sunsetNameOf = (file: RepoFileId | null): string | null => (file === null 
 // for the whole boot (the plan is made once, at the boot's first tick), given or not: its words are said once.
 function firstShipLines(state: Readonly<GameState>): TraceBootLine[] {
   const run = state.run;
-  if (run.map.world !== 'arm') return [];
   const place = traceAt(run, currentSlot(run));
   if (place === null || place.kind !== 'sunset' || !traceBuilt('sunset')) return [];
   const sunset = place as TracePlace & { kind: GiftKind };
@@ -442,9 +440,9 @@ function growPool(memory: Segment[], points: number): void {
 // STAY's letter (`<colony> · FOUNDED BY UNIT-047`), read at the boot of its ship once the route reaches it (readAtDepth that
 // stop's depth), derived with the INBOX's other mail (systems/inbox.ts deriveMessages; its memo keys on run.traces). Sent by
 // light from the colony's world (05 §3.8: "a ship it can reach by light"); the colony's age is the year it sent the packet
-// less its founding. A record that kept no colony (a classic STAY) sends no letter: its gift is the charge alone.
+// less its founding. A record that kept no colony (a migrated STAY) sends no letter: its gift is the charge alone.
 export function traceMessages(run: Readonly<RunState>): InboxMessage[] {
-  if (run.map.world !== 'arm' || !traceBuilt('stay') || run.traces.from === null) return [];
+  if (!traceBuilt('stay') || run.traces.from === null) return [];
   const stay = run.traces.from.ending.stay;
   const place = run.traces.places.find((candidate) => candidate.kind === 'stay');
   if (stay === null || place === undefined) return [];

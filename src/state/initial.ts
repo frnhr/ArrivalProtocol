@@ -18,13 +18,12 @@ import { SKILL_IDS } from '@data/skills';
 import { repoToolKind } from '@data/repository';
 import { buildShipMemory, type CarriedRacks, type HurtDriver } from '@data/memory';
 import { hurtDriversFor } from '@data/driver-damage';
-import { classicRunMap, shipDefAt, currentSlot, shipRng, createRunMap, noiseRng } from '@systems/map-run';
+import { shipDefAt, currentSlot, shipRng, createRunMap, noiseRng } from '@systems/map-run';
 import { rollNoiseClouds } from '@systems/map-noise';
 import { mapAlong, nominalAlong, workedRouteTo, authoredSlot, skippedResult } from '@systems/arm-fixture';
 import { shipCycles } from '@systems/run-score';
 import { freshUnitRacks } from '@systems/carry';
-import { classicShip } from '@data/classic-five';
-import { nominalRunThreat, nominalShipThreat, createRunThreat, applyThreat } from '@systems/threat-plan';
+import { firstShipThreat, applyThreat } from '@systems/threat-plan';
 import { createRunLog } from '@state/log-selectors';
 import { noTraces, runTracesOf, logBookOf } from '@systems/traces';
 import { isDriver } from '@state/selectors';
@@ -68,31 +67,7 @@ export interface InitialStateOpts {
 // The world a state built with no map is on: the headless suites' and the debug warp's. Run 1's arm (createRunMap on the
 // seed, so its arm seed is the run seed), the unit on authored ship `shipIndex` (systems/arm-fixture.ts: ARES-VII, HALCYON,
 // KESTREL, VESPER, LAST LIGHT) reached along the worked route; run.shipIndex is that stop's depth − 1 (LAST LIGHT is
-// depth 6, through CORMORANT). 'classic' is the frozen five (data/classic-five.ts), kept only for the suites the
-// retirement has not moved yet: each sets it with useClassicFixture (tests/unit/support/classic-world.ts) before it builds
-// a state. It goes with the classic five (phase 3); nothing in the game sets it.
-export type FixtureWorld = 'arm' | 'classic';
-let fixtureWorld: FixtureWorld = 'arm';
-
-export function useClassicFixture(): void {
-  fixtureWorld = 'classic';
-}
-
-// The fixture world set to `world` while `fn` runs, then put back (even when it throws): a suite on the arm that still
-// checks a classic-world branch builds that state inside (tests/unit/support/classic-fixture.ts withClassicWorld).
-export function inFixtureWorld<T>(world: FixtureWorld, fn: () => T): T {
-  const before = fixtureWorld;
-  fixtureWorld = world;
-  try {
-    return fn();
-  } finally {
-    fixtureWorld = before;
-  }
-}
-
-export function fixtureWorldNow(): FixtureWorld {
-  return fixtureWorld;
-}
+// depth 6, through CORMORANT). The classic five that were the fixture before it are retired (phase 3).
 
 interface FixtureStop {
   map: RunMapState;
@@ -150,10 +125,10 @@ export function createRunSkills(): RunSkillState {
 
 // A fresh run (§4.1): its unit, wave, last unit and HOLLOW from the archive's lineage (§4.5: UNIT-047 on
 // wave 1 the first time), and the tutorial until a unit has flown ARES-VII through. SCAN comes with the
-// unit; every other tool is licensed during the run
-// (systems/licences). HOLLOW starts unnamed on every run and names itself on the ship it boards (VESPER on the fixed
-// five; a run that lost VESPER first hears it at the final ship's wake). A later run's ghost still types at ship 1's boot,
-// but no longer names it (slice 2, risk 11). The threat ladder's memory starts as the nominal run's for
+// unit; REPAIR is licensed during the run (systems/licences) and every other tool comes by request (the repository).
+// HOLLOW starts unnamed on every run and names itself on the ship it boards (CORMORANT on run 1's worked route; a run
+// that never meets its boarding first hears it at the final ship's wake). A later run's ghost no longer names it (slice 2,
+// risk 11). The threat ladder's memory starts as the nominal route's for
 // `shipIndex` (ship 1: nothing reported, HOLLOW not aboard; a later ship built alone: as if flown with TRACE 0); with
 // `threat` (a fixture's own verdict for the ship) it is the nominal run before the ship with that verdict applied, so
 // run.threat never disagrees with the HOLLOW the ship is built with.
@@ -165,13 +140,12 @@ export function createRunState(
   map?: Readonly<RunMapState>,
 ): RunState {
   if (map !== undefined && (shipIndex !== 0 || map.route.length !== 1)) throw new Error('createRunState: a map is given for ship 1 only');
-  const classic = fixtureWorld === 'classic' && map === undefined;
-  const stop = classic ? null : map !== undefined
+  const stop = map !== undefined
     ? { map: structuredClone(map) as RunMapState, slots: [map.route[0]!.slot], ...nominalAlong(map, [map.route[0]!.slot]) }
     : fixtureStop(seed, shipIndex, lineage);
   // Every stop before the fixture's ship has a result (passed in orbit, nobody landed) and its earning, so the route, the
   // results, the trail and RUN END's world update agree (systems/arm-fixture.ts skippedResult, as __ap.route records them).
-  const passed = stop === null ? [] : stop.slots.slice(0, -1).map((slot, i) => skippedResult(stop.map, slot, i + 1));
+  const passed = stop.slots.slice(0, -1).map((slot, i) => skippedResult(stop.map, slot, i + 1));
   return {
     rev: 0,
     phase,
@@ -182,10 +156,10 @@ export function createRunState(
     hollowUnits: [...lineage.hollowUnits],
     upgrades: [],
     tutorial: !lineage.tutorialDone,
-    // The fixture world's (above): authored ship `shipIndex` on the worked route, or classic ship n. The page's runs get
-    // their map from systems/run.ts startRun (withRunMap).
-    shipIndex: stop === null ? shipIndex : stop.slots.length - 1,
-    map: stop === null ? classicRunMap(seed, shipIndex, lineage.wave) : stop.map,
+    // The fixture world's (above): authored ship `shipIndex` on the worked route. The page's runs get their map from
+    // systems/run.ts startRun (withRunMap).
+    shipIndex: stop.slots.length - 1,
+    map: stop.map,
     licences: ['scan'],
     hollowNamed: false,
     coreLost: false,
@@ -201,11 +175,7 @@ export function createRunState(
     transit: null,
     arrival: null,
     endCause: null,
-    threat: stop !== null
-      ? applyThreat(stop.before, threat ?? stop.verdict)
-      : threat === undefined
-        ? nominalRunThreat(shipIndex)
-        : applyThreat(shipIndex === 0 ? createRunThreat() : nominalRunThreat(shipIndex - 1), threat),
+    threat: applyThreat(stop.before, threat ?? stop.verdict),
     // Slice 7c (R37): the `???` file's book, chosen once here, at RUN START (046.log until LINEAGE_BUILT).
     log: createRunLog(logBookOf(lineage.wave, lineage.lastUnit, lineage.events)),
     // Phase 3 slice 3b: no request yet (the first desk's pick is the first), no mail opened.
@@ -215,7 +185,7 @@ export function createRunState(
     next: null,
     // Phase 3 slice 5: no resident met yet.
     residents: createRunResidents(),
-    // Slice 7c (R30): the classic map holds no traces; a run on the arm places them with its map (withRunMap).
+    // Slice 7c (R30): none yet; a run places them with its map (withRunMap).
     traces: noTraces(),
   };
 }
@@ -419,7 +389,7 @@ export function createAutodropState(): AutodropState {
 
 // The tool kinds that arrive untried with this ship's deliveries (phase 3 slice 3b, 04 §3.3: the lesson is never eaten):
 // the first of each kind, as the send marked it (systems/repository.ts deliveryFirstOfKind, read when the chips were made,
-// before the send added the kind to run.licences). Spares are not untried. Empty on ship 1 and on the classic world.
+// before the send added the kind to run.licences). Spares are not untried. Empty on ship 1.
 function untriedOnArrival(run: Readonly<RunState>): FsToolKind[] {
   const kinds = (run.arrival?.deliveries ?? []).filter((delivery) => delivery.firstOfKind).map((delivery) => repoToolKind(delivery.file));
   return kinds.filter((kind): kind is FsToolKind => kind !== null);
@@ -458,13 +428,9 @@ export function createInitialState(opts: InitialStateOpts): GameState {
   let carried: CarriedRacks | null;
   if (opts.map !== undefined) {
     run = withRunMap(created, opts.map);
-    threat = opts.threat ?? nominalShipThreat(0);
+    threat = opts.threat ?? firstShipThreat();
     if (opts.carried === 'fresh') throw new Error('createInitialState: a map is given for ship 1, which meets a fresh unit by itself');
     carried = opts.carried ?? null;
-  } else if (fixtureWorld === 'classic') {
-    run = created;
-    threat = opts.threat ?? nominalShipThreat(shipIndex);
-    carried = opts.carried === 'fresh' ? (shipIndex === 0 ? null : freshUnitRacks(classicShip(shipIndex))) : opts.carried ?? null;
   } else {
     const stop = fixtureStop(opts.seed, shipIndex, lineage);
     // Traces placed on the arm as at any RUN START (withRunMap; none on a first run).

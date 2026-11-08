@@ -1,9 +1,8 @@
 import type { Hop, RunMapState, RoomFit } from '@/types/map';
 import { layoutFor, fillRoom, BEAM_SEED_LAYOUT_BLOCKS } from '@data/memory';
-import { CLASSIC_FIVE } from '@data/classic-five';
 import { distTable, beamReaches } from '@systems/map-geometry';
 import { hopNoise } from '@systems/map-noise';
-import { armShipAt, classicHop, classicRoute, worldSlotOf } from '@systems/map-run';
+import { armShipAt, worldSlotOf } from '@systems/map-run';
 import {
   BEAM_RANGE_LY, LINK_BASE_TENTHS, LINK_PER_LY_TENTHS, TRANSIT_LY_PER_HIT, ECC_YEARS_PER_HIT,
 } from '@data/tuning';
@@ -38,15 +37,13 @@ export function hitsLanding(hop: Readonly<Pick<Hop, 'transitHits' | 'eccFixes'>>
   return Math.max(0, hop.transitHits + extraHits - hop.eccFixes);
 }
 
-// The approach year of the ship in `slot` (classic: its fixture year on the one route).
+// The approach year of the ship in `slot`.
 function approachOf(map: Readonly<RunMapState>, slot: number): number {
-  if (map.world === 'classic') return classicRoute(slot, map.startYear).at(-1)!.hop?.approachYear ?? map.startYear;
   return armShipAt(map, slot).approachYear;
 }
 
 // The beam from `from` to `to`, whether or not it is reachable (the card shows TOO LATE and OUT OF RANGE hops too).
 export function hopBetween(map: Readonly<RunMapState>, from: number, to: number): Hop {
-  if (map.world === 'classic') return classicHop(from, to, approachOf(map, from));
   if (from === to) throw new Error(`hopBetween: slot ${from} to itself`);
   const dest = armShipAt(map, to);
   const distanceLy = distTable(worldSlotOf(map, from), worldSlotOf(map, to));
@@ -67,17 +64,14 @@ export function hopBetween(map: Readonly<RunMapState>, from: number, to: number)
 }
 
 // Can the unit beam from `from` to `to` (02 §3.1)? Outward (a higher layer), within BEAM_RANGE_LY, and in time (slack ≥ 0).
-// The classic world has one route: each ship to the next.
 export function reachable(map: Readonly<RunMapState>, from: number, to: number): boolean {
-  if (map.world === 'classic') return to === from + 1 && to < CLASSIC_FIVE.length;
   if (from === to) return false;
   return beamReaches(worldSlotOf(map, from), worldSlotOf(map, to), approachOf(map, from), armShipAt(map, to).approachYear);
 }
 
 // Every slot reachable from `from`, in slot order.
 export function reachableFrom(map: Readonly<RunMapState>, from: number): number[] {
-  const slots = map.world === 'classic' ? CLASSIC_FIVE.map((ship) => ship.slot) : map.arm.map((ship) => ship.slot);
-  return slots.filter((to) => reachable(map, from, to));
+  return map.arm.map((ship) => ship.slot).filter((to) => reachable(map, from, to));
 }
 
 // What the unit would carry across: its files (a list, so a delivery's file adds its room with no new type, 3b), the

@@ -9,9 +9,9 @@ import { mountAutoburn, registerAutoburnKeys } from '@systems/autoburn';
 import { giveSkillFile } from '../support/skills';
 import type { SkillFileSegment } from '@/types/segment';
 import { threateningSeeds } from '@systems/hollow';
-import { freshUnitRacks, arrivalDamage } from '@systems/carry';
+import { arrivalDamage } from '@systems/carry';
 import { resetWorld } from '@systems/reset';
-import { createInitialState, fixtureWorldNow } from '@state/initial';
+import { createInitialState } from '@state/initial';
 import { currentShip } from '@systems/map-run';
 import type { GameState } from '@state/schema';
 import { actionRepair, actionDelete } from '@state/actions';
@@ -22,7 +22,6 @@ import { followDirector } from '../wp2/harness2';
 import type { Segment } from '@/types/segment';
 import { phase2Ship } from '../support/hollow-world';
 import { giveWorkedKit } from '../support/arm-ship';
-import { classicShip } from '@data/classic-five';
 
 export const KESTREL = 2;
 
@@ -82,17 +81,9 @@ export function createHarness9(seed = 1, opts: { soulsFound?: boolean } = {}): H
     kestrel(nextSeed, kestrelOpts = {}) {
       base.resetTo('flight', nextSeed);
       // Track RETIRE: on the fixture world's arm (state/initial.ts), the fresh unit is laid out for the hop into run 1's
-      // KESTREL, and the ship's own arrival damage then lands on the unit's files in memory (the classic five: on the racks).
-      let fresh: GameState;
-      if (fixtureWorldNow() === 'classic') {
-        const ship = classicShip(KESTREL);
-        const carried = freshUnitRacks(ship);
-        if (kestrelOpts.arrivalDamage) arrivalDamage(carried.segs, ship.arrivalDamage);
-        fresh = createInitialState({ seed: nextSeed, shipIndex: KESTREL, carried });
-      } else {
-        fresh = createInitialState({ seed: nextSeed, shipIndex: KESTREL, carried: 'fresh' });
-        if (kestrelOpts.arrivalDamage) arrivalDamage(fresh.memory, currentShip(fresh).arrivalDamage);
-      }
+      // KESTREL, and the ship's own arrival damage then lands on the unit's files in memory.
+      const fresh: GameState = createInitialState({ seed: nextSeed, shipIndex: KESTREL, carried: 'fresh' });
+      if (kestrelOpts.arrivalDamage) arrivalDamage(fresh.memory, currentShip(fresh).arrivalDamage);
       if (kestrelOpts.sensorHealed) {
         const sensor = fresh.memory.find((seg) => seg.role === 'sensor');
         if (!sensor || !hasIntegrity(sensor)) throw new Error('harness9: no sensor');

@@ -37,7 +37,6 @@ export const INBOX_TEXT = {
     back: '◀ LIST',
     stamps: (sent: number | null, received: number): string => `SENT ${sent === null ? '????' : sent} · RECEIVED ${received}`,
     forUnit: (unit: number): string => `FOR UNIT-${String(unit).padStart(3, '0')}`,
-    classic: 'NO MAIL ON THE CLASSIC ROUTE',
   },
 
   // --- Senders (05 §3.3) -------------------------------------------------------------------------------------------------

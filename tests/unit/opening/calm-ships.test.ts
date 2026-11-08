@@ -17,7 +17,7 @@ import { createHarness7 } from '../wp7/harness7';
 import { followLanding, lockOn } from '../landing/harness-landing';
 import { setLandingMode } from '../support/landing-instant';
 import { receiveTransmission } from '@systems/boot';
-import { continueAfterReport } from '../support/classic-flow';
+import { continueAfterReport } from '../support/desk';
 import { mountStoryLog } from '@systems/story-log';
 import { logEntriesAtBoot, logKnown, logDisplayName } from '@state/log-selectors';
 import { setMode } from '@systems/mode';

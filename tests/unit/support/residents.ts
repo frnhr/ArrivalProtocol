@@ -18,9 +18,9 @@ import { RESIDENT_BUILT } from '@data/residents';
 import { mapAtShip, shipDefAt } from '@systems/map-run';
 import { hopBetween } from '@systems/map-hop';
 import { freshUnitRacks } from '@systems/carry';
-import { nominalShipThreat } from '@systems/threat-plan';
 import { FIRST_RUN_LINEAGE } from '@systems/meta';
 import { run1Map } from '../map/run1-fixture';
+import { fixtureVerdict } from './arm-ship';
 
 export function withResidents<T>(set: Readonly<Partial<Record<ResidentKind, boolean>>>, fn: () => T): T {
   const flags = RESIDENT_BUILT as Record<ResidentKind, boolean>;
@@ -51,7 +51,7 @@ export function armShipSlices(seed: number, slot: number): { run: RunState; slic
   // world now fills for the route it builds, are left empty as they always were here: map/arm-parity pins these slices).
   const template = createRunState(seed, 'boot', 1, FIRST_RUN_LINEAGE);
   const run: RunState = { ...template, map, ships: [], skills: { ...template.skills, earned: [] } };
-  const calm: ShipThreat = { ...nominalShipThreat(1), rootBlocks: null };
+  const calm: ShipThreat = { ...fixtureVerdict(1), rootBlocks: null };
   const carried = freshUnitRacks(shipDefAt(map, slot), WIDE_LINK_BLOCKS, calm);
   return { run, slices: createShipSlices(run, carried, calm) };
 }

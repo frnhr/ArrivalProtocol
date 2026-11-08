@@ -91,7 +91,7 @@ for (const role of CAPABILITY_ROLES) {
   check('thrust-ctrl degraded (79, 60, 50): the arm\'s twitch, 20 tac s mean, amp 0.15', [79, 60, 50].every((integrity) =>
     JSON.stringify(ghostAt(integrity)) === JSON.stringify(ARM_GHOST_BY_BAND.degraded)) && ghostAt(60)?.meanIntervalTac === 20 && ghostAt(60)?.amp === 0.15);
   // WP12 part 1 (the 200-seed playthrough) retuned §3.3's numbers (failing 25 tac s / 0.15; dead 12 tac s / 0.25 / stick
-  // 0.3) to failing 10 tac s / 0.3 and dead 10 tac s / 0.3 / stick 0.3 (tuning.ts GHOST_BY_BAND has the why).
+  // 0.3) to failing 10 tac s / 0.3 and dead 10 tac s / 0.3 / stick 0.3 (phase 2's table, retired with the classic five; the arm limps at ARM_GHOST_BY_BAND).
   check('thrust-ctrl failing: 10 tac s mean, amp 0.15, dur 1.0, no stick (the arm\'s limp)', JSON.stringify(ghostAt(49)) === JSON.stringify(ARM_GHOST_BY_BAND.failing)
     && ghostAt(31)?.meanIntervalTac === 10 && ghostAt(31)?.amp === 0.15 && ghostAt(31)?.durTac === 1 && ghostAt(31)?.stickChance === 0);
   check('thrust-ctrl dead: 10 tac s, amp 0.15, stick 0.3 (never weaker than failing)', ghostAt(24)?.meanIntervalTac === 10 && ghostAt(0)?.amp === 0.15 && ghostAt(10)?.stickChance === 0.3);

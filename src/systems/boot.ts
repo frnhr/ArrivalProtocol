@@ -23,7 +23,7 @@ import { sentrySeedSaid, compileFirewall } from '@systems/sentry';
 import { receiveDeliveryAtBoot } from '@systems/delivery-boot';
 import { newMessagesAtBoot } from '@systems/inbox';
 import { writeRunSave } from '@systems/save-write';
-import { nominalShipThreat } from '@systems/threat-plan';
+import { firstShipThreat } from '@systems/threat-plan';
 import {
   BOOT_LINE_AT_SEC, BOOT_KLAXON_AFTER_LAST_LINE_SEC, BOOT_END_AFTER_KLAXON_SEC, BOOT_SKIP_GRACE_SEC,
   ARRIVAL_HIT_STAGGER_SEC, ARRIVAL_HIT_SEEN_SEC, BOOT_GHOST_AT_SEC, BOOT_AFTER_GHOST_SEC, BOOT_AFTER_HOLLOW_LINE_SEC,
@@ -47,7 +47,7 @@ import {
 // `> SOUL ARCHIVE · 2,400 · you know what they are`: the slabs crack at once (no STASIS step), and REPAIR is licensed in
 // the same moment (the ENGINE I/O FAULT will want it).
 // Its last unit's ghost (05 §3.5) speaks later, never at ship 1 (the new unit can't know yet): at the boot of the first
-// ship at or past the one where that unit's run ended (systems/meta.ts ghostShipIndex, ghostLineDue), once a run
+// ship in or past the layer where that unit was lost (systems/meta.ts ghostPlaceReached, ghostLineDue), once a run
 // (run.ghostSpoken). It types first, in HOLLOW's slow pink (`> hi 048. it's 047. 046 ate me. now i'm hungry too.`); the
 // boot's own lines follow (on VESPER the boarding's 108% unpack too), and a skip waits until the ghost has had its say. It
 // names nothing: HOLLOW names itself where it arrives (slice-2-plan risk 11 and its follow-up, Fran's playtest: the ghost
@@ -310,7 +310,7 @@ export function receiveTransmission(store: Store<GameState>): boolean {
   if (store.getState().archive.status === 'corrupt') playWithoutArchive(store);
   startBootFromTitle(store, { countRun: true });
   // RUN START (02 §3.11): the run save's first point, once the archive has counted the run (its runs are the save's).
-  writeRunSave(store, 'run-start', { carried: null, threat: nominalShipThreat(0) });
+  writeRunSave(store, 'run-start', { carried: null, threat: firstShipThreat() });
   return true;
 }
 

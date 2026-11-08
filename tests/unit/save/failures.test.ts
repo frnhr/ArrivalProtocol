@@ -311,7 +311,7 @@ for (const [what, spoil, kind] of run2Refusals) {
   storage.fail.setKey = RUN_SAVE_KEY;
   quiet(() => playToEnd());
   storage.fail.setKey = null;
-  startRun(store, 92, archiveLineage(), 'arm');
+  startRun(store, 92, archiveLineage());
   quiet(() => receiveToReport(store));
   const threw = opens(storage);
   check('run 3, a full quota, a NEW RUN in the same page, a reload: the page opens on the next unit\'s title (the unsaved run abandoned)',

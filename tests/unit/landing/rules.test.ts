@@ -17,7 +17,7 @@ import { validateLandingDef } from '@data/landing-def';
 import { shipColonists, shipPodCount, validatePodRacks } from '@data/memory';
 import { LAUNCH_CONFIRM_TEXT, LANDING_REPORT_TEXT, COLONY_NAME_POOL } from '@data/landing-text';
 import { LZ_WIDTH_KM, COLONISTS_PER_POD, PODS_MAX, BAY_SLOTS } from '@data/tuning';
-import { CLASSIC_FIVE } from '@data/classic-five';
+import { fixtureShip } from '../support/arm-ship';
 
 const R = 3390;
 const DEG = Math.PI / 180;
@@ -288,12 +288,14 @@ function solution(dotDeg: number, inBand = true, block: DropSolution['block'] = 
 
 // --- The ships' landing data and its validators ---
 {
-  const pods = CLASSIC_FIVE.map((ship) => shipPodCount(ship));
-  check('the five ships carry 3 / 5 / 12 / 12 / 16 pods', pods.join(',') === '3,5,12,12,16');
-  check('the fleet carries 9,600 colonists', CLASSIC_FIVE.reduce((sum, ship) => sum + shipColonists(ship), 0) === 9600);
+  // Track RETIRE: run 1's authored five (the classic five carried 3 / 5 / 12 / 12 / 16, 9,600).
+  const authored = [0, 1, 2, 3, 4].map((index) => fixtureShip(index));
+  const pods = authored.map((ship) => shipPodCount(ship));
+  check('run 1\'s authored five carry 3 / 5 / 6 / 16 / 16 pods', pods.join(',') === '3,5,6,16,16', pods.join(','));
+  check('…9,200 colonists', authored.reduce((sum, ship) => sum + shipColonists(ship), 0) === 9200, String(authored.reduce((sum, ship) => sum + shipColonists(ship), 0)));
   check('every ship has at most PODS_MAX pods', pods.every((n) => n <= PODS_MAX));
   const bad = (fn: () => void): boolean => { try { fn(); return false; } catch { return true; } };
-  const ares = CLASSIC_FIVE[0]!;
+  const ares = authored[0]!;
   check('validateLandingDef throws when the counts miss the pods', bad(() => validateLandingDef('t', ares.landing, 4, R)));
   check('validateLandingDef throws on brackets under 12° apart edge to edge', bad(() => validateLandingDef('t', {
     ...ares.landing, lzs: [{ label: 'LZ-A', centreDeg: 10, width: 'wide', pods: 1 }, { label: 'LZ-B', centreDeg: 25, width: 'wide', pods: 2 }],
@@ -382,7 +384,7 @@ function solution(dotDeg: number, inBand = true, block: DropSolution['block'] = 
 
 // --- No-go arcs in the data ---
 {
-  const ares = CLASSIC_FIVE[0]!;
+  const ares = fixtureShip(0);
   const bad = (fn: () => void): boolean => { try { fn(); return false; } catch { return true; } };
   check('validateLandingDef throws on a no-go arc over a bracket', bad(() => validateLandingDef('t', { ...ares.landing, noGo: [{ centreDeg: 160, widthDeg: 5, word: 'LAVA' }] }, 3, R)));
   check('…and on two no-go arcs that overlap', bad(() => validateLandingDef('t', {

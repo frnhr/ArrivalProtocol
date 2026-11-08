@@ -1,11 +1,13 @@
-// Guard (slice 5 review fix pass, review item 5 and architecture item 4): data/ships.ts, and the classic five's load
-// (data/classic-five.ts), never reach a stateful system again. Slice 5 met the trap twice (WARDEN's Deviation 1, KIN's
-// lead patch): data/ships.ts imported systems/zones for a load-time check, that system reached state/actions → the
-// residents' dispatcher → a resident module → hollow.ts → carry.ts → classic-five, and classic-five's own load-time check
-// then ran before data/ships.ts had loaded (`__name is not a function` in every suite). data/zone-check.ts broke the
-// cycle; this suite keeps it broken.
+// Guard (slice 5 review fix pass, review item 5 and architecture item 4): data/ships.ts, and the data modules with load-time
+// checks that the stateful systems load, never reach a stateful system again. Slice 5 met the trap twice (WARDEN's
+// Deviation 1, KIN's lead patch): data/ships.ts imported systems/zones for a load-time check, that system reached
+// state/actions → the residents' dispatcher → a resident module → hollow.ts → carry.ts → the classic five's data, and its
+// own load-time check then ran before data/ships.ts had loaded (`__name is not a function` in every suite).
+// data/zone-check.ts broke the cycle; this suite keeps it broken. Track RETIRE retired the classic five's data
+// (data/classic-five.ts): its place as the second root is run 1's arm table (data/run1-arm.ts, checked at load), which
+// the systems reach through the map generator.
 // • Statically: the runtime import graph of src (type-only imports dropped: tsx erases them), walked from both roots, may
-//   reach only data/*, types/* and the few pure helpers listed below, and data/ships.ts must not reach classic-five.
+//   reach only data/*, types/* and the few pure helpers listed below, and data/ships.ts must not reach data/run1-arm.ts.
 // • Dynamically: then this file's one game import, data/ships.ts, is loaded alone (no harness, no store). It is a dynamic
 //   import so the static checks print first: a cycle would throw at the load.
 import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs';
@@ -97,8 +99,8 @@ check('the guard sees the source tree (more than 200 modules, the import walk fi
   graph.size > 200 && [...graph.values()].reduce((sum, deps) => sum + deps.length, 0) > 1000, `${graph.size} modules`);
 
 const ships = join(SRC, 'data', 'ships.ts');
-const five = join(SRC, 'data', 'classic-five.ts');
-for (const [label, root] of [['data/ships.ts', ships], ['data/classic-five.ts', five]] as const) {
+const table = join(SRC, 'data', 'run1-arm.ts');
+for (const [label, root] of [['data/ships.ts', ships], ['data/run1-arm.ts', table]] as const) {
   const prev = reach(root);
   const bad = [...prev.keys()].filter((path) => !allowed(path));
   check(`${label} loads only data, types and pure helpers (no system with state, no resident module, not state/actions)`,
@@ -106,10 +108,10 @@ for (const [label, root] of [['data/ships.ts', ships], ['data/classic-five.ts', 
 }
 {
   const prev = reach(ships);
-  check('data/ships.ts does not reach data/classic-five.ts (the load cycle slice 5 met)', !prev.has(five), prev.has(five) ? pathTo(prev, five) : '');
+  check('data/ships.ts does not reach data/run1-arm.ts (the load cycle slice 5 met)', !prev.has(table), prev.has(table) ? pathTo(prev, table) : '');
   // The guard's own sanity: the walk does find the stateful modules where they are.
   const actions = reach(join(SRC, 'systems', 'residents.ts'));
-  check('…and the walk is live: systems/residents.ts does reach state/actions.ts and classic-five', actions.has(join(SRC, 'state', 'actions.ts')) && actions.has(five));
+  check('…and the walk is live: systems/residents.ts does reach state/actions.ts and data/run1-arm.ts', actions.has(join(SRC, 'state', 'actions.ts')) && actions.has(table));
 }
 
 const { shipDefOf } = await import('@data/ships');

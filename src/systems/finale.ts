@@ -518,7 +518,7 @@ export function pickStep2(store: Store<GameState>, you: YouChoice): string | nul
 }
 
 // STAY's sub-row (R9; review M3): valid at 'step2' with STAY open; refuses a slot that is not one of stayCandidates (the arm
-// slot, the route index on the classic world), else confirms STAY with it. ESC in the sub-row only closes it (CARD's); ESC
+// slot), else confirms STAY with it. ESC in the sub-row only closes it (CARD's); ESC
 // on step 2 is backToStep1.
 export function pickStay(store: Store<GameState>, stay: number): string | null {
   const state = store.getState();

@@ -25,7 +25,7 @@ import {
   createRunState, createInitialState, createRunSkills, createAutodropState, createRunResidents, createResidentState, createSurveyState,
 } from '@state/initial';
 import { createRunLog } from '@state/log-selectors';
-import { createRunThreat, nominalShipThreat } from '@systems/threat-plan';
+import { createRunThreat, firstShipThreat } from '@systems/threat-plan';
 import { createRunMap } from '@systems/map-run';
 import {
   ShapeError, shapeFail, rec, list, whole, int, num, str, name, bool, isNull, anyRecord, nullable, oneOf, likeReference,
@@ -129,10 +129,8 @@ function isInfinityTag(value: unknown): boolean {
   return keys.length === 1 && keys[0] === '$num' && (value as Record<string, unknown>).$num === 'Infinity';
 }
 
-// The save as JSON. Throws on a classic-world map (never saved: 3a's review note) and on a non-finite number other than a
-// sticky burst's end.
+// The save as JSON. Throws on a non-finite number other than a sticky burst's end.
 export function encodeRunSave(save: Readonly<RunSave>): string {
-  if (save.payload.run.map.world !== 'arm') throw new Error(`encodeRunSave: a '${save.payload.run.map.world}' map is never saved`);
   return JSON.stringify(save, (key, value: unknown) => {
     if (typeof value !== 'number' || Number.isFinite(value)) return value;
     if (value === Infinity && key === INFINITY_KEY) return INFINITY_TAG;
@@ -181,7 +179,8 @@ const checkArmShips: Check = (value, at) => {
 
 const checkMap = rec({
   version: oneOf(MAP_STATE_VERSION),
-  world: oneOf('arm', 'classic'),
+  // The arm is the only world (OPEN-DECISIONS 87): any other value, the retired classic five's included, is 'shape'.
+  world: oneOf('arm'),
   run: whole,
   armSeed: whole,
   startYear: whole,
@@ -244,7 +243,7 @@ function refs(): NonNullable<typeof references> {
       return {
         run: createRunState(1, 'title', 0, REFERENCE_LINEAGE),
         slices: shipSlicesOf(world),
-        shipThreat: nominalShipThreat(0) as unknown as Record<string, unknown>,
+        shipThreat: firstShipThreat() as unknown as Record<string, unknown>,
       };
     });
   }
@@ -1067,7 +1066,6 @@ export function decodeRunSave(raw: string): DecodeResult {
   // Past checkShape the envelope is a RunSave's; the run inside is checked by what follows and by resume's constructors.
   const save = data as unknown as RunSave;
   const run = save.payload.run;
-  if (run.map.world !== 'arm') return refuse('classic', `a '${String(run.map.world)}' map`);
   if (run.map.route.length !== run.shipIndex + 1) return refuse('route', `${run.map.route.length} route stops for ship ${run.shipIndex + 1}`);
   const phase = POINT_PHASE[save.point];
   if (run.phase !== phase) return refuse('route', `point ${save.point} with the run in '${run.phase}'`);

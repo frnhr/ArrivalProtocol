@@ -68,7 +68,7 @@ function packetTo(
 let model = transmitModel(packetTo([0, 2, 5], 11).getState());
 check('the years headline: NEXT: VESPER · 3,200 COLONISTS · 55 LY · 103 YRS EARLY', model.headline === 'NEXT: VESPER · 3,200 COLONISTS · 55 LY · 103 YRS EARLY', model.headline);
 check('…the ECC line takes the hits line\'s place: 8 HITS · 4 FIXED WHILE YOU SLEEP (103 YRS) → 4 LAND',
-  model.arm && model.onTheWay === MAP_TEXT.packet.onTheWay(8, 4, 103, 4) && model.onTheWay === 'ON THE WAY: 8 HITS · 4 FIXED WHILE YOU SLEEP (103 YRS) → 4 LAND',
+  model.onTheWay === MAP_TEXT.packet.onTheWay(8, 4, 103, 4) && model.onTheWay === 'ON THE WAY: 8 HITS · 4 FIXED WHILE YOU SLEEP (103 YRS) → 4 LAND',
   model.onTheWay ?? '');
 check('…a FULL room fits everything: ROOM 152 · FILES n + FLOOR 12, no charge line, TRANSMIT ▸ free',
   model.room.line === MAP_TEXT.packet.room(152, model.room.fit.files, 12) && model.room.charge === null && model.room.tone === 'quiet'
