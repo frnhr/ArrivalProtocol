@@ -160,7 +160,7 @@ const armSlots = (state: Readonly<GameState>): number[] => state.run.map.arm.fla
   const lines = (hollow: HollowFate, you: YouChoice, extra: Partial<EndingRecord> = {}, built = ALL): string[] => traceNextLines(ending(hollow, you, extra), built);
   check('PURGE + REASSIGNMENT: 05 §3.12\'s two lines, step 1 first', JSON.stringify(lines('purge', 'reassignment')) === JSON.stringify([
     'NEXT RUN: + your seeds die at the final ship · − a hungrier finale',
-    'NEXT RUN: + 15 charge at the final ship · − the last root is you',
+    'NEXT RUN: + 8 charge at the final ship · − the last root is you',
   ]), JSON.stringify(lines('purge', 'reassignment')));
   check('MERGE + SUNSET: the thread and the root of 18 blocks, the cache on the way and its seed', JSON.stringify(lines('merge', 'sunset')) === JSON.stringify([
     'NEXT RUN: + 1 thread at the final ship · − a root of 18 blocks',

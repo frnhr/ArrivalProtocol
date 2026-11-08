@@ -331,7 +331,7 @@ check(`…every line ≤ ${MAX_LINE_CHARS}, at most ${EPILOGUE_MAX_LINES}`, line
   check(`…ENDINGS 3/${builtPieces().length} (only built pieces count: 7 with CONTACT)`, card.endingsLine === `ENDINGS 3/${builtPieces().length}` && builtPieces().length === 7);
   // R12 turned on by 7c (the traces built): one NEXT RUN: line per trace, step 1 then step 2, in 05 §3.12's words.
   const nextLines = ['NEXT RUN: + your seeds die at the final ship · − a hungrier finale',
-    'NEXT RUN: + 15 charge at the final ship · − the last root is you'];
+    'NEXT RUN: + 8 charge at the final ship · − the last root is you'];
   check('…the title and its colours\' choices, its NEXT RUN lines (R12: PURGE, then REASSIGNMENT), the bridge moved here, NEW RUN',
     card.title === 'STAND BY' && card.ending?.hollow === 'purge' && card.ending.you === 'reassignment'
     && card.next.join('|') === nextLines.join('|')

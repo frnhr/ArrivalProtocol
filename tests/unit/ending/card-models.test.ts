@@ -212,7 +212,7 @@ function input(options: Partial<Record<EndingPiece, OptionState>>, more: Partial
     spared.rows[0]?.kind === 'needs' && spared.rows[0].ruledOut && spared.rows[0].caption === FINALE_TEXT.needs.shipTaken
     && spared.rows.slice(1).every((row) => !row.ruledOut) && model.rows.every((row) => !row.ruledOut));
   check('step 2: the NEXT RUN: lines; after PURGE SUNSET\'s seed is `1 more`, after SPARE `that same seed` (R33: once a run)',
-    model.rows.map((row) => row.nextRun).join(' | ') === '+ a cache you left on the way · − 1 more seed at the end | + a packet from your colony · − 1 more seed at the end | + 15 charge at the final ship · − the last root is you | + 2 signal stops on the map · − 1 more seed at the end'
+    model.rows.map((row) => row.nextRun).join(' | ') === '+ a cache you left on the way · − 1 more seed at the end | + a packet from your colony · − 1 more seed at the end | + 8 charge at the final ship · − the last root is you | + 2 signal stops on the map · − 1 more seed at the end'
     && spared.rows[0]?.nextRun === '+ a cache you left on the way · − that same seed'
     && spared.rows[1]?.nextRun === '+ a packet from your colony · − that same seed' && spared.rows[2]?.nextRun === model.rows[2]?.nextRun
     && spared.rows[3]?.nextRun === '+ 2 signal stops on the map · − that same seed',

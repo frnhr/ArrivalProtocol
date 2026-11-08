@@ -4,7 +4,7 @@
 // • PURGE: the seeds the unit carries in are gone (`> THE DISH HERE WAS WIPED · 2 SEEDS GONE`), and the FINALE bites every
 //   spreadEverySec × 0.85;
 // • MERGE: the Core's capacity +1 as `> A THREAD IN THE DISH · +1 THREAD` is said, and an 18-block root;
-// • REASSIGNMENT: +15 REPAIR CHARGE through the arrival path (`> AN ALLOWANCE FOR THE WAIT`), the root is the last unit, its
+// • REASSIGNMENT: +TRACE_ALLOWANCE_CHARGE (8) REPAIR CHARGE through the arrival path (`> AN ALLOWANCE FOR THE WAIT`), the root is the last unit, its
 //   FINALE seeds 'near-skill', and its RM hunts the highest-version `.skl` (huntTarget: ties the larger file);
 // • non-compliant (SUNSET, SPARE): one wild seed at the final boot (`> THE DISH HERE RUNS WILD · 1 SEED CAME IN`), never behind
 //   a file another seed rides, never wiped by PURGE, one however many are held;
@@ -193,10 +193,24 @@ check('…compliant endings owe none (PURGE / MERGE + REASSIGNMENT), and the gif
 
   // The near-skill seed: no gap beside the skill (the receiver packs the unit's files back to back: AUTOBURN.skl as it
   // arrived) → the FINALE's own spot; a gap beside it (AUTODROP.skl, written into a free run) → in that gap,
-  // SEED_TOOL_GAP_BLOCKS from the skill, facing it.
-  const packed = purge.state.memory;
+  // SEED_TOOL_GAP_BLOCKS from the skill, facing it. Slice 8: with the allowance at 8 (it was 15) this seed's receiver is no
+  // longer full, and a free run lies before AUTOBURN.skl as it arrived. So both cases are built on the same memory as the
+  // hunt's checks above: packed, the hunted skill's free neighbours closed (their blocks go to the largest free run); opened,
+  // a 6-block gap after it.
+  const packed = structuredClone(memory) as Segment[];
+  const skillAt = packed.findIndex((seg) => seg.id === huntedSkill(packed)?.id);
+  for (const side of [skillAt - 1, skillAt + 1]) {
+    const gap = packed[side];
+    if (gap === undefined || gap.type !== 'free') continue;
+    const into = packed.filter((seg) => seg.type === 'free' && seg !== gap).reduce((a, b) => (b.size > a.size ? b : a));
+    into.size += gap.size;
+    gap.size = 0;
+  }
+  const closed = packed.filter((seg) => seg.type !== 'free' || seg.size > 0);
+  packed.splice(0, packed.length, ...closed);
+  mergeAdjacentFree(packed);
   check('a near-skill seed with no gap beside the skill lands where the FINALE\'s own would',
-    JSON.stringify(nearSkillSeedSpot(packed, untried)) === JSON.stringify(seedSpot(packed, untried)));
+    JSON.stringify(nearSkillSeedSpot(packed, untried)) === JSON.stringify(seedSpot(packed, untried)), JSON.stringify({ near: nearSkillSeedSpot(packed, untried), own: seedSpot(packed, untried) }));
   const opened = structuredClone(memory) as Segment[];
   const at = opened.findIndex((seg) => seg.id === v2.id);
   const right = opened[at + 1]!;

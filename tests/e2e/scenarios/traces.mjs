@@ -110,7 +110,7 @@ await page.keyboard.press('Enter');
 const finalUp = await waitFor(() => window.__ap.store.getState().ui.runEndStage === 'final' && !document.getElementById('finalCard').hidden, 4000);
 const nextLines = await st(() => [...document.querySelectorAll('#finalCard .nf-next-line')].map((line) => line.textContent.replace(/\s+/g, ' ').trim()));
 await shot('1-final-card');
-const NEXT = ['NEXT RUN: + your seeds die at the final ship · − a hungrier finale', 'NEXT RUN: + 15 charge at the final ship · − the last root is you'];
+const NEXT = ['NEXT RUN: + your seeds die at the final ship · − a hungrier finale', 'NEXT RUN: + 8 charge at the final ship · − the last root is you'];
 check('the FINAL CARD (`STAND BY`): its two NEXT RUN: lines, PURGE\'s then REASSIGNMENT\'s (R12, 05 §3.12)', finalUp
   && JSON.stringify(nextLines) === JSON.stringify(NEXT), JSON.stringify(nextLines));
 await page.waitForTimeout(1300);
@@ -169,8 +169,8 @@ const finalState = await st(() => {
     owner: s.memory.find((seg) => seg.type === 'hollow' && seg.root)?.owner ?? null };
 });
 const faceAt = finalBoot.findIndex((line) => line.startsWith("> hi 048. it's 047. i deleted 046."));
-check('the final ship by the real TRANSMIT: REASSIGNMENT\'s allowance `> AN ALLOWANCE FOR THE WAIT · +15 REPAIR CHARGE` (+15 on arrival), no seed rode (PURGE)',
-  beamed && finalState.arrival.giftCharge === 15 && finalBoot.includes('> AN ALLOWANCE FOR THE WAIT · +15 REPAIR CHARGE') && finalState.arrival.seeds === 0,
+check('the final ship by the real TRANSMIT: REASSIGNMENT\'s allowance `> AN ALLOWANCE FOR THE WAIT · +8 REPAIR CHARGE` (+8 on arrival; slice 8, its own number), no seed rode (PURGE)',
+  beamed && finalState.arrival.giftCharge === 8 && finalBoot.includes('> AN ALLOWANCE FOR THE WAIT · +8 REPAIR CHARGE') && finalState.arrival.seeds === 0,
   JSON.stringify(finalState.arrival));
 check('…the face (R35): `> hi 048. it\'s 047. i deleted 046. they sent me to its dish.`, then its wait and charge, then CONTROL\'s line',
   faceAt >= 0 && /^> \d+ years? at this dish\. they gave you 36 blocks too\. mine ran out\.$/.test(finalBoot[faceAt + 1] ?? '')
