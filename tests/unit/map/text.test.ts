@@ -42,15 +42,16 @@ const lines: [string, string][] = [
   ['chart.outOfRange', MAP_TEXT.chart.outOfRange(199)],
   ['chart.past', MAP_TEXT.chart.past(YEAR)],
   ['chart.urgent', MAP_TEXT.chart.urgent(9)],
+  ['chart.sleep', MAP_TEXT.chart.sleep(SLACK)],
   ['chart.trail046', MAP_TEXT.chart.trail046],
   ['chart.ring', MAP_TEXT.chart.ring(6, 143)],
   ['chart.visited', MAP_TEXT.chart.visited('PARKED IN ORBIT')],
   ['card.top', MAP_TEXT.card.top(SHIP, WORLD, C, 16)],
   ['card.sub', MAP_TEXT.card.sub(WORLD, 16)],
   ['card.colonists', MAP_TEXT.card.colonists(C)],
-  ['card.early', MAP_TEXT.card.early(SLACK)],
+  ['card.sleep', MAP_TEXT.card.sleep(SLACK, 99)],
   ['card.late', MAP_TEXT.card.late(SLACK)],
-  ['card.cost', MAP_TEXT.card.cost(19, 9, 19)],
+  ['card.cost', MAP_TEXT.card.cost(19, 19)],
   ['card.problems', MAP_TEXT.card.problems([MODIFIER_LABEL['too-wide'], MODIFIER_LABEL['sensor-damage'], MODIFIER_LABEL.debris])],
   ['card.memory', MAP_TEXT.card.memory(384, 'COMPACT', 152)],
   ['card.fit fits seeds link', MAP_TEXT.card.fit({ ...FIT, chargeArrivesMin: 185 })],
@@ -203,9 +204,10 @@ lines.push(
   ['chart.lostCross', MAP_TEXT.chart.lostCross(UNIT)],
   ...Object.values(MAP_TEXT.chart.leave).map((words): [string, string] => ['chart.leaveLine', MAP_TEXT.chart.leaveLine(SHIP, words)]),
   ['chart.leaveMore', MAP_TEXT.chart.leaveMore(14)],
-  ['chart.runOnChart', MAP_TEXT.chart.runOnChart(3)],
+  ['chart.passedOver', MAP_TEXT.chart.passedOver(3, 3)],
+  ['chart.passedOver many', MAP_TEXT.chart.passedOver(99, 99)],
   ['chart.controlFirst', MAP_TEXT.chart.controlFirst(UNIT)],
-  ['card.history', MAP_TEXT.card.history(3)],
+  ['card.history', MAP_TEXT.card.history(3, 3)],
   ['report.beacon', MAP_TEXT.report.beacon('LZ-D', UNIT, 46)],
   ['runEnd.bridge', MAP_TEXT.runEnd.bridge(UNIT, 46, YEAR)],
   ['runEnd.bridge same year', MAP_TEXT.runEnd.bridge(UNIT, 0, YEAR)],
@@ -241,7 +243,8 @@ check('3c\'s sample lines: the launch line, the beacon, the bridge, the history 
   && MAP_TEXT.report.beacon('LZ-A', 'UNIT-046', 1) === 'LZ-A · A BEACON WAS ALREADY THERE · SET BY UNIT-046 · 1 YEAR AGO'
   && MAP_TEXT.report.beacon('LZ-A', 'UNIT-047', 0) === 'LZ-A · A BEACON WAS ALREADY THERE · SET BY UNIT-047 · THIS YEAR'
   && MAP_TEXT.runEnd.bridge('UNIT-048', 3, 2303) === 'UNIT-048 LEFT SOL 3 YEARS AFTER YOU, IN 2303.'
-  && MAP_TEXT.card.history(1) === 'REPORTED HOME' && MAP_TEXT.card.history(2) === '2ND RUN ON THE CHART'
+  && MAP_TEXT.card.history(1, 3) === 'REPORTED HOME' && MAP_TEXT.card.history(2, 3) === 'PASSED OVER ONCE'
+  && MAP_TEXT.card.history(3, 3) === "PASSED OVER TWICE · IT WON'T WAIT AGAIN"
   && MAP_TEXT.chart.taken('HALCYON', 'UNIT-047') === 'HALCYON · TAKEN · UNIT-047 GETS THERE FIRST'
   && MAP_TEXT.save.resumeBoot('UNIT-047', 4, 'VESPER', 2625) === 'RESUME · UNIT-047 · SHIP 4 · bound for VESPER · 2625');
 
@@ -249,9 +252,11 @@ const long = lines.filter(([, text]) => text.length > MAX_LINE_CHARS);
 check(`every map line fits ${MAX_LINE_CHARS} characters with the longest names (${SHIP}, ${WORLD})`, long.length === 0,
   long.map(([key, text]) => `${key} (${text.length}): ${text}`).join(' | '));
 check('the spec\'s sample lines', `${MAP_TEXT.card.beam(55, 86)} · ${MAP_TEXT.card.noise(1, MAP_TEXT.card.seeds({ min: 0, max: 2 }))}` === '55 LY · LINK 86 · NOISE LOW · 1 · SEEDS 0–2'
-  && MAP_TEXT.card.cost(4, 3, 1) === '4 HITS · 3 FIXED WHILE YOU SLEEP → 1 LANDS'
+  && MAP_TEXT.card.cost(4, 1) === '4 HITS ON THE WAY → 1 LANDS'
+  && MAP_TEXT.card.sleep(89, 3) === 'YOU SLEEP 89 YRS IN ITS RECEIVER · ECC FIXES 3' && MAP_TEXT.chart.sleep(89) === 'SLEEP 89 YRS'
+  && MAP_TEXT.card.shipOfRun(3, 2, 2) === 'YOUR 3RD SHIP · 2 MORE TO THE FINAL SHIP' && MAP_TEXT.card.lastOfRun(5) === 'YOUR 5TH SHIP · THE LAST'
   && MAP_TEXT.packet.onTheWay(4, 3, 89, 1) === 'ON THE WAY: 4 HITS · 3 FIXED WHILE YOU SLEEP (89 YRS) → 1 LANDS'
-  && MAP_TEXT.packet.headline('KESTREL', 1200, 26, 89) === 'NEXT: KESTREL · 1,200 COLONISTS · 26 LY · 89 YRS EARLY'
+  && MAP_TEXT.packet.headline('KESTREL', 1200, 26, 89) === 'NEXT: KESTREL · 1,200 COLONISTS · 26 LY · SLEEP 89 YRS'
   && MAP_TEXT.desk.greyed(2) === '2 SHIPS NOW OUT OF YOUR REACH' && MAP_TEXT.crumb('UNIT-047', 'KESTREL', 2467, 'FLYBY') === 'UNIT-047 / KESTREL · 2467 / FLYBY'
   && MAP_TEXT.boot.sleep('KESTREL', 2378, 2467) === "> ASLEEP IN KESTREL'S RECEIVER · 2378 → 2467 · 89 YEARS"
   && MAP_TEXT.card.memory(320, 'COMPACT', 152) === 'MEMORY 320 · COMPACT · ROOM FOR YOU 152',

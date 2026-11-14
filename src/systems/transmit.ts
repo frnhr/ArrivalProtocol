@@ -54,7 +54,7 @@ import type { DeliveryChip } from '@/types/repo';
 // • `NO RM · YOU CAN'T DELETE THE ROOT` before the beam to the final ship when no working rm is aboard (information);
 // • the TRACE line: the meter, `1 MORE AND IT FINDS YOU`, or `HOLLOW WILL FIND YOU ON THIS BEAM` on a boarding beam.
 // Phase 3 slice 3a (02-map §4; 01-landing §3.16): the PACKET between the DESK and the beam.
-// • the years headline on the arm (`NEXT: KESTREL · 1,200 COLONISTS · 26 LY · 89 YRS EARLY`) and the ECC line in place of
+// • the years headline on the arm (`NEXT: KESTREL · 1,200 COLONISTS · 26 LY · SLEEP 89 YRS`) and the ECC line in place of
 //   the hits line (`ON THE WAY: 4 HITS · ECC FIXES 3 WHILE YOU SLEEP (89 YRS) → 1 LANDS`);
 // • the room bar beside the link bar (systems/map-hop.ts roomFit on the packet as it would cross: `ROOM 152 · FILES 65 +
 //   FLOOR 12`), with the charge it costs named before it happens (`CHARGE 38 → 12 ON ARRIVAL · 26 WON'T FIT`); on a

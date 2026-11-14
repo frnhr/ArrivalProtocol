@@ -57,7 +57,7 @@ check('…ALBATROSS (the ark) is ONLY FROM HERE, and nothing else is', onlyFromH
 check('…light ships carry the TIGHT notch (PETREL), HALCYON does not', node(1).tight && !node(2).tight);
 check('…layer-4 ships are OUT OF RANGE with the distance', node(8).state === 'out-of-range' && node(8).reason === MAP_TEXT.chart.outOfRange(70),
   `${node(8).state} ${node(8).reason}`);
-check('…HALCYON reads 31 YRS EARLY on hover; its label is `HALCYON · 1,000`', node(2).reason === MAP_TEXT.chart.early(31) && node(2).label === 'HALCYON · 1,000');
+check('…HALCYON reads SLEEP 31 YRS on hover; its label is `HALCYON · 1,000`', node(2).reason === 'SLEEP 31 YRS' && node(2).label === 'HALCYON · 1,000');
 check('…046\'s written trail: WAYPOINT already a colony (2299 < 2300), MERIDIAN and TALLGRASS still ahead, a grey cross',
   trail046(state.run.map).map((m) => `${m.colony}:${m.passed}`).join() === 'WAYPOINT:true,MERIDIAN:false,TALLGRASS:false,null:false'
   && node(1).taken === MAP_TEXT.chart.trail046 && node(2).taken === null);
@@ -69,7 +69,7 @@ check('…no ship greyed on the first desk; CONTROL types its line', deskOpening
 const halcyon = cardModel(state, 2);
 check('HALCYON\'s card leads with the colonists, the years early and the cost (the lead\'s call), then the fit line',
   halcyon.top === 'HALCYON · Tessaly · 1,000 COLONISTS · 5 PODS' && halcyon.sub === 'Tessaly · 5 PODS' && halcyon.colonists === '1,000 COLONISTS'
-  && halcyon.schedule === '31 YRS EARLY' && halcyon.cost === '3 HITS · 1 FIXED WHILE YOU SLEEP → 2 LAND' && halcyon.rows[0]?.key === 'fit'
+  && halcyon.schedule === 'YOU SLEEP 31 YRS IN ITS RECEIVER · ECC FIXES 1' && halcyon.cost === '3 HITS ON THE WAY → 2 LAND' && halcyon.rows[0]?.key === 'fit'
   && row(halcyon, 'problems') === 'FLYBY, TOO WIDE', JSON.stringify(halcyon));
 check('…MEMORY 320 · COMPACT · ROOM FOR YOU 152, and the fit line from roomFit (YOU FIT for the fresh unit)',
   row(halcyon, 'memory') === 'MEMORY 320 · COMPACT · ROOM FOR YOU 152' && row(halcyon, 'fit') === 'YOU FIT' && halcyon.fit?.word === 'fits', row(halcyon, 'fit'));
@@ -79,15 +79,15 @@ check('…the planet with its off-site words and the LZ count (Tessaly: GRASSLAN
 check('…BEAM `21 LY · LINK 123`, `NOISE CLEAN · SEEDS: none` (depth 2)',
   row(halcyon, 'beam') === '21 LY · LINK 123' && row(halcyon, 'noise') === 'NOISE CLEAN · SEEDS: none');
 // 3–6: HALCYON → a layer-4 ship → a layer-6 ship → LAST LIGHT is a route of 5 (plan §3's sample says 4–6).
-check('…`SHIP 2 OF YOUR RUN · 3–6 MORE TO THE FINAL SHIP` (shipsLeft), no HOLLOW line, no NO RM',
-  row(halcyon, 'run') === 'SHIP 2 OF YOUR RUN · 3–6 MORE TO THE FINAL SHIP' && shipsLeft(state.run.map, 2).join() === '3,6'
+check('…`YOUR 2ND SHIP · 3–6 MORE TO THE FINAL SHIP` (shipsLeft), no HOLLOW line, no NO RM',
+  row(halcyon, 'run') === 'YOUR 2ND SHIP · 3–6 MORE TO THE FINAL SHIP' && shipsLeft(state.run.map, 2).join() === '3,6'
   && row(halcyon, 'threat') === undefined && row(halcyon, 'norm') === undefined, row(halcyon, 'run'));
 check('…the TIMELINE `2300 you leave · 2321 you get there · 2352 ▲ approach`',
   halcyon.timeline?.text === '2300 you leave · 2321 you get there · 2352 ▲ approach' && !halcyon.timeline.late);
 
 const albatross = cardModel(state, 6);
-check('ALBATROSS: ARK, 3,000 COLONISTS, 14 YRS EARLY, 51 LY · LINK 90 · 7 HITS, ONLY FROM HERE in red',
-  albatross.tags.includes('ARK') && albatross.colonists === '3,000 COLONISTS' && albatross.schedule === '14 YRS EARLY'
+check('ALBATROSS: ARK, 3,000 COLONISTS, SLEEP 14 YRS, 51 LY · LINK 90 · 7 HITS, ONLY FROM HERE in red',
+  albatross.tags.includes('ARK') && albatross.colonists === '3,000 COLONISTS' && albatross.schedule === 'YOU SLEEP 14 YRS IN ITS RECEIVER · ECC FIXES 0'
   && row(albatross, 'beam') === '51 LY · LINK 90' && (albatross.cost ?? '').startsWith('7 HITS') && albatross.rows.find((r) => r.key === 'only')?.tone === 'warn',
   JSON.stringify(albatross.rows));
 const far = cardModel(state, 8);
@@ -151,9 +151,9 @@ check('…the next ring out from Brine (55 LY) is ring 3 at 68 LY', kchart.rings
 const vesper = cardModel(state, 11);
 check('VESPER from KESTREL: ARK, ENGINE FAULT, MEMORY 384 · FULL, 55 LY · LINK 86, 8 HITS · 4 FIXED, SEEDS from depth 4',
   vesper.tags.includes('ARK') && row(vesper, 'problems') === 'ENGINE FAULT' && row(vesper, 'memory') === 'MEMORY 384 · FULL · ROOM FOR YOU 152'
-  && row(vesper, 'beam') === '55 LY · LINK 86' && vesper.cost === '8 HITS · 4 FIXED WHILE YOU SLEEP → 4 LAND'
+  && row(vesper, 'beam') === '55 LY · LINK 86' && vesper.cost === '8 HITS ON THE WAY → 4 LAND'
   && /^NOISE CLEAN · SEEDS 0$/.test(row(vesper, 'noise') ?? '')
-  && vesper.schedule === '103 YRS EARLY' && vesper.timeline?.text === '2467 you leave · 2522 you get there · 2625 ▲ approach', JSON.stringify(vesper.rows));
+  && vesper.schedule === 'YOU SLEEP 103 YRS IN ITS RECEIVER · ECC FIXES 4' && vesper.timeline?.text === '2467 you leave · 2522 you get there · 2625 ▲ approach', JSON.stringify(vesper.rows));
 check('VESPER is ONLY FROM HERE at KESTREL (the layer-4 ships would be too late for the ark)', row(vesper, 'only') !== undefined);
 check('3b: later desks have no file step', deskSteps(state).map((step) => step.id).join() === 'pick-ship,set-course');
 // 3b: Swap asked for at KESTREL is 4 years late at VESPER (2629 > 2625): the card says so in red, the mark after ▲.
@@ -209,8 +209,8 @@ const last = cardModel(state, 19);
 check('LAST LIGHT from CORMORANT: FINAL SHIP, `NO RM · YOU CAN\'T DELETE THE ROOT` in red (no DELETE aboard), THE LAST',
   last.tags.includes('FINAL SHIP') && last.rows.find((r) => r.key === 'norm')?.value === THREAT_TEXT.noRmPacket
   && last.rows.find((r) => r.key === 'norm')?.tone === 'warn' && row(last, 'run') === MAP_TEXT.card.lastOfRun(6), JSON.stringify(last.rows));
-check('…54 LY · LINK 87, 8 HITS · 5 FIXED → 3 LAND, 149 YRS EARLY', row(last, 'beam') === '54 LY · LINK 87'
-  && last.cost === '8 HITS · 5 FIXED WHILE YOU SLEEP → 3 LAND' && last.schedule === '149 YRS EARLY');
+check('…54 LY · LINK 87, 8 HITS → 3 LAND, SLEEP 149 YRS · ECC FIXES 5', row(last, 'beam') === '54 LY · LINK 87'
+  && last.cost === '8 HITS ON THE WAY → 3 LAND' && last.schedule === 'YOU SLEEP 149 YRS IN ITS RECEIVER · ECC FIXES 5');
 const goodHope = cardModel(state, 17);
 check('…GOOD HOPE is TOO LATE BY 15 YRS from CORMORANT (card and chart), with no fit line (the nit)', goodHope.schedule === 'TOO LATE BY 15 YRS'
   && chartModel(state).nodes.find((n) => n.slot === 17)?.state === 'too-late' && row(goodHope, 'fit') === undefined && goodHope.cost === null);

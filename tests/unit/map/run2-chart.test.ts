@@ -2,7 +2,8 @@
 // §3 steps 4–5, §6.1 `map/run2-chart`, risk 10), pure on §3.14's run-2 fixture (tests/unit/world/run2-fixture.ts: UNIT-047's
 // worked route as the archive's last unit, the updated arm, the unit on ARES-VIII in 2301). Pins the last unit's trail
 // (TAKEN until the galaxy year passes a stop, then its colony with its age, `NO COLONY`, the grey cross), the beacon on the
-// first ship's world, the nodes' history (`REPORTED HOME` on the first desk only, `2ND RUN ON THE CHART`), the card's
+// first ship's world, the nodes' history (`REPORTED HOME` on the first desk only; playtest 1, Q4: a waiting ship's
+// `PASSED OVER TWICE · IT WON'T WAIT AGAIN` on the chart only on its last run, `PASSED OVER ONCE` on its card), the card's
 // history and trail rows, the departures block (first desk only, folded past LEAVE_BLOCK_MAX_LINES), CONTROL's
 // `UNIT-047 got here first. :)`, the opening beat's green turns, and the older colonies' dots once the year reaches them.
 import { check, finish } from '../landing/checks';
@@ -16,7 +17,7 @@ import {
 import { hopBetween } from '@systems/map-hop';
 import { WORLDS } from '@data/arm';
 import { MAP_TEXT } from '@data/map-text';
-import { LEAVE_BLOCK_MAX_LINES } from '@data/tuning';
+import { LEAVE_BLOCK_MAX_LINES, MAX_RUNS_ON_CHART } from '@data/tuning';
 import { run2Map, RUN1_LAST_UNIT, RUN1_TRAIL } from '../world/run2-fixture';
 import { run1Map } from './run1-fixture';
 
@@ -48,9 +49,9 @@ check('…the beacon on the first ship\'s world: `BEACON · SET BY UNIT-047 · 1
   trail?.beacon?.slot === 0 && trail.beacon.label === 'BEACON · SET BY UNIT-047 · 1 YEAR AGO', trail?.beacon?.label);
 check('…the live ship at a TAKEN world keeps its node (PATIENCE at Tessaly), tagged with the world\'s claim',
   node(2).name === 'PATIENCE' && node(2).taken === 'UNIT-047 GETS THERE FIRST' && node(3).taken === null && node(0).taken === null);
-check('…new ships are REPORTED HOME on the first desk (the tag under the year), waiting ones on their 2ND RUN',
-  node(2).history === MAP_TEXT.chart.reportedHome && node(2).tag === MAP_TEXT.chart.reportedHome
-  && node(3).history === '2ND RUN ON THE CHART' && node(3).tag === null && node(0).tag === null, `${node(2).tag} ${node(3).history}`);
+check('…new ships are REPORTED HOME on the first desk (the tag under the year); a waiting one passed over once says nothing on the chart',
+  node(2).history === MAP_TEXT.chart.reportedHome && node(2).tag === MAP_TEXT.chart.reportedHome && !node(2).historyWarn
+  && node(3).history === null && !node(3).historyWarn && node(3).tag === null && node(0).tag === null, `${node(2).tag} ${node(3).history}`);
 check('…the chart carries the trail (the title and the desk draw it); no older colonies yet (run 1 founded the only ones)',
   chart.trail?.marks.length === 6 && chart.older.length === 0);
 
@@ -60,8 +61,16 @@ const row = (card: typeof patience, key: string) => card.rows.find((r) => r.key 
 check('the card: PATIENCE\'s HISTORY reads REPORTED HOME and its LAST UNIT row HALCYON\'s TAKEN words',
   row(patience, 'history')?.value === 'REPORTED HOME' && row(patience, 'trail')?.value === 'HALCYON · TAKEN · UNIT-047 GETS THERE FIRST',
   JSON.stringify(patience.rows.map((r) => `${r.key}:${r.value}`)));
-check('…OSPREY (a waiting ship) reads 2ND RUN ON THE CHART and has no trail row', row(osprey, 'history')?.value === '2ND RUN ON THE CHART'
-  && row(osprey, 'trail') === undefined);
+check('…OSPREY (a waiting ship) reads PASSED OVER ONCE, plain, and has no trail row', row(osprey, 'history')?.value === 'PASSED OVER ONCE'
+  && row(osprey, 'history')?.tone === 'plain' && row(osprey, 'trail') === undefined);
+// OSPREY on its last run (MAX_RUNS_ON_CHART: after it the ship comes in on its own): the chart says so too, in the warning colour.
+const lastChance = structuredClone(first);
+lastChance.run.map.arm[3]!.runsOnChart = MAX_RUNS_ON_CHART;
+const lastNode = chartModel(lastChance).nodes.find((n) => n.slot === 3)!;
+check(`…on its last run (${MAX_RUNS_ON_CHART}): PASSED OVER TWICE · IT WON'T WAIT AGAIN, on the chart and the card, in the warning colour`,
+  lastNode.history === "PASSED OVER TWICE · IT WON'T WAIT AGAIN" && lastNode.historyWarn && lastNode.tag === null
+  && row(cardModel(lastChance, 3), 'history')?.value === lastNode.history && row(cardModel(lastChance, 3), 'history')?.tone === 'warn',
+  `${lastNode.history} ${JSON.stringify(row(cardModel(lastChance, 3), 'history'))}`);
 
 const leave = deskDepartures(first);
 check('the departures block on the first desk: the two ships that moved on, in the future tense (not the trail\'s own)',

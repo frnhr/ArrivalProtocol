@@ -8,8 +8,8 @@ import { RESIDENT_UI_TEXT } from '@data/resident-ui-text';
 // host's size changes, a hover tag with the node's label and reason (`TOO LATE BY 18 YRS`), and the node clicks handed
 // to the desk. On a phone (portrait host) the arm stands upright and the chart scrolls along it, opening on the ship
 // being left. The view owns no state: the desk passes the model in and decides what a click means.
-// Slice 3c: the tag also names a node's history (`2ND RUN ON THE CHART`, `REPORTED HOME`) and the last unit's claim on its
-// world (`UNIT-047 GETS THERE FIRST`), and a trail mark, the beacon or an older colony shows its own words (data-tip). The
+// Slice 3c: the tag also names a node's history (`REPORTED HOME`; playtest 1: a last chance's `PASSED OVER TWICE · IT
+// WON'T WAIT AGAIN`, in the warning colour) and the last unit's claim on its world (`UNIT-047 GETS THERE FIRST`), and a trail mark, the beacon or an older colony shows its own words (data-tip). The
 // opening beat paints the last unit's newly passed colonies as TAKEN first and turns them green one by one (green()).
 
 export interface StarChartHandle {
@@ -145,6 +145,7 @@ export function mountStarChart(host: HTMLElement, opts: StarChartOpts): StarChar
     tipReason.hidden = node.reason === null;
     tipHistory.textContent = node.history ?? '';
     tipHistory.hidden = node.history === null;
+    tipHistory.classList.toggle('warn', node.historyWarn);
     // Slice 5 (plan R18): the last unit's claim, else a signal fragment still on this ship (one line: the claim wins).
     const taken = node.taken ?? (node.signal ? RESIDENT_UI_TEXT.chart.tip : null);
     tipTaken.textContent = taken ?? '';

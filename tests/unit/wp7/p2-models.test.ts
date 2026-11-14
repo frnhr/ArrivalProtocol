@@ -76,7 +76,7 @@ check('CONTINUE → TRANSMIT', state().run.phase === 'transmit');
 
 {
   const model = transmitModel(state());
-  check('TRANSMIT: NEXT: HALCYON · 1,000 COLONISTS · 21 LY · 31 YRS EARLY', model.headline === 'NEXT: HALCYON · 1,000 COLONISTS · 21 LY · 31 YRS EARLY', model.headline);
+  check('TRANSMIT: NEXT: HALCYON · 1,000 COLONISTS · 21 LY · SLEEP 31 YRS', model.headline === 'NEXT: HALCYON · 1,000 COLONISTS · 21 LY · SLEEP 31 YRS', model.headline);
   check('…no why line after a ship that landed', model.why === null);
   check('…the packet line: LINK 123 · FILES n · CHARGE n → FITS', /^LINK 123 · FILES \d+ · CHARGE \d+ → FITS$/.test(model.packetLine), model.packetLine);
   const names = model.chips.map((chip) => chip.name);

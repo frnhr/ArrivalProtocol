@@ -182,6 +182,7 @@ body.reduced-motion .star-chart .cn-box { transition: none; }
 .chart-tip-taken[hidden] { display: none; }
 .chart-tip-history { margin-top: 2px; font-size: 10px; letter-spacing: 0.12em; color: var(--desk-accent-dim); }
 .chart-tip-history[hidden] { display: none; }
+.chart-tip-history.warn { color: var(--desk-warn); }
 .chart-tip[data-state='mark'] .chart-tip-label { color: var(--desk-colony); }
 .chart-tip[data-state='mark'] .chart-tip-reason { color: var(--desk-text); }
 

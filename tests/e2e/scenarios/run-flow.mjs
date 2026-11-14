@@ -197,8 +197,8 @@ const tx = await st(() => ({
 // Slice 2: 046.log rides along as a fifth locked chip (it isn't yours to leave behind), and nothing uninvited rides yet.
 // Slice 4 (plan §2.6, TREE deviation 13): the first pick's AUTOBURN v1 is a sixth, the fresh file trained at this desk
 // (DropLock 'trained': UNDO is the way back, not leaving it behind).
-check('TRANSMIT shows NEXT: HALCYON · 1,000 COLONISTS · 21 LY · 31 YRS EARLY, the packet line, the files as chips (6 locked: 046.log and the trained AUTOBURN.skl among them)', tx.visible
-  && tx.next === 'NEXT: HALCYON · 1,000 COLONISTS · 21 LY · 31 YRS EARLY' && /^LINK 123 · FILES \d+ · CHARGE \d+ → FITS$/.test(tx.packet) && tx.chips >= 10 && tx.locked === 6,
+check('TRANSMIT shows NEXT: HALCYON · 1,000 COLONISTS · 21 LY · SLEEP 31 YRS, the packet line, the files as chips (6 locked: 046.log and the trained AUTOBURN.skl among them)', tx.visible
+  && tx.next === 'NEXT: HALCYON · 1,000 COLONISTS · 21 LY · SLEEP 31 YRS' && /^LINK 123 · FILES \d+ · CHARGE \d+ → FITS$/.test(tx.packet) && tx.chips >= 10 && tx.locked === 6,
   JSON.stringify(tx));
 check('…slice 4: the one skill chip is the first pick\'s `AUTOBURN.skl v1`, locked `TRAINED HERE · ◀ CHART TO UNDO`, fresh, no PACK AS', tx.skills.length === 1
   && tx.skills[0].name === 'AUTOBURN.skl' && tx.skills[0].badge === 'v1' && tx.skills[0].locked && tx.skills[0].fresh

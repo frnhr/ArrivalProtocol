@@ -15,11 +15,18 @@ import { SITES_TEXT } from '@data/sites-text';
 
 const yrs = (years: number): string => `${years} ${Math.abs(years) === 1 ? 'YR' : 'YRS'}`;
 const years = (n: number): string => `${n} ${Math.abs(n) === 1 ? 'YEAR' : 'YEARS'}`;
-// 2ND, 3RD, 4TH … (a ship's runs on the chart; MAX_RUNS_ON_CHART keeps it at 3RD in play).
+// 2ND, 3RD, 4TH … (the card's `YOUR 3RD SHIP`).
 const ordinal = (n: number): string => {
   const tens = n % 100;
   const suffix = tens >= 11 && tens <= 13 ? 'TH' : (['TH', 'ST', 'ND', 'RD'][n % 10] ?? 'TH');
   return `${n}${suffix}`;
+};
+// A waiting ship the units before passed over (playtest 1, Q4: "run" is the game's word, not the world's): `runsOnChart` 2
+// is once, and on its last run before it comes in on its own (`max`, MAX_RUNS_ON_CHART) it says it won't wait again.
+const passedOver = (runsOnChart: number, max: number): string => {
+  const passes = runsOnChart - 1;
+  const times = passes === 1 ? 'ONCE' : passes === 2 ? 'TWICE' : `${passes} TIMES`;
+  return runsOnChart >= max ? `PASSED OVER ${times} · IT WON'T WAIT AGAIN` : `PASSED OVER ${times}`;
 };
 
 // The words for a link's noise (02 §3.3): `NOISE LOW · 1`.
@@ -94,7 +101,8 @@ export const MAP_TEXT = {
     visited: (outcome: string): string => `VISITED · ${outcome}`,
     flown: 'FLOWN',
     here: 'YOU ARE HERE',
-    early: (years: number): string => `${yrs(years)} EARLY`,
+    // The years the unit sleeps in the ship's receiver before it reaches its planet (playtest 1, Q11: "EARLY" read as a score).
+    sleep: (years: number): string => `SLEEP ${yrs(years)}`,
     behind: 'BEHIND YOU · THE BEAM ONLY GOES OUTWARD',
     colony: (name: string, age: number, unit: string): string => `${name} · ${age} ${age === 1 ? 'YEAR' : 'YEARS'} OLD · ${unit}`,
     lost046: 'UNIT-046 WAS LOST HERE',
@@ -130,9 +138,10 @@ export const MAP_TEXT = {
     legendColony: (unit: string): string => `${unit}'S COLONY`,
     legendLost: (unit: string): string => `WHERE ${unit} WAS LOST`,
     legendOlder: 'OLDER COLONIES',
-    // A ship new on this run's chart (its first desk only), and one waiting from earlier runs.
+    // A ship new on this run's chart (its first desk only), and one waiting from earlier runs: on the chart only on its last
+    // run (`PASSED OVER TWICE · IT WON'T WAIT AGAIN`), on its card always.
     reportedHome: 'REPORTED HOME',
-    runOnChart: (runs: number): string => `${ordinal(runs)} RUN ON THE CHART`,
+    passedOver,
     // CONTROL's one-liner at the first desk when the unit ahead took a ship there (PLACEHOLDER(05)).
     controlFirst: (unit: string): string => `${unit} got here first. :)`,
   },
@@ -143,14 +152,16 @@ export const MAP_TEXT = {
       `${ship} · ${world} · ${formatCount(colonists)} COLONISTS · ${pods} PODS`,
     ark: 'ARK',
     finalShip: 'FINAL SHIP',
-    // The card's lead (the lead's call: colonists, years early or late, and what the trip costs, then the fit line); the
-    // TIMELINE strip under the rows carries the years themselves, so the schedule line is only the difference.
+    // The card's lead (the lead's call: colonists, the years asleep or late, and what the trip costs, then the fit line); the
+    // TIMELINE strip under the rows carries the years themselves, so the schedule line is only the difference. Playtest 1
+    // (Q11): the difference is said as the sleep, and what it buys (one transit hit fixed per ECC_YEARS_PER_HIT asleep).
     sub: (world: string, pods: number): string => `${world} · ${pods} PODS`,
     colonists: (colonists: number): string => `${formatCount(colonists)} COLONISTS`,
-    early: (slack: number): string => `${yrs(slack)} EARLY`,
+    sleep: (slack: number, fixes: number): string => `YOU SLEEP ${yrs(slack)} IN ITS RECEIVER · ECC FIXES ${fixes}`,
     late: (short: number): string => `TOO LATE BY ${yrs(short)}`,
-    cost: (hits: number, fixed: number, land: number): string =>
-      `${hits} ${hits === 1 ? 'HIT' : 'HITS'} · ${fixed} FIXED WHILE YOU SLEEP → ${land} ${land === 1 ? 'LANDS' : 'LAND'}`,
+    // ...and the hits under it: the sleep line above already names what ECC fixes.
+    cost: (hits: number, land: number): string =>
+      `${hits} ${hits === 1 ? 'HIT' : 'HITS'} ON THE WAY → ${land} ${land === 1 ? 'LANDS' : 'LAND'}`,
     problemsLabel: 'KNOWN PROBLEMS',
     memoryLabel: 'MEMORY',
     fitLabel: 'FIT',
@@ -191,13 +202,13 @@ export const MAP_TEXT = {
     seeds: (range: { min: number; max: number } | null): string =>
       (range === null ? 'SEEDS: none' : range.max === range.min ? `SEEDS ${range.min}` : `SEEDS ${range.min}–${range.max}`),
     shipOfRun: (depth: number, minLeft: number, maxLeft: number): string =>
-      `SHIP ${depth} OF YOUR RUN · ${minLeft === maxLeft ? minLeft : `${minLeft}–${maxLeft}`} MORE TO THE FINAL SHIP`,
-    lastOfRun: (depth: number): string => `SHIP ${depth} OF YOUR RUN · THE LAST`,
+      `YOUR ${ordinal(depth)} SHIP · ${minLeft === maxLeft ? minLeft : `${minLeft}–${maxLeft}`} MORE TO THE FINAL SHIP`,
+    lastOfRun: (depth: number): string => `YOUR ${ordinal(depth)} SHIP · THE LAST`,
     timeline: (leave: number, arrive: number, approach: number): string =>
       `${leave} you leave · ${arrive} you get there · ${approach} ▲ approach`,
-    // Slice 3c: the card's history row (`REPORTED HOME` / `2ND RUN ON THE CHART` / `3RD RUN ON THE CHART`).
+    // Slice 3c: the card's history row (`REPORTED HOME` / `PASSED OVER ONCE` / `PASSED OVER TWICE · IT WON'T WAIT AGAIN`).
     historyLabel: 'HISTORY',
-    history: (runsOnChart: number): string => (runsOnChart <= 1 ? 'REPORTED HOME' : `${ordinal(runsOnChart)} RUN ON THE CHART`),
+    history: (runsOnChart: number, max: number): string => (runsOnChart <= 1 ? 'REPORTED HOME' : passedOver(runsOnChart, max)),
     // Track UI: the last unit's mark at the ship's world (the chart's hover words, for the phone, which has no hover).
     trailLabel: 'LAST UNIT',
   },
@@ -206,7 +217,7 @@ export const MAP_TEXT = {
   packet: {
     // `colonists` null: a `?` ship not visited yet (slice 8 POLISH): its card said `??? COLONISTS`, and so does the PACKET.
     headline: (ship: string, colonists: number | null, ly: number, slack: number): string =>
-      `NEXT: ${ship} · ${colonists === null ? '???' : formatCount(colonists)} COLONISTS · ${ly} LY · ${yrs(slack)} EARLY`,
+      `NEXT: ${ship} · ${colonists === null ? '???' : formatCount(colonists)} COLONISTS · ${ly} LY · SLEEP ${yrs(slack)}`,
     room: (room: number, files: number, floor: number): string => `ROOM ${room} · FILES ${files} + FLOOR ${floor}`,
     roomNoFloor: (room: number, files: number): string => `ROOM ${room} · FILES ${files} · NO FLOOR`,
     squeeze: (held: number, arrives: number, lost: number): string => `CHARGE ${held} → ${arrives} ON ARRIVAL · ${lost} WON'T FIT`,
