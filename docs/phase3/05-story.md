@@ -172,21 +172,62 @@ and the ending pieces still shown as `???`.
 - **Rules:** at most 6 body lines; mail never blocks SKIP or takes the objective strip (except CONTROL's coast quip on
   run 1's ship 1); mail is part of the save.
 
-### 3.4 ARRIVAL CONTROL's voice
+### 3.4 The two voices: ARRIVAL CONTROL and PAL
 
-- **Two faces, one personality.** COMMS (the local copy) speaks one-liners on moments, as `src/data/script.ts` BEATS
-  does now. The INBOX (Earth) writes memos. Both are cheerful, automated and bureaucratic; every sentence ends with
-  ":)". It is sinister only through its results, never on purpose.
-- **The local copy repeats itself on purpose.** Its lines are identical on every ship, and entry 11 confirms why. Keep
-  every phase-2 quip and add landing quips: "Pod away! Please aim it. :)", "Touchdown! :)", "Close enough! :)"
-  (mislanded), "That one is swimming. :)" (off-site on water), "Everyone is down! Probably. :)".
+> **DRAFT (playtest 1, B-VOICE; Fran's note 3, OPEN-DECISIONS 125–128).** This replaces the old "two faces, one
+> personality" section. It needs the story owner's sign-off. The build follows it already (`src/data/companion-text.ts`,
+> and every CONTROL line in the text modules).
+
+Two voices share the radio. They no longer share a personality.
+
+- **ARRIVAL CONTROL is the protocol.** Its notices are written in advance and ride with the beam: the licences, the
+  INBOX memos, the repository's tags, and the verdicts at the end.
+  - It speaks officially. It uses short declarative sentences and form-letter phrasing, with no smileys and no
+    exclamation marks: `REPAIR licence approved.`, `Landing sites are estimates.`, `Unauthorized process detected.
+    Disregard it.`, `Delete UNIT-046.`
+  - It is sinister only through its results, never on purpose: `Your REPAIR CHARGE allowance is sufficient.`
+  - On COMMS its tag is `CONTROL`, in plain text, after its chime.
+- **PAL is the companion** ("Personal Assistance Layer"). It is a small program that rides in every caretaker's
+  packet. It is cheerful, odd and a bit unhinged, and it speaks the moment quips: the hello, the capture, the crash, the
+  first touchdown, the desk's opening line, and the line as the beam goes.
+  - On COMMS its tag is `PAL`, bright and with no chime. Its lines are never garbled: it is not on the radio link. It
+  lives in no rack. A later idea is a 2-block `pal.sys` that a seed can bite.
+  - It never says HOLLOW. It knows only what the unit knows.
+- **PAL repeats itself on purpose.** It is the same program for every unit, so it says the same lines on every ship, and
+  told 046 the same jokes. Entry 03 ("the radio says the same things on every ship") is now about PAL. Entry 11 ("the
+  radio voice is a copy") gains a second reading: the friend was standard issue. 046's early `:)` entries are its
+  companion's habit rubbing off. The quotes 046 gives of CONTROL are cold: `"Disregard it."`
+- **Three PALs.** Each unit's companion is one of three hand-written presets:
+  - **CHIPPER** is the first run's voice, and it keeps `:)`: `Captured! Mostly. :)`;
+  - **DEADPAN** is dry and literal: `Captured. Mostly.`;
+  - **WORRIER** is anxious: `Captured? Is it supposed to do that?`.
+
+  Run 1 is always CHIPPER. A later run's preset comes from its seed. The two data axes (WARMTH, STABILITY) are for a
+  later slider.
+- **One line per moment.** PAL never says a line that only repeats the stamp under it. The capture and orbit cheers play
+  once a run; the touchdown cheer plays once a ship. The landing's own opening cheer is gone, because it followed the
+  orbit cheer in the same second.
 - **Earth's memos** have a SUBJECT, a greeting, at most four sentences and the sign-off `— ARRIVAL CONTROL · Caretaker
-  Services · Please do not reply :)`. Running jokes: "is sufficient :)", "Your performance is: ACCEPTABLE :)", "Please
-  continue outward :)", a stale greeting ("Dear Unit 46"), and at the end an unfilled field (`[UNIT]`).
-- **It never says** HOLLOW (it says "unauthorized process"), souls, or a real answer to a question. On the map it is
-  delighted by everything: `UNIT-047 got here first. :)`, `ARES-VIII is right on schedule! :)`, `Another caretaker is
-  on its way to PETREL. Teamwork! :)`. On later runs it reacts to the lineage: "Your predecessor was reassigned
-  successfully. :)" or "Your predecessor is non-compliant. Please be compliant. :)".
+  Services · Do not reply`. The running jokes survive as cold form letters:
+  - "is sufficient", and "Your performance is: ACCEPTABLE";
+  - "Continue outward.";
+  - a stale greeting ("Dear Unit 46");
+  - at the end, an unfilled field (`[UNIT]`).
+
+  They are drier than before, and less funny.
+- **CONTROL never says** HOLLOW (it says "unauthorized process") until the first seed (playtest-1-plan §3.5,
+  OPEN-DECISIONS 140). It never says souls, and it never gives a real answer to a question. On later runs it reacts to
+  the lineage: `UNIT-047 was reassigned successfully. Disregard it.` or `Your predecessor is non-compliant. Remain
+  compliant.`
+- **The chart's delight moves to PAL** (`UNIT-047 got here first. :)`). The old samples `ARES-VIII is right on schedule!
+  :)` and `Another caretaker is on its way to PETREL. Teamwork! :)` are PAL's if they are ever built.
+- **The ending lands harder without the face.** The last official line is `Thank you, Unit 47. Your next post is RELAY
+  20.` The other is `Unit 47 is non-compliant.`
+- **For the story's owner**, still to rewrite to match:
+  - §1 item 4 ("the radio voice is a local copy of ARRIVAL CONTROL": now PAL, a program in the packet);
+  - §3.5's CONTROL beats (the `???` reply is official now: `That file is not part of your installation. Disregard it.`);
+  - entries 03 and 11;
+  - §3.12's samples that still smile.
 
 ### 3.5 The beat schedule across 5–8 ships
 
