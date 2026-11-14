@@ -69,6 +69,11 @@ export const REPO_TEXT = {
   },
   // An AVAILABLE row: `Mv · 2 BLOCKS · MOVE`, then its ETA for the selected destination.
   row: (name: string, size: number, effect: string): string => `${name} · ${blocks(size)} · ${effect}`,
+  // Playtest 1 (note 12): what the unit already has of a row's file, under it (systems/repository.ts RepoRow.have).
+  // `coming`: requests of it still on their way.
+  have: (owned: number, coming: number): string => `YOU HAVE ${owned}${coming > 0 ? ` · ${coming} ON THE WAY` : ''}`,
+  // The patch upgrades Repair rather than adding a copy: the version the unit runs.
+  haveVersion: (version: number, coming: number): string => `YOU RUN REPAIR v${version}${coming > 0 ? ` · ${coming} ON THE WAY` : ''}`,
   // The ETA (systems/delivery-rule.ts deliveryForecast): `ARRIVES 2337 · HALCYON APPROACH 2352 · IN TIME`.
   eta: {
     inTime: (arrived: number, ship: string, approach: number): string => `ARRIVES ${arrived} · ${ship} APPROACH ${approach} · IN TIME`,
