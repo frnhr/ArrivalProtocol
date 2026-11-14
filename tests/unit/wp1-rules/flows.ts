@@ -167,7 +167,7 @@ export function flyToCapture(harness: Harness): void {
     stepUntil(harness, () => /^WAIT/.test(text(harness)), 10);
   }
   stepUntil(harness, () => {
-    if (/^WAIT.*\[F\] SKIP/.test(text(harness)) && harness.store.getState().clock.skipWarp === null) harness.press('KeyF');
+    if (/^WAIT.*hold \[F\]/.test(text(harness)) && harness.store.getState().clock.skipWarp === null) harness.press('KeyF');
     return /HOLD \[SPACE\] NOW/.test(text(harness));
   }, 120);
 }

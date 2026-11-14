@@ -71,11 +71,11 @@ expect('minor 8: …in the MIND it says [TAB] first', ctx({ inMind: true, open: 
 expect('...the bay reloading: RELOADING', ctx({ open: open({ full: true }), roomInBand: false, bayReady: false, bayReadyInTac: 1.2,
   next: next('LZ-A', 0, 0, true, true) }), 'L6', 'RELOADING — next pod in 0:02');
 expect('...the whole dot not in yet: the wait counts to it, no [L]', ctx({ open: open({ full: true, sure: false, sureInTac: 3 }), roomInBand: false,
-  next: next('LZ-A', 0, 3, true, true) }), 'L13', 'NO ROOM IN THE BAND — LZ-A in 0:03 · [F] to SKIP, or END LANDING',
+  next: next('LZ-A', 0, 3, true, true) }), 'L13', 'NO ROOM IN THE BAND — LZ-A in 0:03 · hold [F], or END LANDING',
   (o) => o.id === 'landing-L13-noroom' && !o.text.includes('[L]'));
 expect('no room in the band, between windows: NO ROOM IN THE BAND, the wait to the full window, never GET READY',
   ctx({ roomInBand: false, nextWithRoom: null, next: next('LZ-A', 5, 5, true, true) }), 'L13',
-  'NO ROOM IN THE BAND — LZ-A in 0:05 · [F] to SKIP, or END LANDING', (o) => o.keys.join() === 'F' && o.nextLz === 'LZ-A');
+  'NO ROOM IN THE BAND — LZ-A in 0:05 · hold [F], or END LANDING', (o) => o.keys.join() === 'F' && o.nextLz === 'LZ-A');
 expect('open, the dot fits, the bay ready', ctx({ open: open() }), 'L4', 'LAUNCH NOW — press [L] · LZ-A 1/3',
   (o) => o.keys.join() === 'L' && o.urgency === 'now' && o.layer === 'ship');
 expect('...in the MIND it says [TAB] first', ctx({ open: open(), inMind: true }), 'L4', 'LAUNCH NOW — [TAB], press [L] · LZ-A 1/3',
@@ -98,7 +98,7 @@ expect('pods aboard, no LZ ever in the band', ctx({ noBandWindow: true, roomInBa
   LANDING_LINES.L12band, (o) => o.id === 'landing-L12-band');
 expect('all launched, two falling', ctx({ aboard: 0, falling: 2 }), 'L12b', 'ALL PODS AWAY · 2 FALLING', (o) => o.urgency === 'wait');
 expect('all down, the linger', ctx({ aboard: 0, falling: 0 }), 'L12b', 'ALL PODS AWAY');
-expect('otherwise WAIT, with the SKIP', ctx(), 'L13', 'WAIT — LZ-A in 2:12 ▸▸ · [F] to SKIP', (o) => o.keys.join() === 'F' && o.nextLz === 'LZ-A');
+expect('otherwise WAIT, with the SKIP', ctx(), 'L13', 'WAIT — LZ-A in 2:12 ▸▸ · hold [F]', (o) => o.keys.join() === 'F' && o.nextLz === 'LZ-A');
 expect('...no [F] while a SKIP would not start', ctx({ skipAvailable: false }), 'L13', 'WAIT — LZ-A in 2:12 ▸▸', (o) => o.keys.length === 0);
 expect('...an out-of-band next window says so, with no SKIP', ctx({ next: next('LZ-B', 30, 30, false) }), 'L13',
   'WAIT — LZ-B in 0:30 ▸▸ · OUT OF BAND', (o) => o.keys.length === 0 && o.nextLz === null);

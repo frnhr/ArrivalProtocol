@@ -215,7 +215,7 @@ function fitsAt(R: number, labels: readonly string[], warp = LANDING_TACTICAL_WA
     V3_TEXT.landingOver, V3_TEXT.decayTopUp('▲', time), V3_TEXT.decayHolds, V3_TEXT.ghostEvery(999, 100),
     V3_TEXT.ghostSome(['LZ-A', 'LZ-B', 'LZ-C'], 'NAV PLOTTER', lz), V3_TEXT.ghostSome(['LZ-A', 'LZ-B', 'LZ-C'], null, lz),
     V3_TEXT.noOrbit('SENSOR INTERP'), V3_TEXT.noOrbit('NAV PLOTTER'), V3_TEXT.noOrbit(null), V3_TEXT.noOrbitFuel(AUTO_FUEL_RESERVE_PCT),
-    AUTOBURN_TEXT.armedOrbit('▲', time), AUTOBURN_TEXT.armedHold, AUTOBURN_TEXT.armedTopUp('▲', time) + ' · [F] SKIP',
+    AUTOBURN_TEXT.armedOrbit('▲', time), AUTOBURN_TEXT.armedHold, AUTOBURN_TEXT.armedTopUp('▲', time) + ' · hold [F]',
     AUTOBURN_TEXT.orbiting, AUTOBURN_TEXT.orbitingMind, AUTOBURN_TEXT.toppingUp, AUTOBURN_TEXT.toppingUpMind, AUTOBURN_TEXT.reserveOrbit,
     AUTOBURN_TEXT.downgradedOrbit, AUTOBURN_TEXT.readyV3, AUTOBURN_SKILL_ROW.holding('9,999'), AUTO_MINI_TEXT.armed(time, 'orbit'),
     AUTO_MINI_TEXT.armed(time, 'top-up'), AUTO_MINI_TEXT.armed(time, 'hold'), AUTO_BUTTON_TEXT.armedOrbit(time), AUTO_BUTTON_TEXT.armedHold,

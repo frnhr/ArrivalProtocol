@@ -34,7 +34,7 @@ import { MIND_CLEAR_IDLE_SEC } from '@data/tuning';
   const seen = new Set<string>();
   const end = h4.wall() + MIND_CLEAR_IDLE_SEC + 4;
   while (h4.wall() < end) { h4.step(); seen.add(`${h4.shown()?.id}: ${h4.shown()?.text}`); }
-  check('blue, idle on the hopeless loop: the strip keeps the stranded line, never `MIND CLEAR — press [F] to SKIP`',
+  check('blue, idle on the hopeless loop: the strip keeps the stranded line, never `MIND CLEAR — hold [F]`',
     amber?.text === STRANDED_LINE && ![...seen].some((line) => line.startsWith('hint-mind-clear')) && [...seen].some((line) => line.includes(STRANDED_LINE)),
     `amber "${amber?.text}"; blue: ${[...seen].join(' | ')}`);
 }

@@ -45,7 +45,7 @@ const base: FlightContext = {
     && debris!.text.includes('to dodge'), debris?.text);
   const quiet = flightObjective({ ...base, autoburn: armed });
   check('with ▼ in the ring: the ARMED row (wait, SKIP lit)', quiet?.id === 'AUTO-armed' && quiet.urgency === 'wait'
-    && quiet.text === 'AUTOBURN ARMED — it brakes at ▼ in 1:00 · [B] to cancel · [F] SKIP' && quiet.keys.join() === 'F', quiet?.text);
+    && quiet.text === 'AUTOBURN ARMED — it brakes at ▼ in 1:00 · [B] to cancel · hold [F]' && quiet.keys.join() === 'F', quiet?.text);
   const unarmedWide = flightObjective({ ...base, rp: 9000, sasMode: 'radial-in' });
   check('…not armed: plain TOO WIDE (no tail)', unarmedWide?.text === 'TOO WIDE — hold [SPACE]', unarmedWide?.text);
 }
@@ -55,8 +55,8 @@ const base: FlightContext = {
   const trimBurn: NonNullable<FlightContext['burnPoint']> = { ...capture, reason: 'rp-high', preset: 'retrograde', event: 'apo', inTac: 432, approaching: true };
   const closed = { ...base, outcome: 'closed' as const, rp: 7600, burnPoint: trimBurn };
   const trim = flightObjective({ ...closed, autoburn: armedFor('trim', 432, '▲') });
-  check('between GREEN\'s burns: `AUTOBURN ARMED — trims at ▲ in 7:12 · [B] to cancel · [F] SKIP`',
-    trim?.text === 'AUTOBURN ARMED — trims at ▲ in 7:12 · [B] to cancel · [F] SKIP' && trim.urgency === 'wait', trim?.text);
+  check('between GREEN\'s burns: `AUTOBURN ARMED — trims at ▲ in 7:12 · [B] to cancel · hold [F]`',
+    trim?.text === 'AUTOBURN ARMED — trims at ▲ in 7:12 · [B] to cancel · hold [F]' && trim.urgency === 'wait', trim?.text);
   const wait = flightObjective({ ...base, autoburn: armedFor('capture', 8, '▼', true) });
   const waitMind = flightObjective({ ...base, inMind: true, autoburn: armedFor('capture', 8, '▼', true) });
   const late = flightObjective({ ...base, autoburn: armedFor('capture', -3, '▼', true) });
@@ -99,7 +99,7 @@ const base: FlightContext = {
   const landing = { ...base, landing: true, status: 'locked' as const, outcome: 'closed' as const, inRing: true, burnPoint: roundBurn };
   const armed = landingFlightRow({ ...landing, autoburn: armedFor('round', 50) });
   const flying = landingFlightRow({ ...landing, firing: true, thrustOn: true, autoburn: { phase: 'burning', sinceSec: 1, armedInTac: 0, end: null, flying: 'round' } });
-  check('LANDING: armed in ROUND, L2\'s row is `rounds it at ▼`', armed?.text === 'AUTOBURN ARMED — rounds it at ▼ in 0:50 · [B] to cancel · [F] SKIP', armed?.text);
+  check('LANDING: armed in ROUND, L2\'s row is `rounds it at ▼`', armed?.text === 'AUTOBURN ARMED — rounds it at ▼ in 0:50 · [B] to cancel · hold [F]', armed?.text);
   check('…rounding: ROUNDING', flying?.text === AUTOBURN_TEXT.rounding, flying?.text);
   const lctx = (over: Partial<LandingContext> = {}): LandingContext => ({
     inMind: false, heldTool: null, finalShip: false, rootToDelete: false, everyPodDown: false, aboard: 3, falling: 0, block: false,
@@ -121,9 +121,9 @@ const base: FlightContext = {
 // --- Every new line fits, worst case -------------------------------------------------------------------------------------
 {
   const lines = [
-    AUTOBURN_TEXT.armedTrim('▲', '13:30') + ' · [F] SKIP', AUTOBURN_TEXT.armedRound('▼', '13:30') + ' · [F] SKIP', AUTOBURN_TEXT.threadWaitShip('13:30'),
+    AUTOBURN_TEXT.armedTrim('▲', '13:30') + ' · hold [F]', AUTOBURN_TEXT.armedRound('▼', '13:30') + ' · hold [F]', AUTOBURN_TEXT.threadWaitShip('13:30'),
     AUTOBURN_TEXT.green, AUTOBURN_TEXT.round, AUTOBURN_TEXT.reserveCaptured, AUTOBURN_TEXT.downgradedCaptured, AUTOBURN_TEXT.roundCostsWindow('LZ-WWW'),
-    `WAIT — LZ-WWW in 99:59 ▸▸ · [F] to SKIP · OUT OF BAND${AUTOBURN_TEXT.offerMode('round')}`,
+    `WAIT — LZ-WWW in 99:59 ▸▸ · hold [F] · OUT OF BAND${AUTOBURN_TEXT.offerMode('round')}`,
   ];
   const tooLong = lines.filter((text) => !fits(text));
   // The last is the longest L13 with the tail (withAutoTail drops a tail that would not fit; this one does).

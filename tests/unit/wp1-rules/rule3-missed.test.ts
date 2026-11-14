@@ -94,7 +94,7 @@ const isOutbound = (): boolean => { const o = state().orbit; return o.x * o.vx +
   let lowestPassedAt = -1;
   const lines = new Set<string>();
   stepUntil(harness, () => {
-    if (harness.status() === 'approaching') lines.add(text(harness).replace(/ · \[F\] SKIP$/, ''));
+    if (harness.status() === 'approaching') lines.add(text(harness).replace(/ · hold \[F\]$/, ''));
     if (lowestPassedAt < 0 && isOutbound()) lowestPassedAt = harness.wall();
     return false;
   }, 400);
@@ -144,8 +144,8 @@ const isOutbound = (): boolean => { const o = state().orbit; return o.x * o.vx +
   const start = harness.wall();
   harness.press('KeyF');
   stepUntil(harness, () => false, 120);
-  check('3b: empty tank, ▼ far ahead → OUT OF FUEL · [F] SKIP, the escape is at ▼, and F ends it in seconds',
-    line === 'OUT OF FUEL — the ship will fly past · [F] SKIP' && pred.escapeInSec !== null && pred.periInSec !== null
+  check('3b: empty tank, ▼ far ahead → OUT OF FUEL · hold [F], the escape is at ▼, and F ends it in seconds',
+    line === 'OUT OF FUEL — the ship will fly past · hold [F]' && pred.escapeInSec !== null && pred.periInSec !== null
     && Math.abs(pred.escapeInSec - pred.periInSec) < 1e-6 && harness.status() === 'escaped' && harness.wall() - start < 15,
     `"${line}", escape ${(pred.escapeInSec ?? 0).toFixed(0)} s vs ▼ ${(pred.periInSec ?? 0).toFixed(0)} s, `
     + `${harness.status()} ${(harness.wall() - start).toFixed(1)} s after F`);
@@ -189,7 +189,7 @@ function missTheLowest(): number {
   }, 60);
   check('3a: ignored MISSED ▼ stays TACTICAL for IGNORED_NOW_TAC, then CRUISE with SKIP; the strip keeps MISSED ▼ and names F',
     Math.abs(cruiseAtTac - IGNORED_NOW_TAC) <= 0.1 && Math.abs(skipAtTac - cruiseAtTac) <= 0.1
-    && lineAtCruise === 'MISSED ▼ — hold [SPACE] NOW · [F] SKIP',
+    && lineAtCruise === 'MISSED ▼ — hold [SPACE] NOW · hold [F]',
     `CRUISE at ${cruiseAtTac.toFixed(2)} tac s after ▼, SKIP at ${skipAtTac.toFixed(2)}, line "${lineAtCruise}"`);
   const pressedAt = harness.wall();
   harness.press('KeyF');

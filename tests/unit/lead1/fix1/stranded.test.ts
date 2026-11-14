@@ -77,9 +77,9 @@ function burnAtPeri(rp: number, ecc: number, omega: number): number {
     const line = text(harness);
     const saved = burnAtPeri(elements.rp, elements.e, elements.omega);
     rows.push(`${fuelPct}%: "${line}" (at ▼ ${(saved * 100).toFixed(1)}%)`);
-    if (pred.strandedAnyway || !/^WAIT — brake at ▼ in \d+:\d\d · \[F\] SKIP$/.test(line) || saved < STRANDED_RANGE_FRAC) bad ||= rows[rows.length - 1]!;
+    if (pred.strandedAnyway || !/^WAIT — brake at ▼ in \d+:\d\d · hold \[F\]$/.test(line) || saved < STRANDED_RANGE_FRAC) bad ||= rows[rows.length - 1]!;
   }
-  check('the capture loop past ▲: `WAIT — brake at ▼ in m:ss · [F] SKIP`, no ACCEPT (it strands; the burn at ▼ does not)',
+  check('the capture loop past ▲: `WAIT — brake at ▼ in m:ss · hold [F]`, no ACCEPT (it strands; the burn at ▼ does not)',
     bad === '', bad || rows.join(' | '));
 }
 

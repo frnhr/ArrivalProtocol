@@ -61,7 +61,7 @@ interface Flown {
   // lock: a tank a hair short of the impulsive estimate reaches the ring after all (obeyed trims spend less than it),
   // and RELEASE there is the lock, a better end than the one promised.
   releaseInLast: number | null;
-  longestSkipSec: number;     // LEAD-2: the longest single SKIP, wall s (it was the longest WAIT shown with [F] SKIP)
+  longestSkipSec: number;     // LEAD-2: the longest single SKIP, wall s (it was the longest WAIT shown with hold [F])
   lines: string[];
 }
 
@@ -115,8 +115,8 @@ for (const fuelPct of byDepth([14, 31], [14, 20, 25, 31])) {
   const offer = text(harness);
   const instant = fly(fuelPct, 60, 'obey');
   const human = fly(fuelPct, 60, 0.3);
-  check(`${fuelPct}% (short of the ${trimPct.toFixed(1)}% trim): the WAIT for ▼ with [F] SKIP; held to the empty tank it ends ACCEPTED (or locks), no RELEASE first`,
-    pred.burnPoint?.reason === 'ra-high' && /^WAIT — brake at ▼ in \d+:\d\d · \[F\] SKIP$/.test(offer)
+  check(`${fuelPct}% (short of the ${trimPct.toFixed(1)}% trim): the WAIT for ▼ with hold [F]; held to the empty tank it ends ACCEPTED (or locks), no RELEASE first`,
+    pred.burnPoint?.reason === 'ra-high' && /^WAIT — brake at ▼ in \d+:\d\d · hold \[F\]$/.test(offer)
     && [instant, human].every((flown) => ['accepted', 'locked'].includes(flown.status) && flown.releaseInLast === null
       && flown.range >= STRANDED_RANGE_FRAC && flown.longestSkipSec <= FEW_SKIP_SEC
       && (flown.status === 'locked' || flown.lines.includes(KEEP_TO_EMPTY_LINE))),

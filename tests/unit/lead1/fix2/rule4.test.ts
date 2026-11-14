@@ -105,7 +105,7 @@ function lowTank(fuelPct: number, ignoreSec = 60): void {
   const log = obey(harness, 60);
   check('a burn held when the tank turns short: no verdict while held; at rest the plan decides (the brake at ▼), and it ends ACCEPTED',
     !latchedWhileHeld && !heldPlan.acceptOnly && /^RELEASE \[SPACE\]! — next: brake at ▼/.test(heldLine)
-    && /^WAIT — brake at ▼ in \d+:\d\d · \[F\] SKIP$/.test(afterLine) && !state().burn.acceptOnly && harness.status() === 'accepted'
+    && /^WAIT — brake at ▼ in \d+:\d\d · hold \[F\]$/.test(afterLine) && !state().burn.acceptOnly && harness.status() === 'accepted'
     && log.skipWallSec <= FEW_SKIP_SEC,
     `held: "${heldLine}", after: "${afterLine}" → ${harness.status()}, SKIP ${log.skipWallSec.toFixed(1)} s`);
 }
@@ -126,12 +126,12 @@ function lowTank(fuelPct: number, ignoreSec = 60): void {
     const later = text(harness);
     const log = obey(harness, 120);
     rows.push(`${fuelPct}%: "${offer}", 2 minutes later "${later}" → ${harness.status()}, SKIP ${log.skipWallSec.toFixed(1)} s`);
-    if (!/^WAIT — brake at ▼ in \d+:\d\d · \[F\] SKIP$/.test(offer) || !/^WAIT — brake at ▼/.test(later)
+    if (!/^WAIT — brake at ▼ in \d+:\d\d · hold \[F\]$/.test(offer) || !/^WAIT — brake at ▼/.test(later)
       || !['accepted', 'locked'].includes(harness.status()) || log.skipWallSec > FEW_SKIP_SEC || state().burn.acceptOnly) bad ||= rows[rows.length - 1]!;
   }
   // 31% is short of the impulsive estimate (31.4%) and locks anyway: the strip says RELEASE where the loop enters the
   // ring, short of the trim's aim (obeyed trims spend 2.5–7.6% less than the estimate, WP1-rules round 1).
-  check('a short tank: `WAIT — brake at ▼ … · [F] SKIP`, still offered after 2 minutes, a few seconds of SKIP, ACCEPTED (or locked)',
+  check('a short tank: `WAIT — brake at ▼ … · hold [F]`, still offered after 2 minutes, a few seconds of SKIP, ACCEPTED (or locked)',
     bad === '', bad || rows.join(' | '));
 }
 
@@ -186,8 +186,8 @@ function lowTank(fuelPct: number, ignoreSec = 60): void {
   harness.press('KeyF');
   let skipSec = 0;
   stepUntil(harness, () => { if (state().clock.pace === 'skip') skipSec += TICK; return state().clock.skipWarp === null; }, 300);
-  check('a short tank whose brake at ▼ saves it keeps `WAIT … · [F] SKIP`, and the SKIP takes a few seconds',
-    !pred.acceptOnly && /^WAIT — brake at ▼ in \d+:\d\d · \[F\] SKIP$/.test(line) && skipSec >= SKIP_DIVISOR && skipSec <= FEW_SKIP_SEC,
+  check('a short tank whose brake at ▼ saves it keeps `WAIT … · hold [F]`, and the SKIP takes a few seconds',
+    !pred.acceptOnly && /^WAIT — brake at ▼ in \d+:\d\d · hold \[F\]$/.test(line) && skipSec >= SKIP_DIVISOR && skipSec <= FEW_SKIP_SEC,
     `"${line}": SKIP ${skipSec.toFixed(2)} s`);
 }
 

@@ -123,7 +123,7 @@ function openingUnderSpaceLine(): void {
   const tactical = harness.pace() === 'tactical' && state().burn.fuelPct < fuelBefore;
   holdThenObey(120);
   check(`${ship}: SPACE held during the SKIP to FLEW AWAY under MISSED ▼ brakes at once; obeyed, the ship does not fly away`,
-    /^MISSED ▼ — hold \[SPACE\] NOW · \[F\] SKIP$/.test(lineIgnored) && skipping && asked && firingAtPress && tactical
+    /^MISSED ▼ — hold \[SPACE\] NOW · hold \[F\]$/.test(lineIgnored) && skipping && asked && firingAtPress && tactical
     && ['locked', 'accepted'].includes(harness.status()),
     `ignored: "${lineIgnored}"; during the SKIP ${skipping}: "${lineAtPress}", asks SPACE ${asked}; firing at the press `
     + `${firingAtPress}, TACTICAL and burning a tick later ${tactical}; obeyed: ${harness.status()} with ${state().burn.fuelPct.toFixed(1)}% FUEL`);

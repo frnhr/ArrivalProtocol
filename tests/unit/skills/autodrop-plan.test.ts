@@ -209,7 +209,7 @@ const checkLine = (): string => {
     t.strip.hold('LZ-D'), t.strip.held('LZ-D', 4, '59:59'), t.strip.held('LZ-D', 4, null), t.strip.fly('LZ-D', 4, '59:59'),
     t.strip.fly('LZ-D', 4, null), t.strip.wait('59:59'), t.strip.wait(null), t.strip.passDone(four), t.strip.planDone(four),
     t.strip.armedNext('LZ-D', 4, '59:59'), t.strip.armedIdle,
-    `WAIT — LZ-D in 59:59 ▸▸ · [F] to SKIP${t.strip.tailPlan}`,
+    `WAIT — LZ-D in 59:59 ▸▸ · hold [F]${t.strip.tailPlan}`,
     t.radio.armedPass(four), t.radio.armedPlan(AUTODROP_PLAN_MAX_PASSES), t.radio.cancel, t.radio.passDone(four), t.radio.planDone(four),
     t.radio.v3to2, t.radio.v2to1, t.radio.damaged, t.radio.offline,
     ...(Object.keys(t.refusal) as (keyof typeof t.refusal)[]).map((word) => t.radio.refused(word)),

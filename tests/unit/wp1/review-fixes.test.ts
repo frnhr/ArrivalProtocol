@@ -311,7 +311,7 @@ for (const lateTac of [4, 8, 12]) {
   const chipPaused = countdownChip(state(), getPrediction());
   harness.press('KeyP');
   for (let i = 0; i < 4; i++) harness.step();
-  check('WAIT names SKIP while it is available, not while skipping', waitLine?.text.endsWith('· [F] SKIP') === true
+  check('WAIT names SKIP while it is available, not while skipping', waitLine?.text.endsWith('· hold [F]') === true
     && waitLine.keys.includes('F') && duringSkip?.text.includes('SKIP') === false, `"${waitLine?.text}" / "${duringSkip?.text}"`);
   check('pause keeps the SKIP, and the chip drops ▸▸ while frozen', skipWarp !== null && state().clock.skipWarp === skipWarp
     && state().clock.pace === 'skip' && chipPaused?.fastForward === false, `skipWarp ${skipWarp?.toFixed(0)} → ${state().clock.skipWarp?.toFixed(0)}`);

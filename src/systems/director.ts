@@ -11,7 +11,7 @@ import {
   buildLandingContext, landingObjective, landingFlightOf, type LandingObjective,
 } from '@systems/guidance';
 import { getDropSolution } from '@systems/drop-cache';
-import { skipBlockReason } from '@systems/pace';
+import { fastForwardBlockReason } from '@systems/pace';
 import { FLIGHT_OVER_LINE, percentFloor } from '@systems/flight-hud';
 import { getOps } from '@systems/ops-core';
 import { say } from '@systems/say';
@@ -421,7 +421,7 @@ export function buildDirectorCtx(
   // Nor once the ship has left orbit during it (crashed, escaped): its LOST card owns it too.
   const landingLive = state.burn.status === 'locked' || state.burn.status === 'accepted';
   const landingCtx = state.run.phase === 'landing' && !state.run.coreLost && landingLive
-    ? buildLandingContext(state, getDropSolution(), skipBlockReason(state, sensed) === null, landingFlightOf(state, sensed)) : null;
+    ? buildLandingContext(state, getDropSolution(), fastForwardBlockReason(state, sensed) === null, landingFlightOf(state, sensed)) : null;
   const landing = landingCtx ? landingObjective(landingCtx) : null;
   return {
     state,

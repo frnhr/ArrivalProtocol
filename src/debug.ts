@@ -29,7 +29,9 @@ import {
 import { layoutCarried } from '@systems/carry';
 import { movePreview, type MovePreview } from '@systems/move-preview';
 import { newRunSeed } from '@systems/rng';
-import { requestSkip, mainCountdown, setDebugWarp, skipBlockReason, type SkipResult, type Countdown } from '@systems/pace';
+import {
+  requestSkip, mainCountdown, setDebugWarp, fastForwardBlockReason, fastForwardView, type SkipResult, type Countdown, type FastForwardView,
+} from '@systems/pace';
 import {
   buildFlightContext, flightObjective, buildLandingContext, landingObjective, landingFlightOf, type FlightObjective, type LandingObjective,
 } from '@systems/guidance';
@@ -173,6 +175,8 @@ interface DebugHooks {
   countdown: () => Countdown | null;
   hud: () => Record<string, unknown>;
   requestSkip: () => SkipResult;
+  // Playtest 1 (§3.1): the held [F]'s state (pace fastForwardView), for the e2e drivers that hold it.
+  fastForward: () => FastForwardView;
   setDebugWarp: (warp: number | null) => void;
   resetWorld: () => void;
   listResets: () => string[];
@@ -1024,6 +1028,7 @@ export function mountDebug(store: Store<GameState>): void {
       };
     },
     requestSkip: () => requestSkip(store),
+    fastForward: () => fastForwardView(),
     setDebugWarp: (warp) => setDebugWarp(store, warp),
     resetWorld,
     listResets,
@@ -1091,7 +1096,7 @@ export function mountDebug(store: Store<GameState>): void {
       const state = store.getState();
       if (state.run.phase !== 'landing') return null;
       const sensed = getSensedPrediction();
-      return landingObjective(buildLandingContext(state, getDropSolution(), skipBlockReason(state, sensed) === null, landingFlightOf(state, sensed)));
+      return landingObjective(buildLandingContext(state, getDropSolution(), fastForwardBlockReason(state, sensed) === null, landingFlightOf(state, sensed)));
     },
     lockOn: (opts = {}) => {
       const state = store.getState();

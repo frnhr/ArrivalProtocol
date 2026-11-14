@@ -38,7 +38,7 @@
    "vy": 2.0713614441315884
   },
   "fuelPct": 73.0357142857147,
-  "line": "MISSED ▼ — hold [SPACE] NOW · [F] SKIP",
+  "line": "MISSED ▼ — hold [SPACE] NOW · hold [F]",
   "outcome": "open",
   "rp": 6009,
   "ra": null,
@@ -83,7 +83,7 @@
    "vy": -0.7062648834669425
   },
   "fuelPct": 10,
-  "line": "NOT ENOUGH FUEL — the ship will fly past · [F] SKIP",
+  "line": "NOT ENOUGH FUEL — the ship will fly past · hold [F]",
   "outcome": "open",
   "rp": 6009,
   "ra": null,
