@@ -5,7 +5,7 @@
 // The words: 05-story rewrites the landing's placeholder text (data/landing-text.ts), so this suite pins exactly only
 // what is decided: §3.10's state words (CAN'T LAUNCH, PARKED IN ORBIT, NOT LAUNCHED), the key hint on the launch button
 // ([L]), the numbers and their formats (`0/3`, `3/4`, `±78 km`, `0:12`, `mm:ss`, the bay's ▮▯ glyphs, ★ and ✓), the
-// names the data gives (LZ-A, POD 01, OKAFOR, KEPLER-186F), the decided flight words (ORBIT LOCKED) and the refusals by
+// names the data gives (LZ-A, POD 01, OKAFOR, KEPLER-186F), the decided flight words (STABLE ORBIT) and the refusals by
 // their key. Every other line is checked by its structure (`says`): it holds the LZ, the counts and the numbers it is
 // about, fits its cap, and uses none of the never-say words.
 //
@@ -273,9 +273,9 @@ check("the state words: CAN'T LAUNCH, PARKED IN ORBIT · fate unknown, NOT LAUNC
   check('streak: bent to end where the pod lands, white-hot below the atmosphere',
     Math.abs(angleDelta(landingRad, endRad)) < 1e-3 && end.hot, `${angleDelta(landingRad, endRad)}`);
   check('plot: the arc is drawn while pods are aboard', plotLandingModel(state, sol)?.arc?.inBand === true);
-  check('crumb: ORBIT LOCKED until the first pod is down', headerCrumbs(state, NO_PRED).phase.text === 'ORBIT LOCKED');
+  check('crumb: STABLE ORBIT until the first pod is down', headerCrumbs(state, NO_PRED).phase.text === 'STABLE ORBIT');
   down(state, sol, 1, 'lz', 'LZ-A');
-  says('crumb: 1/3 down once the first pod is down', headerCrumbs(state, NO_PRED).phase.text, ['1/3', /^(?!ORBIT LOCKED)/], CHIP_CHARS);
+  says('crumb: 1/3 down once the first pod is down', headerCrumbs(state, NO_PRED).phase.text, ['1/3', /^(?!STABLE ORBIT)/], CHIP_CHARS);
   check('marks: ◘ for the pod down', landMarks(state).length === 1 && landMarks(state)[0]!.place === 'lz');
   check('ground track: the mark is on the strip', groundTrackModel(state, sol).strip.marks.length === 1);
   setFate(state, 2, { kind: 'parked', why: 'no-time', restorable: false });

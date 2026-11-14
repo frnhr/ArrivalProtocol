@@ -4,7 +4,7 @@
 //   [TAB] BACK — hold [SPACE] once the engine is fixed. Each shows once, none is done by the boot.
 // • The follower that obeys the strip LITERALLY (tutorial lines included: it presses the keys the
 //   line names, clicks what it highlights, and TABs to the screen a line belongs to) gets the
-//   scripted fault, repairs Engine I/O through the tutorial and still reaches ORBIT LOCKED, at two
+//   scripted fault, repairs Engine I/O through the tutorial and still reaches STABLE ORBIT, at two
 //   reaction times and holding SPACE through the TAB or not.
 // • A kid who ignores the tutorial (never TABs) still locks: the beat never stalls the flight.
 import { check, finish, TICK } from '../wp1/harness';
@@ -198,7 +198,7 @@ for (const [reactionSec, holdThroughTab] of [[0.4, false], [0.4, true], [1.0, fa
   if (reactionSec === 0.4 && !holdThroughTab) console.log(`      script:\n      ${script}`);
   check(`(${label}) the strip walks the beat in order: ENGINE WEAK → PICK UP REPAIR → REPAIRING → [TAB] BACK`,
     indices.every((index) => index >= 0) && indices.every((index, i) => i === 0 || index > indices[i - 1]!), JSON.stringify(indices));
-  check(`(${label}) Engine I/O healed, and ORBIT LOCKED`, h.file('engine-io').integrity === 100 && run.status === 'locked',
+  check(`(${label}) Engine I/O healed, and STABLE ORBIT`, h.file('engine-io').integrity === 100 && run.status === 'locked',
     `status=${run.status} wall=${run.wall.toFixed(1)}s fuel=${run.fuel.toFixed(1)}%`);
   check(`(${label}) …with the ★ FUEL (≥ ${STAR_FUEL_PCT}%)`, run.fuel >= STAR_FUEL_PCT, `${run.fuel.toFixed(1)}%`);
   check(`(${label}) no op left running, no tool in hand`, getOps().length === 0 && h.store.getState().ui.activeTool === null);
@@ -209,7 +209,7 @@ for (const [reactionSec, holdThroughTab] of [[0.4, false], [0.4, true], [1.0, fa
   h.resetTo('flight');
   const texts = followDirector(h, { reactionSec: 0.4, maxWall: 400 });
   const burn = h.store.getState().burn;
-  check('ignoring ENGINE WEAK (never TAB, engine at 40%): still ORBIT LOCKED', burn.status === 'locked' && h.file('engine-io').integrity === 38
+  check('ignoring ENGINE WEAK (never TAB, engine at 40%): still STABLE ORBIT', burn.status === 'locked' && h.file('engine-io').integrity === 38
     && texts.includes('ENGINE WEAK — press [TAB] to look inside'),
     `status=${burn.status} wall=${h.wall().toFixed(1)}s fuel=${burn.fuelPct.toFixed(1)}%`);
 }

@@ -164,8 +164,8 @@ function stepWhile(cond: () => boolean, maxWall = 400): void {
   check('lock: the chip counts LOCKING 3, 2, 1', lockDigits.join('') === '321', lockDigits.join(','));
   check('lock: an all-green loop reads IN BAND 100%', hundred);
   pred = getPrediction();
-  check('locked: chip ORBIT LOCKED, status LOCKED', plotChip(state(), pred).text === 'ORBIT LOCKED'
-    && plotReadouts(state(), pred).status.text === 'LOCKED' && plotReadouts(state(), pred).range.text === '100%');
+  check('locked: chip STABLE ORBIT, status STABLE', plotChip(state(), pred).text === 'STABLE ORBIT'
+    && plotReadouts(state(), pred).status.text === 'STABLE' && plotReadouts(state(), pred).range.text === '100%');
   // WP5: a lock goes on into the landing (slice 1a), where the world still coasts at TACTICAL (the plot moves);
   // only a lost ship's pace reads STOPPED.
   // The WP1 harness mounts no landing, so no LZ window is counted here; the chip in a real landing (the next LZ window)
@@ -175,7 +175,7 @@ function stepWhile(cond: () => boolean, maxWall = 400): void {
     !burnButton(state()).disabled && burnButton(state()).look === 'ready'
     && state().run.phase === 'landing' && paceLabel(state()) === 'TACTICAL ×20' && countdownChip(state(), pred) === null,
     `${state().run.phase} / ${paceLabel(state())}`);
-  check('locked: the strip line', FLIGHT_OVER_LINE[harness.status() as 'locked'] === 'ORBIT LOCKED');
+  check('locked: the strip line', FLIGHT_OVER_LINE[harness.status() as 'locked'] === 'STABLE ORBIT');
 }
 
 // --- pause --------------------------------------------------------------------------------------

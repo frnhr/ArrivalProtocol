@@ -179,7 +179,7 @@ function deliveredShare(ticks: number): number {
     && h.store.getState().memory.filter((seg) => seg.type === 'fs-tool' && seg.fsTool === 'repair').length === 2);
   check('(c) while it repaired, the strip said the engine is offline', repairStrip === 'ENGINE OFFLINE — ENGINE I/O IS REPAIRING…', repairStrip);
   check('(c) the repair healed Engine I/O to 100%', repairedTo === 100, String(repairedTo));
-  check('(c) …and the follower still reaches ORBIT LOCKED', burn.status === 'locked',
+  check('(c) …and the follower still reaches STABLE ORBIT', burn.status === 'locked',
     `status=${burn.status} wall=${h.wall().toFixed(1)}s fuel=${burn.fuelPct.toFixed(1)}%`);
 }
 

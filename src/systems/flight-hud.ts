@@ -435,7 +435,7 @@ export interface Label {
 // objective strip, result banner, footer), so they can never disagree. `short` fits the
 // readout row.
 export const TERMINAL: Record<TerminalStatus, { word: string; short: string; tone: Tone }> = {
-  locked: { word: 'ORBIT LOCKED', short: 'LOCKED', tone: 'good' },
+  locked: { word: 'STABLE ORBIT', short: 'STABLE', tone: 'good' },
   accepted: { word: 'ORBIT ACCEPTED', short: 'ACCEPTED', tone: 'plain' },
   stranded: { word: 'STRANDED', short: 'STRANDED', tone: 'danger' },
   escaped: { word: 'FLEW AWAY', short: 'FLEW AWAY', tone: 'danger' },

@@ -192,7 +192,7 @@ function removeFile(role: Parameters<typeof getByRole>[1]): void {
     weakSec > 0 && weakSec <= ENGINE_WEAK_MAX_SHOWN_SEC + OBJECTIVE_HYSTERESIS_SEC + TICK, `${weakSec.toFixed(2)} s`);
   check('hesitant kid: ENGINE WEAK comes up once, never flipping with ▼ TOO LOW', weakEntries === 1, String(weakEntries));
   check('hesitant kid: the coast shows WAIT … [F] SKIP again', skipWaitAfterFault);
-  check('hesitant kid: still ORBIT LOCKED with the engine at 40%', status === 'locked' && h.file('engine-io').integrity === 38,
+  check('hesitant kid: still STABLE ORBIT with the engine at 40%', status === 'locked' && h.file('engine-io').integrity === 38,
     `${status} at ${h.wall().toFixed(1)} s`);
 }
 

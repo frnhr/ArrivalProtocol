@@ -55,11 +55,11 @@ const crumbs = (): HeaderCrumbs => headerCrumbs(h.store.getState(), getPredictio
   seen.push(crumbs().phase.text);
   console.log(`      crumbs: ${seen.join(' → ')}`);
   console.log(`      upcoming: ${upcoming.join(' → ')}`);
-  const expectedOrder = ['IMPACT COURSE', 'FLYBY', 'GET READY', 'CAPTURED', 'IN RING', 'HOLD STEADY', 'ORBIT LOCKED'];
+  const expectedOrder = ['IMPACT COURSE', 'FLYBY', 'GET READY', 'CAPTURED', 'IN RING', 'HOLD STEADY', 'STABLE ORBIT'];
   const positions = expectedOrder.map((word) => seen.indexOf(word));
-  check('crumbs: a clean flight walks IMPACT COURSE → FLYBY → GET READY → CAPTURED → IN RING → HOLD STEADY → ORBIT LOCKED',
+  check('crumbs: a clean flight walks IMPACT COURSE → FLYBY → GET READY → CAPTURED → IN RING → HOLD STEADY → STABLE ORBIT',
     positions.every((index, i) => index >= 0 && (i === 0 || index > positions[i - 1]!)), seen.join(' → '));
-  check('crumbs: ORBIT LOCKED is green', crumbs().phase.tone === 'good');
+  check('crumbs: STABLE ORBIT is green', crumbs().phase.tone === 'good');
   check('upcoming: never more than 2 events, never longer than a line', !upcomingTooMany);
   check('upcoming: never repeats the ▼/▲ the header chip counts', !upcomingRepeatsChip);
   check('upcoming: shows something during the coast', upcoming.some((line) => line.includes('▼') || line.includes('▲')));

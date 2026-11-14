@@ -283,7 +283,7 @@ const EVENT_GLYPH: Readonly<Record<BurnEvent, string>> = { peri: '▼', apo: '�
 // F11 when ACCEPT ORBIT is the only way on (acceptOnly) and it strands the ship (strandedAnyway)...
 export const STRANDED_LINE = 'NOT ENOUGH FUEL to reach the launch band — ACCEPT ORBIT';
 // ...and when that ACCEPT still reaches the launch band (the lead's Rule 4 lists it first).
-export const ACCEPT_ONLY_LINE = 'NOT ENOUGH FUEL to lock the orbit — ACCEPT ORBIT';
+export const ACCEPT_ONLY_LINE = 'NOT ENOUGH FUEL for a stable orbit — ACCEPT ORBIT';
 // F11 held for a trim the tank can't pay for in full: it runs to the empty tank (then ORBIT ACCEPTED), or, a band
 // of about a FUEL point under the trim's price, into the ring after all, where the strip says RELEASE and the
 // flight locks: the impulsive price runs 2.5–7.6% over what a flown burn spends (LEAD-2 review round 1). So the

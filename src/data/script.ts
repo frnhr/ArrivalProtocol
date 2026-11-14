@@ -676,7 +676,7 @@ export const RUN_END_WHY: Readonly<Record<RunEndCause, (ship: string) => string>
 
 // A ship's line on RUN END: how it ended, the word the stamps and cards use.
 export const SHIP_OUTCOME_WORD: Readonly<Record<ShipOutcome, string>> = {
-  locked: 'ORBIT LOCKED',
+  locked: 'STABLE ORBIT',
   partial: 'ACCEPTED',
   stranded: 'STRANDED',
   escaped: 'FLEW AWAY',
@@ -824,7 +824,7 @@ export function speakerTag(speaker: Speaker, vars: LineVars): string {
 export const STAMP_TEXT = {
   clearOfPlanet: 'CLEAR OF THE PLANET',
   captured: 'CAPTURED',
-  locked: 'ORBIT LOCKED',
+  locked: 'STABLE ORBIT',
   accepted: 'ACCEPTED',
   stranded: 'STRANDED',
   crashed: 'IMPACT',
