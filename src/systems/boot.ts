@@ -18,6 +18,7 @@ import { bootLine, bootLinePlan, bootLineSpeaker, bootLineTone, bootLogEntries, 
 import type { Speaker } from '@state/schema';
 import { beamSeedTarget } from '@systems/beam-seeds';
 import { traceBootLineSaid } from '@systems/trace-gifts';
+import { titleEraseAsking } from '@systems/title';
 import { lineageBootLineSaid } from '@systems/lineage-boot';
 import { sentrySeedSaid, compileFirewall } from '@systems/sentry';
 import { receiveDeliveryAtBoot } from '@systems/delivery-boot';
@@ -436,7 +437,8 @@ export function mountBoot(store: Store<GameState>, bootHooks: BootHooks = {}): (
     codes: ['Space', 'Enter'],
     onDown: () => {
       const phase = store.getState().run.phase;
-      if (phase === 'title') receiveTransmission(store);
+      // Playtest 1: ERASE ALL RECORDS' confirm owns ENTER while it asks (KEEP), so the key never also starts a run.
+      if (phase === 'title' && !titleEraseAsking()) receiveTransmission(store);
       else if (phase === 'boot') skipBoot(store);
     },
   });

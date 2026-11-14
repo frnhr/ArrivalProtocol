@@ -886,3 +886,52 @@ To be logged as OPEN-DECISIONS 123 onward. Each is built as recommended unless F
 | 142 | Open a found site as a new LZ (up to 4) | Yes, Batch C |
 | 143 | Keep RUN END's SCORE, RANK, `NEXT RUN:` and the title's ENDINGS line | Keep; they are the game's own screens |
 | 144 | The dock section `System` becomes `Mind` | Yes (Fran's words); it names the unit's own windows |
+
+---
+
+## Deviations (A-UI)
+
+Track A-UI (notes 1, 14, 21, 22 and OD 144), built on 47aa873. Where the build differs from §3.9–§3.12 and §4–§5:
+
+1. **The X buttons (§3.9).** All eight amber windows had the dead pair; no other window had a dead close (the LOG READER,
+   the desk sheet, the op bars and the pills already worked). The × is a `button.ctl.win-close`, the `−` is gone. The close
+   logic is a pure model in `ToolsTabs.ts` (`TOOL_WINDOWS`, the old `TAB_WINDOWS` table, now exported; `toolIdOfWindow`,
+   `closeInDesk`, `openInDesk`, `toggleInDesk`), so the unit check (`tests/unit/ui/window-close.test.ts`, new) closes
+   every window from the markup without a DOM.
+   - **On a phone the × stays hidden.** `responsive.css` (not A-UI's) already hides `.ctl` in tab mode: the dock is the tab
+     bar there, and an × on the NAV PLOT tab would close nothing. The model's phone rule (a closed tab goes back to the NAV
+     PLOT) is wired and unit-tested for code that closes a tab.
+   - The e2e check is in `run-flow.mjs` during ship 1's landing (so the POD BAY is up). ARES-VII is not POOR, so SITES gets
+     `body.survey` for its turn only.
+2. **Q/E (§3.10)** as specified, in `attitude.ts`. The brake is integrated exactly over a tick (a long CRUISE step or the
+   predictor's coast jump stops where short ticks do). The checks went to `wp1/edge-cases` (keys, both directions, a
+   long tick against 10,000 short ones). `wp1/flight-sim` needed no change.
+3. **The belt (§3.11).** `setBeltLevel` drives a continuous voice: white noise through highpass 250 Hz and lowpass 6 kHz,
+   plus a 2 s loop of about 400 random clicks a second through a 3 kHz band. Its gain follows the depth with τ 0.4 s.
+   - New tuning: `BELT_BED_EDGE_DBFS` −30, `BELT_BED_PEAK_DBFS` −22, `BELT_BED_TAU_SEC` 0.4, `BELT_STATIC_CLICKS_HZ` 400.
+   - Gone: the `beltStatic` cue, `BELT_STATIC_GAP_*`, and `GEIGER_EDGE_HZ` / `GEIGER_PEAK_HZ` (the Poisson stream). The
+     geiger plays only in a hit's flurry.
+   - Measured in Chromium with `measureCue('beltBed')`, the loudest 50 ms window reads −28.8 dBFS at the edge and −21.0
+     midway, about 1 dB over the plan's figures, which are mean levels. For scale, a full burn's rumble reads −22.5, and
+     HOLLOW's chew at its loudest −28.5.
+   - `zones.ts beltDepth`'s comment still calls the depth "the geiger's rate". The file is not A-UI's.
+   - The new suite is `tests/unit/ui/belt-bed.test.ts`.
+4. **The erase (§3.12).**
+   - **Keys.** It removes the three named keys and any other `arrival-protocol/` key the storage can list
+     (`GAME_KEY_PREFIX`), so a key a later build adds is covered.
+   - **No write-back.** After the erase, the archive session writes nothing (`erased`) until the reload. Without that, a
+     write in between could put a record back. The unit suite showed this.
+   - **ENTER waits.** While the confirm asks, it takes ENTER, ESC and DEL before the save block. `systems/boot.ts` waits on
+     `titleEraseAsking()` for RECEIVE's ENTER and SPACE. That is one line in a file not on A-UI's list, and no Batch A
+     track owns it.
+   - **The styles** are at the end of `legacy-components.css`, the only stylesheet A-UI owns. The buttons reuse
+     `desk.css`'s `.title-save-btn`.
+   - **Debug.** `?debug` has `__ap.eraseAll({ reload? })` and `__ap.storedKeys()`. `eraseAll({ reload: false })` in the
+     middle of a run leaves the run save free to write again; that is acceptable for a debug tool.
+   - **Tests.** The unit check is a new suite, `tests/unit/ui/erase.test.ts`, not in `save/archive-v2`. It erases a
+     browser that has played run 1 to RUN END and has a saved run 2. The reload's title model, state and stored keys must
+     equal those of a never-played browser on the same seed. A refused remove gives `failed`. The e2e step is
+     `resume.mjs` section G. It checks ENTER and ESC keep the records, DEL erases and reloads, and the title and stored
+     keys then equal those of a first visit.
+5. **The checklist.** Item 49's belt sentence is updated, and items 50–53 are added under "Playtest 1, Batch A (A-UI)" at
+   the end of `docs/playtest-checklist.md`. A-LAND's items may conflict with them textually there.

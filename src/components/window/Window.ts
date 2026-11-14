@@ -12,6 +12,8 @@ function makeDraggable(win: HTMLElement, titleSelector = '.window-title'): () =>
   let dragging = false;
 
   const onMouseDown = (event: MouseEvent): void => {
+    // A press on the title bar's × is a click, not a drag: the window would otherwise jump under the pointer as it shut.
+    if ((event.target as HTMLElement | null)?.closest('.ctl')) return;
     dragging = true;
     const rect = win.getBoundingClientRect();
     dx = event.clientX - rect.left;

@@ -1283,21 +1283,22 @@ export const RACK_FLASH_MS = 900;
 // The MIND's rack tags (`DEBRIS 03:30` under `RACK C`) and the mini-strip's lit row are patched this often: a
 // countdown in whole seconds needs no more.
 export const RACK_TAG_PAINT_HZ = 4;
-// §7.2 geiger: inside a belt, ticks come as a Poisson stream whose rate rises from the edge to the middle of the
-// belt (the deeper in, the more it hurts to hear). Per wall second. A belt hit adds a short flurry on top.
-// Post-handover: the ticks are emphasis now, under the belt's static (below), so sparser than WP9's 2 → 11 Hz and a
-// smaller flurry: at 11 a second the sharp clicks were what Fran found painful on headphones.
-export const GEIGER_EDGE_HZ = 0.7;
-export const GEIGER_PEAK_HZ = 3.5;
+// §7.2 geiger: a belt hit plays a short flurry of ticks, and only a hit (playtest 1 note 22, OPEN-DECISIONS 137: the
+// Poisson stream that used to run under the whole belt is gone, the bed below is the belt's sound). Small, so a hit is
+// heard over the bed without the sharp clicks Fran found painful on headphones.
 export const GEIGER_HIT_CLICKS = 4;
 export const GEIGER_HIT_SPREAD_SEC = 0.25;
-// The belt's main sound (post-handover): short bursts of static (audio.ts beltStatic, ~0.4 s each), one on the way in,
-// then one every GAP seconds start to start, from the edge's to the middle's, each gap ±JITTER so it never settles
-// into a beat. The shortest gap (1.4 × 0.7 ≈ 1 s) still leaves about half a second of quiet after the longest burst:
-// interference that comes and goes, never a continuous wash.
-export const BELT_STATIC_GAP_EDGE_SEC = 3;
-export const BELT_STATIC_GAP_PEAK_SEC = 1.4;
-export const BELT_STATIC_GAP_JITTER = 0.3;
+// The belt's bed (playtest 1 note 22, plan §3.11; audio.ts setBeltLevel): flat white noise plus a quieter static
+// crackle, one continuous voice while the ship is inside a belt. The bursts it replaced (one every 1.4–3 s, each with a
+// rise, hold, fall and a 20 Hz flutter) breathed like a horse huffing. Its level rises smoothly with the depth, from
+// the edge's to the middle's, in dBFS at the output (measureCue's loudest 50 ms: about −29 and −21): at the edge under
+// HOLLOW's chew (about −28 at its loudest), at the middle level with a full burn's rumble (about −22), loud enough to say
+// "you are in it". TAU is how fast the level follows the depth (and the way in): a fade, never a step or a ripple.
+export const BELT_BED_EDGE_DBFS = -30;
+export const BELT_BED_PEAK_DBFS = -22;
+export const BELT_BED_TAU_SEC = 0.4;
+// The static layer's clicks per second: dense enough to crackle like a radio between stations, not to tick.
+export const BELT_STATIC_CLICKS_HZ = 400;
 // A seed's warning outline blinks this often (§6.6 "a blinking outline for 2 AI-s"): four blinks in the
 // telegraph, each with a blip in HOLLOW's voice, so the warning is heard from the amber screen too.
 export const SEED_BLINK_SEC = 0.5;

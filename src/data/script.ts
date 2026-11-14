@@ -464,6 +464,15 @@ export const ARCHIVE_TEXT = {
   wipe: 'WIPE ARCHIVE',
   playWithout: 'PLAY WITHOUT ARCHIVE',
   endings: (seen: number, total: number): string => `ENDINGS ${seen}/${total}`,
+  // Playtest 1 (note 1, plan §3.12): the title's full reset, in-world the unit's archive wiped, with every run and colony
+  // in it. Asked first, in the NEW RUN confirm's pattern (the deliberate key is [DEL]; ENTER and ESC keep).
+  erase: {
+    button: 'ERASE ALL RECORDS',
+    confirm: 'ERASE EVERY UNIT, COLONY AND RUN? · THIS CANNOT BE UNDONE',
+    eraseKey: 'ERASE [DEL]',
+    keepKey: 'KEEP [ENTER]',
+    failed: "ERASE FAILED — this browser won't let the records go",
+  },
   // In the game (the footer), while nothing this unit does can be kept: a write that failed mid-run turns
   // the archive OFFLINE (the tag flashes in), and a kid who chose PLAY WITHOUT sees it stays that way.
   // Said as what it means, not ARCHIVE: in the game that word is the colonists' SOUL ARCHIVE (§3.5).

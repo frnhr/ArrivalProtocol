@@ -19,6 +19,8 @@
 //    ABANDON RUN only; ENTER abandons (recorded signal-lost: the game lost the run, review fix minor 7), to UNIT-048's title.
 //    Then the save's storage throws (setItem stubbed for the run save's key only): RECEIVE's RUN START can't be written, the
 //    footer says NO SAVE and the TERMINAL `RUN SAVE OFFLINE — …`.
+// G. Playtest 1: ERASE ALL RECORDS. A first visit's title and keys; a played browser (UNIT-047's run recorded, UNIT-048's
+//    saved); the button asks, ENTER and ESC keep, [DEL] erases and the page reloads to exactly the first visit's title and keys.
 // No page errors anywhere, except the console lines the save itself writes for a corrupt save and a write that throws.
 // ENTER is the kid's key on the RESUME block; where it does not do its job (it ran RECEIVE TRANSMISSION over the block before
 // the slice 3c review fix B2), the check FAILs and the scenario goes on by the logged fallback: the storage as it was before
@@ -525,4 +527,80 @@ log(`console on the write that threw: ${tabF.kit.errors.slice(errorsBeforeOfflin
 await tabF.shot('3-no-save');
 const errorsF = tabF.kit.errors.filter((text) => !EXPECTED_ERROR.test(text));
 check('no page errors on the corrupt save and the offline save (beyond the save\'s own console lines)', errorsF.length === 0, errorsF.slice(0, 4).join(' | '));
+
+// --- G. Playtest 1 (note 1, plan §3.12): ERASE ALL RECORDS. A first visit's title and storage, then a played browser (run
+// 1 recorded, UNIT-048's run saved in its boot); the button asks, ENTER keeps, ESC keeps, [DEL] erases and the page reloads
+// to exactly the first visit's title and storage. ---------------------------------------------------------------------------
+const tabG = await openPage('erase');
+// The whole title as the kid reads it, with the lines titleLook leaves out (endings, traces, notes, the archive box).
+const fullLook = async (kit) => ({
+  ...(await titleLook(kit)),
+  ...(await kit.st(() => {
+    const text = (id) => (document.getElementById(id).hidden ? null : document.getElementById(id).textContent);
+    return {
+      endings: text('titleEndings'), traces: text('titleTraces'), notes: text('titleNotes'), archive: text('titleArchive'),
+      erase: !document.getElementById('titleErase').hidden && !document.getElementById('titleEraseBtn').hidden
+        ? document.getElementById('titleEraseBtn').textContent : null,
+      eraseAsk: document.getElementById('titleEraseAsk').hidden ? null : document.getElementById('titleEraseAsk').innerText.replace(/\s+/g, ' ').trim(),
+      run: window.__ap.store.getState().run.map.run, tutorial: window.__ap.store.getState().run.tutorial,
+    };
+  })),
+});
+const keysNow = (kit) => kit.st(() => window.__ap.storedKeys().sort());
+const firstVisit = await fullLook(tabG.kit);
+const firstKeys = await keysNow(tabG.kit);
+check('a first visit: UNIT-047 · YEAR 2300, RECEIVE, no RESUME, and `ERASE ALL RECORDS` at the foot', firstVisit.phase === 'title'
+  && /^UNIT-047 · YEAR 2300 · /.test(firstVisit.unit) && firstVisit.receive && firstVisit.save === null && firstVisit.erase === 'ERASE ALL RECORDS'
+  && firstVisit.eraseAsk === null && firstVisit.run === 1 && firstVisit.tutorial, JSON.stringify(firstVisit));
+// Played: UNIT-047's run recorded (won), then UNIT-048's RECEIVE (RUN START) and a reload in its boot.
+await tabG.kit.st(() => window.__ap.archiveAs('won-purge'));
+await tabG.page.reload({ waitUntil: 'networkidle' });
+await tabG.page.waitForTimeout(600);
+await tabG.page.locator('#titleReceive').click();
+await tabG.kit.waitFor(() => window.__ap.store.getState().run.phase === 'boot', 6000);
+await tabG.page.waitForTimeout(800);
+await tabG.page.reload({ waitUntil: 'networkidle' });
+await settledTitle(tabG.kit);
+const playedLook = await fullLook(tabG.kit);
+const playedKeys = await keysNow(tabG.kit);
+check('played: UNIT-048\'s RESUME block, the archive and the run save stored, ERASE ALL RECORDS still offered',
+  playedLook.save?.kind === 'resume' && /UNIT-048/.test(playedLook.save.line) && playedKeys.includes(RUN_SAVE_KEY) && playedKeys.length >= 2
+  && playedLook.erase === 'ERASE ALL RECORDS', JSON.stringify({ playedLook, playedKeys }));
+// The ask: the button opens the confirm; ENTER keeps (and starts nothing: the RESUME block's ENTER waits).
+await tabG.page.locator('#titleEraseBtn').click();
+await tabG.page.waitForTimeout(300);
+const eraseAsking = await fullLook(tabG.kit);
+check('the click asks `ERASE EVERY UNIT, COLONY AND RUN? · THIS CANNOT BE UNDONE` with ERASE [DEL] / KEEP [ENTER]',
+  eraseAsking.eraseAsk === 'ERASE EVERY UNIT, COLONY AND RUN? · THIS CANNOT BE UNDONE ERASE DEL KEEP ENTER' && eraseAsking.erase === null,
+  JSON.stringify(eraseAsking.eraseAsk));
+await tabG.shot('1-erase-confirm');
+await tabG.page.keyboard.press('Enter');
+await tabG.page.waitForTimeout(400);
+const kept = await fullLook(tabG.kit);
+check('ENTER keeps: the confirm closes, the run is neither resumed nor started, every key still stored',
+  kept.phase === 'title' && kept.eraseAsk === null && kept.erase === 'ERASE ALL RECORDS' && kept.save?.kind === 'resume'
+  && JSON.stringify(await keysNow(tabG.kit)) === JSON.stringify(playedKeys), JSON.stringify(kept));
+await tabG.page.locator('#titleEraseBtn').click();
+await tabG.page.waitForTimeout(200);
+await tabG.page.keyboard.press('Escape');
+await tabG.page.waitForTimeout(300);
+const escaped = await fullLook(tabG.kit);
+check('ESC keeps too', escaped.phase === 'title' && escaped.eraseAsk === null && JSON.stringify(await keysNow(tabG.kit)) === JSON.stringify(playedKeys));
+// [DEL] erases: the page reloads by itself.
+await tabG.page.locator('#titleEraseBtn').click();
+await tabG.page.waitForTimeout(200);
+const reloaded = tabG.page.waitForEvent('load', { timeout: 8000 }).then(() => true, () => false);
+await tabG.page.keyboard.press('Delete');
+const didReload = await reloaded;
+await tabG.page.waitForLoadState('networkidle');
+await tabG.page.waitForTimeout(800);
+const afterErase = await fullLook(tabG.kit);
+const afterKeys = await keysNow(tabG.kit);
+check('[DEL] erases and the page reloads by itself', didReload);
+check('after the erase the title is exactly a first visit\'s', JSON.stringify(afterErase) === JSON.stringify(firstVisit),
+  JSON.stringify({ afterErase, firstVisit }));
+check('…and the browser holds exactly what a first visit holds', JSON.stringify(afterKeys) === JSON.stringify(firstKeys),
+  `${afterKeys.join(', ')} | ${firstKeys.join(', ')}`);
+await tabG.shot('2-after-erase');
+check('no page errors through the erase', tabG.kit.errors.length === 0, tabG.kit.errors.slice(0, 4).join(' | '));
 await finish(browser);

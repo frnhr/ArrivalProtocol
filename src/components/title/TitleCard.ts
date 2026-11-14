@@ -2,14 +2,14 @@
 import type { Store } from '@state/store';
 import type { GameState, RunPhase, ArchiveStatus } from '@state/schema';
 import { receiveTransmission, skipBoot } from '@systems/boot';
-import { archiveMeta, wipeArchive, playWithoutArchive, isFirstRun, archiveNotesSaid } from '@systems/meta';
+import { archiveMeta, wipeArchive, playWithoutArchive, isFirstRun, archiveNotesSaid, eraseAllRecords } from '@systems/meta';
 import { builtPieces } from '@data/endings';
 import type { EndingPiece } from '@/types/ending';
 import { resumeRun, abandonRun } from '@systems/run-save';
 import { registerKeys } from '@systems/input';
 import {
   titleModel, titleEnterAction, titleAbandonKey, TITLE_ABANDON_CODES, type TitleModel, type TitleNotes, type TitleSaveButton,
-  type TitleSaveAction,
+  type TitleSaveAction, titleEraseKey, setTitleEraseAsking, TITLE_ERASE_CODES, TITLE_ERASE_KEEP_CODES,
 } from '@systems/title';
 import { play, unlockAudio } from '@systems/audio';
 import { requireById, make, replayAnimation } from '@components/dom';
@@ -43,6 +43,11 @@ import { MAP_TEXT } from '@data/map-text';
 // and NEW RUN (which asks first: ABANDON RUN [ENTER] / KEEP IT [ESC]), or CAN'T RESUME with ABANDON RUN only, or RUN SAVE
 // OFFLINE; RECEIVE TRANSMISSION is hidden while a save is there. `runs save between ships` under it, and the archive's
 // one-off notes, cleared (archiveNotesSaid) once the kid leaves the title.
+// Playtest 1 (note 1, plan §3.12): ERASE ALL RECORDS at the title's foot, in every archive state. A click asks first
+// (`ERASE EVERY UNIT, COLONY AND RUN? · THIS CANNOT BE UNDONE`, ERASE [DEL] / KEEP [ENTER], ESC keeps); while it asks it is
+// the title's only question (the save block's keys and RECEIVE wait). ERASE removes every key of the game's
+// (systems/meta.ts eraseAllRecords) and reloads the page, which opens as a fresh browser's first visit; a remove the
+// browser refuses says ERASE FAILED instead, and nothing reloads.
 export function mountTitleCard(store: Store<GameState>): () => void {
   const root = requireById('titleCard');
   const receiveBtn = requireById<HTMLButtonElement>('titleReceive');
@@ -68,6 +73,13 @@ export function mountTitleCard(store: Store<GameState>): () => void {
   const notesEl = requireById('titleNotes');
   const noteEl = requireById('titleNote');
   const memWrap = requireById('memWrap');
+  const eraseEl = requireById('titleErase');
+  const eraseBtn = requireById<HTMLButtonElement>('titleEraseBtn');
+  const eraseAsk = requireById('titleEraseAsk');
+  const eraseLine = requireById('titleEraseLine');
+  const eraseYes = requireById<HTMLButtonElement>('titleEraseYes');
+  const eraseNo = requireById<HTMLButtonElement>('titleEraseNo');
+  const eraseFailedEl = requireById('titleEraseFailed');
   const subEl = root.querySelector<HTMLElement>('.title-sub');
   if (!subEl) throw new Error('TitleCard: index.html lost .title-sub');
   // `ARRIVAL PROTOCOL // OUTWARD BOUND`: the h1 keeps the name, the sub line takes the rest.
@@ -156,6 +168,23 @@ export function mountTitleCard(store: Store<GameState>): () => void {
 
   // The run save's block (systems/title.ts): `asking` while NEW RUN's inline confirm is up.
   let asking = false;
+  // ERASE ALL RECORDS: `erasing` while its confirm is up (the save block's confirm and it are never up together);
+  // `eraseFailed` once the browser refused a remove (said until the kid leaves the title).
+  let erasing = false;
+  let eraseFailed = false;
+  eraseBtn.textContent = ARCHIVE_TEXT.erase.button;
+  eraseLine.textContent = ARCHIVE_TEXT.erase.confirm;
+  renderKeyCaps(eraseYes, ARCHIVE_TEXT.erase.eraseKey);
+  renderKeyCaps(eraseNo, ARCHIVE_TEXT.erase.keepKey);
+  eraseFailedEl.textContent = ARCHIVE_TEXT.erase.failed;
+  const paintErase = (): void => {
+    // The model is the title's last paint: a boot that began since hides it too (the card is the boot's click catcher).
+    eraseEl.hidden = !model.erase || store.getState().run.phase !== 'title';
+    eraseEl.classList.toggle('asking', erasing);
+    eraseBtn.hidden = erasing;
+    eraseAsk.hidden = !erasing;
+    eraseFailedEl.hidden = !eraseFailed || erasing;
+  };
   renderKeyCaps(resumeBtn, MAP_TEXT.save.resumeKey);
   newRunBtn.textContent = MAP_TEXT.save.newRun;
   renderKeyCaps(keepBtn, MAP_TEXT.save.keepKey);
@@ -177,6 +206,7 @@ export function mountTitleCard(store: Store<GameState>): () => void {
     noteEl.textContent = model.saveNote ?? '';
     notesEl.hidden = model.notes.length === 0;
     notesEl.replaceChildren(...model.notes.map((note) => make('div', 'title-notes-line', note)));
+    paintErase();
   };
 
   // The unit and wave of the run (a NEW RUN starts over with its own), and for a returning unit the one
@@ -259,6 +289,7 @@ export function mountTitleCard(store: Store<GameState>): () => void {
 
   const onReceive = (event: MouseEvent): void => {
     event.stopPropagation();
+    if (erasing) return;
     receiveTransmission(store);
   };
   // The second click of a double-click on RECEIVE lands here (the button no longer takes
@@ -273,12 +304,12 @@ export function mountTitleCard(store: Store<GameState>): () => void {
   // The run save's answers (systems/run-save.ts): each a click or a key, the gesture that lets the page make sound.
   const onTitle = (): boolean => store.getState().run.phase === 'title';
   const resume = (): void => {
-    if (!onTitle() || model.save?.kind !== 'resume' || asking) return;
+    if (!onTitle() || model.save?.kind !== 'resume' || asking || erasing) return;
     unlockAudio();
     resumeRun(store);
   };
   const ask = (): void => {
-    if (!onTitle() || model.save?.kind !== 'resume') return;
+    if (!onTitle() || model.save?.kind !== 'resume' || erasing) return;
     unlockAudio();
     asking = true;
     paintSave();
@@ -291,16 +322,54 @@ export function mountTitleCard(store: Store<GameState>): () => void {
     play('chime', { falling: false });
   };
   const abandon = (): void => {
-    if (!onTitle() || !(asking || model.save?.kind === 'cant-resume')) return;
+    if (!onTitle() || erasing || !(asking || model.save?.kind === 'cant-resume')) return;
     unlockAudio();
     asking = false;
     abandonRun(store);
+  };
+  // ERASE ALL RECORDS' three steps. The flag systems/boot.ts reads (RECEIVE's ENTER waits while the confirm asks) is
+  // dropped after the key that kept the records has been heard by every title binding, so that ENTER starts nothing.
+  const askErase = (): void => {
+    if (!onTitle() || erasing) return;
+    unlockAudio();
+    asking = false;
+    erasing = true;
+    eraseFailed = false;
+    setTitleEraseAsking(true);
+    paintSave();
+    play('buzz');
+  };
+  const keepErase = (): void => {
+    if (!erasing) return;
+    erasing = false;
+    queueMicrotask(() => setTitleEraseAsking(false));
+    paintErase();
+    play('chime', { falling: false });
+  };
+  const erase = (): void => {
+    if (!onTitle() || !erasing) return;
+    if (eraseAllRecords() === 'ok') {
+      // Nothing of the game's is left in the browser, and the archive writes nothing more: the reload is a first visit.
+      window.location.reload();
+      return;
+    }
+    erasing = false;
+    eraseFailed = true;
+    queueMicrotask(() => setTitleEraseAsking(false));
+    paintErase();
+    play('buzz');
   };
   const clicked = (action: () => void) => (event: MouseEvent): void => { event.stopPropagation(); action(); };
   const onResume = clicked(resume);
   const onNewRun = clicked(ask);
   const onKeep = clicked(keep);
   const onAbandon = clicked(abandon);
+  const onEraseAsk = clicked(askErase);
+  const onEraseYes = clicked(erase);
+  const onEraseNo = clicked(keepErase);
+  eraseBtn.addEventListener('click', onEraseAsk);
+  eraseYes.addEventListener('click', onEraseYes);
+  eraseNo.addEventListener('click', onEraseNo);
   resumeBtn.addEventListener('click', onResume);
   newRunBtn.addEventListener('click', onNewRun);
   keepBtn.addEventListener('click', onKeep);
@@ -319,16 +388,25 @@ export function mountTitleCard(store: Store<GameState>): () => void {
     else if (action === 'abandon') abandon();
     else if (action === 'keep') keep();
   };
+  // One binding for every key a title question answers, so the erase confirm (when it asks) takes the key before the save
+  // block could: ENTER that keeps the records never also resumes the run.
+  const TITLE_CODES = [...new Set(['Enter', 'NumpadEnter', 'Escape', ...TITLE_ABANDON_CODES, ...TITLE_ERASE_CODES, ...TITLE_ERASE_KEEP_CODES])];
   const offKeys = [
     registerKeys({
-      layer: 'title', codes: ['Enter', 'NumpadEnter'],
-      onDown: () => { if (onTitle()) act(titleEnterAction(model.save, asking, focused())); },
+      layer: 'title', codes: TITLE_CODES,
+      onDown: (code) => {
+        if (erasing) {
+          const answer = titleEraseKey(code, erasing);
+          if (answer === 'erase') erase();
+          else if (answer === 'keep') keepErase();
+          return;
+        }
+        if (code === 'Escape') { keep(); return; }
+        if (!onTitle()) return;
+        if (code === 'Enter' || code === 'NumpadEnter') act(titleEnterAction(model.save, asking, focused()));
+        else if (TITLE_ABANDON_CODES.includes(code)) act(titleAbandonKey(model.save, asking));
+      },
     }),
-    registerKeys({
-      layer: 'title', codes: TITLE_ABANDON_CODES,
-      onDown: () => { if (onTitle()) act(titleAbandonKey(model.save, asking)); },
-    }),
-    registerKeys({ layer: 'title', codes: ['Escape'], onDown: keep }),
   ];
 
   // The strip's rows slide in one after another over BOOT_ASSEMBLE_SEC.
@@ -365,7 +443,15 @@ export function mountTitleCard(store: Store<GameState>): () => void {
       model = { ...model, notes: [] };
       notesEl.hidden = true;
     }
-    if (phase !== 'title') { asking = false; stopRoll(); settleLaunch(); }
+    if (phase !== 'title') {
+      asking = false;
+      erasing = false;
+      eraseFailed = false;
+      setTitleEraseAsking(false);
+      stopRoll();
+      settleLaunch();
+      paintErase();
+    }
     root.classList.toggle('booting', phase === 'boot');
     // RECEIVE TRANSMISSION (the run's first boot, from the title): the beam draws from SOL to the first ship. A resumed BEAM
     // boot past ship 1 (systems/run-save.ts) is no beam from SOL: the card just clears (Track SAVE's note).
@@ -387,6 +473,10 @@ export function mountTitleCard(store: Store<GameState>): () => void {
     newRunBtn.removeEventListener('click', onNewRun);
     keepBtn.removeEventListener('click', onKeep);
     abandonBtn.removeEventListener('click', onAbandon);
+    eraseBtn.removeEventListener('click', onEraseAsk);
+    eraseYes.removeEventListener('click', onEraseYes);
+    eraseNo.removeEventListener('click', onEraseNo);
+    setTitleEraseAsking(false);
     offKeys.forEach((off) => off());
     stopRoll();
     unsubSave();

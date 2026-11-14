@@ -31,7 +31,7 @@ import {
 } from '@systems/save-shape';
 import {
   META_STORAGE_KEY, META_V1_KEY, META_VERSION, FIRST_UNIT_NUMBER, COLONY_HISTORY_MAX_PER_WORLD,
-  ROUTE_HISTORY_RUNS, NOTABLE_EVENTS_MAX,
+  ROUTE_HISTORY_RUNS, NOTABLE_EVENTS_MAX, RUN_SAVE_KEY,
 } from '@data/tuning';
 
 export type { LastCause, LastUnit, UnitStats } from '@/types/lineage';
@@ -690,6 +690,7 @@ interface Session {
   meta: Meta;
   status: Exclude<ArchiveStatus, 'none'>;
   freshArmSeed: number | null;    // a fresh archive's arm seed (the page's run seed): WIPE ARCHIVE starts from it too
+  erased: boolean;                // ERASE ALL RECORDS took: nothing more is written before the page reloads
 }
 
 let session: Session | null = null;
@@ -704,11 +705,11 @@ let session: Session | null = null;
 export function openRunArchive(provider: StorageProvider, armSeed: number | null = null): ArchiveStatus {
   const loaded = loadMeta(provider, armSeed);
   if (!loaded.ok) {
-    session = { provider, meta: freshMeta(armSeed), status: loaded.reason === 'corrupt' ? 'corrupt' : 'offline', freshArmSeed: armSeed };
+    session = { provider, meta: freshMeta(armSeed), status: loaded.reason === 'corrupt' ? 'corrupt' : 'offline', freshArmSeed: armSeed, erased: false };
     console.error(`[archive] ${loaded.reason}: ${loaded.detail}`);
     return session.status;
   }
-  session = { provider, meta: loaded.meta, status: 'ok', freshArmSeed: armSeed };
+  session = { provider, meta: loaded.meta, status: 'ok', freshArmSeed: armSeed, erased: false };
   if (loaded.changed) write();
   return session.status;
 }
@@ -755,7 +756,7 @@ export function archiveMeta(): Readonly<Meta> {
 // buzz, data/script.ts; the footer's tag stays). Corrupt and played-without archives are never written.
 function write(): void {
   const current = requireSession();
-  if (current.status !== 'ok') return;
+  if (current.status !== 'ok' || current.erased) return;
   if (saveMeta(current.provider, current.meta) === 'ok') return;
   current.status = 'offline';
   console.error('[archive] offline: a write failed; this unit will not be kept');
@@ -921,4 +922,53 @@ export function playWithoutArchive(store: Store<GameState>): void {
   if (current.status !== 'corrupt') throw new Error(`playWithoutArchive: the archive is ${current.status}, not corrupt`);
   current.status = 'without';
   syncStatus(store);
+}
+
+// --- ERASE ALL RECORDS (playtest 1 note 1, plan §3.12, OPEN-DECISIONS 138) ------------------------------------------------
+
+// Every key of the page's storage that is the game's: the run save, the archive and phase 2's archive key (read only to
+// detect it). Anything else under GAME_KEY_PREFIX is the game's too (a key a later build adds, or an old build left), and
+// the erase takes it as well when the storage can list its keys (localStorage can; a headless stub may not).
+export const GAME_STORAGE_KEYS: readonly string[] = [RUN_SAVE_KEY, META_STORAGE_KEY, META_V1_KEY];
+export const GAME_KEY_PREFIX = 'arrival-protocol/';
+
+// The part of localStorage that lists its keys (Storage.length and key(i)).
+interface ListedStorage { readonly length: number; key(index: number): string | null }
+const isListed = (storage: object): storage is ListedStorage =>
+  typeof (storage as Partial<ListedStorage>).length === 'number' && typeof (storage as Partial<ListedStorage>).key === 'function';
+
+// The game's keys a storage holds: GAME_STORAGE_KEYS, and every other key under GAME_KEY_PREFIX it can list.
+export function gameKeysIn(provider: StorageProvider): string[] {
+  const storage = provider();
+  const keys = new Set(GAME_STORAGE_KEYS);
+  if (isListed(storage)) {
+    for (let i = 0; i < storage.length; i++) {
+      const key = storage.key(i);
+      if (key !== null && key.startsWith(GAME_KEY_PREFIX)) keys.add(key);
+    }
+  }
+  return [...keys];
+}
+
+// Removes every key of the game's from the storage: 'ok', or 'failed' when the storage can't be reached or a remove
+// throws (a private window, storage off): the title says so, and nothing is reloaded. Nothing else is kept anywhere: mute
+// and reduced motion are the session's, in memory, so a reload after this is a fresh browser's first visit (run 1,
+// UNIT-047, the authored arm, the tutorial's lines).
+export function eraseEverything(provider: StorageProvider): 'ok' | 'failed' {
+  try {
+    for (const key of gameKeysIn(provider)) provider().removeItem(key);
+    return 'ok';
+  } catch (error) {
+    console.error(`[archive] ERASE ALL RECORDS failed: ${(error as Error).message}`);
+    return 'failed';
+  }
+}
+
+// The title's ERASE ALL RECORDS through the page's own storage. On 'ok' the archive writes nothing more (the page is about
+// to reload: a write in between would put a record back), whatever its status was.
+export function eraseAllRecords(): 'ok' | 'failed' {
+  const current = requireSession();
+  const result = eraseEverything(current.provider);
+  if (result === 'ok') current.erased = true;
+  return result;
 }
