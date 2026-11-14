@@ -23,8 +23,11 @@ import { windowOpenNow, lzAt } from '@systems/landing-rules';
 import {
   lzCounters, bracketModels, dropDotModel, windowToneFraction, groundTrackModel, bayWindowModel, podTags, footerPods,
   miniHudLanding, podStreaks, landMarks, parkedBeacons, plotLandingModel, ringLabel, driverLanding, terrainGlyph,
-  goLowMarks, dragStamp, terrainStretches, terrainAt, TERRAIN_PATTERN,
+  goLowMarks, dragStamp, terrainStretches, terrainAt, TERRAIN_PATTERN, landingPlotViewRadius, landingBandEdges,
 } from '@systems/landing-hud';
+import { plotViewRadius } from '@systems/flight-hud';
+import { PLOT_RING_FACTOR, PLOT_SHIP_MARGIN } from '@data/tuning';
+import { stateFromElements } from '@/types/orbit';
 import { countdownChip, headerCrumbs, toggleAlert, decayChip, burnButton, fuelModel, plotMarkers } from '@systems/flight-hud';
 import { capabilitiesNow, BAND_COPY } from '@systems/capabilities';
 import { dragLineKm } from '@systems/landing-orbit';
@@ -171,7 +174,10 @@ check("the state words: CAN'T LAUNCH, PARKED IN ORBIT · fate unknown, NOT LAUNC
   const bayHidden = bayWindowModel(state, sol, 'closed');
   check('bay: from blue the button still reads what [L] does in amber', bayHidden.launch.look === 'go');
   state.ui.mode = 'tools';
-  check('ring: LAUNCH BAND while landing', ringLabel(state) === BAND_TEXT.ringLanding);
+  // Playtest 1 (Q8): while landing the band is named with its altitudes (km above the ground).
+  const { ring, planet } = state.level;
+  check('ring: `LAUNCH BAND 820–1,400 KM` while landing (its edges\' altitudes)', ringLabel(state) === BAND_TEXT.ringLanding(ring.min - planet.R, ring.max - planet.R)
+    && /^LAUNCH BAND [\d,]+–[\d,]+ KM$/.test(ringLabel(state)) && ringLabel(state).length <= MAX_LINE_CHARS, ringLabel(state));
   const mini = miniHudLanding(state, sol);
   check('mini-HUD: the window is open', mini?.window?.open === true);
   says('mini-HUD: the window names LZ-A', mini?.window?.text, ['LZ-A', openWord], CHIP_CHARS);
@@ -547,6 +553,42 @@ function offerOf(reason: BurnPoint['reason'], inSec: number, extra: Partial<Burn
   check('stamp: at the kick\'s ▼', stamp !== null && Math.abs(Math.hypot(stamp.pos.x, stamp.pos.y) - 5400) < 1e-9
     && Math.abs(Math.atan2(stamp.pos.y, stamp.pos.x) - 1.2) < 1e-9);
   check('stamp: none under DRAG_STAMP_MIN_KM', dragStamp({ ...kick, dropKm: DRAG_STAMP_MIN_KM - 0.5 }) === null && dragStamp(null) === null);
+}
+
+// --- Playtest 1 (Q8): the launch band while landing ---------------------------------------------------------------------
+// The frame is the whole orbit's (its ▲), so the band holds still on screen through a loop; the edges carry their altitudes.
+{
+  const state = world();
+  const { ring, planet } = state.level;
+  const rp = (ring.min + ring.max) / 2;
+  const e = 0.3;
+  const ra = (rp * (1 + e)) / (1 - e);
+  const radii: number[] = [];
+  const frames: number[] = [];
+  for (const nu of [0, Math.PI / 2, Math.PI, 1.5 * Math.PI]) {
+    const orbit = stateFromElements(rp, e, 0, nu, planet.mu);
+    state.orbit = { x: orbit.x, y: orbit.y, vx: orbit.vx, vy: orbit.vy };
+    radii.push(plotViewRadius(state));
+    frames.push(landingPlotViewRadius(state));
+  }
+  const want = Math.max(ra * PLOT_SHIP_MARGIN, ring.max * PLOT_RING_FACTOR);
+  check('Q8: on an ellipse (e 0.3) the landing frame is ▲\'s, the same at ▼, the sides and ▲', frames.every((frame) => Math.abs(frame - want) < want * 1e-6),
+    frames.map((frame) => frame.toFixed(0)).join(' '));
+  check('…where the ship\'s frame breathed (smaller at ▼ than at ▲)', Math.min(...radii) < Math.max(...radii) - 1 && Math.abs(Math.max(...radii) - want) < want * 1e-6,
+    radii.map((radius) => radius.toFixed(0)).join(' '));
+  circle(state, 0.7, rp);
+  check('…a circle inside the band: the ring\'s frame (ring.max × 1.5), as in flight', Math.abs(landingPlotViewRadius(state) - ring.max * PLOT_RING_FACTOR) < 1e-6
+    && Math.abs(landingPlotViewRadius(state) - plotViewRadius(state)) < 1e-6);
+  const escape = Math.sqrt((2.4 * planet.mu) / rp);
+  state.orbit = { x: rp, y: 0, vx: 0, vy: escape };
+  check('…an open path (leaving during the landing) falls back to the ship\'s frame', Math.abs(landingPlotViewRadius(state) - plotViewRadius(state)) < 1e-6);
+  const edges = landingBandEdges(state);
+  check('the band\'s edges: lower at ring.min, upper at ring.max, each with its altitude (`820 KM`)', edges !== null && edges.length === 2
+    && edges[0]!.side === 'lower' && edges[0]!.radiusKm === ring.min && edges[0]!.text === BAND_TEXT.edge(ring.min - planet.R)
+    && edges[1]!.side === 'upper' && edges[1]!.radiusKm === ring.max && edges[1]!.text === BAND_TEXT.edge(ring.max - planet.R)
+    && /^[\d,]+ KM$/.test(edges[0]!.text), JSON.stringify(edges));
+  const flight = createInitialState({ seed: 1, shipIndex: 0 });
+  check('…in flight there are none (the ring alone names the band)', landingBandEdges(flight) === null);
 }
 
 finish();

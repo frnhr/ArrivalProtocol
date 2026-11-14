@@ -211,6 +211,10 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   check('…RESTRICTED: the four skills AUTOBURN/AUTODROP/SURVEY/SENTRY.skl (Train it yourself :)), THREAD+ and FIREWALL.sys (Not available to caretakers :)), in that order, locked; IN TRANSIT: nothing; ONE REQUEST PER TRANSMIT',
     tabs.locked.join(' | ') === RESTRICTED.join(' | ')
     && tabs.transit.length === 0 && tabs.transitNone === 'NOTHING ON THE WAY' && /^ONE REQUEST PER TRANSMIT/.test(tabs.foot ?? ''), JSON.stringify({ locked: tabs.locked, transit: tabs.transit, none: tabs.transitNone, foot: tabs.foot }));
+  // Playtest 1 (A-LAND, note 12): each row says what the unit already has of it, under its name.
+  const have = await st(() => [...document.querySelectorAll('#deskScreen .rp-row')].map((row) => `${row.dataset.file}:${row.querySelector('.rp-have')?.textContent ?? ''}`));
+  check('…each row says what the unit already has (`YOU HAVE n`; the patch `YOU RUN REPAIR v1`)', have.length === 7
+    && have.slice(0, 6).every((row) => /:YOU HAVE \d+( · \d+ ON THE WAY)?$/.test(row)) && /^repair-v2:YOU RUN REPAIR v\d/.test(have[6] ?? ''), JSON.stringify(have));
   await shot('02b-repository');
   await page.keyboard.press('KeyI');
   await page.waitForTimeout(400);

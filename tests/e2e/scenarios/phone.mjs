@@ -336,6 +336,9 @@ if (look === 'blocked') {
     await onScreen('LAUNCH\'s question', '#inlineConfirm');
     const question = await visibleText('#inlineConfirmQuestion');
     check('a tap on an amber LAUNCH asks first (LAUNCH OFF-SITE? / IS FULL)', /OFF-SITE|FULL/.test(question ?? ''), question);
+    // Playtest 1 (A-LAND, note 23): [L]'s question opens centred, big, with [L] YES / [N] NO.
+    check('…centred, with `[L] YES` / `[N] NO`', await st(() => document.getElementById('inlineConfirm').classList.contains('centre')
+      && document.getElementById('inlineConfirmYes').textContent === '[L] YES' && document.getElementById('inlineConfirmNo').textContent === '[N] NO'));
     await shot('09b-launch-confirm');
     await page.tap('#inlineConfirmNo');
     await page.waitForTimeout(300);

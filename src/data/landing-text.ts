@@ -364,7 +364,10 @@ export const RUN_END_TEXT = {
 // The NAV PLOT's ring and the readouts that named the printer.
 export const BAND_TEXT = {
   ringFlight: 'SAFE ORBIT · LAUNCH BAND',
-  ringLanding: 'LAUNCH BAND',
+  // Playtest 1 (Q8): while landing the band is a place, named with its altitudes (km above the ground), and each edge
+  // carries its own (`820 KM` inside the lower edge, `1,400 KM` outside the upper).
+  ringLanding: (lowKm: number, highKm: number): string => `LAUNCH BAND ${formatCount(lowKm)}–${formatCount(highKm)} KM`,
+  edge: (altitudeKm: number): string => `${formatCount(altitudeKm)} KM`,
   inBand: (pct: number): string => `IN BAND ${pct}%`,
   accept: (pct: number): string => `ACCEPT · IN BAND ${pct}%`,
 } as const;
