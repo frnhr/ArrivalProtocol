@@ -79,11 +79,26 @@ export function fliesAlong(mode: PresetMode, sasMode: SasMode, heading: number, 
   return sasMode === 'off' && Math.abs(wrap(presetHeading(mode, orbit) - heading)) <= ALIGN_TOLERANCE_RAD;
 }
 
-// Manual step: held thrusters add torque (rotInput −1/0/+1), momentum persists (capped),
-// heading integrates.
+// Manual step: held thrusters add torque (rotInput −1/0/+1, the spin capped), heading integrates. With no thruster held
+// the spin brakes to zero at the same rotAccel (playtest 1 note 21, §3.10): Q/E turn the ship only while held. The old
+// momentum never stopped by itself, and the only way to stop it was a counter-burst landing on exactly zero, which was
+// next to impossible at CRUISE warp. A full-rate spin stops in maxOmega / rotAccel (0.7 game s).
 function stepManual(att: Attitude, rotInput: number, dt: number, caps: RotCaps): Attitude {
+  if (rotInput === 0) return brakeSpin(att, dt, caps);
   const omega = clamp(att.omega + rotInput * caps.rotAccel * dt, -caps.maxOmega, caps.maxOmega);
   return { omega, heading: wrap(att.heading + omega * dt) };
+}
+
+// The let-go brake, integrated exactly over the tick, so a long tick (a CRUISE step, a coast jump in the prediction)
+// stops where a run of short ones would: a spin that stops inside the tick turns only its braking distance, ω² / 2a.
+function brakeSpin(att: Attitude, dt: number, caps: RotCaps): Attitude {
+  if (att.omega === 0) return { omega: 0, heading: att.heading };
+  const speed = Math.abs(att.omega);
+  const sign = Math.sign(att.omega);
+  const stopSec = speed / caps.rotAccel;
+  if (stopSec <= dt) return { omega: 0, heading: wrap(att.heading + (sign * speed * stopSec) / 2) };
+  const omega = att.omega - sign * caps.rotAccel * dt;
+  return { omega, heading: wrap(att.heading + ((att.omega + omega) / 2) * dt) };
 }
 
 // Preset step: a time-optimal slew that drives heading → target, arriving with ~zero

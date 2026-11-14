@@ -6,6 +6,9 @@ import { pushModal, activeLayer } from '@systems/input';
 import { listResets } from '@systems/reset';
 import { getPrediction } from '@systems/predict';
 import { stateFromElements } from '@/types/orbit';
+import { selectManual } from '@systems/flight-controls';
+import { stepAttitude } from '@systems/attitude';
+import { ROT_ACCEL, MAX_OMEGA } from '@data/tuning';
 
 const harness = createHarness(11);
 const store = harness.store;
@@ -206,6 +209,46 @@ for (const warp of [1e5, 1e7]) {
 {
   const names = listResets();
   check('resets registered: predict + input', names.includes('predict') && names.includes('input-held-keys'), names.join(','));
+}
+
+// --- MANUAL rotation brakes when Q/E are let go (playtest 1 note 21, §3.10) ---------------
+{
+  harness.reset();
+  selectManual(store);
+  harness.keyDown('KeyQ');
+  stepFor(2);
+  const spinHeld = burn().omega;
+  harness.keyUp('KeyQ');
+  stepFor(1.5);
+  const spinAfter = burn().omega;
+  const headingStopped = burn().heading;
+  stepFor(2);
+  check('MANUAL: Q held spins the ship', spinHeld > 0, `${spinHeld}`);
+  check('MANUAL: letting go of Q stops the spin', spinAfter === 0, `${spinAfter}`);
+  check('MANUAL: and the heading stays where it stopped', burn().heading === headingStopped, `${headingStopped} → ${burn().heading}`);
+
+  harness.keyDown('KeyE');
+  stepFor(2);
+  const spinE = burn().omega;
+  harness.keyUp('KeyE');
+  stepFor(1.5);
+  check('MANUAL: E brakes the same way', spinE < 0 && burn().omega === 0, `${spinE} → ${burn().omega}`);
+
+  // The brake is integrated exactly: one long tick (a CRUISE step, the predictor's coast jump) stops where many short
+  // ones do, so the plotted path agrees with the flown one.
+  const orbit = { x: 10000, y: 0, vx: 0, vy: 5 };
+  const start = { heading: 0.3, omega: MAX_OMEGA };
+  const long = stepAttitude(start, 'off', 0, orbit, 10);
+  let short = start;
+  for (let i = 0; i < 10000; i++) short = stepAttitude(short, 'off', 0, orbit, 0.001);
+  const brakeDist = (MAX_OMEGA * MAX_OMEGA) / (2 * ROT_ACCEL);
+  check('brake: a long tick stops at ω²/2a, as short ones do',
+    long.omega === 0 && short.omega === 0 && Math.abs(long.heading - (0.3 + brakeDist)) < 1e-9 && Math.abs(short.heading - long.heading) < 1e-4,
+    `long ${long.heading} short ${short.heading} want ${0.3 + brakeDist}`);
+  const half = stepAttitude(start, 'off', 0, orbit, 0.2);
+  check('brake: part-way through, the spin slows by rotAccel·dt', Math.abs(half.omega - (MAX_OMEGA - ROT_ACCEL * 0.2)) < 1e-12, `${half.omega}`);
+  const held = stepAttitude({ heading: 0, omega: 0 }, 'off', 1, orbit, 0.1);
+  check('brake: a held thruster still accelerates', Math.abs(held.omega - ROT_ACCEL * 0.1) < 1e-12, `${held.omega}`);
 }
 
 finish();
