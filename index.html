@@ -28,7 +28,8 @@
       <!-- A phone's next hazard (DEBRIS C? 03:41): a desktop has it in the strip's upcoming list. -->
       <span class="hazard-chip" id="hazardChip" hidden></span>
       <button class="speed-btn" id="speedPause" data-hint-key="P" aria-label="pause" title="Pause (P): look around, nothing moves" tabindex="-1">❚❚</button>
-      <button class="speed-btn skip-btn" id="skipBtn" data-hint-key="F" tabindex="-1"><span class="skip-label">▸▸ SKIP</span><kbd class="keycap">F</kbd></button>
+      <!-- Playtest 1 (§3.1): held, not tapped: [F] or a press and hold on the button (a phone's finger too) fast-forwards. -->
+      <button class="speed-btn skip-btn" id="skipBtn" data-hint-key="F" tabindex="-1" aria-label="hold to fast-forward"><span class="skip-label">▸▸ HOLD</span><kbd class="keycap">F</kbd></button>
       <span class="skip-reason" id="skipReason"></span>
       <button class="speed-btn mute-btn" id="muteBtn" data-hint-key="M" aria-label="sound on" title="Sound is on (M)" tabindex="-1">♪</button>
       <button class="speed-btn motion-btn" id="motionBtn" aria-label="reduced motion" aria-pressed="false" tabindex="-1">◐</button>

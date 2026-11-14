@@ -1,10 +1,10 @@
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
-import { onGameTick } from '@systems/clock';
+import { onGameTick, onPostTick } from '@systems/clock';
 import { getPrediction, getSensedPrediction } from '@systems/predict';
 import { getDropSolution } from '@systems/drop-cache';
 import { landingBurnOffer } from '@systems/landing-orbit';
-import { togglePause, requestSkip, registerTimeKeys, setDebugWarp } from '@systems/pace';
+import { togglePause, startFastForward, endFastForward, registerTimeKeys, setDebugWarp } from '@systems/pace';
 import { countdownChip, paceLabel, skipButton, formatWarp, headerCrumbs, overclockBadge, nextHazard } from '@systems/flight-hud';
 import { toggleMuted, isMuted, onMuteChange } from '@systems/audio';
 import { requireById, replayAnimation } from '@components/dom';
@@ -12,14 +12,15 @@ import { isDebugMode } from '@/debug';
 import { DEBUG_WARP_MAX } from '@data/tuning';
 
 // Header time controls (§6.1, §7.1). The director (systems/pace.ts) owns the warp; the player
-// only ever pauses or asks to SKIP:
-//   • the pace label: TACTICAL ×20 / CRUISE ×60 / SKIP ▸▸ ×871 / OVERCLOCK ×¼ (in blue while
+// only ever pauses or holds [F] to fast-forward (playtest 1, plan §3.1):
+//   • the pace label: TACTICAL ×20 / CRUISE ×60 / FAST ×871 ▸▸ / OVERCLOCK ×¼ (in blue while
 //     something is happening: the ship slows to a quarter, the mind keeps full speed);
 //   • the main countdown chip: IMPACT, the next burn, or ▼/▲, in tactical seconds, with ▸▸
 //     while the world runs faster than real time, ×¼ under OVERCLOCK, and red at ≤ 30;
 //   • on a phone, the next hazard beside it (`DEBRIS C? 03:41`, WP12 review): the strip's upcoming list has no room there;
 //   • ❚❚ (P): the look-only pause;
-//   • ▸▸ SKIP (F): struck out, with the reason next to it, whenever a skip would be refused;
+//   • ▸▸ HOLD (F): held by the key or by a pointer (a finger on a phone) to fast-forward; struck out, with the reason
+//     next to it, whenever holding would do nothing, and with the stop's name once a hold has ended there;
 //   • ♪ (M): sound on/off for the session;
 //   • ◐: reduced motion on/off for the session (ui.reducedMotion, §7.3).
 // The crumbs on the left are live too: UNIT-047 / ARES-VII / IMPACT COURSE, FLYBY, GET READY,
@@ -27,7 +28,7 @@ import { DEBUG_WARP_MAX } from '@data/tuning';
 // kid who tabbed away sees which unit and ship are waiting. The old ×10 ladder survives only behind
 // ?debug (it writes clock.debugWarp).
 
-// How long a refused SKIP stays flashed (matches the skip-refused keyframes in game.css).
+// How long a refused hold stays flashed (matches the skip-refused keyframes in game.css).
 const REFUSED_FLASH_MS = 600;
 
 function formatClock(tSec: number): string {
@@ -66,7 +67,7 @@ export function mountTimeControls(store: Store<GameState>): () => void {
   const debug = isDebugMode();
   ladder.hidden = !debug;
 
-  // A refused SKIP (button or F) flashes the struck-out button and its reason so the reason
+  // A refused hold (button or F) flashes the struck-out button and its reason so the reason
   // gets read. Wall-clock timing is fine here: it is input feedback, not game logic, and it
   // must also end under reduced motion, where the shake animation is off.
   let flashTimer: ReturnType<typeof setTimeout> | null = null;
@@ -96,9 +97,30 @@ export function mountTimeControls(store: Store<GameState>): () => void {
   motionBtn.addEventListener('click', onMotionClick);
 
   const onPause = (): void => { togglePause(store); };
-  const onSkip = (): void => { if (!requestSkip(store).ok) flashRefused(); };
+  // The button is held like [F]: down starts the hold, up (or the pointer lost: cancelled, captured away) ends it. The
+  // pointer is captured, so a finger sliding off the button keeps holding until it lifts.
+  let pointerHeld: number | null = null;
+  const onHoldDown = (event: PointerEvent): void => {
+    if (event.button !== 0 || pointerHeld !== null) return;
+    event.preventDefault();
+    pointerHeld = event.pointerId;
+    try { skipBtn.setPointerCapture(event.pointerId); } catch { /* a synthetic pointer has nothing to capture */ }
+    if (!startFastForward(store).ok) flashRefused();
+    paint();
+  };
+  const onHoldUp = (event: PointerEvent): void => {
+    if (pointerHeld !== event.pointerId) return;
+    pointerHeld = null;
+    endFastForward(store);
+    paint();
+  };
+  const onContextMenu = (event: Event): void => { event.preventDefault(); };
   pauseBtn.addEventListener('click', onPause);
-  skipBtn.addEventListener('click', onSkip);
+  skipBtn.addEventListener('pointerdown', onHoldDown);
+  skipBtn.addEventListener('pointerup', onHoldUp);
+  skipBtn.addEventListener('pointercancel', onHoldUp);
+  skipBtn.addEventListener('lostpointercapture', onHoldUp);
+  skipBtn.addEventListener('contextmenu', onContextMenu);
   const offKeys = registerTimeKeys(store, { onSkipRefused: flashRefused });
 
   // --- ?debug ladder (decades between ×1 and DEBUG_WARP_MAX) ---
@@ -176,17 +198,18 @@ export function mountTimeControls(store: Store<GameState>): () => void {
     }
 
     const skip = skipButton(state, truth);
-    const skipKey = `${skip.active}|${skip.blockedReason}`;
+    const skipKey = `${skip.active}|${skip.held}|${skip.blockedReason}`;
     if (skipKey !== last.skip) {
       last.skip = skipKey;
       skipBtn.classList.toggle('active', skip.active);
+      skipBtn.classList.toggle('held', skip.held);
       skipBtn.classList.toggle('blocked', skip.blockedReason !== null);
-      // Glows while a skip is available, so a kid waiting out a coast discovers it.
-      skipBtn.classList.toggle('ready', !skip.active && skip.blockedReason === null);
+      // Glows while holding would fast-forward, so a kid waiting out a coast discovers it.
+      skipBtn.classList.toggle('ready', !skip.active && !skip.held && skip.blockedReason === null);
       skipBtn.title = skip.active
-        ? 'Skipping to the next event'
-        : skip.blockedReason ?? 'Skip ahead to the next event (F)';
-      skipReasonEl.textContent = skip.blockedReason ?? (skip.active ? 'SKIPPING…' : '');
+        ? 'Fast-forwarding: let go to stop'
+        : skip.blockedReason ?? 'Hold to fast-forward (F)';
+      skipReasonEl.textContent = skip.blockedReason ?? (skip.active ? 'FAST-FORWARD…' : '');
     }
 
     pauseBtn.classList.toggle('active', state.clock.paused);
@@ -213,6 +236,9 @@ export function mountTimeControls(store: Store<GameState>): () => void {
     () => paint(),
   );
   const offTick = onGameTick(() => paint());
+  // The hold is pace's module state, not the store's: a spent hold ends with no tick of the world (a pause, a stop at the
+  // landing's end), so the keys' and the pointer's edges repaint as well.
+  const offHoldPaint = onPostTick(() => { if (store.getState().clock.speed === 0) paint(); });
   paint();
 
   return () => {
@@ -221,7 +247,13 @@ export function mountTimeControls(store: Store<GameState>): () => void {
     unsubMotion();
     offMute();
     pauseBtn.removeEventListener('click', onPause);
-    skipBtn.removeEventListener('click', onSkip);
+    skipBtn.removeEventListener('pointerdown', onHoldDown);
+    skipBtn.removeEventListener('pointerup', onHoldUp);
+    skipBtn.removeEventListener('pointercancel', onHoldUp);
+    skipBtn.removeEventListener('lostpointercapture', onHoldUp);
+    skipBtn.removeEventListener('contextmenu', onContextMenu);
+    if (pointerHeld !== null) endFastForward(store);
+    offHoldPaint();
     if (flashTimer !== null) clearTimeout(flashTimer);
     if (debug) {
       autoBtn.removeEventListener('click', onAuto);
