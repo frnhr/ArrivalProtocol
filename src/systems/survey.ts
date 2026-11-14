@@ -7,6 +7,7 @@ import { onGameTick, onPostTick, isLivePhase } from '@systems/clock';
 import { onWorldReset } from '@systems/reset';
 import { on, emit } from '@systems/events';
 import { say } from '@systems/say';
+import { palLines } from '@systems/companion';
 import { releaseThread, reserveThread, holdsThread, threadsTotal, threadsBusy } from '@systems/ops-core';
 import { surveyRecordOf, surveyVersion, mappedPct, candidatesFound, lzSiteOf, lzOnSite } from '@state/survey-selectors';
 import { sweptCells, swathHalfRad, surveyRunning, surveyWantsThread, cellOf, assignRefusal, dropSwathOn } from '@systems/survey-model';
@@ -26,11 +27,11 @@ import { SURVEY_RATE_VERSION, SURVEY_SWEEP_VERSION, SURVEY_KEEP_FREE_THREADS, SU
 //   sensors look where the pods will go"), as wide as the ship's; v1 maps under the ship only. The thread rules are the same.
 // • Two tick hooks: the game tick maps (it knows the game time the tick covered: a step of a period or more, a long SKIP,
 //   maps the whole rim); the post tick, which runs in every phase, reconciles the thread, puts the machine at rest outside a
-//   mapping tick (`lastRad` null), says CONTROL's boot quip at the first flight tick and emits 'survey-state' on a change.
+//   mapping tick (`lastRad` null), says CONTROL's boot notice at the first flight tick and emits 'survey-state' on a change.
 // • The touchdown reveal (R5) listens on 'pod-landed': the first pod down on a bad ground nobody knew shows it, whether or
 //   not SURVEY is aboard. landing.ts works out the echo's tail (`· LZ-B IS WET`) before the event.
-// • Lines (R21): CONTROL's boot quip, its reveal quip (once per bad site: `reveals` keeps each once) and, at the first move,
-//   `You moved LZ-B? Bold! :)`. The TERMINAL types the first candidate found, a wreck, a v2 reveal and PLANET MAPPED; every
+// • Lines (R21): CONTROL's boot notice (`Landing sites are estimates.`), then PAL's reveal quip (once per bad site: `reveals`
+//   keeps each once) and, at the first move, PAL's `You moved LZ-B? Bold! :)` (playtest 1, B-VOICE). The TERMINAL types the first candidate found, a wreck, a v2 reveal and PLANET MAPPED; every
 //   other find only emits (the SITES window pings), so a seven-site planet is not seven lines.
 
 // Its Core thread's owner (ops-core reserveThread(SURVEY_THREAD_OWNER, { yieldable: true })).
@@ -168,7 +169,7 @@ function afterMapping(store: Store<GameState>): void {
     emit('site-revealed', { lz: reveal.lz, siteId: reveal.site.id, ground: reveal.ground, by: 'survey' });
     say('mind-sys', SWATH_TEXT.terminal.revealed(reveal.lz, reveal.ground), { critical: true });
     // Review m7: CONTROL's quip is about CONTROL's own bad guess; a bad site the kid moved onto gets the TERMINAL line only.
-    if (reveal.site.kind === 'guess') say('control', SWATH_TEXT.control.reveal(reveal.lz, reveal.ground), { critical: true });
+    if (reveal.site.kind === 'guess') say('companion', palLines(store.getState().run).siteReveal(reveal.lz, reveal.ground), { critical: true });
   }
   if (sayMapped) {
     // Done: the thread goes back now (the post tick would on its next look), and the line once.
@@ -195,7 +196,7 @@ function touchdownReveal(store: Store<GameState>, lz: string | null): void {
   });
   emit('site-revealed', { lz, siteId: site.id, ground, by: 'touchdown' });
   // Review m7: only on CONTROL's guess; on a site the kid moved onto, the echo's tail (`· LZ-B IS WET`) says it.
-  if (!already && site.kind === 'guess') say('control', SWATH_TEXT.control.reveal(lz, ground), { critical: true });
+  if (!already && site.kind === 'guess') say('companion', palLines(store.getState().run).siteReveal(lz, ground), { critical: true });
 }
 
 // --- The post tick: the thread, at rest, CONTROL's boot quip, 'survey-state' ------------------------------------------------
@@ -249,7 +250,7 @@ export function mountSurvey(store: Store<GameState>): () => void {
 
 // Moves the LZ `lz` onto the site `siteId` (R10): survey-model.ts assignRefusal first (its refusal is returned and nothing
 // changes), then in one update the LZ takes the site's centre, half-width, widthKm, ground and id, sitesRev and moves grow
-// (the move names the site it left: review M7), and 'lz-moved' is emitted; CONTROL's `You moved LZ-B? Bold! :)` at the
+// (the move names the site it left: review M7), and 'lz-moved' is emitted; PAL's `You moved LZ-B? Bold! :)` at the
 // ship's first move. Called by the SITES window's pill and __ap.survey.set.
 export function assignSite(store: Store<GameState>, lz: string, siteId: string): AssignRefusal | null {
   const refusal = assignRefusal(store.getState(), lz, siteId);
@@ -271,7 +272,7 @@ export function assignSite(store: Store<GameState>, lz: string, siteId: string):
     draft.landing.survey.lines.controlMoved = true;
   });
   emit('lz-moved', { lz, from, to: site.id });
-  if (firstMove) say('control', SWATH_TEXT.control.moved(lz), { critical: true });
+  if (firstMove) say('companion', palLines(store.getState().run).siteMoved(lz), { critical: true });
   return null;
 }
 

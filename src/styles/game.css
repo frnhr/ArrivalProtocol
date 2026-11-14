@@ -708,6 +708,9 @@ kbd.keycap[hidden] { display: none; }
 .objective-ticker[data-from="mind"] { color: var(--layer-mind); }
 .objective-ticker[data-speaker="hollow"],
 .objective-ticker[data-speaker="hollow-cmd"] { color: var(--hollow); }
+/* Playtest 1 (B-VOICE): the ticker tells the two radio voices apart as COMMS does: PAL's tag bright, CONTROL's plain. */
+.objective-ticker[data-speaker="companion"] .ticker-tag { color: var(--layer-ship-bright); }
+.objective-ticker[data-speaker="control"] .ticker-tag { color: var(--text); font-weight: 400; }
 .objective-ticker:hover { background: color-mix(in srgb, currentColor 18%, var(--bg)); }
 .ticker-glyph { font-size: 10px; }
 .ticker-tag { font-weight: 700; letter-spacing: 0.12em; }
@@ -804,7 +807,11 @@ kbd.keycap[hidden] { display: none; }
   color: var(--accent-dim);
   vertical-align: 1px;
 }
-.comms-line.speaker-control .comms-tag { color: var(--accent-bright); border-color: var(--accent-dim); }
+/* Playtest 1 (B-VOICE): two voices on one radio. CONTROL, the protocol, is plain: its tag in the text colour, its words
+   as any line's. PAL, the companion, is the bright one: an accent tag and accent-bright words. */
+.comms-line.speaker-control .comms-tag { color: var(--text); border-color: var(--edge-bright); }
+.comms-line.speaker-companion .comms-tag { color: var(--bg); background: var(--accent); border-color: var(--accent); }
+.comms-line.speaker-companion .comms-text { color: var(--accent-bright); }
 .comms-line.typing .comms-text::after,
 .term-line.typing .term-text::after {
   content: '▌';

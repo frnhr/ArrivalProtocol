@@ -721,7 +721,9 @@ export interface AlertsState {
 // fall behind what they echo; cmd: your command echoes; mind-sys: the unit's own boot and ECC lines.
 // Slice 5 (plan §2.4): resident: a corrupted resident's voice (amber capitals, the TERMINAL's pace); sleeper: the sleeper's
 // (lowercase, the good green, slow and soft). Both speak in the TERMINAL.
-export type Speaker = 'control' | 'sys' | 'hollow' | 'hollow-cmd' | 'cmd' | 'mind-sys' | 'resident' | 'sleeper';
+// Playtest 1 (B-VOICE, playtest-1-plan §3.2): control is now the protocol's official voice (no smileys); companion is PAL,
+// the program in the unit's packet, which keeps the quips and the personality (data/companion-text.ts). Both on the radio.
+export type Speaker = 'control' | 'companion' | 'sys' | 'hollow' | 'hollow-cmd' | 'cmd' | 'mind-sys' | 'resident' | 'sleeper';
 // Where a line appears: the amber COMMS radio, or the blue TERMINAL inside the mind.
 export type Channel = 'radio' | 'mind';
 

@@ -118,6 +118,8 @@ import {
   LAST_CAUSES, eraseAllRecords, gameKeysIn, type LastCause, type Meta,
 } from '@systems/meta';
 import { pickCard, draftContext, cardFiles, planPacket, type PickRefusal } from '@systems/draft';
+import { personaOf, setPersonaOverride } from '@systems/companion';
+import type { Persona } from '@data/companion-text';
 import { upgradeRepairsToV2 } from '@systems/delivery-boot';
 import { REPAIR_V2_VERSION, THREAD_PLUS_THREADS } from '@data/tuning';
 import type { UpgradeId, DraftContext, DraftCard, DraftCardId } from '@data/upgrades';
@@ -302,6 +304,9 @@ interface DebugHooks {
   // lists the game's keys the browser holds now.
   eraseAll: (opts?: { reload?: boolean }) => 'ok' | 'failed';
   storedKeys: () => string[];
+  // Playtest 1 (B-VOICE): PAL's preset. persona() reads the run's; persona('deadpan') sets one for this page (every later
+  // line reads it, the run's seed aside), and persona(null) goes back to the run's own (systems/companion.ts).
+  persona: (id?: Persona | null) => Persona;
   // Phase 3 slice 3c: the run save. save is the page's save state and what is stored under RUN_SAVE_KEY; saveCorrupt
   // writes JSON that does not read (reload: RUN SAVE CAN'T RESUME); saveClear forgets the save; updateArm runs the world
   // update on this run's arm as if the run ended after `route` (default: the route so far; colony where a pod landed).
@@ -1172,6 +1177,10 @@ export function mountDebug(store: Store<GameState>): void {
       return result;
     },
     storedKeys: () => gameKeysIn(browserStorage).filter((key) => browserStorage().getItem(key) !== null),
+    persona: (id) => {
+      if (id !== undefined) setPersonaOverride(id);
+      return personaOf(store.getState().run);
+    },
     save: () => ({ state: structuredClone(store.getState().save), stored: browserStorage().getItem(RUN_SAVE_KEY) }),
     saveCorrupt: () => { browserStorage().setItem(RUN_SAVE_KEY, '{ this is not a run save'); },
     saveClear: () => { browserStorage().removeItem(RUN_SAVE_KEY); },

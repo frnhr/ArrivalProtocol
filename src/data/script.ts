@@ -18,6 +18,8 @@ import { hollowUnitName, HOLLOW_STORY, HOLLOW_VERB, HOLLOW_FINALE } from '@data/
 import { playsTutorial, type LastCause, type LastUnit } from '@systems/meta';
 import { SPARE_RUN_END } from '@data/epilogue-text';
 import { FINALE_TEXT } from '@data/finale-text';
+import { COMPANION_LINES, COMPANION_NAME, type CompanionLines, type Persona } from '@data/companion-text';
+import { personaOf } from '@systems/companion';
 import type { UpgradeForm } from '@data/upgrades';
 import { currentShip } from '@systems/map-run';
 import { solLy } from '@systems/map-geometry';
@@ -49,7 +51,7 @@ import {
 import { rootDeletable } from '@systems/finale';
 import { dragLineKm } from '@systems/landing-orbit';
 import {
-  hostLine, podCode, groundRadioLine, LANDING_ASKS, LANDING_BEATS, LAUNCH_REFUSAL_LINES, LANDING_LESSONS, LANDING_LESSONS_1B,
+  hostLine, podCode, groundRadioLine, LANDING_ASKS, LAUNCH_REFUSAL_LINES, LANDING_LESSONS, LANDING_LESSONS_1B,
   END_LANDING_REFUSAL_KEY, END_LANDING_REFUSAL_TEXT,
 } from '@data/landing-text';
 import { HARD_WORDS_POOL } from '@data/souls';
@@ -103,6 +105,7 @@ import {
 export interface LineVars {
   unit: number;           // our unit number: "Unit 47", UNIT-047
   wave: number;           // the fleet wave (run number)
+  persona: Persona;       // the run's PAL (playtest 1, systems/companion.ts): which preset its quips are read from
   ship: string;           // the ship's name (≤ NAME_MAX_CHARS)
   colonists: number;      // colonists aboard
   podsTotal: number;      // the pods this ship arrived with
@@ -167,6 +170,8 @@ export interface LineVars {
 export const WORST_CASE_VARS: LineVars = {
   unit: 999,
   wave: 99,
+  // Every preset is rendered at its worst case by tests/unit/voice/voices.test.ts; the BEATS here read CHIPPER.
+  persona: 'chipper',
   ship: 'W'.repeat(NAME_MAX_CHARS),
   colonists: 99_999,
   podsTotal: 16,
@@ -304,6 +309,7 @@ export function lineVars(state: Readonly<GameState>, pred: Prediction): LineVars
   return {
     unit: state.mission.transmissionNum,
     wave: state.mission.wave,
+    persona: personaOf(state.run),
     ship: state.level.shipName,
     colonists: state.mission.colonists,
     podsTotal: state.landing.pods.length,
@@ -407,8 +413,6 @@ export const LINES = {
   // run is over (RUN END).
   transmitting: (next: string): string => `TRANSMITTING TO ${next}…`,
   runOver: (): string => 'RUN OVER',
-  // Run 1, ship 1, the first crash (§4.3): ARRIVAL CONTROL takes it back, once.
-  simulation: (): string => 'That was a simulation. :) Again.',
   // BEAM OUT (WP7 part 2): a doomed ship no burn can save, with the reason that is true (a full tank too
   // late in the dive is not short of FUEL); then the bar racing the ground.
   beamOutOffer: (why: Hopeless): string => `${BEAM_OUT_HOPELESS_WORDS[why]} — press BEAM OUT`,
@@ -821,6 +825,8 @@ export const FILE_FAULTS: readonly FileFault[] = [
 export function speakerTag(speaker: Speaker, vars: LineVars): string {
   switch (speaker) {
     case 'control': return 'CONTROL';
+    // Playtest 1 (B-VOICE): the companion, by its name.
+    case 'companion': return COMPANION_NAME;
     case 'sys': return 'SHIP';
     case 'hollow': return vars.hollow;
     case 'hollow-cmd': return vars.hollow;
@@ -1195,10 +1201,12 @@ export const BOOT_LINE_MAX = 30;
 
 // --- Beats: lines spoken on a moment (§6.3) ---------------------------------------------------
 
-// ARRIVAL CONTROL's reaction lines are quips: they wait out a burn and are dropped while the
-// mind is in trouble. A critical quip is spoken at once instead of waiting its turn.
-const controlQuip = (text: (ctx: TextCtx) => string, critical = false): BeatLine =>
-  ({ speaker: 'control', text, quip: true, critical });
+// The reaction lines are quips: they wait out a burn and are dropped while the mind is in trouble. A critical quip is
+// spoken at once instead of waiting its turn. Playtest 1 (B-VOICE, plan §3.2): they are PAL's, read from the run's preset
+// (data/companion-text.ts); ARRIVAL CONTROL keeps only the licences here. The beat ids keep their `control-` names: the
+// director's done list is saved under them.
+const palQuip = (text: (lines: CompanionLines, vars: LineVars) => string, critical = false): BeatLine =>
+  ({ speaker: 'companion', text: (ctx: TextCtx) => text(COMPANION_LINES[ctx.vars.persona], ctx.vars), quip: true, critical });
 
 export const BEATS: readonly Beat[] = [
   {
@@ -1231,7 +1239,7 @@ export const BEATS: readonly Beat[] = [
     when: (ctx) => ctx.phaseEntered === 'flight' && ctx.pred.outcome === 'impact' && !currentShip(ctx.state).final,
     // Critical: it is the mission briefing, typed on the radio the moment the screen cuts to
     // amber. Queued, it would wait out the boot lines' spacing and arrive after the first burn.
-    lines: [controlQuip((ctx) => `Hello, Unit ${ctx.vars.unit}! ${ctx.vars.ship} is about to hit a planet. :)`, true)],
+    lines: [palQuip((pal, vars) => pal.helloImpact(vars.unit, vars.ship), true)],
   },
   {
     // A returning unit's REPAIR came with its boot (§5.2, systems/licences.ts installBootLicences): CONTROL
@@ -1247,7 +1255,7 @@ export const BEATS: readonly Beat[] = [
     once: true,
     perShip: true,
     when: (ctx) => ctx.phaseEntered === 'flight' && currentShip(ctx.state).final,
-    lines: [controlQuip((ctx) => `Hello, Unit ${ctx.vars.unit}! The flagship is about to hit a planet. :)`, true)],
+    lines: [palQuip((pal, vars) => pal.helloFlagship(vars.unit), true)],
   },
   // WP7. A ship that arrives on a flyby (HALCYON: TOO WIDE) gets its own hello, like ship 1's crash.
   {
@@ -1255,7 +1263,7 @@ export const BEATS: readonly Beat[] = [
     once: true,
     perShip: true,
     when: (ctx) => ctx.phaseEntered === 'flight' && ctx.pred.outcome === 'open',
-    lines: [controlQuip((ctx) => `Hello, Unit ${ctx.vars.unit}! ${ctx.vars.ship} is about to fly past its planet. :)`, true)],
+    lines: [palQuip((pal, vars) => pal.helloFlyby(vars.unit, vars.ship), true)],
   },
   // WP12 (the lead's ruling of 06:20): the unit crossed with no working REPAIR, and the boot reissued it
   // (systems/licences.ts renewRepairAtBoot): CONTROL says so after its hello, in the licence's own words.
@@ -1273,56 +1281,51 @@ export const BEATS: readonly Beat[] = [
     // Critical, like the captured quip: the path clears the planet ~1 s into an OUT burn that
     // runs 7–8 s more, so a kid who lets go a second late outlived SAY_QUEUE_TTL_SEC and never
     // heard it. It lands with the CLEAR OF THE PLANET stamp instead.
-    lines: [controlQuip(() => 'Nice! Now please orbit it. :)', true)],
+    lines: [palQuip((pal) => pal.clear, true)],
   },
   {
     id: 'control-captured',
+    // Playtest 1 (B-VOICE): once a run, no longer once a ship. The CAPTURED stamp says it on every ship; PAL's line said
+    // the same again (plan §3.5: never a line that repeats a stamp).
     once: true,
-    perShip: true,
     when: (ctx) => ctx.events.has('loop-closed'),
     // Critical: the loop closes 1–2 s into a capture burn that runs ~10 s, so a queued quip
     // would outlive SAY_QUEUE_TTL_SEC and never be said. It is about this moment: say it now.
-    lines: [controlQuip(() => 'Captured! Mostly. :)', true)],
+    lines: [palQuip((pal) => pal.captured, true)],
   },
   {
     id: 'control-locked',
+    // Playtest 1 (B-VOICE): once a run, as the captured quip, under the STABLE ORBIT stamp. The landing's own opening
+    // quip (`Lovely orbit! Let's get them down.`, in the same tick) is cut: two orbit cheers in a row.
     once: true,
-    perShip: true,
     when: (ctx) => ctx.events.has('locked'),
     // The outcome quips are critical: the flight is over and the clock paused, so the say()
     // queue never flushes again. A queued outcome line would wait forever.
-    lines: [controlQuip(() => 'Great orbit! Probably. :)', true)],
+    lines: [palQuip((pal) => pal.locked, true)],
   },
   {
     id: 'control-crashed',
     once: true,
     perShip: true,
     when: (ctx) => ctx.events.has('crashed'),
-    lines: [controlQuip(() => 'Oh no. :)', true)],
+    lines: [palQuip((pal) => pal.crashed, true)],
   },
   {
     id: 'control-escaped',
     once: true,
     perShip: true,
     when: (ctx) => ctx.events.has('escaped'),
-    lines: [controlQuip(() => "That's… not an orbit. :)", true)],
+    lines: [palQuip((pal) => pal.escaped, true)],
   },
-  // Slice 1a (01-landing §2): CONTROL at the landing's start, then at the ship's first touchdown with the ground's radio
-  // line after it (the first pod down on every ship sends one). The start waits its turn after the lock's quip; the
-  // touchdown is critical, about this moment. The radio line is the ground's, not a quip: no mind alert holds it back.
-  {
-    id: 'control-landing-start',
-    once: true,
-    perShip: true,
-    when: (ctx) => ctx.events.has('landing-start'),
-    lines: [controlQuip(() => LANDING_BEATS.start)],
-  },
+  // Slice 1a (01-landing §2): the ship's first touchdown, with the ground's radio line after it (the first pod down on
+  // every ship sends one). The touchdown is critical, about this moment. The radio line is the ground's, not a quip: no
+  // mind alert holds it back. Playtest 1 (B-VOICE): PAL's; the landing-start quip is cut (see control-locked).
   {
     id: 'control-first-down',
     once: true,
     perShip: true,
     when: (ctx) => ctx.events.has('pod-landed') && ctx.vars.firstDownRadio !== '',
-    lines: [controlQuip(() => LANDING_BEATS.firstDown, true), { speaker: 'sys', text: (ctx) => ctx.vars.firstDownRadio, critical: true }],
+    lines: [palQuip((pal) => pal.firstDown, true), { speaker: 'sys', text: (ctx) => ctx.vars.firstDownRadio, critical: true }],
   },
 ];
 
