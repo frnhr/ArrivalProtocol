@@ -86,6 +86,21 @@ expect('open, a pod ready, the bay reloading', ctx({ open: open(), bayReady: fal
 expect('a launch moment within the lead', ctx({ next: next('LZ-B', 4.4, WINDOW_TACTICAL_LEAD_TAC) }), 'L7',
   'GET READY — LZ-B IN 0:08', (o) => o.urgency === 'now');
 expect('...in the MIND', ctx({ inMind: true, next: next('LZ-B', 5, 5) }), 'L7', 'GET READY — [TAB], LZ-B IN 0:05');
+// Playtest 1 (B-DROP, plan §3.4.2): AUTODROP v1's ` · or [G] AUTO` rides GET READY and LAUNCH NOW, [L] first (a plain launch).
+{
+  const v1 = { row: null, tail: null, launchTail: { text: ' · or [G] AUTO', key: 'G' } };
+  expect('AUTODROP v1 aboard: GET READY carries ` · or [G] AUTO`', ctx({ next: next('LZ-B', 4.4, 6), autodrop: v1 }), 'L7',
+    'GET READY — LZ-B IN 0:06 · or [G] AUTO', (o) => o.keys.join() === 'G');
+  expect('...and LAUNCH NOW, its [L] kept first', ctx({ open: open(), autodrop: v1 }), 'L4', 'LAUNCH NOW — press [L] · LZ-A 1/3 · or [G] AUTO',
+    (o) => o.keys.join() === 'L,G');
+  expect('...never on a WIDE DROP\'s L5 (the tail is for a window v1 can fly)', ctx({ open: open({ sure: false }), autodrop: v1 }), 'L5', LANDING_LINES.L5,
+    (o) => o.keys.join() === 'L');
+  expect('...nor on RELOADING', ctx({ open: open(), bayReady: false, bayReadyInTac: 1.2, autodrop: v1 }), 'L6', 'RELOADING — next pod in 0:02');
+  // OPEN-DECISIONS 120: an armed AUTODROP's AD-armed row stands over a WIDE DROP window (autodrop.ts autodropLineOf), before L5.
+  const armed = { row: { id: 'landing-AD-armed', text: 'AUTODROP ARMED — next LZ-B ×2 in 0:40 · [G] to cancel', keys: ['G'], urgency: 'wait' as const, layer: 'ship' as const }, tail: null, launchTail: null };
+  expect('OD 120: AUTODROP armed over a WIDE DROP window: its wait, no [L]', ctx({ open: open({ sure: false }), autodrop: armed }), 'AD',
+    /^AUTODROP ARMED — /, (o) => o.id === 'landing-AD-armed' && !o.keys.includes('L'));
+}
 expect('a launch moment just past the lead is still WAIT, counting to it', ctx({ next: next('LZ-B', 5, WINDOW_TACTICAL_LEAD_TAC + 0.1) }), 'L13', /^WAIT — LZ-B in 0:09/);
 expect('no pod can launch now, one needs its driver repaired', ctx({ canLaunch: false, stuckPod: 7, open: open() }), 'L11',
   "POD 07 CAN'T LAUNCH — TAB, REPAIR its driver", (o) => o.urgency === 'soon' && o.layer === 'mind' && o.keys.join() === 'TAB');
