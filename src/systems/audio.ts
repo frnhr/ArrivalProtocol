@@ -1,5 +1,6 @@
 import {
   AUDIO_MASTER_GAIN, AUDIO_BUS_GAIN, AUDIO_DUCK_DB, AUDIO_DUCK_HOLD_SEC, AUDIO_DUCK_RELEASE_SEC, SURVEY_PING_GAIN,
+  BELT_BED_EDGE_DBFS, BELT_BED_PEAK_DBFS, BELT_BED_TAU_SEC, BELT_STATIC_CLICKS_HZ,
 } from '@data/tuning';
 
 // Every sound in the game, synthesized with WebAudio (§7.2). This module owns the ONLY
@@ -13,9 +14,10 @@ import {
 //   0.4 s, so a payoff cuts through the engine instead of fighting it;
 // • the alarm bus plays ONE voice at a time, klaxon over countdown beep;
 // • a soft limiter at the end keeps stacked cues from clipping.
-// Five voices are continuous and driven per tick: the engine rumble (setEngineLevel), the lock tone
-// (setLockTone), HOLLOW's chew (setChewLevel), the tug-of-war's beating tones (setTugTone) and (WP11 part 2) the
-// duel's drone while LAST LIGHT's root is being deleted (setDuelTone). Everything else is a one-shot play(cue).
+// Six voices are continuous and driven per tick: the engine rumble (setEngineLevel), the lock tone
+// (setLockTone), HOLLOW's chew (setChewLevel), the tug-of-war's beating tones (setTugTone), (WP11 part 2) the
+// duel's drone while LAST LIGHT's root is being deleted (setDuelTone) and (playtest 1) the belt's bed of noise and
+// static while the ship is inside a radiation belt (setBeltLevel). Everything else is a one-shot play(cue).
 //
 // The numbers below are sound design (pitches, envelopes, filter sweeps), kept next to the
 // voice they shape; the mix rules (bus levels, ducking) are in tuning.ts. Small pitch and
@@ -74,13 +76,10 @@ export interface CueParams {
   transmitSweep: { seconds: number; stutter?: boolean };
   transitHit: undefined;
   nameGlitch: undefined;
-  // WP9: KESTREL. A debris cloud hitting a rack; one Geiger tick inside a radiation belt (audio-cues schedules
-  // them as a sparse Poisson stream whose rate follows how deep in the belt the ship is); one blink of a seed's warning
-  // outline in HOLLOW's voice; a seed landing. Post-handover: one burst of the belt's static (depth 0 at its edge, 1
-  // midway), the belt's main sound, spaced out by audio-cues with the geiger's ticks on top.
+  // WP9: KESTREL. A debris cloud hitting a rack; one Geiger tick (playtest 1: only in a belt hit's flurry, the bed
+  // itself is the continuous setBeltLevel voice); one blink of a seed's warning outline in HOLLOW's voice; a seed landing.
   debrisImpact: undefined;
   geiger: undefined;
-  beltStatic: { depth: number };
   seedWarn: undefined;
   seedDrop: undefined;
   // Phase 3 slice 2 (04 §4): a beam seed landing behind its target as the boot's ECC line names it (a small thunk); HOLLOW's
@@ -156,6 +155,7 @@ interface Graph {
   chew: ChewVoice;
   tug: TugVoice;
   duel: DuelVoice;
+  belt: BeltVoice;
   alarm: { kind: AlarmKind; endsAt: number; out: GainNode } | null;
 }
 
@@ -232,6 +232,7 @@ function buildGraph(ctx: BaseAudioContext, masterGain: number): Graph {
     chew: buildChewVoice(ctx, buses.ambient, makeNoise(ctx, 1.5, false)),
     tug: buildTugVoice(ctx, buses.ambient),
     duel: buildDuelVoice(ctx, buses.ambient),
+    belt: buildBeltVoice(ctx, buses.ambient, makeNoise(ctx, 1.5, false), makeStatic(ctx, BELT_STATIC_BUFFER_SEC)),
     alarm: null,
   };
 }
@@ -1242,8 +1243,8 @@ function cueDebrisImpact(mix: Graph, t0: number): void {
   }
 }
 
-// §7.2 geiger: one tick of a counter's tube, a few ms of noise in a band around 2.4 kHz at a random level. Played as
-// a sparse Poisson stream (audio-cues) on top of the belt's static, as emphasis. It used to BE the belt's sound: a
+// §7.2 geiger: one tick of a counter's tube, a few ms of noise in a band around 2.4 kHz at a random level. Played only
+// in a belt hit's short flurry (audio-cues), over the belt's bed: playtest 1 (note 22) dropped the Poisson stream. It used to BE the belt's sound: a
 // 0.3 ms step to as loud as −14 dBFS of 1.8 kHz-and-up noise, up to 11 a second, the sharp click Fran found painful
 // on headphones (post-handover). Now it rises over 2.5 ms, sits ~10 dB lower and has no top above ~4 kHz.
 function cueGeiger(mix: Graph, t0: number): void {
@@ -1253,32 +1254,6 @@ function cueGeiger(mix: Graph, t0: number): void {
   const band = voice.filter('bandpass', 2400 * vary(0.12), 0.9, soft);
   const end = swell(amp.gain, t0, 0.32 * vary(0.3), 0.0025, 0.008);
   voice.noise(mix.white, t0, end + 0.004, band);
-}
-
-// The belt's radiation interference (post-handover: the main belt sound, the geiger's ticks only ride on top). One short
-// burst of static, white noise through a band that drifts down like a radio losing its station and flutters at ~20 Hz,
-// faded in and out with no step at either end. audio-cues spaces the bursts out with silence between them (tuning.ts
-// BELT_STATIC_GAP_*), so it is never a wash. depth (0 at a belt's edge, 1 midway) makes it a little louder and brighter.
-function cueBeltStatic(mix: Graph, t0: number, depth: number): void {
-  const voice = makeVoice(mix.ctx);
-  const amp = voice.gain(0, mix.buses.ambient);
-  const soft = voice.filter('lowpass', 3200 + 1400 * depth, 0.6, amp);
-  const band = voice.filter('bandpass', 1400, 0.8, soft);
-  const centre = (1100 + 400 * depth) * vary(0.2);
-  const rise = 0.06;
-  const hold = 0.08 + Math.random() * 0.12;
-  const fall = 0.22;
-  const end = t0 + rise + hold + fall;
-  sweep(band.frequency, t0, centre * 1.3, centre * 0.75, rise + hold + fall);
-  const peak = (0.13 + 0.08 * depth) * vary(0.15);
-  amp.gain.setValueAtTime(0, t0);
-  amp.gain.linearRampToValueAtTime(peak, t0 + rise);
-  amp.gain.setValueAtTime(peak, t0 + rise + hold);
-  amp.gain.linearRampToValueAtTime(0, end);
-  // The flutter: the band's input wobbling between 40% and 100%, so it crackles like interference instead of hissing.
-  const flutter = voice.gain(0.7, band);
-  voice.osc('sine', 20 * vary(0.2), t0, end + 0.01, voice.gain(0.3, flutter.gain));
-  voice.noise(mix.white, t0, end + 0.01, flutter);
 }
 
 // A seed's warning outline blinks (§6.6): one high blip in HOLLOW's own voice (detuned squares, its minor
@@ -1789,7 +1764,6 @@ function playOn(mix: Graph, cue: Cue, params: CueParams[Cue] | undefined, t0: nu
     case 'nameGlitch': cueNameGlitch(mix, t0); return;
     case 'debrisImpact': cueDebrisImpact(mix, t0); return;
     case 'geiger': cueGeiger(mix, t0); return;
-    case 'beltStatic': cueBeltStatic(mix, t0, (params as CueParams['beltStatic']).depth); return;
     case 'seedWarn': cueSeedWarn(mix, t0); return;
     case 'seedDrop': cueSeedDrop(mix, t0); return;
     case 'seedLand': cueSeedLand(mix, t0); return;
@@ -2083,6 +2057,93 @@ function applyChewLevel(mix: Graph, level: number): void {
   chew.lowpass.frequency.setTargetAtTime(CHEW_CUTOFF_MIN + CHEW_CUTOFF_SPAN * clamped, now, 0.1);
 }
 
+// The belt's bed (playtest 1 note 22, plan §3.11): one continuous voice while the ship is inside a radiation belt. The
+// old sound was a burst of static every 1.4–3 s, each rising, holding, falling and fluttering at 20 Hz; repeated, that
+// breathing envelope sounded like a horse huffing. Now it is two flat layers under one gain, with no envelope, sweep or
+// flutter of their own:
+// • white noise, band-limited to 250 Hz – 6 kHz (no rumble, no hiss at the top): the radiation's wash;
+// • static: a loop of single-sample clicks at random times and levels (about BELT_STATIC_CLICKS_HZ a second) through a
+//   band around 3 kHz, quieter: the crackle of a radio between stations.
+// The gain follows the depth smoothly (setTargetAtTime, BELT_BED_TAU_SEC), from BELT_BED_EDGE_DBFS at a belt's edge to
+// BELT_BED_PEAK_DBFS midway, and the geiger's ticks play only on a hit (audio-cues).
+interface BeltVoice {
+  out: GainNode;
+  depth: number | null;
+}
+
+// The static loop's length: long enough that its pattern of clicks never reads as a rhythm.
+const BELT_STATIC_BUFFER_SEC = 2;
+// The layers' mix inside the voice, and the voice's loudness at out gain 1 (both layers summed, measured with
+// measureCue('beltBed') through the ambient bus and master), so setBeltLevel can aim at a level in dBFS.
+const BELT_NOISE_GAIN = 0.5;
+const BELT_STATIC_GAIN = 0.35;
+const BELT_BED_UNITY_DBFS = -16.3;
+
+// Clicks, not noise: each is one sample at a random level and sign, at random (Poisson) times.
+function makeStatic(ctx: BaseAudioContext, seconds: number): AudioBuffer {
+  const buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * seconds), ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  const meanGap = ctx.sampleRate / BELT_STATIC_CLICKS_HZ;
+  const gap = (): number => Math.floor(-Math.log(1 - Math.random()) * meanGap);
+  for (let i = gap(); i < data.length; i += 1 + gap()) {
+    data[i] = (Math.random() < 0.5 ? -1 : 1) * (0.3 + 0.7 * Math.random());
+  }
+  return buffer;
+}
+
+function buildBeltVoice(ctx: BaseAudioContext, bus: GainNode, white: AudioBuffer, crackle: AudioBuffer): BeltVoice {
+  const out = ctx.createGain();
+  out.gain.value = 0;
+  out.connect(bus);
+  const filter = (type: BiquadFilterType, freq: number, q: number): BiquadFilterNode => {
+    const node = ctx.createBiquadFilter();
+    node.type = type;
+    node.frequency.value = freq;
+    node.Q.value = q;
+    return node;
+  };
+  const layer = (buffer: AudioBuffer, chain: BiquadFilterNode[], level: number): AudioBufferSourceNode => {
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+    const gain = ctx.createGain();
+    gain.gain.value = level;
+    let node: AudioNode = source;
+    for (const next of chain) { node.connect(next); node = next; }
+    node.connect(gain);
+    gain.connect(out);
+    return source;
+  };
+  const noise = layer(white, [filter('highpass', 250, 0.7), filter('lowpass', 6000, 0.7)], BELT_NOISE_GAIN);
+  const clicks = layer(crackle, [filter('bandpass', 3000, 0.8)], BELT_STATIC_GAIN);
+  noise.start();
+  clicks.start();
+  return { out, depth: null };
+}
+
+// The out gain that puts the bed at `dbfs` at the output (see BELT_BED_UNITY_DBFS).
+function beltGainFor(dbfs: number): number {
+  return 10 ** ((dbfs - BELT_BED_UNITY_DBFS) / 20);
+}
+
+// depth: how deep in a belt the ship is (zones.ts beltDepth: 0 at an edge, 1 midway), or null for silence (outside every
+// belt, paused, between ships). Call every tick; nothing is rescheduled unless it moved.
+export function setBeltLevel(depth: number | null): void {
+  if (graph) applyBeltLevel(graph, depth);
+}
+
+function applyBeltLevel(mix: Graph, depth: number | null): void {
+  const { belt } = mix;
+  const clamped = depth === null ? null : Math.max(0, Math.min(1, depth));
+  if (clamped === belt.depth) return;
+  if (clamped !== null && belt.depth !== null && Math.abs(clamped - belt.depth) < 0.01) return;
+  if (belt.depth === null && clamped !== null) logCue('beltBed:on');
+  belt.depth = clamped;
+  const now = mix.ctx.currentTime;
+  const target = clamped === null ? 0 : beltGainFor(BELT_BED_EDGE_DBFS + (BELT_BED_PEAK_DBFS - BELT_BED_EDGE_DBFS) * clamped);
+  belt.out.gain.setTargetAtTime(target, now, clamped === null ? 0.15 : BELT_BED_TAU_SEC);
+}
+
 // The tug-of-war (§7.2 tugBeat): two sines a few Hz apart beat against each other (the fight), with
 // a quiet triangle pair an octave up so a laptop speaker hears it too. setTugTone moves the pair.
 interface TugVoice {
@@ -2268,8 +2329,9 @@ function highpassed(samples: Float32Array, cutoffHz: number): Float32Array {
 }
 
 // cue: any one-shot cue, or a continuous voice held for the whole render: 'engineRumble' /
-// 'lockTone' / 'hollowChew' / 'duelDrone' at `level`, 'tugBeat' at `params` ({ beatHz, pitchHz }).
-export type MeasurableCue = Cue | 'engineRumble' | 'lockTone' | 'hollowChew' | 'tugBeat' | 'duelDrone';
+// 'lockTone' / 'hollowChew' / 'duelDrone' at `level`, 'beltBed' at `level` (the depth), 'tugBeat' at `params`
+// ({ beatHz, pitchHz }).
+export type MeasurableCue = Cue | 'engineRumble' | 'lockTone' | 'hollowChew' | 'tugBeat' | 'duelDrone' | 'beltBed';
 
 export async function measureCue(
   cue: MeasurableCue, params?: unknown, seconds = 3, level = 1,
@@ -2282,6 +2344,7 @@ export async function measureCue(
   else if (cue === 'hollowChew') applyChewLevel(mix, level);
   else if (cue === 'tugBeat') applyTugTone(mix, (params as { beatHz: number; pitchHz: number } | undefined) ?? { beatHz: 8, pitchHz: 300 });
   else if (cue === 'duelDrone') applyDuelTone(mix, level);
+  else if (cue === 'beltBed') applyBeltLevel(mix, level);
   else playOn(mix, cue, params as CueParams[Cue] | undefined, t0);
   const rendered = await ctx.startRendering();
   const data = rendered.getChannelData(0);

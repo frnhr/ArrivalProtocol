@@ -23,7 +23,7 @@ import { sleeperBreathing } from '@systems/resident-hud';
 import { driversInMemory, verbSecondsLeft, engineOpen } from '@state/selectors';
 import { driverTouch } from '@systems/landing-rules';
 import {
-  play, setEngineLevel, setLockTone, setChewLevel, setTugTone, setDuelTone, toggleMuted, type TouchdownSound, type WhoompShape,
+  play, setEngineLevel, setLockTone, setChewLevel, setTugTone, setDuelTone, setBeltLevel, toggleMuted, type TouchdownSound, type WhoompShape,
 } from '@systems/audio';
 import type { Place, Touch } from '@/types/landing';
 import { getDropSolution } from '@systems/drop-cache';
@@ -36,8 +36,7 @@ import type { LineState } from '@systems/flight-events';
 import { beltDepth } from '@systems/zones';
 import { openChoiceEntry, choiceTimerRunning, choiceSecondsLeft } from '@systems/say';
 import {
-  GEIGER_EDGE_HZ, GEIGER_PEAK_HZ, GEIGER_HIT_CLICKS, GEIGER_HIT_SPREAD_SEC, SEED_BLINK_SEC, SEED_TELEGRAPH_SEC,
-  CHOICE_URGENT_SEC, BELT_STATIC_GAP_EDGE_SEC, BELT_STATIC_GAP_PEAK_SEC, BELT_STATIC_GAP_JITTER,
+  GEIGER_HIT_CLICKS, GEIGER_HIT_SPREAD_SEC, SEED_BLINK_SEC, SEED_TELEGRAPH_SEC, CHOICE_URGENT_SEC,
 } from '@data/tuning';
 
 // What the game sounds like (§7.2): the one table from game events and state to cues. Every
@@ -82,9 +81,8 @@ import {
 //   transitHit with a flurry of Geiger clicks; zone-forecast → the CLEAR OF THE DEBRIS stamp's thud and a chime
 //   when a correction takes the path off the cloud, a sag when a path runs back into it; dodge-lapsed → the
 //   TOO LATE TO DODGE stamp's heavy thud and the sag; seed-telegraph → one seedWarn blip per blink of the outline; seed-landed → seedDrop; AUTOBURN armed → chime; skill-trained →
-//   transmitIn, then the licence's chime as AUTOBURN.skl lands; and every tick inside a belt, spaced-out bursts of
-//   beltStatic (post-handover: the belt's main sound) with the geiger's sparse Poisson ticks on top, both coming
-//   quicker toward the belt's middle
+//   transmitIn, then the licence's chime as AUTOBURN.skl lands; and inside a belt the continuous bed of noise and
+//   static (setBeltLevel, playtest 1), louder toward the belt's middle, with the geiger's ticks only on a hit
 // • WP10 (VESPER): ghost-start → ghostIgnite (the relay and the whump of the engine lighting by itself; the ship's
 //   first one heavier, under the klaxon its alarm raises; a burst a SKIP flew through too, its only sound); deal → the answer
 //   stamp's thud (an ACCEPT's eaten cluster plays sombreFall through hollow-consume); and every whole second of a
@@ -126,6 +124,12 @@ function touchdownSound(place: Place, touch: Touch): TouchdownSound {
 // pod still aboard (landing.ts gives that one POD_FIRST_DESCENT_SEC).
 function launchingFirstOfRun(state: Readonly<GameState>): boolean {
   return state.run.tutorial && state.run.ships.length === 0 && state.landing.pods.every((record) => record.fate.kind === 'aboard');
+}
+
+// The belt's bed (playtest 1 note 22): how deep in a belt the ship is (0 at an edge, 1 midway), or null for silence:
+// outside every belt, between ships, or paused (the world stands, so the radiation is not heard either). Pure.
+export function beltBedLevel(state: Readonly<GameState>): number | null {
+  return state.clock.paused ? null : beltDepth(state);
 }
 
 export function mountAudioCues(store: Store<GameState>): () => void {
@@ -501,30 +505,6 @@ export function mountAudioCues(store: Store<GameState>): () => void {
     nextBeatIn -= dtAi;
   }));
 
-  // The belt (§7.2, WP9; post-handover): while the ship is inside a belt and the world runs, bursts of static with
-  // silence between them (the first on the way in), and on top the geiger's ticks at random (exponential) gaps. Both
-  // come quicker with the depth and are scheduled inside the tick like the chirps. A pause keeps both waits (resuming
-  // does not fire a burst at once); leaving the belt resets them, so the next belt starts with a burst. Cosmetic randomness.
-  let nextClickIn = 0;
-  let nextStaticIn = 0;
-  offs.push(onPostTick((_dtWall, dtAi) => {
-    if (dtAi <= 0) return;
-    const depth = beltDepth(store.getState());
-    if (depth === null) { nextClickIn = 0; nextStaticIn = 0; return; }
-    const staticGapSec = BELT_STATIC_GAP_EDGE_SEC + (BELT_STATIC_GAP_PEAK_SEC - BELT_STATIC_GAP_EDGE_SEC) * depth;
-    while (nextStaticIn < dtAi) {
-      play('beltStatic', { depth }, { delaySec: nextStaticIn });
-      nextStaticIn += staticGapSec * (1 + (Math.random() * 2 - 1) * BELT_STATIC_GAP_JITTER);
-    }
-    nextStaticIn -= dtAi;
-    const rateHz = GEIGER_EDGE_HZ + (GEIGER_PEAK_HZ - GEIGER_EDGE_HZ) * depth;
-    while (nextClickIn < dtAi) {
-      play('geiger', undefined, { delaySec: nextClickIn });
-      nextClickIn += -Math.log(1 - Math.random()) / rateHz;
-    }
-    nextClickIn -= dtAi;
-  }));
-
   // The continuous voices, every tick (also while paused, so they fall silent at once).
   offs.push(onPostTick(() => {
     const state = store.getState();
@@ -545,6 +525,8 @@ export function mountAudioCues(store: Store<GameState>): () => void {
     setTugTone(tugTone(state));
     // WP11 part 2: the duel's drone follows the root's DELETE (silent while paused: the op stands still then).
     setDuelTone(state.run.phase === 'landing' && !state.clock.paused ? rootDeleteProgress(state) : null);
+    // Playtest 1 (note 22): the belt's bed while the ship is inside a belt and the world runs (silent when paused).
+    setBeltLevel(beltBedLevel(state));
   }));
 
   // M mutes for the session (§7.2).
