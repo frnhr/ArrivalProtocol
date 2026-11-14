@@ -56,8 +56,8 @@ export const REPO_TEXT = {
     requested: 'REQUESTED',
     clear: 'CLEAR',
     locked: 'LOCKED',
-    // One request per transmit (02 §3.8): what the window says under the list.
-    oneRequest: 'ONE REQUEST PER TRANSMIT · CHANGE IT UNTIL TRANSMIT ▸',
+    // One request per beam (02 §3.8): what the window says under the list. Playtest 1 (§3.7): the beam, not the screen.
+    oneRequest: 'ONE REQUEST PER BEAM',
     // The tag (02 §3.8; decision 19: the tag is the advice, no confirm).
     recommended: ':) RECOMMENDED FOR YOU',
     nothingToRecommend: 'You have everything you need :)',
@@ -107,7 +107,7 @@ export const REPO_TEXT = {
   desk: {
     // The first desk's file step (02 §4: ship → file → SET COURSE); it guides only, SET COURSE never waits for it.
     request: (file: string): string => `REQUEST ${file} · RECOMMENDED [R]`,
-    requestAny: 'REQUEST A FILE [R] · OPTIONAL',
+    requestAny: 'REQUEST A FILE [R]',
     requested: (file: string): string => `${file} REQUESTED`,
     tabCard: 'CARD',
     tabRepository: 'REPOSITORY [R]',

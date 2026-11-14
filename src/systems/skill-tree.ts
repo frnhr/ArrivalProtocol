@@ -149,7 +149,7 @@ export function anyPaid(skills: Readonly<RunSkillState>): boolean {
 export type TrainRefusal = 'closed' | 'unaffordable' | 'needs-lower' | 'owned' | 'lost' | 'not-desk';
 
 // How a cell looks (plan §2.5): held (owned), bought at this desk (pending), buyable (affordable), open but not buyable now
-// (dim), paid for and no longer held (lost: `LOST · RESTORE n`), its branch or row not open yet (closed: `OPENS LATER`), or
+// (dim), paid for and no longer held (lost: `LOST · RESTORE n`), its branch or row not open yet (closed: `NOT YET`), or
 // above what this build implements (unbuilt).
 export type CellLook = 'owned' | 'pending' | 'affordable' | 'dim' | 'lost' | 'closed' | 'unbuilt';
 

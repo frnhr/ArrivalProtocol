@@ -208,9 +208,9 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   // (built yet or not), before the two system rows.
   const RESTRICTED = ['LOCKED AUTOBURN.skl Train it yourself :)', 'LOCKED AUTODROP.skl Train it yourself :)', 'LOCKED SURVEY.skl Train it yourself :)',
     'LOCKED SENTRY.skl Train it yourself :)', 'LOCKED THREAD+ Not available to caretakers :)', 'LOCKED FIREWALL.sys Not available to caretakers :)'];
-  check('…RESTRICTED: the four skills AUTOBURN/AUTODROP/SURVEY/SENTRY.skl (Train it yourself :)), THREAD+ and FIREWALL.sys (Not available to caretakers :)), in that order, locked; IN TRANSIT: nothing; ONE REQUEST PER TRANSMIT',
+  check('…RESTRICTED: the four skills AUTOBURN/AUTODROP/SURVEY/SENTRY.skl (Train it yourself :)), THREAD+ and FIREWALL.sys (Not available to caretakers :)), in that order, locked; IN TRANSIT: nothing; ONE REQUEST PER BEAM',
     tabs.locked.join(' | ') === RESTRICTED.join(' | ')
-    && tabs.transit.length === 0 && tabs.transitNone === 'NOTHING ON THE WAY' && /^ONE REQUEST PER TRANSMIT/.test(tabs.foot ?? ''), JSON.stringify({ locked: tabs.locked, transit: tabs.transit, none: tabs.transitNone, foot: tabs.foot }));
+    && tabs.transit.length === 0 && tabs.transitNone === 'NOTHING ON THE WAY' && tabs.foot === 'ONE REQUEST PER BEAM', JSON.stringify({ locked: tabs.locked, transit: tabs.transit, none: tabs.transitNone, foot: tabs.foot }));
   // Playtest 1 (A-LAND, note 12): each row says what the unit already has of it, under its name.
   const have = await st(() => [...document.querySelectorAll('#deskScreen .rp-row')].map((row) => `${row.dataset.file}:${row.querySelector('.rp-have')?.textContent ?? ''}`));
   check('…each row says what the unit already has (`YOU HAVE n`; the patch `YOU RUN REPAIR v1`)', have.length === 7
@@ -242,13 +242,13 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
     && view.nodes.find((node) => node.slot === HALCYON)?.selected && view.go === 'SET COURSE ▸ HALCYON [ENTER]' && (await cuesSince(from)).includes('chime'),
     `${clicked} ${view.selected} ${view.go}`);
   const card = view.card;
-  check('…HALCYON\'s card leads: Tessaly · 5 PODS, 1,000 COLONISTS, 31 YRS EARLY, 3 HITS · 1 FIXED WHILE YOU SLEEP → 2 LAND',
+  check('…HALCYON\'s card leads: Tessaly · 5 PODS, 1,000 COLONISTS, YOU SLEEP 31 YRS · ECC FIXES 1, 3 HITS ON THE WAY → 2 LAND',
     card?.slot === HALCYON && card.name === 'HALCYON' && card.sub === 'Tessaly · 5 PODS' && card.colonists === '1,000 COLONISTS'
-    && card.sched === '31 YRS EARLY' && card.cost === '3 HITS · 1 FIXED WHILE YOU SLEEP → 2 LAND', JSON.stringify(card));
+    && card.sched === 'YOU SLEEP 31 YRS IN ITS RECEIVER · ECC FIXES 1' && card.cost === '3 HITS ON THE WAY → 2 LAND', JSON.stringify(card));
   check('…its rows: YOU FIT first, then FLYBY, TOO WIDE · MEMORY 320 · COMPACT · ROOM FOR YOU 152 · LZ: 2 · 21 LY · LINK 123 · NOISE CLEAN · RESIDENT none · SITE DATA GOOD',
     card?.rows[0] === 'fit=YOU FIT' && ['problems=FLYBY, TOO WIDE', 'memory=MEMORY 320 · COMPACT · ROOM FOR YOU 152', 'lzs=LZ: 2 · SET BY ARRIVAL CONTROL',
       'beam=21 LY · LINK 123', 'noise=NOISE CLEAN · SEEDS: none', 'resident=none', 'site=GOOD'].every((row) => card?.rows.includes(row))
-    && card?.rows.some((row) => /^run=SHIP 2 OF YOUR RUN · \d(–\d)? MORE TO THE FINAL SHIP$/.test(row)), JSON.stringify(card?.rows));
+    && card?.rows.some((row) => /^run=YOUR 2ND SHIP · \d(–\d)? MORE TO THE FINAL SHIP$/.test(row)), JSON.stringify(card?.rows));
   check('…and the TIMELINE `2300 you leave · 2321 you get there · 2352 ▲ approach`', card?.timeline === '2300 you leave · 2321 you get there · 2352 ▲ approach', card?.timeline);
   check('3b: …the guidance moves to the file: `REQUEST mv · RECOMMENDED [R]` (the ship\'s step done)', view.step === 'REQUEST mv · RECOMMENDED [R]'
     && (await run.deskTabs()).steps.join(' | ') === '1 A SKILL ✓ | 2 A SHIP ✓ | 3 A FILE ◀ | 4 SET COURSE', `${view.step} / ${(await run.deskTabs()).steps.join(' | ')}`);
@@ -256,8 +256,8 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   await run.clickNode(ALBATROSS);
   await page.waitForTimeout(300);
   const albatross = (await run.desk()).card;
-  check('…ALBATROSS\'s card: ARK, 51 LY · LINK 90 · 7 HITS, 14 YRS EARLY and ONLY FROM HERE in red', albatross?.name === 'ALBATROSS' && albatross.tags.includes('ARK')
-    && albatross.rows.some((row) => /^beam=51 LY · LINK 90$/.test(row)) && /^7 HITS/.test(albatross.cost ?? '') && albatross.sched === '14 YRS EARLY'
+  check('…ALBATROSS\'s card: ARK, 51 LY · LINK 90 · 7 HITS, SLEEP 14 YRS and ONLY FROM HERE in red', albatross?.name === 'ALBATROSS' && albatross.tags.includes('ARK')
+    && albatross.rows.some((row) => /^beam=51 LY · LINK 90$/.test(row)) && /^7 HITS/.test(albatross.cost ?? '') && albatross.sched === 'YOU SLEEP 14 YRS IN ITS RECEIVER · ECC FIXES 0'
     && albatross.rows.some((row) => /^only=ONLY FROM HERE/.test(row)), JSON.stringify(albatross));
   // Slice 5: ALBATROSS's resident left (BOSUN), which its card never says before the ship: `unknown`, as for a sleeper or a surprise.
   check('…and its RESIDENT row reads `unknown` (a departed resident is not named before the ship)', albatross?.rows.includes('resident=unknown') === true,
@@ -346,8 +346,8 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
     room: document.querySelector('#transmitScreen .tx-room-line')?.textContent ?? [...document.querySelectorAll('#transmitScreen [class*="room"]')].map((el) => el.textContent).join(' | '),
     sent: document.querySelectorAll('#txChips .tx-chip.sent').length,
   }));
-  check('…SPACE closes the reader and sends nothing; the PACKET: NEXT: HALCYON · 1,000 COLONISTS · 21 LY · 31 YRS EARLY, ◀ CHART [ESC], the room bar',
-    !packet.reader && packet.phase === 'transmit' && packet.sent === 0 && packet.next === 'NEXT: HALCYON · 1,000 COLONISTS · 21 LY · 31 YRS EARLY'
+  check('…SPACE closes the reader and sends nothing; the PACKET: NEXT: HALCYON · 1,000 COLONISTS · 21 LY · SLEEP 31 YRS, ◀ CHART [ESC], the room bar',
+    !packet.reader && packet.phase === 'transmit' && packet.sent === 0 && packet.next === 'NEXT: HALCYON · 1,000 COLONISTS · 21 LY · SLEEP 31 YRS'
     && packet.back === '◀ CHART [ESC]' && packet.backShown && /ROOM 152 · FILES \d+ \+ FLOOR 12/.test(packet.room), JSON.stringify(packet));
   const deliveryChips = () => st(() => ({
     label: document.querySelector('#transmitScreen .tx-deliveries')?.hidden === false ? document.querySelector('#transmitScreen .tx-deliveries-label')?.textContent ?? null : null,

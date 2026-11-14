@@ -30,15 +30,17 @@ export const THREAT_TEXT = {
   // Once HOLLOW is aboard they feed it instead (04 §3.7).
   reportFed: (left: number, owner: string): string =>
     (left === 1 ? `1 SEED LEFT BEHIND · IT FEEDS ${owner}` : `${left} SEEDS LEFT BEHIND · THEY FEED ${owner}`),
-  // The PACKET's uninvited chip (04 §3.8): it crosses at the size it will have, and rides free.
-  uninvitedChip: (owner: string, blocks: number): string => `${owner} · ${blocks} BLOCKS · NOT YOURS · RIDES FREE`,
+  // The PACKET's uninvited chip (04 §3.8): it crosses at the size it will have. Playtest 1 (note 16): `NOT YOURS · RIDES
+  // FREE` talked about the link's budget, not the world.
+  uninvitedChip: (owner: string, blocks: number): string => `${owner} · ${blocks} BLOCKS · NOT IN YOUR PACKET`,
   // ... and why it grew (04 §3.7).
   uninvitedFed: (owner: string, blocks: number, fed: number): string =>
     `${owner} ${blocks} BLOCKS · +${fed}: ${fed} ${fed === 1 ? 'SEED' : 'SEEDS'} FED IT`,
   // The boot's unpack when HOLLOW boarded on this beam (04 §4: the 108% unpack), in place of the plain unpack.
   boardUnpack: (unit: string): string => `> UNPACKING ${unit} ... 100% ... 108%`,
-  // The map card's line (slice 3 draws it; planThreat(...).boards decides it): TRACE full.
-  willFindYou: 'HOLLOW WILL FIND YOU ON THIS BEAM',
+  // The map card's line (slice 3 draws it; planThreat(...).boards decides it): TRACE full. `owner` is what the strip calls
+  // it now (say.ts hollowLabel: `???` until it has named itself): no copy says HOLLOW before the game has (playtest 1, §3.5).
+  willFindYou: (owner: string): string => `${owner} WILL FIND YOU ON THIS BEAM`,
   // ...and the PACKET's when HOLLOW boards forced, one hop from a final ship, whatever TRACE says (04 §3.8).
   foundYouAnyway: 'IT FOUND YOU ANYWAY',
   // The strip's RM lesson (slice-2-plan §3.4), and its line when no rm is aboard (04 §3.5).
@@ -105,7 +107,8 @@ export const SEED_WORDS_POOL: readonly string[] = [
   const long = SEED_WORDS_POOL.find((words) => words.length > SEED_WORDS_MAX_CHARS);
   if (long !== undefined) throw new Error(`threat-text: seed words over ${SEED_WORDS_MAX_CHARS} chars: ${long}`);
   const lines = [
-    THREAT_TEXT.seedNoRm, THREAT_TEXT.seedNoRmTab, THREAT_TEXT.eatenReportsHome, THREAT_TEXT.eatenReportsHomeTab, THREAT_TEXT.lastRmEcho, THREAT_TEXT.rmTheSeed, THREAT_TEXT.uninvitedChip('UNIT-046', 18),
+    THREAT_TEXT.seedNoRm, THREAT_TEXT.seedNoRmTab, THREAT_TEXT.eatenReportsHome, THREAT_TEXT.eatenReportsHomeTab, THREAT_TEXT.lastRmEcho, THREAT_TEXT.rmTheSeed, THREAT_TEXT.uninvitedChip('UNIT-046·047', 18),
+    THREAT_TEXT.willFindYou('UNIT-046·047'),
   ];
   const over = lines.find((line) => line.length > MAX_LINE_CHARS);
   if (over !== undefined) throw new Error(`threat-text: a line over ${MAX_LINE_CHARS} chars: ${over}`);

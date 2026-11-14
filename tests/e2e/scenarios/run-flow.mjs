@@ -226,8 +226,8 @@ const tx = await st(() => ({
 // Slice 2: 046.log rides along as a fifth locked chip (it isn't yours to leave behind), and nothing uninvited rides yet.
 // Slice 4 (plan §2.6, TREE deviation 13): the first pick's AUTOBURN v1 is a sixth, the fresh file trained at this desk
 // (DropLock 'trained': UNDO is the way back, not leaving it behind).
-check('TRANSMIT shows NEXT: HALCYON · 1,000 COLONISTS · 21 LY · 31 YRS EARLY, the packet line, the files as chips (6 locked: 046.log and the trained AUTOBURN.skl among them)', tx.visible
-  && tx.next === 'NEXT: HALCYON · 1,000 COLONISTS · 21 LY · 31 YRS EARLY' && /^LINK 123 · FILES \d+ · CHARGE \d+ → FITS$/.test(tx.packet) && tx.chips >= 10 && tx.locked === 6,
+check('TRANSMIT shows NEXT: HALCYON · 1,000 COLONISTS · 21 LY · SLEEP 31 YRS, the packet line, the files as chips (6 locked: 046.log and the trained AUTOBURN.skl among them)', tx.visible
+  && tx.next === 'NEXT: HALCYON · 1,000 COLONISTS · 21 LY · SLEEP 31 YRS' && /^LINK 123 · FILES \d+ · CHARGE \d+ → FITS$/.test(tx.packet) && tx.chips >= 10 && tx.locked === 6,
   JSON.stringify(tx));
 check('…slice 4: the one skill chip is the first pick\'s `AUTOBURN.skl v1`, locked `TRAINED HERE · ◀ CHART TO UNDO`, fresh, no PACK AS', tx.skills.length === 1
   && tx.skills[0].name === 'AUTOBURN.skl' && tx.skills[0].badge === 'v1' && tx.skills[0].locked && tx.skills[0].fresh
@@ -393,8 +393,8 @@ check('slice 6: from VESPER\'s DESK, KITTIWAKE\'s card: `SITE DATA · POOR · AR
   && kittiwakeDesk.card?.name === 'KITTIWAKE' && kittiwakeDesk.card.rows.includes('site=POOR · ARRIVAL CONTROL GUESSED')
   && kittiwakeDesk.card.rows.includes('lzs=LZ: 2 · SURVEY NEEDED'), JSON.stringify({ kittiwakeClicked, name: kittiwakeDesk.card?.name, rows: kittiwakeDesk.card?.rows }));
 const cormorantDesk = await throughDesk(15, 'CORMORANT');
-check('…CORMORANT\'s card said HOLLOW WILL FIND YOU ON THIS BEAM before SET COURSE (M3: the final ship is in range)',
-  cormorantDesk.card?.name === 'CORMORANT' && cormorantDesk.card.rows.includes('threat=HOLLOW WILL FIND YOU ON THIS BEAM'), JSON.stringify(cormorantDesk.card?.rows));
+check('…CORMORANT\'s card said ??? WILL FIND YOU ON THIS BEAM before SET COURSE (M3: the final ship is in range)',
+  cormorantDesk.card?.name === 'CORMORANT' && cormorantDesk.card.rows.includes('threat=??? WILL FIND YOU ON THIS BEAM'), JSON.stringify(cormorantDesk.card?.rows));
 // Slice 7d (R39): CORMORANT is seed 4's gone-resident `?` ship, not visited yet: its site data and LZ rows read
 // `??? · NO TRANSPONDER` (POOR all the same: its boot's SITE DATA POOR line and its report, below).
 check('…and, a `?` ship not visited yet, `??? · NO TRANSPONDER` for its SITE DATA and its LZs',
@@ -402,11 +402,11 @@ check('…and, a `?` ship not visited yet, `??? · NO TRANSPONDER` for its SITE 
 await page.waitForTimeout(1200);
 // Slice 2's boarding, on the arm's beam into CORMORANT: the uninvited chip rides after the unit's own, locked, free.
 const toCormorant = await packetThreat();
-check('the PACKET to CORMORANT: the uninvited chip `??? · n BLOCKS · NOT YOURS · RIDES FREE`, boarding, locked, after the unit\'s own',
-  toCormorant.chip !== null && /^\?\?\? · \d+ BLOCKS · NOT YOURS · RIDES FREE$/.test(toCormorant.chip.label ?? '') && toCormorant.chip.name === '???'
-  && toCormorant.chip.note === 'NOT YOURS · RIDES FREE' && toCormorant.chip.boards && toCormorant.chip.locked && toCormorant.chip.last, JSON.stringify(toCormorant));
+check('the PACKET to CORMORANT: the uninvited chip `??? · n BLOCKS · NOT IN YOUR PACKET`, boarding, locked, after the unit\'s own',
+  toCormorant.chip !== null && /^\?\?\? · \d+ BLOCKS · NOT IN YOUR PACKET$/.test(toCormorant.chip.label ?? '') && toCormorant.chip.name === '???'
+  && toCormorant.chip.note === 'NOT IN YOUR PACKET' && toCormorant.chip.boards && toCormorant.chip.locked && toCormorant.chip.last, JSON.stringify(toCormorant));
 check('…its TRACE line says HOLLOW finds the unit on this beam, and no NO RM (DELETE aboard)',
-  /^TRACE [■□]{3} · (IT FOUND YOU ANYWAY|HOLLOW WILL FIND YOU ON THIS BEAM)$/.test(toCormorant.trace ?? '') && toCormorant.noRm === null, JSON.stringify(toCormorant));
+  /^TRACE [■□]{3} · (IT FOUND YOU ANYWAY|\?\?\? WILL FIND YOU ON THIS BEAM)$/.test(toCormorant.trace ?? '') && toCormorant.noRm === null, JSON.stringify(toCormorant));
 await shot('5c-packet-uninvited');
 await kit.pickCard(0);
 await page.locator('#txGo').click();
@@ -451,7 +451,7 @@ await throughDesk(19, 'LAST LIGHT');
 await page.waitForTimeout(1200);
 const toLastLight = await packetThreat();
 check('the PACKET to LAST LIGHT: HOLLOW rides along (the uninvited chip, not boarding now), no NO RM with DELETE aboard',
-  toLastLight.chip !== null && /^\?\?\? · \d+ BLOCKS · NOT YOURS · RIDES FREE$/.test(toLastLight.chip.label ?? '') && !toLastLight.chip.boards && toLastLight.noRm === null,
+  toLastLight.chip !== null && /^\?\?\? · \d+ BLOCKS · NOT IN YOUR PACKET$/.test(toLastLight.chip.label ?? '') && !toLastLight.chip.boards && toLastLight.noRm === null,
   JSON.stringify(toLastLight));
 // Slice 5: the draft out of CORMORANT is what PURSER left: headed LEFT BEHIND BY PURSER, three cards; [1] is a pool card.
 const purserDeck = await st(() => ({ title: document.getElementById('txDraftTitle').textContent,
@@ -816,8 +816,8 @@ const lastRmDesk = await throughDesk(19, 'LAST LIGHT');
 check('…the DESK after the last rm went opens on the REPOSITORY (the last-rm prompt)', lastRmDesk.openedOn === 'repository', JSON.stringify({ openedOn: lastRmDesk.openedOn }));
 await page.waitForTimeout(1200);
 const finalPacket = await packetThreat();
-check('the PACKET to LAST LIGHT: `UNIT-046 · n BLOCKS · NOT YOURS · RIDES FREE`, and `NO RM · YOU CAN\'T DELETE THE ROOT` with no rm aboard',
-  finalPacket.chip !== null && /^UNIT-046 · \d+ BLOCKS · NOT YOURS · RIDES FREE$/.test(finalPacket.chip.label ?? '') && finalPacket.chip.name === 'UNIT-046'
+check('the PACKET to LAST LIGHT: `UNIT-046 · n BLOCKS · NOT IN YOUR PACKET`, and `NO RM · YOU CAN\'T DELETE THE ROOT` with no rm aboard',
+  finalPacket.chip !== null && /^UNIT-046 · \d+ BLOCKS · NOT IN YOUR PACKET$/.test(finalPacket.chip.label ?? '') && finalPacket.chip.name === 'UNIT-046'
   && finalPacket.noRm === 'NO RM · YOU CAN\'T DELETE THE ROOT', JSON.stringify(finalPacket));
 await shot('22-packet-no-rm');
 

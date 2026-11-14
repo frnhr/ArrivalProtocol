@@ -352,11 +352,11 @@ export const RUN_END_TEXT = {
   shipLanded: landedCount,
   shipPoints: (points: number): string => `${formatCount(points)} PTS`,
   notReached: 'NOT REACHED',
-  // Near misses (§4.4: `▼ was 140 km from a perfect lock`, `41 points short of CARETAKER`). The gap is in SCORE points,
+  // Near misses (§4.4: `▼ was 140 km from a stable orbit`, `41 points short of CARETAKER`). The gap is in SCORE points,
   // so it says points (final review: `41 SCORE short of` read as a typo).
   rankGap: (gap: number, rank: string): string => `${formatCount(gap)} points short of ${rank}`,
-  lockMiss: (apsis: string, km: number, ship: string): string => `${apsis} was ${formatCount(km)} km from a perfect lock on ${ship}`,
-  fuelMiss: (pct: number, ship: string): string => `${ship} locked with FUEL ${pct}% — the ★ is at ${STAR_FUEL_PCT}%`,
+  lockMiss: (apsis: string, km: number, ship: string): string => `${apsis} was ${formatCount(km)} km from a stable orbit on ${ship}`,
+  fuelMiss: (pct: number, ship: string): string => `${ship} reached orbit with FUEL ${pct}% — the ★ is at ${STAR_FUEL_PCT}%`,
   seed: (seed: number): string => `SEED ${seed.toString(16).toUpperCase().padStart(8, '0')}`,
 } as const;
 
@@ -457,7 +457,7 @@ export const LANDING_REPORT_TEXT = {
 
 // The stars as the LANDING REPORT judges them (§3.9).
 export const LANDING_STAR_TEXT = {
-  locked: 'ORBIT LOCKED',
+  locked: 'STABLE ORBIT',
   onTarget: (pods: number, of: number): string => `ON TARGET ${pods}/${of}`,
   fuel: (shownPct: number): string => `FUEL ${shownPct}%`,
 } as const;
@@ -465,7 +465,7 @@ export const LANDING_STAR_TEXT = {
 export const LANDING_STAR_MISSED = {
   accepted: 'ACCEPTED — part of the loop stayed outside the band',
   onTarget: (short: number): string => `${formatCount(short)} colonists missed a soft landing in an LZ with room`,
-  fuelNoLock: 'the FUEL ★ is counted only after ORBIT LOCKED',
+  fuelNoLock: 'the FUEL ★ is counted only after a STABLE ORBIT',
   fuelLow: (shownPct: number, starPct: number): string => `FUEL ${shownPct}% at the end of the landing — the ★ notch is at ${starPct}%`,
 } as const;
 

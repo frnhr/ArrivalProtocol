@@ -54,7 +54,7 @@ function result(index: number, outcome: ShipResult['outcome']): ShipResult {
   const all = home(['locked', 'partial', 'locked', 'locked', 'locked']);
   const lost = home(['locked', 'locked', 'crashed', 'locked', 'locked']);
   const stranded = home(['escaped', 'stranded', 'abandoned', 'emergency', 'locked']);
-  check('fleetHome: ORBIT LOCKED and ACCEPTED count as home; CRASHED, FLEW AWAY, STRANDED, BEAMED OUT, CORE LOST do not',
+  check('fleetHome: STABLE ORBIT and ACCEPTED count as home; CRASHED, FLEW AWAY, STRANDED, BEAMED OUT, CORE LOST do not',
     all.all && all.home === 5 && !lost.all && lost.home === 4 && !stranded.all && stranded.home === 1, JSON.stringify({ all, lost, stranded }));
   check('…the flagship still landing counts once (its result is not recorded yet)', fleetHome([], FLEET, FLAGSHIP_ID).home === 1
     && fleetHome(Array.from({ length: FLEET }, (_ship, i) => result(i, 'locked')), FLEET, FLAGSHIP_ID).home === 5);

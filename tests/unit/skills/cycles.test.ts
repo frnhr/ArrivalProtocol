@@ -1,6 +1,6 @@
 // Slice 4 Track TREE (plan §6): training cycles, store level, under a second.
 // • endShip pays every ship its cycles (run-score.ts shipCycles), on the arm and the classic world, one earning per ship.
-// • The first-pick floor (03 §3.1): a crashed ship 1 (1 earned) gets `+2 CYCLES · FIRST SKILL ON THE HOUSE :)` at the run's
+// • The first-pick floor (03 §3.1): a crashed ship 1 (1 earned) gets `+2 CYCLES` at the run's
 //   first desk, written before SHIP DONE's save; a good ship 1 gets none; a run that already paid for a skill gets none and
 //   is not asked to pick. Only on the arm, only at visit 1.
 // • The +2 CYCLES salvage card: dealt only with a tree (never on the classic world: its deals byte-identical), never into a
@@ -41,9 +41,9 @@ const throws = (run: () => unknown): boolean => { try { run(); return false; } c
     JSON.stringify(earned));
   openDesk(store, null);
   const grants = store.getState().run.skills.grants;
-  check('…the run\'s first desk tops the bank up to the floor: +2 (`FIRST SKILL ON THE HOUSE`), 3 to spend',
+  check('…the run\'s first desk tops the bank up to the floor: +2 (`+2 CYCLES`), 3 to spend',
     grants.length === 1 && grants[0]!.source === 'first-pick' && grants[0]!.cycles === FIRST_PICK_FLOOR_CYCLES - 1 && grants[0]!.visit === 1
-      && bankOf(store.getState().run.skills) === FIRST_PICK_FLOOR_CYCLES && TRAINING_TEXT.onTheHouse(grants[0]!.cycles) === '+2 CYCLES · FIRST SKILL ON THE HOUSE :)',
+      && bankOf(store.getState().run.skills) === FIRST_PICK_FLOOR_CYCLES && TRAINING_TEXT.onTheHouse(grants[0]!.cycles) === '+2 CYCLES',
     JSON.stringify(grants));
   check('…and SET COURSE waits for the first pick (setCourse throws), the desk opened on TRAINING', deskBlocker(store.getState()) === 'first-pick'
     && store.getState().ui.deskWindow === 'training' && throws(() => setCourse(store, 2)) && store.getState().run.phase === 'desk');

@@ -10,6 +10,7 @@ import { currentSlot, shipSummaryAt, worldSlotOf, isEndSlot } from '@systems/map
 import { armShipAt } from '@systems/map-streams';
 import { unitTrailOf, olderColonies } from '@systems/lineage';
 import { unitName } from '@data/hollow-text';
+import { hollowLabel } from '@systems/say';
 import { hopBetween, reachable, reachableFrom, hitsLanding } from '@systems/map-hop';
 import { layerOf, solLy } from '@systems/map-geometry';
 import { seedAllowance } from '@systems/map-noise';
@@ -32,7 +33,7 @@ import { SHIP_OUTCOME_WORD } from '@data/script';
 import { MAP_TEXT, MODIFIER_LABEL } from '@data/map-text';
 import { REPO_FILES } from '@data/repository';
 import { REPO_TEXT, REPO_FILE_TEXT } from '@data/repo-text';
-import { URGENT_SLACK_YEARS, BEAM_OUT_BLACKOUT_SEC, LEAVE_BLOCK_MAX_LINES, TRAIL_CROSS_PAST_COLONY_LY } from '@data/tuning';
+import { URGENT_SLACK_YEARS, BEAM_OUT_BLACKOUT_SEC, LEAVE_BLOCK_MAX_LINES, TRAIL_CROSS_PAST_COLONY_LY, MAX_RUNS_ON_CHART } from '@data/tuning';
 import type { SkillId, CellRow } from '@/types/skill';
 import { bankOf, deskBlocker, isFirstDesk, type TrainRefusal } from '@systems/skill-tree';
 import { trainCell, restoreSkill, undoPurchase } from '@systems/training';
@@ -78,14 +79,15 @@ export interface ChartNode {
   state: ChartNodeState;
   label: string;            // `NAME · colonists`
   year: number;             // the approach year, under the label
-  reason: string | null;    // the hover reason (`TOO LATE BY 18 YRS`, `31 YRS EARLY`, `VISITED · ORBIT LOCKED`)
+  reason: string | null;    // the hover reason (`TOO LATE BY 18 YRS`, `SLEEP 31 YRS`, `VISITED · STABLE ORBIT`)
   onlyFromHere: boolean;    // in reach now and from no ship in reach after it (02 §2: ALBATROSS on the first desk)
   // The last unit gets to this world first (`UNIT-047 GETS THERE FIRST`, 046's on run 1) until the galaxy year passes its
   // stop there; null otherwise.
   taken: string | null;
-  // Slice 3c (02 §4): a waiting ship's `2ND RUN ON THE CHART` / `3RD`, a new one's `REPORTED HOME` on the run's first desk
-  // (from run 2; null on run 1). The hover tip says it.
+  // Slice 3c (02 §4): a new ship's `REPORTED HOME` on the run's first desk, and (playtest 1, Q4) a waiting ship's last
+  // chance, `PASSED OVER TWICE · IT WON'T WAIT AGAIN` (from run 2; null on run 1). The hover tip says it.
   history: string | null;
+  historyWarn: boolean;     // the last-chance line, in the warning colour
   // `REPORTED HOME` beside the year on the run's first desk (the walk's "new nodes tagged REPORTED HOME"), else null.
   tag: string | null;
   // Slice 5 (plan R18): a ship ahead whose departed resident's note carries a signal fragment, once the run has found one
@@ -166,10 +168,10 @@ export interface ChartModel {
   selected: number | null;
 }
 
-// One row of the SHIP CARD (02 §4: KNOWN PROBLEMS, MEMORY and its fit line, PLANET, LZ, BEAM, DELIVERIES, SHIP n OF YOUR
-// RUN …). 'resident' is slice 5's (`RESIDENT · reported faulty`, after KNOWN PROBLEMS); 'site' is slice 6's (`SITE DATA ·
+// One row of the SHIP CARD (02 §4: KNOWN PROBLEMS, MEMORY and its fit line, PLANET, LZ, BEAM, DELIVERIES, YOUR 3RD
+// SHIP …). 'resident' is slice 5's (`RESIDENT · reported faulty`, after KNOWN PROBLEMS); 'site' is slice 6's (`SITE DATA ·
 // POOR · ARRIVAL CONTROL GUESSED`, after PLANET and its no-go row: systems/survey-hud.ts surveyCardRow). 'deliveries' is 3b's (`Swap ✗ 4 YRS LATE`, `✓ CATCHES
-// UP HERE`). 3c adds 'history' (`REPORTED HOME` / `2ND RUN ON THE CHART`, from run 2) and 'trail' (the last unit's mark at
+// UP HERE`). 3c adds 'history' (`REPORTED HOME` / `PASSED OVER ONCE`, from run 2) and 'trail' (the last unit's mark at
 // this ship's world: what the hover says on a desktop, readable on a phone, whose chart has no hover).
 export interface CardRow {
   key: 'problems' | 'resident' | 'memory' | 'fit' | 'planet' | 'site' | 'lzs' | 'nogo' | 'beam' | 'noise' | 'range'
@@ -208,9 +210,9 @@ export interface CardModel {
   sub: string;              // `Tessaly · 5 PODS`
   colonists: string;        // `1,000 COLONISTS`
   tags: string[];           // `ARK`, `FINAL SHIP`
-  schedule: string | null;  // `31 YRS EARLY` / `TOO LATE BY 18 YRS` (null with no hop to show); the TIMELINE has the years
+  schedule: string | null;  // `YOU SLEEP 31 YRS IN ITS RECEIVER · ECC FIXES 1` / `TOO LATE BY 18 YRS` (null with no hop to show); the TIMELINE has the years
   scheduleTone: 'plain' | 'good' | 'warn';
-  cost: string | null;      // `4 HITS · 3 FIXED WHILE YOU SLEEP → 1 LANDS` (ships in reach)
+  cost: string | null;      // `4 HITS ON THE WAY → 1 LANDS` (ships in reach)
   rows: CardRow[];
   timeline: CardTimeline | null;
   fit: RoomFit | null;      // the unit as it is now against the ship's room (null on the ship being left)
@@ -284,7 +286,7 @@ function nodeState(
   if (!hop.inRange) return { state: 'out-of-range', reason: MAP_TEXT.chart.outOfRange(hop.distanceLy), hop };
   if (hop.slackYears < 0) return { state: 'too-late', reason: MAP_TEXT.chart.tooLate(-hop.slackYears), hop };
   if (hop.slackYears < URGENT_SLACK_YEARS) return { state: 'urgent', reason: MAP_TEXT.chart.urgent(hop.slackYears), hop };
-  return { state: 'reachable', reason: MAP_TEXT.chart.early(hop.slackYears), hop };
+  return { state: 'reachable', reason: MAP_TEXT.chart.sleep(hop.slackYears), hop };
 }
 
 function worldXY(map: Readonly<RunMapState>, slot: number): { x: number; y: number } {
@@ -375,13 +377,21 @@ export function olderColonyDots(map: Readonly<RunMapState>, trail: Readonly<Pick
   });
 }
 
-// A ship's history on the chart and its card (02 §4), from run 2: a waiting ship's runs on the chart, a new one's REPORTED
-// HOME (`firstDesk`: the run's first desk only, on the chart; the card always says it). null on run 1.
-function shipHistory(map: Readonly<RunMapState>, slot: number, firstDesk: boolean): string | null {
+// A ship's history on the chart and its card (02 §4), from run 2: a new one's REPORTED HOME (`firstDesk`: the run's first
+// desk only, on the chart; the card always says it), and how often the units before passed a waiting one over (playtest 1,
+// Q4). The chart says the passes only on the ship's last run (`lastChance`: after it the ship comes in on its own,
+// map-update.ts); the card always does. null on run 1.
+function shipHistory(
+  map: Readonly<RunMapState>, slot: number, where: 'chart' | 'card', firstDesk: boolean,
+): { text: string; lastChance: boolean } | null {
   if (map.run <= 1) return null;
   const ship = armShipAt(map, slot);
-  if (ship.runsOnChart > 1) return MAP_TEXT.chart.runOnChart(ship.runsOnChart);
-  return firstDesk && ship.reportedRun === map.run ? MAP_TEXT.chart.reportedHome : null;
+  if (ship.runsOnChart > 1) {
+    const lastChance = ship.runsOnChart >= MAX_RUNS_ON_CHART;
+    if (where === 'chart' && !lastChance) return null;
+    return { text: MAP_TEXT.chart.passedOver(ship.runsOnChart, MAX_RUNS_ON_CHART), lastChance };
+  }
+  return firstDesk && ship.reportedRun === map.run ? { text: MAP_TEXT.chart.reportedHome, lastChance: false } : null;
 }
 
 // The six key rings (05 §3.2), the next one out from the ship being left labelled.
@@ -404,7 +414,7 @@ export function chartModel(state: Readonly<GameState>): ChartModel {
     const seen = nodeState(state, slot, from);
     const world = worldSlotOf(map, slot);
     const taken = trail?.marks.some((mark) => mark.kind === 'taken' && mark.slot === world) === true;
-    const history = shipHistory(map, slot, firstDesk);
+    const history = shipHistory(map, slot, 'chart', firstDesk);
     // Slice 7d (R39): a `?` ship not visited yet gives no size away (its label `???`, its node a standard ship's).
     const hidden = unknownShown(state.run, slot);
     return {
@@ -413,8 +423,9 @@ export function chartModel(state: Readonly<GameState>): ChartModel {
       label: hidden ? UNKNOWN_TEXT.chartNode(ship.name) : MAP_TEXT.chart.node(ship.name, ship.colonists), year: ship.approachYear, reason: seen.reason,
       onlyFromHere: only.has(slot),
       taken: taken && trail !== null ? MAP_TEXT.chart.takenNoShip(unitName(trail.unit)) : null,
-      history,
-      tag: history === MAP_TEXT.chart.reportedHome && seen.state !== 'current' ? history : null,
+      history: history?.text ?? null,
+      historyWarn: history?.lastChance === true,
+      tag: history?.text === MAP_TEXT.chart.reportedHome && seen.state !== 'current' ? history.text : null,
       signal: signalGlyph(state, slot),
       trace: traceOnChart(state, slot),
     };
@@ -533,9 +544,10 @@ export function cardModel(state: Readonly<GameState>, slot: number): CardModel {
   }
 
   // HOLLOW boarding on this beam is said before SET COURSE (04 §3.8; slice-3a-plan §1.1 item 14): the ladder's verdict
-  // for this candidate, from the run's threat with this ship's tally done.
+  // for this candidate, from the run's threat with this ship's tally done. It is named as the strip names it (`???` until
+  // it has named itself): playtest 1, never HOLLOW before the game has said it.
   if (isReachable && verdict !== null && verdict.boards !== null) {
-    row('threat', MAP_TEXT.card.threatLabel, THREAT_TEXT.willFindYou, 'warn');
+    row('threat', MAP_TEXT.card.threatLabel, THREAT_TEXT.willFindYou(hollowLabel(state.run)), 'warn');
   }
   if (ship.final && noWorkingRm(state)) row('norm', MAP_TEXT.card.threatLabel, THREAT_TEXT.noRmPacket, 'warn');
   if (isReachable && onlyFromHere(map, from).includes(slot)) row('only', '', MAP_TEXT.card.onlyFromHere, 'warn');
@@ -544,8 +556,8 @@ export function cardModel(state: Readonly<GameState>, slot: number): CardModel {
   if (deliveries !== null) row('deliveries', REPO_TEXT.card.deliveriesLabel, deliveries.value, deliveries.tone);
 
   // Slice 3c (02 §4): its history (from run 2), and the last unit's mark at its world (TAKEN, or its colony with its age).
-  const history = shipHistory(map, slot, true);
-  if (history !== null) row('history', MAP_TEXT.card.historyLabel, history);
+  const history = shipHistory(map, slot, 'card', true);
+  if (history !== null) row('history', MAP_TEXT.card.historyLabel, history.text, history.lastChance ? 'warn' : 'plain');
   const mark = chartTrail(state.run)?.marks.find((candidate) => candidate.offset && candidate.slot === worldSlotOf(map, slot));
   if (mark !== undefined) row('trail', MAP_TEXT.card.trailLabel, mark.label, mark.kind === 'colony' ? 'good' : 'plain');
   // Slice 7c (R38): the trace row (the last ending on the final ship, a gift ship's cache; Track CHART's, none until built).
@@ -563,7 +575,7 @@ export function cardModel(state: Readonly<GameState>, slot: number): CardModel {
   let timeline: CardTimeline | null = null;
   if (hop !== null) {
     const late = hop.slackYears < 0;
-    schedule = late ? MAP_TEXT.card.late(-hop.slackYears) : MAP_TEXT.card.early(hop.slackYears);
+    schedule = late ? MAP_TEXT.card.late(-hop.slackYears) : MAP_TEXT.card.sleep(hop.slackYears, hop.eccFixes);
     scheduleTone = late ? 'warn' : hop.slackYears < URGENT_SLACK_YEARS ? 'warn' : 'good';
     timeline = {
       leave: hop.leaveYear, arrive: hop.arriveYear, approach: hop.approachYear, late,
@@ -579,7 +591,7 @@ export function cardModel(state: Readonly<GameState>, slot: number): CardModel {
   let cost: string | null = null;
   if (hop !== null && isReachable) {
     const extra = map.pendingExtra?.extraHits ?? 0;
-    cost = MAP_TEXT.card.cost(hop.transitHits + extra, hop.eccFixes, hitsLanding(hop, extra));
+    cost = MAP_TEXT.card.cost(hop.transitHits + extra, hitsLanding(hop, extra));
   }
 
   // Slice 7d (R39): a `?` ship not visited yet shows its public schedule, and every other row `??? · NO TRANSPONDER`

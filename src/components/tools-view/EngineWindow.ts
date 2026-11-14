@@ -244,7 +244,7 @@ export function mountEngineWindow(store: Store<GameState>): () => void {
 
   // --- FUEL ---
   fuelStar.style.left = `${STAR_FUEL_PCT}%`;
-  const starTitle = `★ Lock the orbit with at least ${STAR_FUEL_PCT}% FUEL left`;
+  const starTitle = `★ Reach a stable orbit with at least ${STAR_FUEL_PCT}% FUEL left`;
   fuelStar.title = starTitle;
   fuelStarLabel.textContent = `★ ${STAR_FUEL_PCT}%`;
   let lastFuel = '';

@@ -506,18 +506,18 @@ export const DRAFT_TEXT = {
   // Why it was offered (data/upgrades.ts: the kid's own trouble, or ARRIVAL CONTROL had a spare).
   why: (reason: string): string => `because ${reason}`,
   picked: '✓ CARRYING',
-  // TRANSMIT ▸ before a card is picked: the pick is mandatory (§6.9).
-  goWaiting: 'PICK A CARD FIRST',
+  // TRANSMIT ▸ before a card is picked: the pick is mandatory (§6.9). Playtest 1 (§3.7): the cards are salvage on screen
+  // (the draft's heading, repo-text.ts REPO_TEXT.packet.salvage); "card" is the game's word.
+  goWaiting: 'TAKE ONE FIRST',
   // The picked card's new file, as a chip among the packed files.
-  newFile: 'NEW · YOUR CARD',
+  newFile: 'NEW · SALVAGE',
 } as const;
 
 // --- The Skills window (§9 WP8 item 3): the cards this unit carries ------------------------------------------
 
 export const SKILLS_TEXT = {
-  // WP9: the window lists the trained skill too (AUTOBURN.skl).
-  empty: 'NO CARDS OR SKILLS YET',
-  emptyHint: 'Pick a card between ships. Train a skill at the desk, in TRAINING.',
+  // WP9: the window lists the trained skill too (AUTOBURN.skl). Playtest 1 (§3.7): no hint about the game's screens.
+  empty: 'NOTHING CARRIED YET',
   count: (count: number): string => `×${count}`,
   // Each card's line about what it is doing right now.
   status: {
@@ -685,7 +685,7 @@ export const RUN_END_WHY: Readonly<Record<RunEndCause, (ship: string) => string>
 
 // A ship's line on RUN END: how it ended, the word the stamps and cards use.
 export const SHIP_OUTCOME_WORD: Readonly<Record<ShipOutcome, string>> = {
-  locked: 'ORBIT LOCKED',
+  locked: 'STABLE ORBIT',
   partial: 'ACCEPTED',
   stranded: 'STRANDED',
   escaped: 'FLEW AWAY',
@@ -839,7 +839,7 @@ export function speakerTag(speaker: Speaker, vars: LineVars): string {
 export const STAMP_TEXT = {
   clearOfPlanet: 'CLEAR OF THE PLANET',
   captured: 'CAPTURED',
-  locked: 'ORBIT LOCKED',
+  locked: 'STABLE ORBIT',
   accepted: 'ACCEPTED',
   stranded: 'STRANDED',
   crashed: 'IMPACT',

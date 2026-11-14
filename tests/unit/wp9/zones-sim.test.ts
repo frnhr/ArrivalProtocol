@@ -106,7 +106,7 @@ for (const startTac of [0, 40, 80]) {
   while (tacNow() < startTac) h.step();
   h.flyDefending9(900);
   const fuel = state().burn.fuelPct;
-  check(`the follower correcting IN at ${startTac} tac s: 0 debris hits, ORBIT LOCKED, FUEL ≥ 20%`,
+  check(`the follower correcting IN at ${startTac} tac s: 0 debris hits, STABLE ORBIT, FUEL ≥ 20%`,
     h.zoneHits().length === 0 && h.status() === 'locked' && fuel >= 20, `${h.zoneHits().length} hits, ${h.status()}, FUEL ${fuel.toFixed(1)}%`);
 }
 

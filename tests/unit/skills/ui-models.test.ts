@@ -3,7 +3,7 @@
 //   risk R5), ARRIVAL CONTROL's line, SET COURSE waiting; the TRAIN bar (select, hold, advance past TRAINING_HOLD_SEC: the
 //   real trainCell lands it), then the TRAINED card, `n CYCLES · SAVED FOR NEXT TIME`, the UNDO row; the desk's A SKILL step
 //   and the tab's badge; UNDO gives it back.
-// • From visit 2 (a migrated desk carrying phase 2's AUTOBURN): the grid (FLIGHT open, the other three one OPENS LATER row
+// • From visit 2 (a migrated desk carrying phase 2's AUTOBURN): the grid (FLIGHT open, the other three one NOT YET row
 //   each), the cells' looks and words, the trace parents, the default selection and its detail; the file eaten: LOST ·
 //   RESTORE 2 and RESTORE in the detail.
 // • The packet preview's words on crafted fits (the binding limit: LINK, ROOM · TIGHT; ROOM FOR n CHARGE, NO CHARGE ARRIVES,
@@ -85,8 +85,8 @@ const look = (model: Readonly<TrainingModel>, key: string): string | undefined =
   model = trainingModel(store.getState());
   check('…full: trainCell buys it (pending), the card is stamped TRAINED, the bar is gone', done === 'done' && model.hold === null
     && store.getState().run.skills.pending.length === 1 && model.cards[0]!.trained && look(model, 'autoburn:v1') === 'pending');
-  check(`…the counter: \`${TRAINING_TEXT.saved(bank - 3)}\` and MORE SKILLS OPEN AS YOU GO; the UNDO row`, model.saved === TRAINING_TEXT.saved(bank - 3)
-    && model.moreLater === TRAINING_TEXT.moreLater && model.pending.length === 1 && model.pending[0]!.undoable
+  check(`…the counter: \`${TRAINING_TEXT.saved(bank - 3)}\`; the UNDO row`, model.saved === TRAINING_TEXT.saved(bank - 3)
+    && model.pending.length === 1 && model.pending[0]!.undoable
     && model.pending[0]!.text === TRAINING_TEXT.pendingRow('AUTOBURN v1', 3));
   check('…SET COURSE no longer waits; A SKILL is done and names the pick', !firstPickWaits(store.getState()) && deskSteps(store.getState())[0]!.done
     && deskSteps(store.getState())[0]!.text === TRAINING_TEXT.stepDone('AUTOBURN', 1));
@@ -94,8 +94,11 @@ const look = (model: Readonly<TrainingModel>, key: string): string | undefined =
   selectShip(store, ship);
   model = trainingModel(store.getState());
   check('a ship picked on the chart: the AHEAD row names it, the preview counts the trained file (SKILLS 6) and names a limit',
-    model.ahead.startsWith('NEXT: ') && !model.ahead.includes('PICK A SHIP') && model.preview !== null
+    model.ahead?.startsWith('NEXT: ') === true && !model.ahead.includes('PICK A SHIP') && model.preview !== null
       && model.preview.text.includes('SKILLS 6') && /LINK|ROOM/.test(model.preview.text) && heldSkillBlocks(store.getState()) === 6, JSON.stringify([model.ahead, model.preview]));
+  const none = trainingModel({ ...store.getState(), ui: { ...store.getState().ui, deskSelected: null } });
+  check('…and with no ship picked, no AHEAD row and no preview (playtest 1: `NEXT: PICK A SHIP …` is cut)',
+    none.ahead === null && none.preview === null, JSON.stringify([none.ahead, none.preview]));
   undoTraining(store, 0);
   model = trainingModel(store.getState());
   check('UNDO gives it back: nothing pending, the bank whole, the card chosen again, SET COURSE waits again',
@@ -118,9 +121,11 @@ const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), '..', 'save', 'fi
   let model = trainingModel(store.getState());
   const branches = model.branches.map((branch) => `${branch.branch}:${branch.versions.length}+${branch.locks.length}`).join();
   // The branches and the closed list: Track DROP edits this check when AUTODROP's branch opens (review M1).
-  check('desk 2: the grid, FLIGHT open (v1–v3 and LOCK RANGE beside) and LANDING (AUTODROP v1–v3), the two others one OPENS LATER row each',
+  check('desk 2: the grid, FLIGHT open (v1–v3 and LOCK RANGE beside) and LANDING (AUTODROP v1–v3), the two others one NOT YET row each, why on hover',
     !model.firstPick && model.cards.length === 0 && branches === 'FLIGHT:3+2,LANDING:3+0'
-      && model.closed.join() === 'SURVEY · SURVEY,DEFENCE · SENTRY', `${branches} ${model.closed.join()}`);
+      && JSON.stringify(model.closed) === JSON.stringify([
+        { name: 'SURVEY · SURVEY', why: TRAINING_TEXT.notYetWhy['poor-ahead'] }, { name: 'DEFENCE · SENTRY', why: TRAINING_TEXT.notYetWhy['after-seeds'] },
+      ]), `${branches} ${JSON.stringify(model.closed)}`);
   // (end of DROP's check)
   // AUTOBURN's cells (Track ORBIT): v3 is built (slice 4e), so it reads NEEDS v2 FIRST.
   check('…v1 TRAINED (owned), v2 affordable (`4 · 8`), v3 NEEDS v2 FIRST (dim), LOCK 270 affordable (`1 · +1`), LOCK 810 NEEDS LOCK 270 FIRST',
@@ -254,7 +259,6 @@ const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), '..', 'save', 'fi
   check('below the floor it warns (`ROOM FOR 9 CHARGE`); one block is `1 BLOCK OVER`',
     packetPreview(fit({ chargeArrives: 9 }), 9, false, null).tone === 'warn'
       && packetPreview(fit({ word: 'leave', overLink: 1 }), 9, false, null).text.endsWith('1 BLOCK OVER'));
-  check('AHEAD with no ship picked asks for one', TRAINING_TEXT.aheadNone.startsWith('NEXT: PICK A SHIP'));
 }
 
 // --- The LANDING REPORT's cycles line ----------------------------------------------------------------------------------------
@@ -267,8 +271,8 @@ const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), '..', 'save', 'fi
   check('the final ship: `+5 TRAINING CYCLES · NO DESK AHEAD` (decision 18: shown, does nothing)',
     cyclesReport({ slot: 19, arrived: 1, landed: 4, pct: 85 }, true, false).line === '+5 TRAINING CYCLES · NO DESK AHEAD');
   const crash = cyclesReport({ slot: 0, arrived: 1, landed: 0, pct: 0 }, false, true);
-  check('a crash on the run\'s first ship: +1, then `+2 CYCLES · FIRST SKILL ON THE HOUSE :)`', crash.total === 1
-    && crash.topUp === '+2 CYCLES · FIRST SKILL ON THE HOUSE :)' && cyclesReport({ slot: 2, arrived: 1, landed: 0, pct: 0 }, false, false).topUp === null);
+  check('a crash on the run\'s first ship: +1, then `+2 CYCLES`', crash.total === 1
+    && crash.topUp === '+2 CYCLES' && cyclesReport({ slot: 2, arrived: 1, landed: 0, pct: 0 }, false, false).topUp === null);
 }
 
 // --- Graded damage on screen (03 §3.5, §4) ------------------------------------------------------------------------------------
@@ -321,13 +325,13 @@ const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), '..', 'save', 'fi
   const lines = [
     T.badge(54), T.title('UNIT-999'), T.demos([{ count: 999, kind: 'captures' }, { count: 999, kind: 'drops' }]), T.demos([]),
     T.chooseFirst, T.stepText, T.stepDone('AUTODROP', 3), T.controlFirstVisit,
-    T.onTheHouse(2), T.saved(54), T.moreLater, T.opensLater, T.lost(27), T.cardCost(8, 12), T.enterKey(T.train(8)),
+    T.onTheHouse(2), T.saved(54), T.notYet, ...Object.values(T.notYetWhy), T.lost(27), T.cardCost(8, 12), T.enterKey(T.train(8)),
     T.training('AUTOBURN', 3, { count: 999, kind: 'captures' }), T.training('AUTODROP', 3, { count: 999, kind: 'drops' }),
     T.training('AUTOBURN', 1, { count: 0, kind: 'captures' }), T.training('SENTRY', 3, null), T.trainingLock(810), T.enterKey(T.restore(3, 27)), T.restoring('AUTOBURN', 3), T.detailCost(8, 12), T.detailLockCost(2, 12),
     T.status.pendingLong, T.status.needsLower('LOCK 270'), T.status.unaffordable(8), ...T.nextLock,
     ...Object.values(T.skills).flatMap((words) => [words.pitch, ...words.next]),
     T.pendingRow('AUTOBURN LOCK 810', 8), T.pendingRestore('AUTOBURN v3', 27),
-    T.ahead('GOOD HOPE', true, 16, 384, 'COMPACT', 'SEVERE 3'), T.aheadNone,
+    T.ahead('GOOD HOPE', true, 16, 384, 'COMPACT', 'SEVERE 3'),
     [T.preview.head(999, 34), T.preview.room(152, true), T.preview.over(999)].join(' · '),
     [T.preview.head(999, 34), T.preview.link(999), T.preview.roomFor(999)].join(' · '),
     T.preview.hintPack('AUTOBURN', 2, 12), T.preview.hintUndo, T.preview.hintLeave,

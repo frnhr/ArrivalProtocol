@@ -54,7 +54,7 @@ function summary(): string {
   check('events: in flight order', order.every((index, i) => index >= 0 && (i === 0 || index > order[i - 1]!)), JSON.stringify(order));
   const lastCount = h.events.filter((event) => event.name === 'lock-count').at(-1)!;
   const locked = h.events.find((event) => event.name === 'locked')!;
-  check('events: ORBIT LOCKED about a second after the 1', Math.abs(locked.wall - lastCount.wall - 1) < 0.15,
+  check('events: STABLE ORBIT about a second after the 1', Math.abs(locked.wall - lastCount.wall - 1) < 0.15,
     `${(locked.wall - lastCount.wall).toFixed(2)} s`);
   check('events: burn-point GET READY and NOW both fired', names.includes('burn-point')
     && h.events.some((event) => event.name === 'burn-point' && (event.payload as { stage: string }).stage === 'now'));

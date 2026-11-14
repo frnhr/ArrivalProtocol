@@ -49,7 +49,7 @@ import {
 // information after. Three cards, each with what it does in one line and why it was offered (`because you
 // lost a pod's driver to HOLLOW`, in the star's gold when it answers how the kid played). A click or [1] [2] [3]
 // picks one (a chime; the others dim; a file card's new file joins the packet's chips and bar); the pick can
-// change until the send. TRANSMIT ▸ waits for it: without one it says PICK A CARD FIRST, buzzes and nudges
+// change until the send. TRANSMIT ▸ waits for it: without one it says TAKE ONE FIRST, buzzes and nudges
 // the cards. Picks wait for the same arm delay as the send, so a click meant for the LANDING REPORT's CONTINUE
 // never picks a card by accident.
 // Phase 3 slice 2 (04 §3.8, §4; 05 §3.2): HOLLOW riding the beam is an uninvited chip after the unit's own, in its pink,

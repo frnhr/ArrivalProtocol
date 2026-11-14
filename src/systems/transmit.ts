@@ -48,13 +48,13 @@ import type { DeliveryChip } from '@/types/repo';
 // numbers (systems/draft.ts planPacket), and its charge in the arrival line.
 // Phase 3 slice 2 (04 §3.3, §3.7, §3.8, §4; 05 §3.2): the threat the beam carries, read from TransitPlan.threat (the
 // ladder's verdict for the next ship) and the tally the last ship's end applied (run.threat):
-// • the uninvited chip when HOLLOW rides this beam (`??? · 10 BLOCKS · NOT YOURS · RIDES FREE`): it crosses at the size
+// • the uninvited chip when HOLLOW rides this beam (`??? · 10 BLOCKS · NOT IN YOUR PACKET`): it crosses at the size
 //   it will have (threat.rootBlocks), costs no link room, and says why it grew (`+2: 2 SEEDS FED IT`, lastTally.left);
 // • 046.log's chip as `046.log · 3/12`, locked, glowing while an entry is unread (a click opens the LOG READER);
 // • `NO RM · YOU CAN'T DELETE THE ROOT` before the beam to the final ship when no working rm is aboard (information);
-// • the TRACE line: the meter, `1 MORE AND IT FINDS YOU`, or `HOLLOW WILL FIND YOU ON THIS BEAM` on a boarding beam.
+// • the TRACE line: the meter, `1 MORE AND IT FINDS YOU`, or `??? WILL FIND YOU ON THIS BEAM` on a boarding beam.
 // Phase 3 slice 3a (02-map §4; 01-landing §3.16): the PACKET between the DESK and the beam.
-// • the years headline on the arm (`NEXT: KESTREL · 1,200 COLONISTS · 26 LY · 89 YRS EARLY`) and the ECC line in place of
+// • the years headline on the arm (`NEXT: KESTREL · 1,200 COLONISTS · 26 LY · SLEEP 89 YRS`) and the ECC line in place of
 //   the hits line (`ON THE WAY: 4 HITS · ECC FIXES 3 WHILE YOU SLEEP (89 YRS) → 1 LANDS`);
 // • the room bar beside the link bar (systems/map-hop.ts roomFit on the packet as it would cross: `ROOM 152 · FILES 65 +
 //   FLOOR 12`), with the charge it costs named before it happens (`CHARGE 38 → 12 ON ARRIVAL · 26 WON'T FIT`); on a
@@ -121,8 +121,8 @@ export interface UninvitedChip {
   blocks: number;
   fed: number;            // beam-born blocks the last ship's end fed it (0: none)
   boards: boolean;        // it boards on this beam (the boarding moment: the stutter in the sweep)
-  text: string;           // ??? · 10 BLOCKS · NOT YOURS · RIDES FREE
-  note: string;           // NOT YOURS · RIDES FREE
+  text: string;           // ??? · 10 BLOCKS · NOT IN YOUR PACKET
+  note: string;           // NOT IN YOUR PACKET
   fedText: string | null; // ??? 12 BLOCKS · +2: 2 SEEDS FED IT
 }
 
@@ -213,7 +213,7 @@ export interface PacketRoom {
   card: { blocks: number; arrives: number; label: string } | null;
 }
 
-// The chip's words after the owner (THREAT_TEXT.uninvitedChip reads `owner · n BLOCKS · NOT YOURS · RIDES FREE`).
+// The chip's words after the owner (THREAT_TEXT.uninvitedChip reads `owner · n BLOCKS · NOT IN YOUR PACKET`).
 const UNINVITED_NOTE_FROM = ' BLOCKS · ';
 
 function uninvitedChip(state: Readonly<GameState>, plan: TransitPlan): UninvitedChip | null {
@@ -234,14 +234,14 @@ function uninvitedChip(state: Readonly<GameState>, plan: TransitPlan): Uninvited
 }
 
 // HOLLOW boarding on this beam is said outright (the map card's line, 04 §3.8: the surprise is what it does, not that it
-// comes), worded by its cause: TRACE full (`HOLLOW WILL FIND YOU ON THIS BEAM`), or forced one hop from a final ship,
+// comes), worded by its cause: TRACE full (`??? WILL FIND YOU ON THIS BEAM`), or forced one hop from a final ship,
 // where TRACE did not do it (`IT FOUND YOU ANYWAY`: the review's minor 2; the fixed five always board forced). A beam it
 // already rides needs no line (its chip is there). Otherwise the meter, once TRACE has counted or the last ship's end
 // tallied a seed; nothing on a run that has met no seed.
 function packetTraceLine(state: Readonly<GameState>, plan: TransitPlan): PacketTraceLine | null {
   const trace = state.run.threat.trace;
   if (plan.threat.boards !== null) {
-    const why = plan.threat.boards === 'forced' ? THREAT_TEXT.foundYouAnyway : THREAT_TEXT.willFindYou;
+    const why = plan.threat.boards === 'forced' ? THREAT_TEXT.foundYouAnyway : THREAT_TEXT.willFindYou(hollowLabel(state.run));
     return { text: `${THREAT_TEXT.trace(trace)} · ${why}`, tone: 'boards' };
   }
   if (plan.threat.rootBlocks !== null) return null;

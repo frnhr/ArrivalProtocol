@@ -15,6 +15,10 @@
 // Slice 5 (slice-5-plan §2.10): a resident AI is a mind, not a colonist: it wakes (`THE SHIP'S OWN AI IS AWAKE`, the sleeper
 // woken), so the `wake` rule skips the residents' word modules (RESIDENT_WORD_FILES); every other rule still reads them. At
 // the end, each track renders its own pools at their worst case in its own block (5 WARDEN, 5 KIN, 5 FACE).
+// Playtest 1 (docs/phase3/impl/playtest-1-plan.md §3.7, Fran's note 2): no meta-lingo, a line that talks about the game
+// instead of the world (`asks first`, `rides free`, `on the house`, `run on the chart`, `to see what it`, `future
+// revisions`, `optional`, and the cut `opens later` / `as you go`): the `meta` rule. `to see what it is` stays a world
+// phrase (a resident's `I'm going to see what it is.`, which the per-track blocks below read with no allowance).
 import ts from 'typescript';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -61,6 +65,7 @@ const RULES: readonly Rule[] = [
   { id: 'insertion', re: /\binsertion\b/i },
   { id: 'impact', re: /\bimpact/i, podOnly: true },
   { id: 'lost', re: /\blost\b|\boffline\b|\bnot recovered\b/i, podOnly: true },
+  { id: 'meta', re: /\b(?:asks first|rides free|on the house|runs? on the chart|to see what it(?! is\b)|future revisions|optional|opens later|as you go)\b/i },
 ];
 
 // The residents' word modules (slice 5): the lead's shared words and each track's. The `wake` rule is the colonists'.

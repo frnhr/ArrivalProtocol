@@ -27,8 +27,8 @@
 // • KESTREL: the boot's ECC line names the beam seed next to Telemetry; the kid rm's it on `RM THE SEED` (DELETE, then the
 //   seed); the TRACE meter shows; the report's TRACE line says what was left behind.
 // • VESPER (slice 3a: the ark, ENGINE FAULT): 16 pods, and the controller's ghost thrust fires in the flight.
-// • CORMORANT (slice 3a: HOLLOW's forced boarding, M3: the final ship is in range): its card says HOLLOW WILL FIND YOU ON
-//   THIS BEAM, the PACKET to it carries the uninvited chip (`??? · n BLOCKS · NOT YOURS · RIDES FREE`, boarding); its boot
+// • CORMORANT (slice 3a: HOLLOW's forced boarding, M3: the final ship is in range): its card says ??? WILL FIND YOU ON
+//   THIS BEAM, the PACKET to it carries the uninvited chip (`??? · n BLOCKS · NOT IN YOUR PACKET`, boarding); its boot
 //   unpacks to 108%; HOLLOW is silent until it bites a pod, the kid fights it by REPAIR, it says `> ...047?` and names
 //   itself (`> i was 046.`). The PACKET to LAST LIGHT carries it under its name (NO RM only with no rm aboard).
 //   Slice 4d: from depth 5 a beam seed may wear a file's name (a decoy); on `SOMETHING NEXT TO <file> IS EATING IT — SCAN
@@ -1022,8 +1022,8 @@ for (const [index, name] of SHIPS.entries()) {
     check(`${tag}: …the kid clicks ${next.name}'s node (its card, \`SET COURSE ▸ ${next.name} [ENTER]\`) and ENTER opens its PACKET`, pickedOk && packetUp,
       JSON.stringify({ clicked, selected: deskPicked.selected, card: deskPicked.card?.name ?? null, go: deskPicked.go, packetUp }));
     if (next.name === 'CORMORANT') {
-      check(`${tag}: …CORMORANT's card said HOLLOW WILL FIND YOU ON THIS BEAM (M3: the final ship is in range)`,
-        deskPicked.card?.rows.includes('threat=HOLLOW WILL FIND YOU ON THIS BEAM') === true, JSON.stringify(deskPicked.card?.rows));
+      check(`${tag}: …CORMORANT's card said ??? WILL FIND YOU ON THIS BEAM (M3: the final ship is in range)`,
+        deskPicked.card?.rows.includes('threat=??? WILL FIND YOU ON THIS BEAM') === true, JSON.stringify(deskPicked.card?.rows));
       // Slice 6: CORMORANT is POOR on seed 7 (LZ-B on a ROCKY guess); the kid trains no SURVEY.
       check(`${tag}: …and \`SITE DATA · POOR · ARRIVAL CONTROL GUESSED\`, \`LZ: 2 · SURVEY NEEDED\` (slice 6)`,
         deskPicked.card?.rows.includes('site=POOR · ARRIVAL CONTROL GUESSED') === true && deskPicked.card.rows.includes('lzs=LZ: 2 · SURVEY NEEDED'),
@@ -1104,12 +1104,12 @@ for (const [index, name] of SHIPS.entries()) {
     check(`${tag}: …046.log rides as \`046.log · ${packet.found}/12\`, locked, glowing while an entry is unread (${packet.unread})`, packet.log !== null
       && packet.log.name === `046.log · ${packet.found}/12` && packet.log.locked && packet.log.glow === (packet.unread > 0) && packet.found >= index + 1, JSON.stringify(packet.log));
     if (SHIPS[index + 1] === 'CORMORANT') {
-      check(`${tag}: …the uninvited chip rides after the unit's own: \`??? · n BLOCKS · NOT YOURS · RIDES FREE\`, boarding`, packet.uninvited !== null
-        && /^\?\?\? · \d+ BLOCKS · NOT YOURS · RIDES FREE$/.test(packet.uninvited.label ?? '') && packet.uninvited.boards && packet.uninvited.last && /^TRACE [■□]{3}/.test(packet.trace ?? ''),
+      check(`${tag}: …the uninvited chip rides after the unit's own: \`??? · n BLOCKS · NOT IN YOUR PACKET\`, boarding`, packet.uninvited !== null
+        && /^\?\?\? · \d+ BLOCKS · NOT IN YOUR PACKET$/.test(packet.uninvited.label ?? '') && packet.uninvited.boards && packet.uninvited.last && /^TRACE [■□]{3}/.test(packet.trace ?? ''),
         JSON.stringify(packet));
     } else if (SHIPS[index + 1] === 'LAST LIGHT') {
-      check(`${tag}: …HOLLOW rides on to LAST LIGHT under its name (\`UNIT-046 · n BLOCKS · NOT YOURS · RIDES FREE\`)`, packet.uninvited !== null
-        && /^UNIT-046 · \d+ BLOCKS · NOT YOURS · RIDES FREE$/.test(packet.uninvited.label ?? '') && !packet.uninvited.boards, JSON.stringify(packet));
+      check(`${tag}: …HOLLOW rides on to LAST LIGHT under its name (\`UNIT-046 · n BLOCKS · NOT IN YOUR PACKET\`)`, packet.uninvited !== null
+        && /^UNIT-046 · \d+ BLOCKS · NOT IN YOUR PACKET$/.test(packet.uninvited.label ?? '') && !packet.uninvited.boards, JSON.stringify(packet));
       // A hurt DELETE may or may not still work (isUsableTool decides): judged only for a whole one or none.
       if (packet.rm !== 'hurt') {
         check(`${tag}: …NO RM on the final packet only with no rm aboard (DELETE: ${packet.rm})`,
