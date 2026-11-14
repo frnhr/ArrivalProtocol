@@ -9,7 +9,7 @@
 // • the first DESK: 047's trail (RIVERSIDE's colony dot with its age, the TAKEN squares `HALCYON · TAKEN · UNIT-047 GETS THERE
 //   FIRST`), the REPORTED HOME diamonds and the chart's key, the box of ships that moved on (`n SHIPS MOVED ON`, `HERON · IT
 //   WILL COME IN ON ITS OWN`), each of them gone from the chart (its slot empty or a new ship's), CONTROL's `UNIT-047 got here
-//   first. :)`; in the INBOX a letter `FOR UNIT-047`;
+//   first. …` (PAL's, in run 2's preset); in the INBOX a letter `FOR UNIT-047`;
 // • a corrupt save on run 2 (a reload): RUN SAVE CAN'T RESUME, ABANDON RUN; UNIT-049's first DESK then shows 048's trail
 //   and 047's colony as an older dot (OLDER COLONIES in the key);
 // • a fresh page, run 1 lost (__ap.archiveAs('flagship-lost')): the grey cross where UNIT-047 was lost, on the title's chart.
@@ -186,7 +186,7 @@ const gone = movedOn.map((d) => {
 });
 check('…each ship that moved on is gone from the chart (its slot empty, or a new ship there with its REPORTED HOME diamond)', gone.length > 0
   && gone.every((g) => g.wasId !== null && !g.stillOnArm && (!g.node || g.nodeNew)), JSON.stringify(gone));
-check('…CONTROL: `UNIT-047 got here first. :)`', chart.control === 'UNIT-047 got here first. :)', JSON.stringify(chart.control));
+check('…PAL: `UNIT-047 got here first. …` (in run 2\'s preset)', /^UNIT-047 got here first\./.test(chart.control ?? ''), JSON.stringify(chart.control));
 // The INBOX: a letter from one of 047's colonies.
 await page.keyboard.press('KeyI');
 await page.waitForTimeout(500);

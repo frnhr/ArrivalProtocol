@@ -124,10 +124,11 @@ check('ship 1\'s boot: no ghost beat, the strip offers the skip ([SPACE])', !boo
   && state().director.shown?.text === LINES.booting() && (state().director.shown?.keys.includes('SPACE') ?? false), JSON.stringify(state().director.shown));
 h.stepUntil(() => state().run.phase === 'flight', 20);
 h.stepFor(0.3);
-const control = log().filter((entry) => entry.speaker === 'control').map((entry) => entry.text);
-const hello = control.findIndex((text) => text.startsWith('Hello, Unit 49!'));
+// Playtest 1 (B-VOICE): the hello is PAL's (in this run's preset: every preset names the unit), the licence CONTROL's.
+const control = log().filter((entry) => entry.speaker === 'control' || entry.speaker === 'companion').map((entry) => entry.text);
+const hello = control.findIndex((text) => text.includes('Unit 49'));
 const licence = control.indexOf(LICENCE_LINES.repair);
-check('REPAIR came with the boot, and CONTROL says hello first, then the licence', state().run.licences.includes('repair')
+check('REPAIR came with the boot, and PAL says hello first, then CONTROL the licence', state().run.licences.includes('repair')
   && hello >= 0 && licence > hello, control.join(' | '));
 
 // The ghost's beat, at ship 2's boot (HALCYON on the classic five; the last unit was left on ARES-VII): the strip does not

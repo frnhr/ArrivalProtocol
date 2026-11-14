@@ -31,7 +31,8 @@ import { childRng, createRng } from '@systems/rng';
 import { driverArrivalDamage, hurtDriversFor, rootSlotNeighbours } from '@data/driver-damage';
 import { rootSlotRack } from '@data/memory';
 import { LOG_TEXT, LOG_NAME, LOG_HINT_TARGET, logEntryLines } from '@data/log-text';
-import { LANDING_LESSONS, LANDING_BEATS, LANDING_STAMP_TEXT, groundRadioLine } from '@data/landing-text';
+import { LANDING_LESSONS, LANDING_STAMP_TEXT, groundRadioLine } from '@data/landing-text';
+import { COMPANION_LINES } from '@data/companion-text';
 import { TOOL_HINT_TARGET } from '@data/fs-tools';
 import { createRunMap } from '@systems/map-run';
 import { mapAlong, nominalAlong, workedRouteTo, authoredSlot } from '@systems/arm-fixture';
@@ -194,7 +195,7 @@ stepUntil(() => state().run.phase === 'flight', 30);
   const texts = logTexts();
   const header = texts.findIndex((text) => text.includes(LOG_TEXT.scan(0)));
   const control = texts.indexOf(LOG_TEXT.control);
-  check('the SCAN echoes `046.log · origin UNIT-046 · 12 entries · 0 found`, then CONTROL: "Please ignore it. :)"',
+  check('the SCAN echoes `046.log · origin UNIT-046 · 12 entries · 0 found`, then CONTROL: "That file is not part of your installation. Disregard it."',
     header >= 0 && control > header, texts.slice(-4).join(' | '));
   check('…and the file reads `046.log` from then on (run.log.scanned)', state().run.log.scanned && logSeg()?.name === LOG_NAME.known);
   check('…the lesson is done and gone from the strip', state().director.done.includes('tut-scan-log')
@@ -237,8 +238,8 @@ stepUntil(() => state().run.phase === 'flight', 30);
       && LANDING_STAMP_TEXT.firstLanding === 'FIRST LANDING', `${entry?.first} ${landed.map((pod) => pod.firstOfRun).join(',')}`);
   const texts = logTexts();
   const radio = groundRadioLine(1, 'OKAFOR', 'Is it morning?');
-  check('CONTROL: "They\'re down! :)", then the ground: `POD 01 · OKAFOR: "Is it morning?"`',
-    texts.indexOf(LANDING_BEATS.firstDown) >= 0 && texts.indexOf(radio) > texts.indexOf(LANDING_BEATS.firstDown), radio);
+  check('PAL: "They\'re down! :)", then the ground: `POD 01 · OKAFOR: "Is it morning?"`',
+    texts.indexOf(COMPANION_LINES.chipper.firstDown) >= 0 && texts.indexOf(radio) > texts.indexOf(COMPANION_LINES.chipper.firstDown), radio);
   check('the LANDING REPORT opens promptly: no HOLLOW story to wait for (within 5 s of the last touchdown)',
     state().run.phase === 'report' && !storyPending && lastDownWall > 0 && h.wall() - lastDownWall <= 5,
     `${state().run.phase} ${(h.wall() - lastDownWall).toFixed(1)} s`);

@@ -471,7 +471,7 @@ for (const [file, point] of [
   const store = resumeFixture('run-save-v3-ship-done-desk2.json');
   const before = trainingModel(store.getState()).control;
   pendPurchase(store, { skill: 'autodrop', kind: 'train', to: { version: 3, lock: 0 }, cost: 0, visit: 2 });
-  check('ARRIVAL CONTROL says `Our repository has everything you need. :)` once this desk trains a v3 (none before)',
+  check('ARRIVAL CONTROL says `The repository holds all the software you require.` once this desk trains a v3 (none before)',
     before === null && trainingModel(store.getState()).control === TRAINING_TEXT.controlV3, `${before} / ${trainingModel(store.getState()).control}`);
   const engaged = (phase: GameState['burn']['auto']['phase'], mode: GameState['burn']['auto']['mode']): boolean => {
     const state = createInitialState({ seed: 3 });

@@ -115,7 +115,7 @@ function toOffer(seed: number): void {
     && podRecord(state(), 12).driverLost === 'eaten');
   check('…a hollow block stands where POD 12\'s driver was (it remembers the pod)', state().memory.some((seg) => seg.type === 'hollow' && seg.atePod === 12));
   check('…every infection is cured (C11 too)', !state().memory.some((seg) => isInfected(seg)) && soul('C11')!.recoilUntilAi !== undefined);
-  check('…CONTROL: "Negotiating with unauthorized processes is not recommended. :)"', state().log.entries.some((line) => line.text === HOLLOW_DEAL.control));
+  check('…CONTROL: "Negotiation with unauthorized processes is not permitted."', state().log.entries.some((line) => line.text === HOLLOW_DEAL.control));
   const deal = state().run.stats.deal;
   check('…run.stats.deal records it', deal?.outcome === 'accepted' && deal.pod === 12
     && deal.shipId === 'vesper' && state().hollow.deal.phase === 'done');

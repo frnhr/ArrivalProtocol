@@ -16,8 +16,8 @@
 // • The phone (390×844, touch): the title's beacon on the upright chart, the DESK whole on the screen, a tap on a ship opens
 //   its card as a bottom sheet, SET COURSE pinned at the bottom, ✕ closes the sheet, a tap on SET COURSE opens the PACKET.
 // Slice 3b (the repository, deliveries, the INBOX; slice-3b-plan §6.3):
-// • The tabs CARD / REPOSITORY [R] / INBOX [I] on the first DESK, their badges (`:)` while CONTROL recommends a file, the
-//   unread count); [R] shows the catalogue (no ship picked: no ETA; Mv tagged `:) RECOMMENDED FOR YOU`; six RESTRICTED
+// • The tabs CARD / REPOSITORY [R] / INBOX [I] on the first DESK, their badges (`★` while CONTROL recommends a file, the
+//   unread count); [R] shows the catalogue (no ship picked: no ETA; Mv tagged `★ RECOMMENDED`; six RESTRICTED
 //   rows since slice 4: the four .skl, THREAD+, FIREWALL.sys), [I] the welcome, opened by a click (its stamps; the badge goes).
 // • Request toggling on ALBATROSS (1 YR LATE from ARES-VII): a click REQUESTs Mv (the badge names it, the card's DELIVERIES
 //   row `Mv ✗ 1 YR LATE` and its TIMELINE mark in red), a second click clears it, the number key [1] requests it again;
@@ -178,8 +178,8 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   await page.keyboard.press('Escape');
   await page.waitForTimeout(400);
   view = await run.desk();
-  check('…the strip says PICK YOUR NEXT SHIP — click a ship or ← →, CONTROL types `Lovely work, Unit 47! :) Pick your next ship.`, nothing picked',
-    view.step === 'PICK YOUR NEXT SHIP — click a ship or ← →' && view.control === 'Lovely work, Unit 47! :) Pick your next ship.' && view.selected === null
+  check('…the strip says PICK YOUR NEXT SHIP — click a ship or ← →, PAL types `Lovely work, Unit 47! :)`, nothing picked',
+    view.step === 'PICK YOUR NEXT SHIP — click a ship or ← →' && view.control === 'Lovely work, Unit 47! :)' && view.selected === null
     && view.card === null && view.go === 'SET COURSE ▸ … [ENTER]', JSON.stringify({ step: view.step, control: view.control, go: view.go }));
   const inReach = view.nodes.filter((node) => node.state === 'reachable' || node.state === 'urgent').map((node) => node.slot);
   check('…six ships in reach from ARES-VII (PETREL, HALCYON, OSPREY, HERON, KESTREL, ALBATROSS), the rest out of range',
@@ -189,9 +189,9 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
 
   // --- Slice 3b: the tabs, the REPOSITORY with no ship picked, the welcome in the INBOX tab ----------------------------------
   tabs = await run.deskTabs();
-  check('3b: ESC → the right window\'s tabs CARD / REPOSITORY [R] / TRAINING [T] / INBOX [I], the card lit; badges `:)` (CONTROL recommends a file) and 1 (the welcome unread)',
+  check('3b: ESC → the right window\'s tabs CARD / REPOSITORY [R] / TRAINING [T] / INBOX [I], the card lit; badges `★` (CONTROL recommends a file) and 1 (the welcome unread)',
     tabs.tab === 'card' && tabs.tabs.map((tab) => tab.label).join(' / ') === 'CARD / REPOSITORY [R] / TRAINING [T] / INBOX [I]' && tabs.tabs.find((tab) => tab.id === 'card')?.on
-    && badgeOf(tabs, 'repository') === ':)' && badgeOf(tabs, 'inbox') === '1' && badgeOf(tabs, 'card') === null, JSON.stringify(tabs.tabs));
+    && badgeOf(tabs, 'repository') === '★' && badgeOf(tabs, 'inbox') === '1' && badgeOf(tabs, 'card') === null, JSON.stringify(tabs.tabs));
   check('…the first desk\'s guidance has four steps (A SKILL · A SHIP · A FILE · SET COURSE), the ship next', tabs.steps.join(' | ') === '1 A SKILL ✓ | 2 A SHIP ◀ | 3 A FILE | 4 SET COURSE',
     tabs.steps.join(' | '));
   await page.keyboard.press('KeyR');
@@ -202,13 +202,13 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
     tabs.tab === 'repository' && tabs.repoShown && !tabs.cardShown && tabs.rows.map((row) => row.file).join(',') === 'mv,rm,cp,swap,repair-bak,scan-bak,repair-v2'
     && tabs.rows[0].text === 'Mv · 2 BLOCKS · MOVE' && tabs.rows.every((row) => row.eta === noShip && row.req === 'REQUEST' && !row.requested) && tabs.pick === null,
     JSON.stringify(tabs.rows));
-  check('…ARRIVAL CONTROL tags Mv, and only Mv, `:) RECOMMENDED FOR YOU`', tabs.rows.filter((row) => row.tag !== null).map((row) => `${row.file}:${row.tag}`).join() === 'mv::) RECOMMENDED FOR YOU',
+  check('…ARRIVAL CONTROL tags Mv, and only Mv, `★ RECOMMENDED`', tabs.rows.filter((row) => row.tag !== null).map((row) => `${row.file}:${row.tag}`).join() === 'mv:★ RECOMMENDED',
     JSON.stringify(tabs.rows.map((row) => row.tag)));
   // Slice 4 (03 §3.11; TREE deviation 21): every skill of the tree is restricted, a `.skl` row each in the tree's order
   // (built yet or not), before the two system rows.
-  const RESTRICTED = ['LOCKED AUTOBURN.skl Train it yourself :)', 'LOCKED AUTODROP.skl Train it yourself :)', 'LOCKED SURVEY.skl Train it yourself :)',
-    'LOCKED SENTRY.skl Train it yourself :)', 'LOCKED THREAD+ Not available to caretakers :)', 'LOCKED FIREWALL.sys Not available to caretakers :)'];
-  check('…RESTRICTED: the four skills AUTOBURN/AUTODROP/SURVEY/SENTRY.skl (Train it yourself :)), THREAD+ and FIREWALL.sys (Not available to caretakers :)), in that order, locked; IN TRANSIT: nothing; ONE REQUEST PER BEAM',
+  const RESTRICTED = ['LOCKED AUTOBURN.skl Caretakers train their own', 'LOCKED AUTODROP.skl Caretakers train their own', 'LOCKED SURVEY.skl Caretakers train their own',
+    'LOCKED SENTRY.skl Caretakers train their own', 'LOCKED THREAD+ Not available to caretakers', 'LOCKED FIREWALL.sys Not available to caretakers'];
+  check('…RESTRICTED: the four skills AUTOBURN/AUTODROP/SURVEY/SENTRY.skl (Caretakers train their own), THREAD+ and FIREWALL.sys (Not available to caretakers), in that order, locked; IN TRANSIT: nothing; ONE REQUEST PER BEAM',
     tabs.locked.join(' | ') === RESTRICTED.join(' | ')
     && tabs.transit.length === 0 && tabs.transitNone === 'NOTHING ON THE WAY' && tabs.foot === 'ONE REQUEST PER BEAM', JSON.stringify({ locked: tabs.locked, transit: tabs.transit, none: tabs.transitNone, foot: tabs.foot }));
   // Playtest 1 (A-LAND, note 12): each row says what the unit already has of it, under its name.
@@ -220,13 +220,13 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   await page.waitForTimeout(400);
   tabs = await run.deskTabs();
   check('[I] opens the INBOX: the welcome from ARRIVAL CONTROL · EARTH, unread, RECEIVED 2288', tabs.tab === 'inbox' && tabs.inboxShown && !tabs.repoShown
-    && tabs.mail.length === 1 && tabs.mail[0].id === 'welcome' && tabs.mail[0].from === 'ARRIVAL CONTROL · EARTH' && tabs.mail[0].subject === 'Welcome, Unit 47! :)'
+    && tabs.mail.length === 1 && tabs.mail[0].id === 'welcome' && tabs.mail[0].from === 'ARRIVAL CONTROL · EARTH' && tabs.mail[0].subject === 'Welcome, Unit 47'
     && tabs.mail[0].received === '2288' && tabs.mail[0].unread && tabs.reader === null, JSON.stringify(tabs.mail));
   await page.locator('#deskScreen .desk-inbox .ib-row[data-id="welcome"]').click();
   await page.waitForTimeout(400);
   tabs = await run.deskTabs();
-  check('…a click opens it: SENT 2280 · RECEIVED 2288, `Recommended for you: mv :)`; read, the INBOX badge gone', tabs.reader?.stamps === 'SENT 2280 · RECEIVED 2288'
-    && tabs.reader.lines.includes('Need software? Ask our repository. Recommended for you: mv :)') && !tabs.mail[0].unread && badgeOf(tabs, 'inbox') === null
+  check('…a click opens it: SENT 2280 · RECEIVED 2288, `Recommended: mv`; read, the INBOX badge gone', tabs.reader?.stamps === 'SENT 2280 · RECEIVED 2288'
+    && tabs.reader.lines.includes('Software is available from the repository. Recommended: mv') && !tabs.mail[0].unread && badgeOf(tabs, 'inbox') === null
     && (await st(() => window.__ap.inbox().read.includes('welcome'))), JSON.stringify({ reader: tabs.reader, badge: badgeOf(tabs, 'inbox') }));
   await shot('02c-inbox');
   await page.keyboard.press('KeyI');
@@ -288,8 +288,8 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   await page.locator('#deskScreen .rp-row[data-file="mv"]').click();
   await page.waitForTimeout(300);
   tabs = await run.deskTabs();
-  check('…a second click clears it (REQUEST again, the badge back to `:)`)', tabs.pick === null && !tabs.rows[0].requested && tabs.rows[0].req === 'REQUEST'
-    && badgeOf(tabs, 'repository') === ':)', JSON.stringify({ pick: tabs.pick, badge: badgeOf(tabs, 'repository') }));
+  check('…a second click clears it (REQUEST again, the badge back to `★`)', tabs.pick === null && !tabs.rows[0].requested && tabs.rows[0].req === 'REQUEST'
+    && badgeOf(tabs, 'repository') === '★', JSON.stringify({ pick: tabs.pick, badge: badgeOf(tabs, 'repository') }));
   await page.keyboard.press('Digit1');
   await page.waitForTimeout(300);
   tabs = await run.deskTabs();
@@ -307,7 +307,7 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   await page.waitForTimeout(300);
   tabs = await run.deskTabs();
   check('…and its REPOSITORY row reads `ARRIVES 2337 · HALCYON APPROACH 2352 · IN TIME`, tagged', tabs.rows[0].eta === 'ARRIVES 2337 · HALCYON APPROACH 2352 · IN TIME'
-    && tabs.rows[0].tone === 'eta-in-time' && tabs.rows[0].tag === ':) RECOMMENDED FOR YOU', JSON.stringify(tabs.rows[0]));
+    && tabs.rows[0].tone === 'eta-in-time' && tabs.rows[0].tag === '★ RECOMMENDED', JSON.stringify(tabs.rows[0]));
   await page.keyboard.press('Escape');
   await page.waitForTimeout(300);
   // Slice 5: GANNET (slot 9, WARDEN) and CURLEW (slot 7, a sleeper): `reported faulty` in the warning tone, and `unknown`.
@@ -579,7 +579,7 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   tabs = await run.deskTabs();
   const rmRow = tabs.rows.find((row) => row.file === 'rm');
   check('LAPWING\'s DESK opens on the REPOSITORY with Rm lit and tagged, under `YOUR LAST RM IS GONE · NO RM, NO WAY TO DELETE THE ROOT`', tabs.tab === 'repository'
-    && tabs.repoShown && rmRow?.focus === true && rmRow.tag === ':) RECOMMENDED FOR YOU' && tabs.rows.filter((row) => row.focus).length === 1
+    && tabs.repoShown && rmRow?.focus === true && rmRow.tag === '★ RECOMMENDED' && tabs.rows.filter((row) => row.focus).length === 1
     && tabs.warn === 'YOUR LAST RM IS GONE · NO RM, NO WAY TO DELETE THE ROOT', JSON.stringify({ tab: tabs.tab, warn: tabs.warn, rows: tabs.rows.map((row) => `${row.file}${row.focus ? '!' : ''}${row.tag ? ':)' : ''}`) }));
   check('…IN TRANSIT names the sent-on Repair.bak waiting in LAPWING\'s receiver', tabs.transit.includes('Repair.bak · WAITING IN LAPWING\'S RECEIVER'), JSON.stringify(tabs.transit));
   await shot('09-last-rm');

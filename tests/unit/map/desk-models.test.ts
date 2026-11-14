@@ -21,6 +21,7 @@ import { planThreat, threatInputFor, NO_FINAL_TRACES } from '@systems/threat-pla
 import { shipSummaryAt } from '@systems/map-run';
 import { shipsLeft } from '@systems/map-route';
 import { MAP_TEXT } from '@data/map-text';
+import { COMPANION_LINES } from '@data/companion-text';
 import { REPO_TEXT, REPO_FILE_TEXT } from '@data/repo-text';
 import { recommendation } from '@systems/repository';
 import { THREAT_TEXT } from '@data/threat-text';
@@ -63,8 +64,8 @@ check('…046\'s written trail: WAYPOINT already a colony (2299 < 2300), MERIDIA
   && node(1).taken === MAP_TEXT.chart.trail046 && node(2).taken === null);
 check('…rings: six, the next one out from ARES-VII (8 LY) is ring 1 at 20 LY', chartRings(state.run.map, 0).filter((r) => r.next).map((r) => r.n).join() === '1'
   && chart.rings.length === 6);
-check('…no ship greyed on the first desk; CONTROL types its line', deskOpeningBeat(state).greyed.length === 0 && deskOpeningBeat(state).line === null
-  && deskControlLine(state) === MAP_TEXT.desk.controlPick(47));
+check('…no ship greyed on the first desk; PAL types its line (playtest 1: the companion\'s, CHIPPER on run 1)', deskOpeningBeat(state).greyed.length === 0 && deskOpeningBeat(state).line === null
+  && deskControlLine(state) === COMPANION_LINES.chipper.deskHello(47));
 
 const halcyon = cardModel(state, 2);
 check('HALCYON\'s card leads with the colonists, the years early and the cost (the lead\'s call), then the fit line',

@@ -115,7 +115,7 @@ withResidentsBuilt(['corrupted'], () => {
     toGannet();
     check('GANNET wakes WARDEN at the flight\'s first tick: `THIS SHIP DID NOT ASK FOR A CARETAKER.`, then CONTROL on the radio',
       machine().phase === 'awake' && machine().wokeAtAi !== null && machine().wokeAtAi! < 0.2
-      && said('resident', 'WARDEN: THIS SHIP DID NOT ASK FOR A CARETAKER.') && said('control', 'GANNET\'s onboard AI is reported faulty. Please delete it. :)')
+      && said('resident', 'WARDEN: THIS SHIP DID NOT ASK FOR A CARETAKER.') && said('control', 'GANNET\'s onboard AI is reported faulty. Delete it.')
       && JSON.stringify(events('resident-wake', from)) === JSON.stringify([{ kind: 'corrupted', name: 'WARDEN', surprise: false }]),
       JSON.stringify(machine()));
     check('…its file stays hidden (`?`) until a SCAN, and it fires RESIDENT_GHOST (the composite\'s source; no ENGINE FAULT refusal)',
@@ -316,7 +316,7 @@ withResidentsBuilt(['corrupted'], () => {
       Math.abs(tookSec - 6) < 0.3 && deleting >= ticks - 2, `${tookSec.toFixed(2)} s, ${deleting}/${ticks} ticks deleting`);
     check('…then RESIDENT DELETED: every lock released, its last line, CONTROL\'s thanks, no more bursts or locks',
       machine().phase === 'deleted' && driver(pod).lockedBy === undefined && residentGhostSpec(s()) === null && machine().lockInSec === null
-      && capabilitiesNow(s()).thrustCtrl.ghostBy === null && said('resident', 'WARDEN: TELL THEM I KEPT THEM SAFE.') && said('control', 'Thank you. :)')
+      && capabilitiesNow(s()).thrustCtrl.ghostBy === null && said('resident', 'WARDEN: TELL THEM I KEPT THEM SAFE.') && said('control', 'Compliance noted.')
       && JSON.stringify(events('resident-deleted', from)) === '[{"name":"WARDEN"}]'
       && events('resident-lock', from).some((p) => JSON.stringify(p) === JSON.stringify({ pod, phase: 'released' })));
     stepFor(45);
@@ -411,7 +411,7 @@ withResidentsBuilt(['corrupted'], () => {
     check('…its wake clears `hidden`: amber from then on', warden().hidden === undefined && residentSegmentLook(warden())?.className.includes('res-corrupted') === true);
     check(`…it wakes at ${SURPRISE_WAKE_SEC} calm s: \`WARDEN: NOBODY REPORTED ME. GOOD.\`, no CONTROL line, its health shown at once (no SCAN hunt)`,
       Math.abs(machine().calmAiSec - SURPRISE_WAKE_SEC) < 0.25 && said('resident', 'WARDEN: NOBODY REPORTED ME. GOOD.')
-      && !said('control', 'GANNET\'s onboard AI is reported faulty. Please delete it. :)') && warden().scanned
+      && !said('control', 'GANNET\'s onboard AI is reported faulty. Delete it.') && warden().scanned
       && JSON.stringify(events('resident-wake', from)) === '[{"kind":"corrupted","name":"WARDEN","surprise":true}]', machine().calmAiSec.toFixed(2));
     giveTools(h.store, ['delete']);
     check('…DELETE needs no SCAN first', actionDelete(h.store, warden()) === null);

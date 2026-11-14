@@ -90,7 +90,7 @@ h.step();
   const belt = pred.zoneHits.find((hit) => hit.kind === 'belt');
   check('…the belt is on the path ahead, with an inside time and expected hits', belt !== undefined && belt.enterInSec !== null && belt.insideSec > 0
     && belt.expectedHits > 2, JSON.stringify(belt));
-  check('…CONTROL\'s own hello for the flagship', h.log().some((entry) => entry.speaker === 'control' && entry.text === 'Hello, Unit 47! The flagship is about to hit a planet. :)'));
+  check('…PAL\'s own hello for the flagship', h.log().some((entry) => entry.speaker === 'companion' && entry.text === 'Hello, Unit 47! The flagship is about to hit a planet. :)'));
 }
 
 // Flown by the strip-following kid with the defender, recording what the TACTICAL hold has to promise.

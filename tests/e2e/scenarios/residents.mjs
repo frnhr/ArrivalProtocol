@@ -138,7 +138,7 @@ async function arrive(route, name, bypass = null) {
     && resolved !== undefined && resolved.ms <= 1300, JSON.stringify(frames.slice(0, 4)));
   check('…WARDEN wakes at the flight\'s first tick (`WARDEN: THIS SHIP DID NOT ASK FOR A CARETAKER.`), CONTROL says it on the radio (COMMS)',
     lines.some((line) => line.speaker === 'resident' && line.text === 'WARDEN: THIS SHIP DID NOT ASK FOR A CARETAKER.')
-    && lines.some((line) => line.speaker === 'control' && line.channel === 'radio' && line.text === 'GANNET\'s onboard AI is reported faulty. Please delete it. :)'),
+    && lines.some((line) => line.speaker === 'control' && line.channel === 'radio' && line.text === 'GANNET\'s onboard AI is reported faulty. Delete it.'),
     lines.filter((line) => line.speaker === 'resident' || line.speaker === 'control').map((line) => line.text).join(' | '));
   // The first burst: its alarm and the strip's line (in amber: `… — [TAB], find it in RACK A`).
   await toTools();

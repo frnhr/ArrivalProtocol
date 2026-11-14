@@ -174,7 +174,7 @@ check('the final ship by the real TRANSMIT: REASSIGNMENT\'s allowance `> AN ALLO
   JSON.stringify(finalState.arrival));
 check('…the face (R35): `> hi 048. it\'s 047. i deleted 046. they sent me to its dish.`, then its wait and charge, then CONTROL\'s line',
   faceAt >= 0 && /^> \d+ years? at this dish\. they gave you 36 blocks too\. mine ran out\.$/.test(finalBoot[faceAt + 1] ?? '')
-  && finalBoot.indexOf('UNIT-047 was reassigned successfully. Please ignore it. :)') > faceAt + 1, JSON.stringify(finalBoot.slice(Math.max(0, faceAt - 1))));
+  && finalBoot.indexOf('UNIT-047 was reassigned successfully. Disregard it.') > faceAt + 1, JSON.stringify(finalBoot.slice(Math.max(0, faceAt - 1))));
 check('…the root is UNIT-047 (its blocks named so), the FINALE\'s seeds hunt your best skill, its bites ×0.85 (PURGE)',
   JSON.stringify(finalState.root) === '[47]' && finalState.owner === 'UNIT-047' && finalState.target === 'near-skill' && Math.abs(finalState.spread - 12 * 0.85) < 1e-9,
   JSON.stringify(finalState));

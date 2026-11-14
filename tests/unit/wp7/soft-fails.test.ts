@@ -16,7 +16,7 @@ import { beamOutRefusal, beamOutProgress, shipDoomed } from '@systems/beam-out';
 import { infectNow } from '@systems/hollow';
 import { getPrediction } from '@systems/predict';
 import { getByRole, hasIntegrity } from '@state/selectors';
-import { LINES } from '@data/script';
+import { COMPANION_LINES } from '@data/companion-text';
 import { BEAM_OUT_TAC, BEAM_OUT_EXTRA_HITS, EMERGENCY_EXTRA_HITS, EMERGENCY_CORE_HIT, CORE_RESET_INTEGRITY } from '@data/tuning';
 import { hitsLanding } from '@systems/map-hop';
 import type { SegmentRole } from '@/types/segment';
@@ -56,7 +56,7 @@ function bootToFlight(): void {
   check('…ship 1 starts over (boot, ship 1, the world reset once), no ship recorded',
     state().run.phase === 'boot' && state().run.shipIndex === 0 && state().run.rev === rev + 1 && state().run.ships.length === 0
     && state().run.simulationRetryUsed, `${state().run.phase} ${state().run.shipIndex}`);
-  check('…CONTROL: "That was a simulation. :) Again."', state().log.entries.some((entry) => entry.speaker === 'control' && entry.text === LINES.simulation()));
+  check('…PAL: "That was a simulation. :) Again."', state().log.entries.some((entry) => entry.speaker === 'companion' && entry.text === COMPANION_LINES.chipper.simulation));
   check('…the licences start over (fresh unit), the pods all aboard again',
     state().run.licences.join() === 'scan' && state().landing.pods.every((record) => record.fate.kind === 'aboard'));
   bootToFlight();

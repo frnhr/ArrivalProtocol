@@ -20,6 +20,7 @@ import { MAP_TEXT } from '@data/map-text';
 import { LEAVE_BLOCK_MAX_LINES, MAX_RUNS_ON_CHART } from '@data/tuning';
 import { run2Map, RUN1_LAST_UNIT, RUN1_TRAIL } from '../world/run2-fixture';
 import { run1Map } from './run1-fixture';
+import { palLines } from '@systems/companion';
 
 // Run 2 at the desk after the last ship of `route` (ARES-VIII first), the archive's last unit `last`.
 function deskAt(route: readonly number[], last: LastUnit = RUN1_LAST_UNIT): GameState {
@@ -81,7 +82,8 @@ const folded = departuresBlock([...many, { slot: 19, name: 'LAST LIGHT', reason:
 check(`…past ${LEAVE_BLOCK_MAX_LINES} lines it folds into +n MORE (the hover keeps all), and a done ship is never listed`,
   folded !== null && folded.lines.length === LEAVE_BLOCK_MAX_LINES - 1 && folded.more === `+${9 - (LEAVE_BLOCK_MAX_LINES - 1)} MORE`
   && folded.all.length === 9 && departuresBlock([{ slot: 0, name: 'ARES-VII', reason: 'first-past', words: null }]) === null);
-check('CONTROL at the first desk: `UNIT-047 got here first. :)`', deskControlLine(first) === 'UNIT-047 got here first. :)', String(deskControlLine(first)));
+check('PAL at the first desk, in run 2\'s preset: `UNIT-047 got here first. …`', deskControlLine(first) === palLines(first.run).gotHereFirst('UNIT-047')
+  && /^UNIT-047 got here first\./.test(String(deskControlLine(first))), String(deskControlLine(first)));
 check('…no green turn on the first desk (the title already showed RIVERSIDE)', deskOpeningBeat(first).greened.length === 0);
 
 // --- Later desks ----------------------------------------------------------------------------------------------------------

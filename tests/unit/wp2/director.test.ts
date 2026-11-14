@@ -212,10 +212,10 @@ const h = createHarness2(1);
   h.resetTo('flight');
   h.stepFor(2);
   raiseAlert(h.store, { id: 'test-mind', layer: 'mind', severity: 'warn', text: 'TEST', inhibitsSkip: false });
-  check('queue: a CONTROL quip is dropped during a mind alert', say('control', 'Ha ha. :)', { quip: true }) === 'suppressed');
+  check('queue: a quip (PAL\'s since playtest 1) is dropped during a mind alert', say('companion', 'Ha ha. :)', { quip: true }) === 'suppressed');
   clearAlert(h.store, 'test-mind');
   h.stepFor(2);
-  check('queue: and spoken again once it clears', say('control', 'Ha ha. :)', { quip: true }) === 'spoken');
+  check('queue: and spoken again once it clears', say('companion', 'Ha ha. :)', { quip: true }) === 'spoken');
 }
 
 finish();
