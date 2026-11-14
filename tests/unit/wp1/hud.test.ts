@@ -125,7 +125,7 @@ function stepWhile(cond: () => boolean, maxWall = 400): void {
   harness.press('KeyF');
   harness.step();
   pred = getPrediction();
-  check('skip: SKIP active, pace label SKIP ▸▸', skipButton(state(), pred).active && paceLabel(state()).startsWith('SKIP ▸▸ ×'), paceLabel(state()));
+  check('skip: the button active, pace label FAST ×n ▸▸', skipButton(state(), pred).active && /^FAST ×.* ▸▸$/.test(paceLabel(state())), paceLabel(state()));
   stepWhile(() => (harness.burnPointTac() ?? 0) > 0);
   const miss = marker ? Math.hypot(state().orbit.x - marker.pos.x, state().orbit.y - marker.pos.y) : NaN;
   const radius = Math.hypot(state().orbit.x, state().orbit.y);

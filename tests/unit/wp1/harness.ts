@@ -11,7 +11,7 @@ import { advance } from '@systems/clock';
 import { mountOrbitSim } from '@systems/orbit-sim';
 import { mountPredictor, getPrediction, secUntil, type Prediction } from '@systems/predict';
 import { mountDropCache } from '@systems/drop-cache';
-import { mountPace, registerTimeKeys, mainCountdown, type Countdown } from '@systems/pace';
+import { mountPace, registerTimeKeys, mainCountdown, requestSkip, type Countdown } from '@systems/pace';
 import { mountGhostThrust } from '@systems/ghost-thrust';
 import { mountInput } from '@systems/input';
 import { registerFlightKeys } from '@systems/flight-controls';
@@ -33,6 +33,10 @@ export interface Harness {
   step: (dtWall?: number) => void;
   keyDown: (code: string) => void;
   keyUp: (code: string) => void;
+  // A key's down and up in one moment. Playtest 1 (§3.1): [F] is HELD to fast-forward in the game, so a tap of it does
+  // nothing there; the scripted kids' press('KeyF') taps the SKIP engine itself (pace requestSkip, its refusals and its
+  // 'refused' buzz included), as the controllers do, and the suites written against the tap keep testing that engine.
+  // keyDown('KeyF') … keyUp('KeyF') is the held key, through the real key path.
   press: (code: string) => void;
   // A keydown/keyup with modifier flags (metaKey, ctrlKey, altKey); returns defaultPrevented.
   keyWith: (type: 'keydown' | 'keyup', code: string, mods: Partial<Record<'metaKey' | 'ctrlKey' | 'altKey', boolean>>) => boolean;
@@ -140,7 +144,11 @@ export function createHarness(seed = 1, opts: HarnessOpts = {}): Harness {
     },
     keyDown: (code) => key('keydown', code),
     keyUp: (code) => key('keyup', code),
-    press(code) { key('keydown', code); key('keyup', code); },
+    press(code) {
+      if (code === 'KeyF') { requestSkip(store); return; }
+      key('keydown', code);
+      key('keyup', code);
+    },
     keyWith(type, code, mods) {
       const event = Object.assign(new Event(type, { cancelable: true }), { code, repeat: false, ...mods });
       keyTarget.dispatchEvent(event);

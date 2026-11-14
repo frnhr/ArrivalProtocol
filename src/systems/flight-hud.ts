@@ -7,7 +7,9 @@ import { WARDEN_TEXT } from '@data/warden-text';
 import type { Ring, Vec2 } from '@/types/orbit';
 import { secUntil, samplePath, loopProblem, sweetZone, type BurnPoint, type Prediction } from '@systems/predict';
 import { decayWarned, type DecayForecast } from '@systems/landing-orbit';
-import { tac, mainCountdown, skipBlockReason, apsisTimesHidden, type CountdownKind } from '@systems/pace';
+import {
+  tac, mainCountdown, apsisTimesHidden, fastForwardBlockReason, fastForwardView, type CountdownKind, type FastForwardView,
+} from '@systems/pace';
 import {
   canAccept, acceptStrands, burnVerb, formatTac, PRESET_KEY, PRESET_NAME, TRIM_PROBLEM,
 } from '@systems/guidance';
@@ -390,9 +392,10 @@ export function upcomingEvents(state: Readonly<GameState>, pred: Prediction, plo
   return shown.join(' · ');
 }
 
-const PACE_NAME: Record<Pace, string> = { tactical: 'TACTICAL', cruise: 'CRUISE', skip: 'SKIP ▸▸' };
+// Playtest 1 (§3.1): a SKIP leg and the capped FAST read the same to the kid, who only ever holds [F]: `FAST ×871 ▸▸`.
+const PACE_NAME: Record<Pace, string> = { tactical: 'TACTICAL', cruise: 'CRUISE', skip: 'FAST', fast: 'FAST' };
 
-// TACTICAL and CRUISE show the ship's fixed warp (what the pace means); SKIP and the debug
+// TACTICAL and CRUISE show the ship's fixed warp (what the pace means); FAST (a SKIP leg or the capped hold) and the debug
 // override show the live, gliding multiplier, because there the speed itself is the news.
 export function paceLabel(state: Readonly<GameState>): string {
   const { clock, level } = state;
@@ -403,18 +406,22 @@ export function paceLabel(state: Readonly<GameState>): string {
   if (clock.overclock) return `OVERCLOCK ${overclockBadge()}`;
   if (clock.pace === 'tactical') return `${PACE_NAME.tactical} ${formatWarp(level.tacticalWarp)}`;
   if (clock.pace === 'cruise') return `${PACE_NAME.cruise} ${formatWarp(level.cruiseWarp)}`;
-  return `${PACE_NAME.skip} ${formatWarp(clock.speed)}`;
+  return `${PACE_NAME[clock.pace]} ${formatWarp(clock.speed)} ▸▸`;
 }
 
+// The header's ▸▸ HOLD [F] button (playtest 1, §3.1: hold to fast-forward; the phone presses and holds the same button).
 export interface SkipButtonModel {
-  active: boolean;               // a SKIP is running
-  blockedReason: string | null;  // why a new SKIP would be refused (shown struck out)
+  active: boolean;               // the world is fast-forwarding (a held [F], or a SKIP a controller asked for)
+  held: boolean;                 // [F] or the button is held down
+  blockedReason: string | null;  // why holding does nothing now, or the stop the hold ended at (shown struck out)
 }
 
-export function skipButton(state: Readonly<GameState>, pred: Prediction): SkipButtonModel {
-  // A pause freezes a running skip; it carries on after P.
-  if (state.clock.skipWarp !== null && !state.clock.paused) return { active: true, blockedReason: null };
-  return { active: false, blockedReason: skipBlockReason(state, pred) };
+// `ff`: pace's fast-forward state (fastForwardView), injected so a suite can paint a held button without holding one.
+export function skipButton(state: Readonly<GameState>, pred: Prediction, ff: FastForwardView = fastForwardView()): SkipButtonModel {
+  // A pause freezes a running fast-forward; it carries on after P.
+  const running = !state.clock.paused && (ff.running || state.clock.skipWarp !== null);
+  if (running) return { active: true, held: ff.held, blockedReason: null };
+  return { active: false, held: ff.held, blockedReason: fastForwardBlockReason(state, pred) };
 }
 
 // --- NAV PLOT --------------------------------------------------------------------------------
