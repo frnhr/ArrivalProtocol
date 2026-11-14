@@ -886,3 +886,52 @@ To be logged as OPEN-DECISIONS 123 onward. Each is built as recommended unless F
 | 142 | Open a found site as a new LZ (up to 4) | Yes, Batch C |
 | 143 | Keep RUN END's SCORE, RANK, `NEXT RUN:` and the title's ENDINGS line | Keep; they are the game's own screens |
 | 144 | The dock section `System` becomes `Mind` | Yes (Fran's words); it names the unit's own windows |
+
+---
+
+## Deviations (A-WORDS)
+
+Built on `47aa873`. Everything in A-WORDS's scope is in, with these departures from the plan's wording or ownership:
+
+- **`runs save between ships` (`map-text.ts:50`) is not cut.** Its only reader is `systems/title.ts titleModel.saveNote`,
+  drawn by `TitleCard.ts` and pinned by `ui/title-resume` and the `resume`/`run2` e2e scenarios, all A-UI's (the title).
+  To cut it: drop `MAP_TEXT.title.savesBetweenShips`, `TitleModel.saveNote` and the note element, and the tests' `saveNote`
+  and `note` expectations. Left for A-UI or the lead at merge.
+- **The card's cost line also loses `FIXED WHILE YOU SLEEP`.** With Q11's schedule line saying `… · ECC FIXES 3`, the cost
+  line under it would have said the fixes twice. It reads `3 HITS ON THE WAY → 2 LAND`. `card.cost` takes `(hits, land)`.
+  The PACKET's `ON THE WAY:` line keeps its fixes (it has no sleep line beside it).
+- **Q4 generalised.** `PASSED OVER ONCE`, `PASSED OVER TWICE`, then `PASSED OVER n TIMES`; the last chance is
+  `runsOnChart ≥ MAX_RUNS_ON_CHART` and adds `· IT WON'T WAIT AGAIN`. The card's HISTORY row turns warn on the last chance;
+  the chart's hover line takes a `warn` class (`ChartNode.historyWarn`, `desk.css .chart-tip-history.warn`).
+- **`NOT YET`'s reasons.** The plan gave one (`NEEDS A POOR PLANET AHEAD`). The others: `NEEDS A SEED MET ON THE WAY`
+  (SENTRY's after-seeds branch), `OPENS AT THE NEXT DESK` (a start branch's rows before visit 2) and `NOT IN THIS BUILD`
+  (a version above `built`; none today). The reason is the `title` of the closed row and of a closed cell, and the detail
+  panel's status reads `NOT YET · <reason>`. `TrainingModel.closed` is now `{ name, why }[]`.
+- **`MORE SKILLS OPEN AS YOU GO` is cut, not rewritten.** It had no reason to give; the closed rows carry it.
+- **`TRAINING_TEXT.saved` (`2 CYCLES · SAVED FOR NEXT TIME`) is kept.** Borderline, not on the list; Fran's call if it grates.
+- **Three lines past the list, in the same spirit.**
+  - The Skills window's `emptyHint` (`Pick a card between ships. Train a skill …`) is cut with its element and CSS.
+  - COPY on a card's or skill's file: `A CARD IS ONE UNIT'S` → `THIS FILE IS ONE UNIT'S — IT CAN'T BE COPIED` (it also
+    refuses skill files, which are not salvage).
+  - The ORBIT LOCKED pass also took the verb: `▼ was 140 km from a stable orbit on HALCYON`, `HALCYON reached orbit with
+    FUEL 31%`, the FUEL ★ hover `★ Reach a stable orbit with at least 20% FUEL left` (`EngineWindow.ts`), and
+    `NOT ENOUGH FUEL for a stable orbit — ACCEPT ORBIT` (`guidance.ts ACCEPT_ONLY_LINE`, B-TIME's file in Batch B; one line).
+- **Found and left, for the batch that owns them.**
+  - The arrival sums' `+ 12 (CARD)` and `+12 CHARGE (CARD)` (`script.ts arrivalParts`, `chargeLine`): A-LAND reworks the
+    +12 card (Q19), and the salvage naming is B-ORDER's (§3.3). Rename with it.
+  - `REPO_TEXT.window.noShip` (`PICK A SHIP TO SEE WHEN A FILE GETS THERE`): an instruction about the screen, drawn by
+    A-LAND's `RepositoryWindow.ts`/`repoModel`; B-DESK's merged REPOSITORY can drop it.
+  - The `(CARD)` and draft words aside, `DRAFT_TEXT.title` `PICK ONE TO CARRY` stays for B-ORDER's LEAVE ORBIT.
+  - The `.demo-block.disabled` rules in `legacy-components.css` (A-UI's) are now unused: the debug version slider renders no
+    block at all for a one-version tool.
+- **SENTRY v2's line** reads `NEXT SHIP: rm ON ITS BLOCKS TWICE AS FAST, AIMED AT A SEED'S OUTLINE` (the plan's `rm ON ITS
+  BLOCKS`; `FOREIGN BLOCKS` ran to 72 characters).
+- **`??? WILL FIND YOU ON THIS BEAM`.** `THREAT_TEXT.willFindYou` is now `(owner) => …`, fed `hollowLabel(state.run)` by the
+  card (`desk.ts`) and the PACKET's TRACE line (`transmit.ts`). On run 1's VESPER desk that is `???`.
+- **The meta guard.** `to see what it` is matched as `to see what it(?! is)`: a resident's `I'm going to see what it is.`
+  (`kin-text.ts`) is the world's, and the per-track blocks of `support/words` read the rules with no allowance. The guard
+  also bans the two lines it replaced, `opens later` and `as you go`. **At A-LAND's merge:** the allowance for
+  `landing-text.ts`'s `· asks first` goes stale once A-LAND's `DOT OFF-SITE` / `LZ-A FULL` land, and the stale check
+  fails until it is removed: delete that one `ALLOWED` entry.
+- **Tests.** The ORBIT LOCKED pass edited 9 unit files, not 18: the rest read `TERMINAL.locked.word` or the status id. No
+  e2e scenario matched the literal (`playthrough` and `phone` read the status id `locked`).
