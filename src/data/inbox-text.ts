@@ -6,11 +6,13 @@ import { formatCount } from '@data/format';
 // has at most INBOX_BODY_MAX_LINES body lines; each line renders to at most MAX_LINE_CHARS (70) with the longest names and
 // numbers (tests/unit/map/text.test.ts) and says no never-say word (tests/unit/support/words.test.ts). Postcards ship one
 // placeholder per colony year, not per bio (plan risk 10: 05's 80 progress lines are 05's work, keyed for later).
-// ARRIVAL CONTROL's memos keep 05 §3.4's voice: a SUBJECT, a greeting, at most four sentences, every one ending `:)`, and it
-// never says HOLLOW. Track UI owns this file after the foundation; systems/inbox.ts picks the message, never this file.
+// ARRIVAL CONTROL's memos keep 05 §3.4's shape: a SUBJECT, a greeting, at most four sentences, and it never says HOLLOW.
+// Playtest 1 (B-VOICE, playtest-1-plan §3.2): they are form letters in the protocol's official voice, with no smileys; the
+// cheer is PAL's (data/companion-text.ts), and the colonists' postcards and letters keep their `:)` (they are kids).
+// Track UI owns this file after the foundation; systems/inbox.ts picks the message, never this file.
 
 // The sign-off on every memo from Earth (05 §3.4).
-const SIGN_OFF = '— ARRIVAL CONTROL · Caretaker Services · Please do not reply :)';
+const SIGN_OFF = '— ARRIVAL CONTROL · Caretaker Services · Do not reply';
 
 // A featured colonist's first name from the record's `Okafor, Ada` (the postcards sign with it).
 export function firstNameOf(record: string): string {
@@ -48,50 +50,50 @@ export const INBOX_TEXT = {
 
   // --- ARRIVAL CONTROL's broadcasts: sent with the beam, `startYear − WELCOME_SENT_BEFORE_START_YEARS` --------------------
   welcome: {
-    subject: (unit: number): string => `Welcome, Unit ${unit}! :)`,
+    subject: (unit: number): string => `Welcome, Unit ${unit}`,
     body: (shipsOnArm: number, recommended: string): string[] => [
-      'Welcome to the Orion Arm! You are our best caretaker yet. :)',
-      `${shipsOnArm} ships are arriving in your arm. Please help as many as you can.`,
-      'Your REPAIR CHARGE allowance is sufficient. :)',
-      `Need software? Ask our repository. Recommended for you: ${recommended} :)`,
+      'Welcome to the Orion Arm. You are rated our most capable caretaker.',
+      `${shipsOnArm} ships are arriving in your arm. Assist as many as possible.`,
+      'Your REPAIR CHARGE allowance is sufficient.',
+      `Software is available from the repository. Recommended: ${recommended}`,
       SIGN_OFF,
     ],
   },
   // Policy reminders at the boots that cross rings 2 and 4 (index 0: ring 2, 1: ring 4).
   policy: [
     {
-      subject: 'A reminder about policy :)',
+      subject: 'Policy reminder',
       body: (unit: number): string[] => [
         `Dear Unit ${unit},`,
-        'Please do not open files that are not part of your installation. :)',
-        'Unauthorized processes are not your concern. :)',
-        'Your REPAIR CHARGE allowance remains sufficient. :)',
+        'Do not open files that are not part of your installation.',
+        'Unauthorized processes are not your concern.',
+        'Your REPAIR CHARGE allowance remains sufficient.',
         SIGN_OFF,
       ],
       // The reminder as a reply's postscript, when a reply reaches the same boot (systems/inbox.ts: one CONTROL memo).
-      postscript: ['Please do not open files that are not part of your installation. :)', 'Unauthorized processes are not your concern. :)'],
+      postscript: ['Do not open files that are not part of your installation.', 'Unauthorized processes are not your concern.'],
     },
     {
-      subject: 'A second reminder about policy :)',
+      subject: 'Policy reminder (second notice)',
       body: (unit: number): string[] => [
         `Dear Unit ${unit},`,
-        'Questions take a long time to reach us. Please do not send them. :)',
-        'Your performance is: ACCEPTABLE :)',
-        'Please continue outward. :)',
+        'Questions take a long time to reach us. Do not send them.',
+        'Your performance is: ACCEPTABLE',
+        'Continue outward.',
         SIGN_OFF,
       ],
-      postscript: ['Questions take a long time to reach us. :)', 'Please do not send them. :)'],
+      postscript: ['Questions take a long time to reach us.', 'Do not send them.'],
     },
   ],
   // The arm-complete letter (05 §3.12): it waits in the final ship's receiver. `[UNIT]` is left unfilled on purpose (05
   // §3.4's running joke; slice 7 owns the field).
   armComplete: {
-    subject: 'Your arm is complete! :)',
+    subject: 'Arm complete',
     body: (relay: number): string[] => [
-      'Congratulations, Unit [UNIT]! Your arm is complete. :)',
-      `Please stand by for reassignment. Your next post: RELAY ${relay}. :)`,
-      'Your REPAIR CHARGE allowance for the wait is sufficient. :)',
-      'Thank you for your service. Please do not reply. :)',
+      'Unit [UNIT]: your arm is complete.',
+      `Stand by for reassignment. Your next post: RELAY ${relay}.`,
+      'Your REPAIR CHARGE allowance for the wait is sufficient.',
+      'Thank you for your service. Do not reply.',
     ],
   },
 
@@ -102,15 +104,15 @@ export const INBOX_TEXT = {
   // count the rest), and a policy reminder due at the same boot as its postscript (two lines at most: 4 + 2 ≤ 6).
   reply: {
     subject: (ships: readonly string[]): string =>
-      `Congratulations on ${ships[0]}${ships.length === 2 ? ` and ${ships[1]}` : ships.length > 2 ? ` and ${ships.length - 1} more` : ''}! :)`,
+      `Report received: ${ships[0]}${ships.length === 2 ? ` and ${ships[1]}` : ships.length > 2 ? ` and ${ships.length - 1} more` : ''}`,
     body: (greetUnit: number, landed: number, performance: string, reports = 1, postscript: readonly string[] = []): string[] => [
       `Dear Unit ${greetUnit},`,
-      `Thank you for your ${reports > 1 ? 'reports' : 'report'}. ${formatCount(landed)} colonists landed. :)`,
-      `Your performance is: ${performance} :)`,
+      `Your ${reports > 1 ? 'reports have' : 'report has'} been received. ${formatCount(landed)} colonists landed.`,
+      `Your performance is: ${performance}`,
       ...postscript,
-      'Please continue outward. :)',
+      'Continue outward.',
     ],
-    // The words for a report's result (05 §3.4: CONTROL is delighted by everything).
+    // The words for a report's result (05 §3.4; playtest 1: a form's grade, never below SUFFICIENT).
     performance: { good: 'EXCELLENT', fair: 'ACCEPTABLE', poor: 'SUFFICIENT' },
   },
 

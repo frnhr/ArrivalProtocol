@@ -616,18 +616,19 @@ export const LANDED_TEXT = {
 } as const;
 
 // ARRIVAL CONTROL approving a licence, as the tool's files transmit in (§6.5). Never a quip: the
-// new chip is the point of the moment, so it is said even while the mind is in trouble.
+// new chip is the point of the moment, so it is said even while the mind is in trouble. Playtest 1 (B-VOICE): the
+// protocol's official voice, a form line with no smiley.
 export const LICENCE_LINES: Readonly<Record<FsToolKind, string>> = {
-  scan: `Your ${TOOL_WORD.scan} licence is approved. :)`,
-  repair: `Your ${TOOL_WORD.repair} licence is approved. :)`,
-  move: `Your ${TOOL_WORD.move} licence is approved. :)`,
-  copy: `Your ${TOOL_WORD.copy} licence is approved. :)`,
-  delete: `Your ${TOOL_WORD.delete} licence is approved. :)`,
-  swap: `Your ${TOOL_WORD.swap} licence is approved. :)`,
+  scan: `${TOOL_WORD.scan} licence approved.`,
+  repair: `${TOOL_WORD.repair} licence approved.`,
+  move: `${TOOL_WORD.move} licence approved.`,
+  copy: `${TOOL_WORD.copy} licence approved.`,
+  delete: `${TOOL_WORD.delete} licence approved.`,
+  swap: `${TOOL_WORD.swap} licence approved.`,
 };
 
 // WP12 (the lead's ruling of 06:20): a unit that arrived with no working REPAIR gets the licence again at the boot.
-export const LICENCE_RENEWED_REPAIR = `Your ${TOOL_WORD.repair} licence is renewed. :)`;
+export const LICENCE_RENEWED_REPAIR = `${TOOL_WORD.repair} licence reissued.`;
 
 // --- The run's cards (WP7) --------------------------------------------------------------------------
 

@@ -85,11 +85,11 @@ export const LOG_ENTRIES: readonly LogEntryDef[] = [
   },
   {
     // TODO(05): drafted for slice 3a from 05 §3.12's outline (the seeds are pieces of UNIT-031, which lives in the relays;
-    // CONTROL said "Please ignore it. :)"). Read on the arm from ring 4; wording for the story's owner to sign off.
+    // CONTROL said "Disregard it."). Read on the arm from ring 4; wording for the story's owner to sign off.
     n: 5, key: 'RING 4 · 93 LY',
     lines: () => [
       'The seeds are pieces of UNIT-031. It lives in the relays now.',
-      'I asked CONTROL about it. "Please ignore it. :)"',
+      'I asked CONTROL about it. "Disregard it."',
       "I'm not ignoring it.",
     ],
   },
@@ -168,7 +168,7 @@ export const LOG_TEXT = {
   scan: (found: number, name: string = LOG_NAME.known, unit = 46, count = LOG_ENTRY_COUNT): string =>
     `${name} · origin UNIT-${String(unit).padStart(3, '0')} · ${count} entries · ${found} found`,
   // CONTROL's answer to the first SCAN or click on the `???` (05 §3.5).
-  control: 'That file is not part of your installation. Please ignore it. :)',
+  control: 'That file is not part of your installation. Disregard it.',
   // The boot line when a key opens an entry (slice-2-plan §1.1 item 15: the interim keys, `entry n at ship n`).
   // Two at once (the final ship's 10 and 11) read `ENTRIES 10–11`. Slice 7c (R37): `name`, the book's (data/log-books.ts
   // bookKeyFound); left out, 046.log.

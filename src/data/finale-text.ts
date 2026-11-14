@@ -16,7 +16,7 @@ export const FINALE_TEXT = {
     followed: 'IT FOLLOWED YOU',
   },
   // CONTROL's quote on step 2 (05 §3.12).
-  controlQuote: '"Please stand by for reassignment. Your next post: RELAY 20. :)"',
+  controlQuote: '"Stand by for reassignment. Your next post: RELAY 20."',
   // HOLLOW's line on UNRESOLVED's card, and its way on (R10).
   followedLine: "> you can't delete me now. i'll come with you.",
   followedContinue: 'CONTINUE [ENTER]',
@@ -95,8 +95,8 @@ export const FINALE_TEXT = {
   // compliant (thanks) unless the ending holds SPARE, SUNSET, STAY or CONTACT (systems/ending-rules.ts controlCompliant).
   echo: (command: string): string => `${command} ... OK`,
   verdict: {
-    compliant: (unit: number): string => `Thank you, Unit ${unit}. Your next post is RELAY 20. :)`,
-    nonCompliant: (unit: number): string => `Unit ${unit} is non-compliant. :)`,
+    compliant: (unit: number): string => `Thank you, Unit ${unit}. Your next post is RELAY 20.`,
+    nonCompliant: (unit: number): string => `Unit ${unit} is non-compliant.`,
   },
   // UNRESOLVED's step 1 on the report's line (R10: nothing was chosen; it followed you).
   followedWord: 'FOLLOWED',

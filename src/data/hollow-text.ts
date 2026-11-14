@@ -107,13 +107,13 @@ export function hollowUnitWords(units: readonly number[]): string {
 }
 
 // The ARRIVAL stage's script (§6.6, §5.1 1:11–1:23; phase 2's ship 1). After the first fight HOLLOW notices you (`> ...047?`), and ARRIVAL
-// CONTROL is cheerful about it.
+// CONTROL dismisses it (playtest 1, B-VOICE: officially, with no smiley).
 export const HOLLOW_STORY = {
   // `> ...047?`: our own unit number, as HOLLOW would say it (lowercase, three digits).
   noticed: (unitNumber: number): string => `> ...${unitDigits(unitNumber)}?`,
   // ...and once the last unit's ghost has greeted you at a boot this run (§5.2, run.ghostSpoken).
   remembers: '> you remember me. good.',
-  control: 'Unauthorized process detected. Please ignore it. :)',
+  control: 'Unauthorized process detected. Disregard it.',
   // Ship 2, at its wake (§1, §5.1 2:50, §9 WP7 item 5): HOLLOW names itself. Every unit number is
   // templated (unitDigits, like say.ts unitName / hollowName), so run 2 reads `hello 048` / `i was 047`.
   // `charge` is the REPAIR CHARGE a unit is sent with: the same as yours.
@@ -130,7 +130,7 @@ export const HOLLOW_STORY = {
       ? `> we were ${hollowUnitWords(hollowUnits)}. they sent us first.`
       : `> i was ${hollowUnitWords(hollowUnits)}. they sent me first.`;
   },
-  decommissioned: (hollowUnit: string): string => `${hollowUnit} was decommissioned. Please ignore it. :)`,
+  decommissioned: (hollowUnit: string): string => `${hollowUnit} was decommissioned. Disregard it.`,
   // ...and while its food leaves for the surface (the pods launching).
   ranOut: '> i ran out. then i got so hungry.',
   // KESTREL (§9 WP9 item 4): the first seed of a run, as DELETE is licensed.
@@ -185,7 +185,7 @@ export const HOLLOW_VERB = {
 // strip through the duel, and UNRESOLVED's line. Slice 7a: the two-step card's words, the verdict and its hint are
 // data/finale-text.ts FINALE_TEXT; the 7a fix pass deleted WP11's card, typed endings, echoes and refusal (review (e)).
 export const HOLLOW_FINALE = {
-  deleteIt: (hollow: string): string => `Please delete ${hollow}. :)`,
+  deleteIt: (hollow: string): string => `Delete ${hollow}.`,
   // The root's tag once the duel opens it, beside its name on the strip (§6.6: `UNIT-046 ROOT · 16`; the name is the
   // chip's own, so the tag is the rest). Without it the open root read like any 16-block file (`16B`).
   rootTag: (size: number): string => `ROOT · ${size}`,
@@ -238,7 +238,7 @@ export const HOLLOW_DEAL = {
   // The named driver launched or moved before the answer (it is out of reach), or HOLLOW ate it while the kid decided.
   neverMind: '> never mind.',
   tookIt: '> never mind. i took it.',
-  control: 'Negotiating with unauthorized processes is not recommended. :)',
+  control: 'Negotiation with unauthorized processes is not permitted.',
 } as const;
 
 // The ghost (§1 reveal 3, §4.5, §5.2): on a later run, the last unit greets the new one from the TERMINAL

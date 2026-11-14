@@ -45,6 +45,6 @@ export const LINEAGE_TEXT = {
     `> ${years} year${years === 1 ? '' : 's'} at this dish. they gave you ${charge} blocks too. ${merged ? 'ours' : 'mine'} ran out.`,
   // CONTROL (05 §3.5, §2.9): after the face, the last unit by name; at a final boot whose dish runs wild (a non-compliant
   // trace's cost, R33), the predecessor.
-  reassigned: (us: number): string => `UNIT-${digits(us)} was reassigned successfully. Please ignore it. :)`,
-  nonCompliant: 'Your predecessor is non-compliant. Please be compliant. :)',
+  reassigned: (us: number): string => `UNIT-${digits(us)} was reassigned successfully. Disregard it.`,
+  nonCompliant: 'Your predecessor is non-compliant. Remain compliant.',
 } as const;

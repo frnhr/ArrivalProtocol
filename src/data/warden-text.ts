@@ -58,9 +58,9 @@ export const WARDEN_TEXT = {
   deleted: (name: string): string => `${name}: TELL THEM I KEPT THEM SAFE.`,
   cured: (name: string): string => `${name}: ...OH. THANK YOU. THE PODS ARE YOURS.`,
 
-  // --- ARRIVAL CONTROL (05 §3.4: the radio, every sentence ends with `:)`; plan R20). ---
-  controlFaulty: (ship: string): string => `${ship}'s onboard AI is reported faulty. Please delete it. :)`,
-  controlThanks: 'Thank you. :)',
+  // --- ARRIVAL CONTROL (plan R20; playtest 1, B-VOICE: the protocol's official voice, no smiley). ---
+  controlFaulty: (ship: string): string => `${ship}'s onboard AI is reported faulty. Delete it.`,
+  controlThanks: 'Compliance noted.',
 
   // --- The engine (systems/ghost-thrust.ts, flight-hud.ts's THRUST CTRL pip): its bursts named by their cause. ---
   // The first burst's alarm (the alert's word, which the mode toggle shows), and the bursts after it, counted.
