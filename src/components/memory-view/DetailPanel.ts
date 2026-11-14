@@ -362,26 +362,22 @@ function renderDemoBlock(currentCorruption: number): string {
     </div>`;
 }
 
-// Demo control to live-tweak an fs-tool segment's version. Slider range is
-// 1..TOOL_MAX_VERSION for the tool kind. When max is 1, no upgrade exists
-// yet — the slider is rendered disabled so the player can see that future
-// versions are possible but none are currently available.
+// Demo control to live-tweak an fs-tool segment's version (?debug only). Slider range is 1..TOOL_MAX_VERSION for the
+// tool kind. A tool with one version has nothing to switch, so it gets no block (playtest 1, §3.7: its placeholder
+// line, "Future revisions will unlock new behaviours", talked about the game's development).
 function renderVersionDemoBlock(seg: FsToolSegment): string {
   const max = TOOL_MAX_VERSION[seg.fsTool];
+  if (max <= 1) return '';
   const cur = Math.max(1, Math.min(max, seg.version));
-  const range = max - 1;
-  const pct = range > 0 ? Math.round(((cur - 1) / range) * 100) : 50;
-  const disabled = max <= 1;
+  const pct = Math.round(((cur - 1) / (max - 1)) * 100);
   return `
-    <div class="demo-block${disabled ? ' disabled' : ''}">
+    <div class="demo-block">
       <div class="demo-label">// demo: tool version</div>
       <div style="font-size:10px;color:var(--text);line-height:1.5;margin-bottom:8px">
-        ${disabled
-          ? 'No upgrade path defined for this tool yet. Future revisions will unlock new behaviours.'
-          : 'Drag to switch this tool between known revisions. Higher versions add capabilities (e.g. Repair v2 squeezes the empty blocks out of REPAIR CHARGE).'}
+        Drag to switch this tool between known revisions. Higher versions add capabilities (e.g. Repair v2 squeezes the empty blocks out of REPAIR CHARGE).
       </div>
-      <input type="range" id="demoVersionSlider" data-seg-id="${seg.id}" min="1" max="${Math.max(max, 1)}" value="${cur}" style="--p:${pct}%"${disabled ? ' disabled' : ''}>
-      <div class="scale"><span>v1</span>${max > 1 ? `<span>v${max}</span>` : ''}</div>
+      <input type="range" id="demoVersionSlider" data-seg-id="${seg.id}" min="1" max="${max}" value="${cur}" style="--p:${pct}%">
+      <div class="scale"><span>v1</span><span>v${max}</span></div>
     </div>`;
 }
 

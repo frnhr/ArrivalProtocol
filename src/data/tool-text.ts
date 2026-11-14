@@ -55,9 +55,9 @@ export const TOOL_REFUSAL = {
   driverDelete: DRIVER_TOOL_TEXT.delete,
   driverCopy: DRIVER_TOOL_TEXT.copy,
   // The cards' files (WP8): a FIREWALL has no health to scan or heal (nothing can hurt it), and a card is
-  // licensed to one unit (a COPY would deal it twice).
+  // licensed to one unit (a COPY would deal it twice). Playtest 1 (§3.7): the refusal says file, not card.
   firewallHealth: "NOTHING TO HEAL — NOTHING CAN HURT IT",
-  cardCopy: "A CARD IS ONE UNIT'S — IT CAN'T BE COPIED",
+  cardCopy: "THIS FILE IS ONE UNIT'S — IT CAN'T BE COPIED",
   // 046.log (phase 3 slice 2, 05 §3.2): it can't be infected, moved, copied or deleted. SCAN reads it.
   logDelete: LOG_TEXT.refuseDelete,
   logMove: LOG_TEXT.refuseMove,

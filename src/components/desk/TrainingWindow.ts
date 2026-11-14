@@ -15,13 +15,13 @@ import { WALL_FRAME_MAX_SEC, TRAINING_BANK_ROLL_SEC, TRAINING_CHIRP_SEC } from '
 // TRAINING (phase 3 slice 4; 03-skills §4; slice-4-plan §2.5, §3 steps 1 and 3): the desk's [T] tab, drawn from
 // systems/training-model.ts trainingModel only. In the desk's amber, in the right window, which widens while it is open
 // (desk.css). Top to bottom:
-// • the head: `TRAINING · UNIT-047`, the demos (`YOUR DEMOS · 1 CAPTURE`), the bank in VT323 digits (`5 CYCLES`), which
-//   rolls down as a purchase lands; ARRIVAL CONTROL's first-visit line; `+2 CYCLES · FIRST SKILL ON THE HOUSE :)`;
+// • the head: `TRAINING · UNIT-047`, the demos (`FROM YOUR FLIGHTS · 1 CAPTURE`), the bank in VT323 digits (`5 CYCLES`),
+//   which rolls down as a purchase lands; ARRIVAL CONTROL's first-visit line; `+2 CYCLES`;
 // • visit 1: CHOOSE YOUR FIRST SKILL over the cards (4a: AUTOBURN v1 alone), each with its key ([1], [2]), its pitch, a
 //   looping mini-demo and `3 CYCLES · 6 BLOCKS`; a picked card is stamped TRAINED, and the bank says what it saves;
 // • from visit 2: the grid, a column per open branch (versions down, LOCK RANGE on a side axis), traces that light from
-//   the parent as cells are held, the closed branches as one `OPENS LATER` row each; then the selected cell's detail with
-//   its 4-second demo and TRAIN (or RESTORE on a lost cell);
+//   the parent as cells are held, the closed branches as one `NOT YET` row each (why on hover); then the selected cell's
+//   detail with its 4-second demo and TRAIN (or RESTORE on a lost cell);
 // • TRAIN fills its bar over TRAINING_HOLD_SEC (wall time) with the op chirps, then the purchase lands with the ORBIT
 //   LOCKED arpeggio (RESTORE: the repair-won sparkle); a refusal buzzes;
 // • this desk's purchases with UNDO, the AHEAD row, the packet preview (its tone: quiet, warn below the floor, red over),
@@ -173,6 +173,7 @@ function cellNode(cell: TrainingCellView): HTMLButtonElement {
   foot.append(make('span', 'tr-cell-cost', cell.cost));
   if (cell.status !== '') foot.append(make('span', 'tr-cell-status', cell.status));
   node.append(foot);
+  if (cell.why !== null) node.title = cell.why;
   return node;
 }
 
@@ -257,7 +258,7 @@ function structureKey(model: Readonly<TrainingModel>, openBranch: string | null)
   return JSON.stringify([
     model.visit, model.firstPick, model.title, model.bank, model.demos, model.control, model.topUp, model.cards, model.closed,
     model.branches.map((branch) => [branch.skill, branch.versions, branch.locks]), model.detail, model.pending, model.saved,
-    model.moreLater, model.ahead, model.aheadSite, model.preview, model.lastUnitLine, model.hold !== null, model.holdText, openBranch,
+    model.ahead, model.aheadSite, model.preview, model.lastUnitLine, model.hold !== null, model.holdText, openBranch,
   ]);
 }
 
@@ -330,7 +331,6 @@ export function mountTrainingWindow(store: Store<GameState>): TrainingWindowView
       const action = actionNode(model.detail);
       if (action !== null) parts.push(action);
       if (model.saved !== null) parts.push(make('div', 'tr-saved', model.saved));
-      if (model.moreLater !== null) parts.push(make('div', 'tr-later', model.moreLater));
     } else {
       const grid = make('div', 'tr-grid');
       const open = openBranch ?? model.branches.find((branch) => branch.newest)?.skill ?? null;
@@ -338,9 +338,10 @@ export function mountTrainingWindow(store: Store<GameState>): TrainingWindowView
       parts.push(grid);
       if (model.closed.length > 0) {
         const closed = make('div', 'tr-closed');
-        for (const name of model.closed) {
+        for (const branch of model.closed) {
           const row = make('div', 'tr-closed-row');
-          row.append(make('span', 'tr-closed-name', name), make('span', 'tr-closed-why', TRAINING_TEXT.opensLater));
+          row.title = branch.why;
+          row.append(make('span', 'tr-closed-name', branch.name), make('span', 'tr-closed-why', TRAINING_TEXT.notYet));
           closed.appendChild(row);
         }
         parts.push(closed);
@@ -366,7 +367,7 @@ export function mountTrainingWindow(store: Store<GameState>): TrainingWindowView
       parts.push(pending);
     }
     const ahead = make('div', 'tr-ahead');
-    ahead.appendChild(make('div', 'tr-ahead-line', model.ahead));
+    if (model.ahead !== null) ahead.appendChild(make('div', 'tr-ahead-line', model.ahead));
     // Slice 6 (R15): the selected ship's site data, a second line (the AHEAD line is 69 characters at its worst).
     if (model.aheadSite !== null) ahead.appendChild(make('div', 'tr-ahead-line tr-ahead-site', model.aheadSite));
     if (model.preview !== null) {
@@ -375,7 +376,7 @@ export function mountTrainingWindow(store: Store<GameState>): TrainingWindowView
       ahead.appendChild(preview);
       if (model.preview.hint !== null) ahead.appendChild(make('div', 'tr-hint', model.preview.hint));
     }
-    parts.push(ahead);
+    if (ahead.childElementCount > 0) parts.push(ahead);
     if (model.lastUnitLine !== null) parts.push(make('div', 'tr-last', model.lastUnitLine));
     root.replaceChildren(...parts);
     root.classList.toggle('first-pick', model.firstPick);

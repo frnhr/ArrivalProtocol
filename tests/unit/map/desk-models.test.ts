@@ -188,7 +188,8 @@ check('…with 40 charge held, LAPWING\'s 88 squeezes it: `CHARGE SQUEEZED: n AR
 const atVesper = deskAt([0, 2, 5, 11]);
 state = atVesper.getState();
 const cormorant = cardModel(state, 15);
-check('VESPER\'s desk: CORMORANT says HOLLOW WILL FIND YOU ON THIS BEAM (M3)', row(cormorant, 'threat') === THREAT_TEXT.willFindYou, JSON.stringify(cormorant.rows));
+check('VESPER\'s desk: CORMORANT says ??? WILL FIND YOU ON THIS BEAM (M3; playtest 1: not HOLLOW, which it has not said yet)',
+  row(cormorant, 'threat') === '??? WILL FIND YOU ON THIS BEAM' && row(cormorant, 'threat') === THREAT_TEXT.willFindYou('???'), JSON.stringify(cormorant.rows));
 check('…KITTIWAKE (Kettle is 59 LY from New Haven: no M3) has no HOLLOW line; CORMORANT is not ONLY FROM HERE',
   row(cardModel(state, 14), 'threat') === undefined && row(cormorant, 'only') === undefined);
 // 3b: Swap in transit, 4 years behind the unit at VESPER: it catches up at CORMORANT (4 − 162), its receiver in 2659.

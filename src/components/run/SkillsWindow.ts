@@ -133,7 +133,7 @@ export function mountSkillsWindow(store: Store<GameState>): () => void {
   if (!toolsView || !engine) throw new Error('.engine-win missing beside #skillsWin in index.html');
 
   const empty = make('div', 'skills-empty');
-  empty.append(make('div', 'skills-empty-title', SKILLS_TEXT.empty), make('div', 'skills-empty-hint', SKILLS_TEXT.emptyHint));
+  empty.append(make('div', 'skills-empty-title', SKILLS_TEXT.empty));
   const list = make('div', 'skills-list');
   body.append(empty, list);
 

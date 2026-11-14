@@ -221,7 +221,7 @@ function deal(ids: UpgradeId[], pick?: UpgradeId): void {
   const row = rowOf('charge');
   check('+12 REPAIR CHARGE: no pips, `+12 REPAIR CHARGE ARRIVED WITH YOU`', row?.pips.length === 0 && row.status === SKILLS_TEXT.status.charge(12), JSON.stringify(row));
   const longest = [
-    SKILLS_TEXT.empty, SKILLS_TEXT.emptyHint, SKILLS_TEXT.status.holding(2, 'UNIT-998·999'), SKILLS_TEXT.status.idle('UNIT-998·999'), SKILLS_TEXT.status.trimThisShip(30),
+    SKILLS_TEXT.empty, SKILLS_TEXT.status.holding(2, 'UNIT-998·999'), SKILLS_TEXT.status.idle('UNIT-998·999'), SKILLS_TEXT.status.trimThisShip(30),
     SKILLS_TEXT.status.trimNextShip(30), SKILLS_TEXT.status.trimNoEffect, SKILLS_TEXT.status.repairV2, SKILLS_TEXT.status.noRepairV2,
     SKILLS_TEXT.status.threadsLow(1), SKILLS_TEXT.status.charge(999), SKILLS_TEXT.status.gone, SKILLS_TEXT.pipTitle.gone('FIREWALL.sys'),
     SKILLS_TEXT.pipTitle.file('Repair.bak'), ...Object.values(ARCHIVE_TEXT.runEnd), ...Object.values(ARCHIVE_TEXT.footer), ARCHIVE_TEXT.footerTitle,

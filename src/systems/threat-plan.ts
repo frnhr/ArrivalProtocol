@@ -26,7 +26,7 @@ export const NO_FINAL_TRACES: Readonly<FinalTraceInput> = { purge: false, merge:
 // ended (its TRACE tally done: Track THREAT's endShip).
 //
 // Slice 3 extension points: oneHopFromFinal ← the map's M3 query; the beam's seeds ← { kind: 'noise', noise: hop.noise };
-// depth ← the route; run.threat ← the save; TRACE ← the map card; `HOLLOW WILL FIND YOU ON THIS BEAM` ← boardsOnBeam.
+// depth ← the route; run.threat ← the save; TRACE ← the map card; `??? WILL FIND YOU ON THIS BEAM` ← boardsOnBeam.
 // Track THREAT owns this file after the slice 2 foundation.
 
 // Does HOLLOW board on the beam into this ship (04 §3.8)? Never below BOARD_MIN_DEPTH, never on the beam into a final ship

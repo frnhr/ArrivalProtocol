@@ -682,7 +682,6 @@ body.reduced-motion .desk-tab.pulse .desk-tab-badge { animation: none; }
 @keyframes tr-stamp { from { transform: translate(-50%, -50%) rotate(-8deg) scale(1.8); opacity: 0; } }
 .desk-training.reduced .tr-card-stamp { animation: none; }
 .tr-saved { text-align: center; font-size: 12px; letter-spacing: 0.16em; color: var(--desk-bright); }
-.tr-later { text-align: center; font-size: 10px; letter-spacing: 0.2em; color: var(--desk-dim); }
 
 /* The mini-demo (03 §4: a 4-second loop): a planet, the ring, and what the cell does to the path. */
 .tr-demo-box { display: flex; justify-content: center; }

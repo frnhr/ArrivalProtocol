@@ -213,7 +213,7 @@ const TIME = /^IN \d\d:\d\d$/;
   const rackLines: string[] = [...Object.values(RACK_TAG_TEXT), `−${DEBRIS_HIT_DAMAGE}%`, '−100%', '99:59'];
   check('every rack tag line fits the 48 px label column (≤ 7 characters)', rackLines.every((text) => text.length <= 7), rackLines.join(' | '));
   const stripLines = [ZONE_STAMP_TEXT.clear, ZONE_STAMP_TEXT.hit(worstRacks), AUTO_BUTTON_TEXT.title(99), AUTO_BUTTON_TEXT.titleNoSkill, AUTOBURN_SKILL_ROW.effect,
-    AUTOBURN_SKILL_ROW.trained(99, 99), AUTOBURN_SKILL_ROW.gone, AUTOBURN_SKILL_ROW.damaged(BAND_DEGRADED_MIN), SKILLS_TEXT.empty, SKILLS_TEXT.emptyHint];
+    AUTOBURN_SKILL_ROW.trained(99, 99), AUTOBURN_SKILL_ROW.gone, AUTOBURN_SKILL_ROW.damaged(BAND_DEGRADED_MIN), SKILLS_TEXT.empty];
   // The tooltip may be longer (it is a tooltip); everything a kid reads in a line fits the strip's 70.
   check(`every new line fits ≤ ${MAX_LINE_CHARS} characters (tooltips excepted)`, stripLines.filter((text) => !text.startsWith('AUTOBURN.skl flies') && !text.startsWith('AUTOBURN.skl is gone'))
     .every((text) => text.length <= MAX_LINE_CHARS), stripLines.filter((text) => text.length > MAX_LINE_CHARS).join(' | '));

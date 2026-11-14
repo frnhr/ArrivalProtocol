@@ -4,14 +4,14 @@
 // (skill-tree.ts treeCells, bankOf, held, paid, lostLevels, deskBlocker) and the desk's selection (UiState.trainingSel,
 // trainingHoldSec). The view (components/desk/TrainingWindow.ts) only lays it out.
 // • Visit 1 (the run's first desk on the arm): the cards only, one per open root (4a: AUTOBURN v1 alone, plan risk R5),
-//   under CHOOSE YOUR FIRST SKILL, keys [1] [2], then TRAIN; ARRIVAL CONTROL's line; `+2 CYCLES · FIRST SKILL ON THE HOUSE`
-//   when the floor topped the bank up; once picked, `2 CYCLES · SAVED FOR NEXT TIME` and `MORE SKILLS OPEN AS YOU GO`.
+//   under CHOOSE YOUR FIRST SKILL, keys [1] [2], then TRAIN; ARRIVAL CONTROL's line; `+2 CYCLES` when the floor topped the
+//   bank up; once picked, `2 CYCLES · SAVED FOR NEXT TIME`.
 // • From visit 2: the grid. One column per branch that is open, its versions down and (AUTOBURN) LOCK RANGE on a side axis,
 //   each cell joined to the one it needs by a trace that lights once that cell is held; the closed branches are one dim
-//   `OPENS LATER` row each. The selected cell's detail (what it is, its price and size, NEXT SHIP, why not) holds TRAIN, or
+//   `NOT YET` row each, the reason on hover (playtest 1, §3.7). The selected cell's detail (what it is, its price and size, NEXT SHIP, why not) holds TRAIN, or
 //   RESTORE on a lost cell.
 // • Every desk: the bank in the head, this desk's purchases with UNDO (the last of each skill only: training.ts
-//   undoPurchase), the AHEAD row for the ship selected on the chart, the packet preview with the limit that binds, and the
+//   undoPurchase), the AHEAD row for the ship selected on the chart (none until one is), the packet preview with the limit that binds, and the
 //   last unit's flavour line.
 // Also here: the LANDING REPORT's cycles line (cyclesReport), from the same earning endShip records (run-score.ts shipCycles).
 import type { GameState } from '@state/schema';
@@ -55,7 +55,8 @@ export interface TrainingCellView {
   mode: string;                // GREEN, THEN ROUND / LOCK RANGE
   cost: string;                // 5 · 8 (CYCLES · BLOCKS)
   nextShip: string;            // NEXT SHIP: …
-  status: string;              // TRAINED / TRAINED HERE / LOST · RESTORE 3 / OPENS LATER / NEEDS v1 FIRST / NEEDS 2 CYCLES MORE / ''
+  status: string;              // TRAINED / TRAINED HERE / LOST · RESTORE 3 / NOT YET / NEEDS v1 FIRST / NEEDS 2 CYCLES MORE / ''
+  why: string | null;          // NOT YET's reason, on hover (NEEDS A POOR PLANET AHEAD); null on an open cell
   selected: boolean;
   parent: string | null;       // the cell it needs (the trace it hangs from)
   lit: boolean;                // held (owned or pending): its trace from the parent lights
@@ -93,6 +94,12 @@ export interface TrainingAction {
   holdText: string;            // the bar's words while it fills
 }
 
+// A branch not open yet: its one row (`DEFENCE · SENTRY`) and why, on hover.
+export interface TrainingClosed {
+  name: string;
+  why: string;
+}
+
 export interface TrainingDetail {
   cell: TrainingCellView;
   demo: DemoArt;               // the mini-demo's loop (the view's drawing, by data: training-text.ts TRAINING_DEMO_ART)
@@ -123,18 +130,17 @@ export interface TrainingModel {
   bankText: string;            // 5 CYCLES
   demos: string;               // YOUR DEMOS · 1 CAPTURE
   control: string | null;      // ARRIVAL CONTROL's first-visit line
-  topUp: string | null;        // +2 CYCLES · FIRST SKILL ON THE HOUSE :)
+  topUp: string | null;        // +2 CYCLES
   blocked: boolean;            // SET COURSE waits for the first pick (skill-tree.ts deskBlocker)
   cards: TrainingCard[];
   branches: TrainingBranch[];
-  closed: string[];            // the closed branches' one-row names (SURVEY · OPENS LATER)
+  closed: TrainingClosed[];    // the closed branches' one row each (SURVEY · SURVEY · NOT YET), the reason on hover
   cells: TrainingCellView[];
   selected: TrainingCellView | null;
   detail: TrainingDetail | null;
   pending: TrainingPending[];
   saved: string | null;        // visit 1 after the pick: 2 CYCLES · SAVED FOR NEXT TIME
-  moreLater: string | null;
-  ahead: string;
+  ahead: string | null;        // null until a ship is picked on the chart
   // Slice 6 (R15): the AHEAD row's second line, the selected ship's site data (Track SITES's systems/survey-hud.ts
   // surveyAheadLine: `SITE DATA POOR · SURVEY FINDS BETTER SITES`), or null.
   aheadSite: string | null;
@@ -165,7 +171,7 @@ function shortStatus(cell: Readonly<TreeCell>, bank: number, restore: number): s
     case 'pending': return TRAINING_TEXT.status.pending;
     case 'lost': return TRAINING_TEXT.lost(restore);
     case 'closed':
-    case 'unbuilt': return TRAINING_TEXT.opensLater;
+    case 'unbuilt': return TRAINING_TEXT.notYet;
     case 'affordable': return '';
     case 'dim': {
       if (cell.refusal === 'not-desk') return TRAINING_TEXT.status.notDesk;
@@ -180,6 +186,15 @@ function shortStatus(cell: Readonly<TreeCell>, bank: number, restore: number): s
   }
 }
 
+// Why a cell is not open yet (NOT YET's hover): the rule its branch opens by (skill-tree.ts latchedRuleDue), the next desk for
+// the rows a branch open from the start shows from visit 2 (rowOpenAt), or a version this build lacks. null on an open cell.
+function closedWhy(cell: Readonly<TreeCell>): string | null {
+  if (cell.look === 'unbuilt') return TRAINING_TEXT.notYetWhy.unbuilt;
+  if (cell.look !== 'closed') return null;
+  const opens = SKILL_TREE[cell.skill].opens.kind;
+  return TRAINING_TEXT.notYetWhy[opens === 'start' ? 'next-desk' : opens];
+}
+
 function cellView(state: Readonly<GameState>, cell: Readonly<TreeCell>, bank: number, sel: TrainingSel | null): TrainingCellView {
   const parent = parentRow(cell.row);
   const restore = cell.look === 'lost' ? restoreCost(state, cell.skill) : 0;
@@ -190,6 +205,7 @@ function cellView(state: Readonly<GameState>, cell: Readonly<TreeCell>, bank: nu
     cost: cell.row.kind === 'version' ? TRAINING_TEXT.cellCost(cell.price, cell.blocks) : TRAINING_TEXT.lockCost(cell.price),
     nextShip: cell.row.kind === 'version' ? TRAINING_TEXT.skills[cell.skill].next[cell.row.version - 1]! : TRAINING_TEXT.nextLock[cell.row.level - 1]!,
     status: shortStatus(cell, bank, restore),
+    why: closedWhy(cell),
     selected: sel !== null && sel.skill === cell.skill && sameRow(sel.row, cell.row),
     parent: parent === null ? null : cellKey(cell.skill, parent),
     lit: cell.look === 'owned' || cell.look === 'pending',
@@ -270,7 +286,8 @@ function detailOf(state: Readonly<GameState>, cell: TrainingCellView, bank: numb
     cell,
     demo: cellArt(cell.skill, cell.row),
     lines: [cell.mode, longCost, cell.nextShip],
-    status: cell.look === 'pending' ? TRAINING_TEXT.status.pendingLong : cell.status === '' ? null : cell.status,
+    status: cell.look === 'pending' ? TRAINING_TEXT.status.pendingLong : cell.status === '' ? null
+      : cell.why === null ? cell.status : `${cell.status} · ${cell.why}`,
     action: cellAction(state, cell, bank),
   };
 }
@@ -339,8 +356,8 @@ export function overHint(state: Readonly<GameState>, over: number): string {
   return text.hintPack(TRAINING_TEXT.skills[pack.skill].name, pack.level.version, pack.frees);
 }
 
-function aheadLine(state: Readonly<GameState>, slot: number | null): string {
-  if (slot === null) return TRAINING_TEXT.aheadNone;
+function aheadLine(state: Readonly<GameState>, slot: number | null): string | null {
+  if (slot === null) return null;
   const map = state.run.map;
   const ship = shipSummaryAt(map, slot);
   const hop = hopBetween(map, currentSlot(state.run), slot);
@@ -384,12 +401,12 @@ export function trainingModel(state: Readonly<GameState>): TrainingModel {
   const selected = cells.find((cell) => cell.selected) ?? null;
 
   const branches: TrainingBranch[] = [];
-  const closed: string[] = [];
+  const closed: TrainingClosed[] = [];
   for (const id of SKILL_IDS) {
     const mine = cells.filter((cell) => cell.skill === id);
     const open = mine.some((cell) => cell.look !== 'closed' && cell.look !== 'unbuilt');
     const words = TRAINING_TEXT.skills[id];
-    if (!open) { closed.push(`${words.branch} · ${words.name}`); continue; }
+    if (!open) { closed.push({ name: `${words.branch} · ${words.name}`, why: mine.map(closedWhy).find((why) => why !== null) ?? TRAINING_TEXT.notYetWhy.unbuilt }); continue; }
     branches.push({
       skill: id, branch: words.branch, name: words.name, open, newest: false,
       versions: mine.filter((cell) => cell.row.kind === 'version'), locks: mine.filter((cell) => cell.row.kind === 'lock'),
@@ -424,7 +441,6 @@ export function trainingModel(state: Readonly<GameState>): TrainingModel {
     blocked, cards, branches, closed, cells, selected, detail,
     pending: trainingPending(run.skills.pending),
     saved: picked ? TRAINING_TEXT.saved(bank) : null,
-    moreLater: picked ? TRAINING_TEXT.moreLater : null,
     ahead: aheadLine(state, slot),
     aheadSite: surveyAheadLine(state, slot),
     preview: previewFor(state, slot),
@@ -441,7 +457,7 @@ export interface CyclesReport {
   total: number;               // what the ship pays (1..6), the line's rolling number
   line: string;                // TRAINING CYCLES +5 · ARRIVED +1 · LANDED 83% +4 / PERFECT LANDING · +6 / … NO DESK AHEAD
   lineAt: (shown: number) => string;   // the same line while it rolls up to `total`
-  topUp: string | null;        // a run's first ship below the first-pick floor: +2 CYCLES · FIRST SKILL ON THE HOUSE :)
+  topUp: string | null;        // a run's first ship below the first-pick floor: +2 CYCLES
 }
 
 // The line from what the ship earns (run-score.ts shipCycles), the ship being the final one (decision 18: shown, it does

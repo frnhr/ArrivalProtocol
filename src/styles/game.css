@@ -2897,7 +2897,6 @@ body.reduced-motion .term-line.renamed { animation: none; }
 .skills-empty { display: flex; flex-direction: column; gap: 4px; padding: 4px 0; }
 .skills-empty[hidden] { display: none; }
 .skills-empty-title { font-size: 11px; letter-spacing: 0.2em; color: var(--accent-dim); }
-.skills-empty-hint { font-size: 11px; line-height: 1.45; color: var(--text-dim); }
 .skills-list { display: flex; flex-direction: column; gap: 10px; }
 .skill-row { display: flex; flex-direction: column; gap: 4px; padding-bottom: 9px; border-bottom: 1px dashed var(--edge); }
 .skill-row:last-child { border-bottom: none; padding-bottom: 0; }

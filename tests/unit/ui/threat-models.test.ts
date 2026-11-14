@@ -7,7 +7,7 @@
 //   aboard: they feed it; a ship whose seeds were all deleted says nothing reports home; none met: no line;
 // • NEXT BITE on a calm-only wake: the calm clock's remainder, frozen while calmAiSec stands (TACTICAL), never jumping;
 //   `?:??` on VESPER's silent boarding until the capture;
-// • the PACKET (systems/transmit.ts): KESTREL → VESPER carries the uninvited `??? · 10 BLOCKS · NOT YOURS · RIDES FREE`
+// • the PACKET (systems/transmit.ts): KESTREL → VESPER carries the uninvited `??? · 10 BLOCKS · NOT IN YOUR PACKET`
 //   (no link room), the boarding warning on the TRACE line, and 046.log as `046.log · 3/12`, glowing while unread;
 //   VESPER → LAST LIGHT carries it at 16 with its fed share, and `NO RM · YOU CAN'T DELETE THE ROOT` without a working rm;
 // • the LOG READER (systems/log-view.ts): one row per entry (number, KEY, text or `[NOT FOUND YET]`), the open entry,
@@ -174,14 +174,15 @@ function toTransmit(store: Store<GameState>): void {
   const store = world(VESPER);
   toTransmit(store);
   const model = transmitModel(store.getState());
-  check('VESPER → CORMORANT: HOLLOW boards (forced) and rides as the uninvited chip, `??? · 10 BLOCKS · NOT YOURS · RIDES FREE`',
-    model.uninvited?.text === '??? · 10 BLOCKS · NOT YOURS · RIDES FREE' && model.uninvited.boards && model.uninvited.blocks === 10
-    && model.uninvited.note === 'NOT YOURS · RIDES FREE' && model.uninvited.fedText === null, model.uninvited?.text);
+  check('VESPER → CORMORANT: HOLLOW boards (forced) and rides as the uninvited chip, `??? · 10 BLOCKS · NOT IN YOUR PACKET`',
+    model.uninvited?.text === '??? · 10 BLOCKS · NOT IN YOUR PACKET' && model.uninvited.boards && model.uninvited.blocks === 10
+    && model.uninvited.note === 'NOT IN YOUR PACKET' && model.uninvited.fedText === null, model.uninvited?.text);
   check('…it costs no link room (the packet\'s files are the unit\'s own)', model.files === store.getState().run.transit?.filesBlocks);
   check('…the TRACE line says it found you anyway (forced one hop from the final ship, not by TRACE: minor 2)',
-    model.trace?.tone === 'boards' && model.trace.text.endsWith(THREAT_TEXT.foundYouAnyway) && !model.trace.text.includes(THREAT_TEXT.willFindYou), model.trace?.text);
+    model.trace?.tone === 'boards' && model.trace.text.endsWith(THREAT_TEXT.foundYouAnyway) && !model.trace.text.includes(THREAT_TEXT.willFindYou('???')), model.trace?.text);
   store.update((draft) => { draft.run.transit!.threat.boards = 'trace'; });
-  check('…and, boarding by TRACE (slice 3\'s routes), that it finds you on this beam', transmitModel(store.getState()).trace?.text.endsWith(THREAT_TEXT.willFindYou) === true);
+  check('…and, boarding by TRACE (slice 3\'s routes), that it finds you on this beam, named as the strip names it: `??? WILL FIND YOU ON THIS BEAM`',
+    transmitModel(store.getState()).trace?.text.endsWith('· ??? WILL FIND YOU ON THIS BEAM') === true, transmitModel(store.getState()).trace?.text);
   store.update((draft) => { draft.run.transit!.threat.boards = 'forced'; });
   check('…no NO RM warning (not the beam to the final ship)', model.noRm === null);
   const logOf = (): ReturnType<typeof transmitModel>['chips'][number] | undefined => transmitModel(store.getState()).chips.find((chip) => chip.log);
@@ -226,7 +227,7 @@ function toTransmit(store: Store<GameState>): void {
   check('…with the last rm gone: `NO RM · YOU CAN\'T DELETE THE ROOT` before the beam to the final ship',
     transmitModel(store.getState()).noRm === THREAT_TEXT.noRmPacket);
   check('the packet\'s new words fit a line', [THREAT_TEXT.noRmPacket, model.uninvited?.text ?? '', notFinal.uninvited?.fedText ?? '',
-    `${THREAT_TEXT.trace(2)} · ${THREAT_TEXT.willFindYou}`, `${THREAT_TEXT.trace(2)} · ${THREAT_TEXT.foundYouAnyway}`].every((line) => line.length <= MAX_LINE_CHARS));
+    `${THREAT_TEXT.trace(2)} · ${THREAT_TEXT.willFindYou('UNIT-046·047')}`, `${THREAT_TEXT.trace(2)} · ${THREAT_TEXT.foundYouAnyway}`].every((line) => line.length <= MAX_LINE_CHARS));
 }
 
 // INSPECT's `if left` row (minor 3): TRACE before HOLLOW boards, its next root once aboard, nothing on the final ship.

@@ -322,7 +322,7 @@ export function endShip(store: Store<GameState>, outcome: ShipOutcome, stars = 0
 // non-final ship throws: the arm's checks 1 and 4 guarantee one.
 // Slice 4 (03 §3.1–§3.2; plan §2.4–§2.5), inside the same update, before SHIP DONE's save (so a reload resumes the same
 // bank and branches): a branch newly due by the map ('after-seeds', 'poor-ahead') is latched open, and at the run's first
-// desk on the arm the bank is raised to FIRST_PICK_FLOOR_CYCLES (`+2 CYCLES · FIRST SKILL ON THE HOUSE :)`) while no skill
+// desk on the arm the bank is raised to FIRST_PICK_FLOOR_CYCLES (`+2 CYCLES`) while no skill
 // is paid for, so the required first pick can always buy a root.
 export function openDesk(store: Store<GameState>, extra: PendingExtra | null): void {
   const state = store.getState();

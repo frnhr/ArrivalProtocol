@@ -26,7 +26,7 @@ export const DEMO_WORDS: Readonly<Record<DemoKind, { one: string; many: string; 
 const demosOf = (n: number, kind: DemoKind): string => `${n} ${n === 1 ? DEMO_WORDS[kind].one : DEMO_WORDS[kind].many}`;
 const fromDemos = (n: number, kind: DemoKind): string => (n === 0 ? `no ${DEMO_WORDS[kind].many} yet: UNTRAINED` : `from your ${demosOf(n, kind)}`);
 
-// A count of one demo kind (the head's `YOUR DEMOS · 1 CAPTURE`, the bar's `from your 1 capture`).
+// A count of one demo kind (the head's `FROM YOUR FLIGHTS · 1 CAPTURE`, the bar's `from your 1 capture`).
 export interface DemoCount {
   count: number;
   kind: DemoKind;
@@ -49,7 +49,7 @@ export const TRAINING_TEXT = {
   title: (unit: string): string => `TRAINING · ${unit}`,
   bank: (n: number): string => cycles(n),
   demos: (counts: readonly DemoCount[]): string =>
-    `YOUR DEMOS · ${counts.length === 0 ? 'NONE YET' : counts.map((demo) => demosOf(demo.count, demo.kind).toUpperCase()).join(' · ')}`,
+    `FROM YOUR FLIGHTS · ${counts.length === 0 ? 'NONE YET' : counts.map((demo) => demosOf(demo.count, demo.kind).toUpperCase()).join(' · ')}`,
   // The SET COURSE bar on the run's first desk until the required pick (skill-tree.ts deskBlocker).
   chooseFirst: 'CHOOSE YOUR FIRST SKILL',
   // The desk's guidance strip: the step's name, what it says until the pick is made, and after.
@@ -62,10 +62,18 @@ export const TRAINING_TEXT = {
   // ...and at a desk whose purchases train a v3 (03 §7; slice-4cde-plan §5.4), for any skill.
   controlV3: 'Our repository has everything you need. :)',
   // The first-pick floor (03 §3.1): on the report of a run's first ship, and in the window's head at the first desk.
-  onTheHouse: (n: number): string => `+${cycles(n)} · FIRST SKILL ON THE HOUSE :)`,
+  // Playtest 1 (§3.7): the number alone; `FIRST SKILL ON THE HOUSE` talked about the game.
+  onTheHouse: (n: number): string => `+${cycles(n)}`,
   saved: (n: number): string => `${cycles(n)} · SAVED FOR NEXT TIME`,
-  moreLater: 'MORE SKILLS OPEN AS YOU GO',
-  opensLater: 'OPENS LATER',
+  // A branch or row not open yet (playtest 1, §3.7: `OPENS LATER` / `MORE SKILLS OPEN AS YOU GO` talked about the
+  // game), and why, on hover (training-model.ts closedWhy).
+  notYet: 'NOT YET',
+  notYetWhy: {
+    'poor-ahead': 'NEEDS A POOR PLANET AHEAD',
+    'after-seeds': 'NEEDS A SEED MET ON THE WAY',
+    'next-desk': 'OPENS AT THE NEXT DESK',
+    'unbuilt': 'NOT IN THIS BUILD',
+  },
   lost: (restore: number): string => `LOST · RESTORE ${restore}`,
   // Visit 1's cards (03 §2): CHOOSE YOUR FIRST SKILL over one card per open root, with its key.
   cardCost: (price: number, blocks: number): string => `${cycles(price)} · ${plural(blocks, 'BLOCK')}`,
@@ -137,7 +145,7 @@ export const TRAINING_TEXT = {
       pitch: 'It sees the seeds that hide as files, at the boot.',
       next: [
         'NEXT SHIP: THE BOOT NAMES EVERY DISGUISED SEED',
-        "NEXT SHIP: rm ON HOLLOW TWICE AS FAST, AIMED AT A SEED'S OUTLINE",
+        "NEXT SHIP: rm ON ITS BLOCKS TWICE AS FAST, AIMED AT A SEED'S OUTLINE",
         'NEXT SHIP: A NEW FIREWALL.sys AT EVERY BOOT',
       ],
     },
@@ -148,9 +156,9 @@ export const TRAINING_TEXT = {
   pendingRestore: (what: string, cost: number): string => `RESTORED ${what} · ${cycles(cost)}`,
   undo: 'UNDO',
   // The AHEAD row (03 §4): the ship selected on the STAR CHART, its memory class and noise written as its card writes them.
+  // None until a ship is picked (playtest 1, §3.7: `NEXT: PICK A SHIP ON THE CHART TO SEE WHAT IT ASKS` is cut).
   ahead: (ship: string, ark: boolean, pods: number, memory: number, cls: string, noise: string): string =>
     `NEXT: ${ship}${ark ? ' · ARK' : ''} · ${plural(pods, 'POD')} · MEMORY ${memory} ${cls} · NOISE ${noise}`,
-  aheadNone: 'NEXT: PICK A SHIP ON THE CHART TO SEE WHAT IT ASKS',
   // The packet preview (03 §4), by the limit that binds: `FILES 72 + SKILLS 17 · LINK 86 · 3 BLOCKS OVER`.
   preview: {
     head: (files: number, skills: number): string => `FILES ${files} + SKILLS ${skills}`,

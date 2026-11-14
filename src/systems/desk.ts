@@ -10,6 +10,7 @@ import { currentSlot, shipSummaryAt, worldSlotOf, isEndSlot } from '@systems/map
 import { armShipAt } from '@systems/map-streams';
 import { unitTrailOf, olderColonies } from '@systems/lineage';
 import { unitName } from '@data/hollow-text';
+import { hollowLabel } from '@systems/say';
 import { hopBetween, reachable, reachableFrom, hitsLanding } from '@systems/map-hop';
 import { layerOf, solLy } from '@systems/map-geometry';
 import { seedAllowance } from '@systems/map-noise';
@@ -543,9 +544,10 @@ export function cardModel(state: Readonly<GameState>, slot: number): CardModel {
   }
 
   // HOLLOW boarding on this beam is said before SET COURSE (04 §3.8; slice-3a-plan §1.1 item 14): the ladder's verdict
-  // for this candidate, from the run's threat with this ship's tally done.
+  // for this candidate, from the run's threat with this ship's tally done. It is named as the strip names it (`???` until
+  // it has named itself): playtest 1, never HOLLOW before the game has said it.
   if (isReachable && verdict !== null && verdict.boards !== null) {
-    row('threat', MAP_TEXT.card.threatLabel, THREAT_TEXT.willFindYou, 'warn');
+    row('threat', MAP_TEXT.card.threatLabel, THREAT_TEXT.willFindYou(hollowLabel(state.run)), 'warn');
   }
   if (ship.final && noWorkingRm(state)) row('norm', MAP_TEXT.card.threatLabel, THREAT_TEXT.noRmPacket, 'warn');
   if (isReachable && onlyFromHere(map, from).includes(slot)) row('only', '', MAP_TEXT.card.onlyFromHere, 'warn');

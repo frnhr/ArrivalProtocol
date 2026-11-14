@@ -208,9 +208,9 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   // (built yet or not), before the two system rows.
   const RESTRICTED = ['LOCKED AUTOBURN.skl Train it yourself :)', 'LOCKED AUTODROP.skl Train it yourself :)', 'LOCKED SURVEY.skl Train it yourself :)',
     'LOCKED SENTRY.skl Train it yourself :)', 'LOCKED THREAD+ Not available to caretakers :)', 'LOCKED FIREWALL.sys Not available to caretakers :)'];
-  check('…RESTRICTED: the four skills AUTOBURN/AUTODROP/SURVEY/SENTRY.skl (Train it yourself :)), THREAD+ and FIREWALL.sys (Not available to caretakers :)), in that order, locked; IN TRANSIT: nothing; ONE REQUEST PER TRANSMIT',
+  check('…RESTRICTED: the four skills AUTOBURN/AUTODROP/SURVEY/SENTRY.skl (Train it yourself :)), THREAD+ and FIREWALL.sys (Not available to caretakers :)), in that order, locked; IN TRANSIT: nothing; ONE REQUEST PER BEAM',
     tabs.locked.join(' | ') === RESTRICTED.join(' | ')
-    && tabs.transit.length === 0 && tabs.transitNone === 'NOTHING ON THE WAY' && /^ONE REQUEST PER TRANSMIT/.test(tabs.foot ?? ''), JSON.stringify({ locked: tabs.locked, transit: tabs.transit, none: tabs.transitNone, foot: tabs.foot }));
+    && tabs.transit.length === 0 && tabs.transitNone === 'NOTHING ON THE WAY' && tabs.foot === 'ONE REQUEST PER BEAM', JSON.stringify({ locked: tabs.locked, transit: tabs.transit, none: tabs.transitNone, foot: tabs.foot }));
   await shot('02b-repository');
   await page.keyboard.press('KeyI');
   await page.waitForTimeout(400);
