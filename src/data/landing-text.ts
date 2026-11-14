@@ -79,15 +79,19 @@ export const END_LANDING_REFUSAL_TEXT = "DON'T HIT THE PLANET first";
 export const END_LANDING_REFUSAL_KEY = 'END|HITS THE PLANET';
 
 // The inline confirms at [L] (§3.3) and END LANDING (§3.10). Enter confirms.
+// Playtest 1 (note 23, plan §3.4.3): [L]'s guards open centred, big, over the NAV PLOT, and a second [L] (or ENTER) says
+// yes, [N] (or ESC) no (main.ts launchConfirm). The questions say what is wrong first, then ask.
 export const LAUNCH_CONFIRM_TEXT = {
-  offSite: (terrain: TerrainWord, points: number): string => `LAUNCH OFF-SITE? ${terrain} · scores ${formatCount(points)}`,
-  full: (lz: string, points: number): string => `${lz} IS FULL — LAUNCH ANYWAY? scores ${formatCount(points)}`,
+  offSite: (terrain: TerrainWord, points: number): string => `DOT OFF-SITE · LAUNCH ANYWAY? ${terrain} · scores ${formatCount(points)}`,
+  full: (lz: string, points: number): string => `${lz} IS FULL · LAND IT ANYWAY? scores ${formatCount(points)}`,
   // The dot's centre over a no-go arc (§3.6), in the arc's own word: `LAUNCH INTO LAVA? scores 0` (slice 1b).
   noGo: (word: string, points: number): string => `LAUNCH INTO ${word}? scores ${formatCount(points)}`,
   endLanding: (pods: number): string =>
     pods === 0 ? 'END THE LANDING?' : `${pods} POD${pods === 1 ? '' : 'S'} WILL BE PARKED IN ORBIT · NOT COUNTED`,
-  yes: '✓ LAUNCH',
-  no: '✗ WAIT',
+  yes: '[L] YES',
+  no: '[N] NO',
+  // The hint under the centred confirm's buttons.
+  keys: '[L] or [ENTER] yes · [N] or [ESC] no',
 } as const;
 
 // The TERMINAL's echoes (§3.8): `> launch pod03 ... LZ-A`, then `> pod03 ... LANDED`.
@@ -519,8 +523,9 @@ export const DECAY_CHIP_TEXT = {
 // The POD BAY window's live words beyond POD_BAY_TEXT: why [L] would not launch now, and what it would ask first.
 export const POD_BAY_STATUS_TEXT = {
   ready: 'READY',
-  offSite: 'DOT OFF-SITE · asks first',
-  full: (lz: string): string => `${lz} FULL · asks first`,
+  // Playtest 1 (note 10): the state, not how the game behaves (the confirm itself is plain to see now, note 23).
+  offSite: 'DOT OFF-SITE',
+  full: (lz: string): string => `${lz} FULL`,
   allAway: 'ALL PODS AWAY',
   noNext: 'NO POD READY',
   cantLaunch: (pods: number): string => `${pods} CAN'T LAUNCH`,

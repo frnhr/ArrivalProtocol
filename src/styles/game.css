@@ -1243,6 +1243,22 @@ body.inline-confirm-open .cursor-follower { visibility: hidden; }
 }
 .inline-confirm[hidden] { display: none; }
 @keyframes inline-confirm-in { from { opacity: 0; transform: translateY(-4px); } }
+/* Playtest 1 (note 23): a question a key asked ([L]'s guards) opens big in the middle of the screen, over the NAV PLOT. */
+.inline-confirm.centre {
+  left: 50%; top: 42%; transform: translate(-50%, -50%);
+  width: min(560px, calc(100vw - 32px)); max-width: none; padding: 18px 22px 14px;
+  border-width: 2px; text-align: center;
+  box-shadow:
+    0 0 0 100vmax color-mix(in srgb, var(--bg) 45%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--warn) 35%, transparent),
+    0 0 40px color-mix(in srgb, var(--warn) 45%, transparent);
+  animation: inline-confirm-centre-in 0.16s ease-out;
+}
+.inline-confirm.centre .ic-question { font-size: 32px; line-height: 1.15; }
+.inline-confirm.centre .ic-buttons { gap: 14px; margin-top: 14px; }
+.inline-confirm.centre .ic-btn { padding: 10px 14px; font-size: 15px; font-weight: 700; }
+.inline-confirm.centre .ic-keys { margin-top: 10px; font-size: 11px; }
+@keyframes inline-confirm-centre-in { from { opacity: 0; transform: translate(-50%, -50%) scale(0.94); } }
 .ic-question {
   font-family: 'VT323', monospace;
   font-size: 20px;

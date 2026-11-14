@@ -42,6 +42,8 @@ const PREVENTED_CODES: ReadonlySet<string> = new Set([
   'Space', 'Tab', 'KeyF', 'KeyP', 'KeyM', 'KeyB', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE',
   // Slice 1a: [L] launches a pod; [G] is reserved for the landing (landing-controls.ts).
   'KeyL', 'KeyG',
+  // Playtest 1 (note 23): [N] answers no to [L]'s centred confirm (components/hud/InlineConfirm.ts).
+  'KeyN',
 ]);
 
 const TEXT_INPUT_TYPES: ReadonlySet<string> = new Set([
