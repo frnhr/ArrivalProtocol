@@ -6,6 +6,8 @@
 // • trainCell's refusals (closed, unaffordable, needs-lower, owned, not-desk; the classic world has no tree); UNDO only the
 //   last purchase of a skill, only at the desk, the bank given back; ◀ CHART keeps them; TRANSMIT ▸ commits them.
 // • A reload at the desk restores SHIP DONE's bank with nothing pending (03 §5 item 4).
+// • Playtest 1 (B-DESK, §3.6): the cycles ledger walks with it: desk 2's rows (the ship, a grant, the two purchases, UNDO
+//   only on the last of the skill) add up to the bank, and a reload at desk 1 shows the ledger SHIP DONE's bank had.
 // • The boot's skill lines (03 §4): `> SKILL TRAINED: AUTOBURN.skl v1 · from your 1 capture · ACCURACY 92%`, the UNTRAINED
 //   variant, `> SKILL RETRAINED` after new demos, none without; saying one records `announced` and fires 'skill-trained'
 //   (the ONLINE stamp); bootLinePlan places it; a BEAM save resumed plans the same line.
@@ -30,6 +32,7 @@ import { bootLinePlan } from '@data/script';
 import { on } from '@systems/events';
 import { advance } from '@systems/clock';
 import { resumeRun } from '@systems/run-save';
+import { cyclesLedger } from '@systems/cycles-ledger';
 import { SKILL_TREE } from '@data/skills';
 import { BOOT_SKILL_TEXT, PACKET_SKILL_TEXT } from '@data/training-text';
 import { MAX_LINE_CHARS } from '@data/tuning';
@@ -111,6 +114,11 @@ toDesk(store);
   check('…with 7: v2 then LOCK 270 bought (4 + 1: v2 4 since slice 8), the bank 2', trainCell(store, 'autoburn', v(2)) === null
     && trainCell(store, 'autoburn', lock(1)) === null && bankOf(store.getState().run.skills) === 2
     && store.getState().run.skills.pending.map((p) => `${p.kind}:${p.to.version}.${p.to.lock}`).join() === 'train:2.0,lock:2.1');
+  const ledger = cyclesLedger(store.getState());
+  check('…the ledger: `+1 HALCYON · ARRIVED +1 · LANDED 0% +0`, `+6 FOUND ON THE WAY`, `−4 AUTOBURN v2` (no UNDO: LOCK 270 rides on it), `−1 AUTOBURN LOCK 270` (UNDO 1); 2 left',
+    ledger.rows.map((row) => `${row.amountText} ${row.text}${row.undo === null ? '' : ` [${row.undo}]`}`).join(' | ')
+      === '+1 HALCYON · ARRIVED +1 · LANDED 0% +0 | +6 FOUND ON THE WAY | −4 AUTOBURN v2 | −1 AUTOBURN LOCK 270 [1]' && ledger.bank === 2,
+    JSON.stringify(ledger.rows));
   check('…UNDO of v2 first throws (LOCK 270 rides on it), and an index out of range throws', throws(() => undoPurchase(store, 0)) && throws(() => undoPurchase(store, 5)));
   undoPurchase(store, 1);
   undoPurchase(store, 0);
@@ -248,6 +256,9 @@ offTrained();
   check('a reload at desk 1: the desk again, SHIP DONE\'s bank 3, nothing pending, the pick asked for, on TRAINING',
     reload.getState().run.phase === 'desk' && bankOf(reload.getState().run.skills) === 3 && reload.getState().run.skills.pending.length === 0
       && deskBlocker(reload.getState()) === 'first-pick' && reload.getState().ui.deskWindow === 'training');
+  check('…and its ledger: ARES-VII\'s row and the CORE RESERVE adding up to 3, nothing spent',
+    cyclesLedger(reload.getState()).bank === 3 && cyclesLedger(reload.getState()).rows[0]!.text.startsWith('ARES-VII · ')
+      && cyclesLedger(reload.getState()).rows.every((row) => row.kind !== 'spent'), JSON.stringify(cyclesLedger(reload.getState()).rows));
   pageOpen(reload, stubStorage(atBeam!.storage), 3);
   resumeRun(reload);
   check('a reload in HALCYON\'s boot replays the BEAM: the same skill line planned, the file in memory',

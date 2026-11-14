@@ -29,7 +29,6 @@ import { planThreat, threatInputFor } from '@systems/threat-plan';
 import { finalTraceInput } from '@systems/traces';
 import { currentSlot, shipSummaryAt } from '@systems/map-run';
 import { hopBetween, reachableFrom } from '@systems/map-hop';
-import { unitName } from '@systems/say';
 import { SKILL_TREE, SKILL_IDS, skillBlocks } from '@data/skills';
 import { layoutFor } from '@data/memory';
 import { NOISE_WORD } from '@data/map-text';
@@ -125,7 +124,7 @@ export interface TrainingModel {
   visit: number;
   firstPick: boolean;          // visit 1: the cards, not the grid
   armed: boolean;              // the selection was picked this visit, so ENTER trains it (review M3; desk.ts deskEnter)
-  title: string;               // TRAINING · UNIT-047
+  title: string;               // COMPILE HERE (playtest 1, B-DESK: the REPOSITORY's lower half)
   bank: number;
   bankText: string;            // 5 CYCLES
   demos: string;               // YOUR DEMOS · 1 CAPTURE
@@ -434,7 +433,7 @@ export function trainingModel(state: Readonly<GameState>): TrainingModel {
   const detail = selected === null ? null : detailOf(state, selected, bank);
   const slot = state.ui.deskSelected;
   return {
-    visit, firstPick, armed: trainingArmed(state), title: TRAINING_TEXT.title(unitName(run.unitNumber)), bank, bankText: TRAINING_TEXT.bank(bank),
+    visit, firstPick, armed: trainingArmed(state), title: TRAINING_TEXT.title, bank, bankText: TRAINING_TEXT.bank(bank),
     demos: TRAINING_TEXT.demos(headDemos(state)),
     control: firstPick ? TRAINING_TEXT.controlFirstVisit : trainsV3(run.skills.pending) ? TRAINING_TEXT.controlV3 : null,
     topUp: topUp > 0 ? TRAINING_TEXT.onTheHouse(topUp) : null,

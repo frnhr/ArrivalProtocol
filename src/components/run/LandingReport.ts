@@ -13,6 +13,7 @@ import { requireById, replayAnimation, make } from '@components/dom';
 import { renderKeyCaps } from '@components/hud/keycaps';
 import { reportTraceLine } from '@systems/hollow-hud';
 import { cyclesReport } from '@systems/training-model';
+import { TRAINING_TEXT } from '@data/training-text';
 import { shipCycles } from '@systems/run-score';
 import { currentSlot } from '@systems/map-run';
 import { CYCLES_ARRIVED, CYCLES_LANDED_STEPS, REPORT_CYCLES_START_SEC, REPORT_CYCLE_STEP_SEC } from '@data/tuning';
@@ -121,6 +122,9 @@ export function mountLandingReport(store: Store<GameState>): () => void {
   const continueEl = requireById<HTMLButtonElement>('lrContinue');
   // Slice 4: the cycles line and the first-pick top-up, under the charge (built here: index.html keeps phase 2's skeleton).
   const cyclesEl = make('div', 'lr-cycles');
+  // Playtest 1 (B-DESK, §3.6): the line says what cycles are for (`+5 CYCLES TO COMPILE · …`, the REPOSITORY's COMPILE HERE,
+  // whose ledger repeats its breakdown), and its hover what they are, as the desk's bank says it.
+  cyclesEl.title = TRAINING_TEXT.bankWhy;
   const topUpEl = make('div', 'lr-topup');
   cyclesEl.hidden = true;
   topUpEl.hidden = true;

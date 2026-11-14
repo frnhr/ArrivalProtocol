@@ -15,6 +15,10 @@ import { MAX_LINE_CHARS } from '@data/tuning';
 
 const cycles = (n: number): string => `${n} CYCLE${n === 1 ? '' : 'S'}`;
 const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 'S'}`;
+// A ship's cycles, broken down (03 §3.1: ARRIVED +1 always, +1 per full 20% of the landing): the LANDING REPORT's line and
+// the desk ledger's row for that ship say it the same way (playtest 1, B-DESK).
+const earnedWords = (landedPct: number, landed: number): string => `ARRIVED +1 · LANDED ${landedPct}% +${landed}`;
+const PERFECT_WORD = 'PERFECT LANDING';
 
 // A demo kind's noun and its measure (03 §3.3, §6; review m5; slice-4cde-plan R21): AUTOBURN learns from the kid's
 // captures and reads ACCURACY, AUTODROP (4c) from drops (a ship 1 has one landing and three drops, so `3 landings`
@@ -42,12 +46,30 @@ interface SkillWords {
 }
 
 export const TRAINING_TEXT = {
+  // Playtest 1 (B-DESK, §3.6, note 15): there is no TRAINING tab any more. The REPOSITORY holds two halves, FROM EARTH (the
+  // requests) and COMPILE HERE (the skills); [T] opens it on this one, and its head shows the key.
+  key: 'T',
+  // (Until the merged screen lands: the TRAINING tab's label.)
   tab: 'TRAINING [T]',
-  // The tab's badge while cycles are unspent (desk.ts deskTabBadges.training).
+  // The REPOSITORY tab's cycles badge while any are unspent (desk.ts deskTabBadges.training).
   badge: (n: number): string => cycles(n),
-  // The window's head (03 §4): `TRAINING · UNIT-047`, the bank in VT323 on the right, the demos on the left.
-  title: (unit: string): string => `TRAINING · ${unit}`,
+  // The half's head (03 §4): `COMPILE HERE`, the bank in VT323 on the right (the unit's name is the desk's head already).
+  title: 'COMPILE HERE',
   bank: (n: number): string => cycles(n),
+  // The bank's hover (§3.6): what cycles are, in the world, in one place. The ledger under it shows the numbers.
+  bankWhy: 'CYCLES: time your Core spends learning from your own flights. You earn them by flying and landing.',
+  // The ledger (systems/cycles-ledger.ts): where this desk's cycles came from and where they went, one row each, the amount
+  // signed on the left. A ship's row reads as its LANDING REPORT line did (`HALCYON · ARRIVED +1 · LANDED 83% +4`).
+  ledger: {
+    amount: (n: number): string => (n < 0 ? `−${-n}` : `+${n}`),
+    carried: 'CARRIED OVER',
+    ship: (ship: string, how: string): string => `${ship} · ${how}`,
+    // The first desk's floor (03 §3.1): the Core lends what the first compile needs.
+    reserve: 'CORE RESERVE',
+    salvage: 'SALVAGE',
+    story: 'FOUND ON THE WAY',
+    restored: (cell: string): string => `RESTORED ${cell}`,
+  },
   demos: (counts: readonly DemoCount[]): string =>
     `FROM YOUR FLIGHTS · ${counts.length === 0 ? 'NONE YET' : counts.map((demo) => demosOf(demo.count, demo.kind).toUpperCase()).join(' · ')}`,
   // The SET COURSE bar on the run's first desk until the required pick (skill-tree.ts deskBlocker).
@@ -61,9 +83,9 @@ export const TRAINING_TEXT = {
   controlFirstVisit: 'Training outside approved hours is discouraged. :)',
   // ...and at a desk whose purchases train a v3 (03 §7; slice-4cde-plan §5.4), for any skill.
   controlV3: 'Our repository has everything you need. :)',
-  // The first-pick floor (03 §3.1): on the report of a run's first ship, and in the window's head at the first desk.
-  // Playtest 1 (§3.7): the number alone; `FIRST SKILL ON THE HOUSE` talked about the game.
-  onTheHouse: (n: number): string => `+${cycles(n)}`,
+  // The first-pick floor (03 §3.1): on the report of a run's first ship, named as the ledger names it.
+  // Playtest 1 (§3.7): `FIRST SKILL ON THE HOUSE` talked about the game; B-DESK: the Core's reserve, the world's word.
+  onTheHouse: (n: number): string => `+${cycles(n)} · CORE RESERVE`,
   saved: (n: number): string => `${cycles(n)} · SAVED FOR NEXT TIME`,
   // A branch or row not open yet (playtest 1, §3.7: `OPENS LATER` / `MORE SKILLS OPEN AS YOU GO` talked about the
   // game), and why, on hover (training-model.ts closedWhy).
@@ -150,7 +172,7 @@ export const TRAINING_TEXT = {
       ],
     },
   } satisfies Record<SkillId, SkillWords>,
-  // UNDO beside each purchase of this desk (03 §3.3: until TRANSMIT ▸).
+  // A purchase of this desk (03 §3.3: UNDO until TRANSMIT ▸), as the model lists it; the ledger shows it as `−3 AUTOBURN v1`.
   pendingTitle: 'TRAINED AT THIS DESK',
   pendingRow: (what: string, cost: number): string => `${what} · ${cycles(cost)}`,
   pendingRestore: (what: string, cost: number): string => `RESTORED ${what} · ${cycles(cost)}`,
@@ -175,12 +197,15 @@ export const TRAINING_TEXT = {
   // The flavour line from the archive (03 §3.11): `LAST UNIT TRAINED: AUTODROP v3 · SENTRY v2`.
   lastUnit: (skills: readonly string[]): string => `LAST UNIT TRAINED: ${skills.join(' · ')}`,
   report: {
-    // The LANDING REPORT's line (plan §1.1 4a item 1), rolled up.
+    // The LANDING REPORT's line (plan §1.1 4a item 1), rolled up. Playtest 1 (B-DESK, §3.6): it says what they are for
+    // (`TO COMPILE`, the REPOSITORY's COMPILE HERE), and its breakdown is the desk ledger's row for the ship, word for word.
     cycles: (total: number, landedPct: number, landed: number): string =>
-      `TRAINING CYCLES +${total} · ARRIVED +1 · LANDED ${landedPct}% +${landed}`,
-    perfect: (total: number): string => `PERFECT LANDING · +${total}`,
+      `+${cycles(total)} TO COMPILE · ${earnedWords(landedPct, landed)}`,
+    perfect: (total: number): string => `+${cycles(total)} TO COMPILE · ${PERFECT_WORD}`,
+    earned: earnedWords,
+    perfectWord: PERFECT_WORD,
     // The final ship (decision 18 kept: shown, does nothing).
-    noDesk: (total: number): string => `+${total} TRAINING CYCLES · NO DESK AHEAD`,
+    noDesk: (total: number): string => `+${cycles(total)} · NO DESK AHEAD`,
   },
   runEnd: {
     unspent: (n: number): string => `UNSPENT ${n}`,

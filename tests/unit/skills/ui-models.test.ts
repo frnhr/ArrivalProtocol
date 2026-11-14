@@ -9,6 +9,8 @@
 // • The packet preview's words on crafted fits (the binding limit: LINK, ROOM · TIGHT; ROOM FOR n CHARGE, NO CHARGE ARRIVES,
 //   n BLOCKS OVER) and the AHEAD row.
 // • The LANDING REPORT's cycles line (the roll, PERFECT LANDING, NO DESK AHEAD, the first pick's top-up on a crash).
+// • Playtest 1 (B-DESK, §3.6): the cycles ledger at desk 1 and desk 2 (cycles-ledger.ts): the ship's row as its report said
+//   it, the CORE RESERVE, CARRIED OVER, a grant, the purchases with UNDO; the rows add up to the bank.
 // • Graded damage as the MIND and the Skills window show it: the labelled ticks per version, a file's badge and INSPECT
 //   line, offline read first, the Skills row's version line and its RESTORE prompt, the version stamps.
 // • Every TRAINING_TEXT line with worst-case numbers fits MAX_LINE_CHARS and says no word 03 §4's glossary rules out.
@@ -35,6 +37,7 @@ import { createRunMap } from '@systems/map-run';
 import { FIRST_RUN_LINEAGE } from '@systems/meta';
 import { skillsModel, skillFileView, skillTickZones, skillVersionStamp } from '@systems/skills';
 import { bankOf } from '@systems/skill-tree';
+import { cyclesLedger } from '@systems/cycles-ledger';
 import { skillFile } from '@systems/skill-files';
 import { resumeRun } from '@systems/run-save';
 import { freeSegment, mergeAdjacentFree, segmentStarts, replaceRange } from '@systems/memory-ops';
@@ -64,8 +67,19 @@ const look = (model: Readonly<TrainingModel>, key: string): string | undefined =
       && model.cards[1]!.name === 'AUTODROP v1' && model.cards[1]!.cost === '3 CYCLES · 4 BLOCKS' && model.cards[1]!.key === '2'
       && model.cards[1]!.pitch === TRAINING_TEXT.skills.autodrop.pitch && model.cards[1]!.demo === 'centre' && !model.cards[1]!.trained,
     JSON.stringify(model.cards));
-  check('…ARRIVAL CONTROL: `Training outside approved hours is discouraged. :)`, the head `TRAINING · UNIT-047` and the bank',
-    model.control === TRAINING_TEXT.controlFirstVisit && model.title === 'TRAINING · UNIT-047' && model.bankText === TRAINING_TEXT.bank(bank) && bank >= 3);
+  check('…ARRIVAL CONTROL: `Training outside approved hours is discouraged. :)`, the head `COMPILE HERE` (playtest 1) and the bank',
+    model.control === TRAINING_TEXT.controlFirstVisit && model.title === 'COMPILE HERE' && model.bankText === TRAINING_TEXT.bank(bank) && bank >= 3);
+  // Playtest 1 (B-DESK): the ledger says where the bank came from: ARES-VII's row as its report said it, then the CORE RESERVE
+  // when the floor topped it up; nothing carried at a run's first desk.
+  const earned = store.getState().run.skills.earned[0]!;
+  const reserve = store.getState().run.skills.grants.filter((grant) => grant.source === 'first-pick').reduce((sum, grant) => sum + grant.cycles, 0);
+  let ledger = cyclesLedger(store.getState());
+  check('…the ledger: `+n ARES-VII · ARRIVED +1 · LANDED p% +k` (or PERFECT LANDING), the CORE RESERVE if any, adding up to the bank',
+    ledger.bank === bank && ledger.rows[0]!.kind === 'ship' && ledger.rows[0]!.amount === earned.arrived + earned.landed
+      && ledger.rows[0]!.text === `ARES-VII · ${earned.landed === 5 ? 'PERFECT LANDING' : TRAINING_TEXT.report.earned(earned.pct, earned.landed)}`
+      && ledger.rows[0]!.amountText === `+${earned.arrived + earned.landed}` && ledger.rows.every((row) => row.kind !== 'carried' && row.undo === null)
+      && (reserve === 0 ? ledger.rows.length === 1 : ledger.rows[1]!.text === 'CORE RESERVE' && ledger.rows[1]!.amount === reserve),
+    JSON.stringify(ledger.rows));
   check('…SET COURSE waits (firstPickWaits), the strip\'s first step is A SKILL, the tab\'s badge names the cycles',
     model.blocked && firstPickWaits(store.getState()) && deskSteps(store.getState())[0]!.id === 'train' && !deskSteps(store.getState())[0]!.done
       && deskSteps(store.getState())[0]!.text === TRAINING_TEXT.stepText && deskTabBadges(store.getState()).training === TRAINING_TEXT.badge(bank));
@@ -88,6 +102,10 @@ const look = (model: Readonly<TrainingModel>, key: string): string | undefined =
   check(`…the counter: \`${TRAINING_TEXT.saved(bank - 3)}\`; the UNDO row`, model.saved === TRAINING_TEXT.saved(bank - 3)
     && model.pending.length === 1 && model.pending[0]!.undoable
     && model.pending[0]!.text === TRAINING_TEXT.pendingRow('AUTOBURN v1', 3));
+  ledger = cyclesLedger(store.getState());
+  check('…and on the ledger: `−3 AUTOBURN v1` with UNDO (pending 0), the rows adding up to the bank left',
+    ledger.rows.at(-1)?.kind === 'spent' && ledger.rows.at(-1)?.amountText === '−3' && ledger.rows.at(-1)?.text === 'AUTOBURN v1'
+      && ledger.rows.at(-1)?.undo === 0 && ledger.bank === bank - 3, JSON.stringify(ledger.rows));
   check('…SET COURSE no longer waits; A SKILL is done and names the pick', !firstPickWaits(store.getState()) && deskSteps(store.getState())[0]!.done
     && deskSteps(store.getState())[0]!.text === TRAINING_TEXT.stepDone('AUTOBURN', 1));
   const ship = deskCandidates(store.getState())[0]!;
@@ -141,6 +159,14 @@ const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), '..', 'save', 'fi
     model.selected?.key === 'autoburn:v2' && model.detail?.lines[0] === 'GREEN, THEN ROUND' && model.detail.lines[1] === TRAINING_TEXT.detailCost(4, 8)
       && model.detail.lines[2] === TRAINING_TEXT.skills.autoburn.next[1] && model.detail.action?.label === TRAINING_TEXT.train(4), JSON.stringify(model.detail));
   check('…no CONTROL line, no top-up, no SAVED line past visit 1', model.control === null && model.topUp === null && model.saved === null);
+  // Playtest 1 (B-DESK): a migrated desk's ledger: what earlier ships and the migration paid, less v1, is CARRIED OVER; the
+  // ship just left; the story's 8 (this visit's, no label: FOUND ON THE WAY). They add up to the bank.
+  const ledger = cyclesLedger(store.getState());
+  const bank2 = bankOf(store.getState().run.skills);
+  check('…the ledger at desk 2: CARRIED OVER, the ship, `+8 FOUND ON THE WAY`, adding up to the bank',
+    ledger.bank === bank2 && ledger.rows.map((row) => row.kind).join() === `${ledger.rows[0]!.kind === 'carried' ? 'carried,' : ''}ship,grant`
+      && ledger.rows.at(-1)!.text === 'FOUND ON THE WAY' && ledger.rows.at(-1)!.amountText === '+8'
+      && ledger.rows.reduce((sum, row) => sum + row.amount, 0) === bank2, JSON.stringify(ledger.rows));
   selectTrainingCell(store, 'autoburn', { kind: 'lock', level: 1 });
   startTrainingHold(store);
   const result = advanceTrainingHold(store, TRAINING_HOLD_SEC + 0.1);
@@ -264,15 +290,18 @@ const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), '..', 'save', 'fi
 // --- The LANDING REPORT's cycles line ----------------------------------------------------------------------------------------
 {
   const line = cyclesReport({ slot: 0, arrived: 1, landed: 4, pct: 83 }, false, false);
-  check('`TRAINING CYCLES +5 · ARRIVED +1 · LANDED 83% +4`, rolling up from +0', line.line === 'TRAINING CYCLES +5 · ARRIVED +1 · LANDED 83% +4'
-    && line.total === 5 && line.lineAt(0) === 'TRAINING CYCLES +0 · ARRIVED +1 · LANDED 83% +0' && line.lineAt(3) === 'TRAINING CYCLES +3 · ARRIVED +1 · LANDED 83% +2'
-    && line.topUp === null, line.line);
-  check('every point: `PERFECT LANDING · +6`', cyclesReport({ slot: 0, arrived: 1, landed: 5, pct: 100 }, false, false).line === 'PERFECT LANDING · +6');
-  check('the final ship: `+5 TRAINING CYCLES · NO DESK AHEAD` (decision 18: shown, does nothing)',
-    cyclesReport({ slot: 19, arrived: 1, landed: 4, pct: 85 }, true, false).line === '+5 TRAINING CYCLES · NO DESK AHEAD');
+  // Playtest 1 (B-DESK, §3.6): the line says what cycles are for (`TO COMPILE`, the REPOSITORY's COMPILE HERE), and its
+  // breakdown is the desk ledger's row for the ship.
+  check('`+5 CYCLES TO COMPILE · ARRIVED +1 · LANDED 83% +4`, rolling up from +0', line.line === '+5 CYCLES TO COMPILE · ARRIVED +1 · LANDED 83% +4'
+    && line.total === 5 && line.lineAt(0) === '+0 CYCLES TO COMPILE · ARRIVED +1 · LANDED 83% +0' && line.lineAt(1) === '+1 CYCLE TO COMPILE · ARRIVED +1 · LANDED 83% +0'
+    && line.lineAt(3) === '+3 CYCLES TO COMPILE · ARRIVED +1 · LANDED 83% +2' && line.topUp === null, line.line);
+  check('every point: `+6 CYCLES TO COMPILE · PERFECT LANDING`',
+    cyclesReport({ slot: 0, arrived: 1, landed: 5, pct: 100 }, false, false).line === '+6 CYCLES TO COMPILE · PERFECT LANDING');
+  check('the final ship: `+5 CYCLES · NO DESK AHEAD` (decision 18: shown, does nothing)',
+    cyclesReport({ slot: 19, arrived: 1, landed: 4, pct: 85 }, true, false).line === '+5 CYCLES · NO DESK AHEAD');
   const crash = cyclesReport({ slot: 0, arrived: 1, landed: 0, pct: 0 }, false, true);
-  check('a crash on the run\'s first ship: +1, then `+2 CYCLES`', crash.total === 1
-    && crash.topUp === '+2 CYCLES' && cyclesReport({ slot: 2, arrived: 1, landed: 0, pct: 0 }, false, false).topUp === null);
+  check('a crash on the run\'s first ship: +1, then `+2 CYCLES · CORE RESERVE` (the ledger\'s word for it)', crash.total === 1
+    && crash.topUp === '+2 CYCLES · CORE RESERVE' && cyclesReport({ slot: 2, arrived: 1, landed: 0, pct: 0 }, false, false).topUp === null);
 }
 
 // --- Graded damage on screen (03 §3.5, §4) ------------------------------------------------------------------------------------
@@ -323,7 +352,7 @@ const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), '..', 'save', 'fi
 {
   const T = TRAINING_TEXT;
   const lines = [
-    T.badge(54), T.title('UNIT-999'), T.demos([{ count: 999, kind: 'captures' }, { count: 999, kind: 'drops' }]), T.demos([]),
+    T.badge(54), T.title, T.ledger.ship('GOOD HOPE', T.report.earned(100, 5)), T.ledger.restored('AUTOBURN v3'), T.demos([{ count: 999, kind: 'captures' }, { count: 999, kind: 'drops' }]), T.demos([]),
     T.chooseFirst, T.stepText, T.stepDone('AUTODROP', 3), T.controlFirstVisit,
     T.onTheHouse(2), T.saved(54), T.notYet, ...Object.values(T.notYetWhy), T.lost(27), T.cardCost(8, 12), T.enterKey(T.train(8)),
     T.training('AUTOBURN', 3, { count: 999, kind: 'captures' }), T.training('AUTODROP', 3, { count: 999, kind: 'drops' }),
