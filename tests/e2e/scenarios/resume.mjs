@@ -569,10 +569,10 @@ check('played: UNIT-048\'s RESUME block, the archive and the run save stored, ER
 // The ask: the button opens the confirm; ENTER keeps (and starts nothing: the RESUME block's ENTER waits).
 await tabG.page.locator('#titleEraseBtn').click();
 await tabG.page.waitForTimeout(300);
-const asking = await fullLook(tabG.kit);
+const eraseAsking = await fullLook(tabG.kit);
 check('the click asks `ERASE EVERY UNIT, COLONY AND RUN? · THIS CANNOT BE UNDONE` with ERASE [DEL] / KEEP [ENTER]',
-  asking.eraseAsk === 'ERASE EVERY UNIT, COLONY AND RUN? · THIS CANNOT BE UNDONE ERASE DEL KEEP ENTER' && asking.erase === null,
-  JSON.stringify(asking.eraseAsk));
+  eraseAsking.eraseAsk === 'ERASE EVERY UNIT, COLONY AND RUN? · THIS CANNOT BE UNDONE ERASE DEL KEEP ENTER' && eraseAsking.erase === null,
+  JSON.stringify(eraseAsking.eraseAsk));
 await tabG.shot('1-erase-confirm');
 await tabG.page.keyboard.press('Enter');
 await tabG.page.waitForTimeout(400);
