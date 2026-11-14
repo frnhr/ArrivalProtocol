@@ -234,8 +234,22 @@
   letter-spacing: 0.2em;
   text-transform: uppercase;
 }
-.window-title .ctl { color: var(--accent-dim); font-size: 14px; cursor: pointer; padding: 0 6px; }
-.window-title .ctl:hover { color: var(--warn); }
+/* The title bar's × (a button since playtest 1 note 14: ToolsTabs closes the window it sits in). Reset to read as the
+ * old glyph, with a hit area a finger or a hurried mouse can find. */
+.window-title .ctl {
+  appearance: none;
+  background: none;
+  border: 0;
+  margin: 0 -4px 0 0;
+  font: inherit;
+  line-height: 1;
+  color: var(--accent-dim);
+  font-size: 15px;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+.window-title .ctl:hover,
+.window-title .ctl:focus-visible { color: var(--warn); outline: none; }
 .window-body { padding: 16px; flex: 1; overflow: auto; }
 
 body.mode-memory .tools-view { display: none; }

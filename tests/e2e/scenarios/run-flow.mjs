@@ -122,6 +122,35 @@ const podBay = await st(() => ({ body: document.body.classList.contains('landing
   track: !document.getElementById('groundTrack').hidden, lzs: [...document.querySelectorAll('#pbLzs .pb-lz')].map((el) => el.innerText) }));
 check('ship 1 locks: the landing opens the POD BAY window (LZ-A 0/3) and the GROUND TRACK', podBay.body && podBay.bay && podBay.track
   && podBay.lzs.join(' ') === 'LZ-A 0/3', JSON.stringify(podBay));
+// Playtest 1 note 14 (plan §3.9): every amber window's × closes it, and its dock item opens it again. Checked while ship
+// 1 lands, so the POD BAY is on the desk; SITES is survey-only, so body.survey is put on for its turn (SitesWindow toggles
+// the class only when its model changes, which it does not on ARES-VII).
+{
+  const ids = ['telemetry', 'comms', 'skills', 'inbox', 'sites', 'engine', 'podbay', 'navplot'];
+  const winState = (id) => st((tool) => {
+    const win = document.querySelector(`.desktop > .tools-view > .${tool}-win`);
+    const item = document.querySelector(`.dock-content.tools-view .dock-item[data-tool="${tool}"]`);
+    return { shown: !!win && !win.hidden && win.getBoundingClientRect().width > 0, mark: item?.querySelector('.mark')?.textContent ?? '?',
+      ctls: win ? win.querySelectorAll('.window-title .ctl').length : -1, minus: win ? win.querySelector('.window-title').textContent.includes('−') : true };
+  }, id);
+  for (const id of ids) {
+    if (id === 'sites') await st(() => document.body.classList.add('survey'));
+    const before = await winState(id);
+    if (!before.shown) await page.locator(`.dock-content.tools-view .dock-item[data-tool="${id}"]`).click();
+    const opened = await winState(id);
+    await page.locator(`.desktop > .tools-view > .${id}-win .window-title .win-close`).click({ timeout: 3000 }).catch(() => {});
+    await page.waitForTimeout(150);
+    const closed = await winState(id);
+    check(`${id}: its × closes the window (the dock mark goes ○), one control in the title bar, no −`,
+      opened.shown && !closed.shown && closed.mark === '○' && opened.ctls === 1 && !opened.minus, JSON.stringify({ before, opened, closed }));
+    if (before.shown) {
+      await page.locator(`.dock-content.tools-view .dock-item[data-tool="${id}"]`).click();
+      const back = await winState(id);
+      check(`${id}: its dock item opens it again after the ×`, back.shown && back.mark === '●', JSON.stringify(back));
+    }
+    if (id === 'sites') await st(() => document.body.classList.remove('survey'));
+  }
+}
 // Slice 2: ARES-VII is calm (no HOLLOW, no scripted bite): nothing to cure before the pods go down.
 check('ship 1 is calm: no hollow block in memory, no HOLLOW line in the TERMINAL', await st(() => !window.__ap.store.getState().memory.some((seg) => seg.type === 'hollow')
   && !window.__ap.log().some((entry) => entry.speaker === 'hollow')));

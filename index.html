@@ -67,7 +67,7 @@
         <div class="dock-item open" data-tool="comms"><span class="mark">●</span><span>Comms</span></div>
         <!-- LANDING only (body.landing): the POD BAY window -->
         <div class="dock-item open landing-only" data-tool="podbay"><span class="mark">●</span><span>Pod Bay</span></div>
-        <div class="dock-section">System</div>
+        <div class="dock-section">Mind</div>
         <!-- The cards this unit carries (WP8, SkillsWindow); NEW pulses when one lands and the window is closed -->
         <div class="dock-item" data-tool="skills"><span class="mark">○</span><span>Skills</span><span class="dock-new">NEW</span></div>
         <!-- Phase 3 slice 3b: the INBOX (InboxWindow); its label reads `INBOX n` and pulses while mail is unread -->
@@ -122,8 +122,7 @@
           <div class="window-title">
             <span class="grip" data-grip><span class="bar"></span><span class="bar"></span><span class="bar"></span></span>
             <span class="name">Telemetry</span>
-            <span class="ctl">−</span>
-            <span class="ctl">×</span>
+            <button class="ctl win-close" tabindex="-1" aria-label="close" title="close">×</button>
           </div>
           <div class="window-body">
             <div class="readout"><span class="label">speed</span><span><span class="value" id="telSpeed">—</span><span class="unit">km/s</span></span></div>
@@ -138,7 +137,7 @@
             <span class="grip" data-grip><span class="bar"></span><span class="bar"></span><span class="bar"></span></span>
             <span class="name">Comms</span>
             <span class="comms-lamp" id="commsLamp" title="receiving">RX</span>
-            <span class="ctl">−</span><span class="ctl">×</span>
+            <button class="ctl win-close" tabindex="-1" aria-label="close" title="close">×</button>
           </div>
           <div class="window-body comms-body" id="commsBody" title="click to finish the line">
             <div class="comms-log" id="commsLog" aria-live="polite"></div>
@@ -157,7 +156,7 @@
           <div class="window-title">
             <span class="grip intact" data-grip><span class="bar"></span><span class="bar"></span><span class="bar"></span></span>
             <span class="name">Skills</span>
-            <span class="ctl">−</span><span class="ctl">×</span>
+            <button class="ctl win-close" tabindex="-1" aria-label="close" title="close">×</button>
           </div>
           <div class="window-body skills-body" id="skillsBody"></div>
         </div>
@@ -168,7 +167,7 @@
           <div class="window-title">
             <span class="grip intact" data-grip><span class="bar"></span><span class="bar"></span><span class="bar"></span></span>
             <span class="name">Inbox</span>
-            <span class="ctl">−</span><span class="ctl">×</span>
+            <button class="ctl win-close" tabindex="-1" aria-label="close" title="close">×</button>
           </div>
           <div class="window-body inbox-body" id="inboxBody"></div>
         </div>
@@ -179,7 +178,7 @@
           <div class="window-title">
             <span class="grip intact" data-grip><span class="bar"></span><span class="bar"></span><span class="bar"></span></span>
             <span class="name">Sites</span>
-            <span class="ctl">−</span><span class="ctl">×</span>
+            <button class="ctl win-close" tabindex="-1" aria-label="close" title="close">×</button>
           </div>
           <div class="window-body sites-body" id="sitesBody"></div>
         </div>
@@ -188,7 +187,7 @@
           <div class="window-title">
             <span class="grip" data-grip><span class="bar"></span><span class="bar"></span><span class="bar"></span></span>
             <span class="name">Engine Control</span>
-            <span class="ctl">−</span><span class="ctl">×</span>
+            <button class="ctl win-close" tabindex="-1" aria-label="close" title="close">×</button>
           </div>
           <div class="window-body engine-body">
             <button class="engage burn-btn" id="burnBtn" data-hint-key="SPACE" tabindex="-1"></button>
@@ -252,7 +251,7 @@
           <div class="window-title">
             <span class="grip" data-grip><span class="bar"></span><span class="bar"></span><span class="bar"></span></span>
             <span class="name">Pod Bay</span>
-            <span class="ctl">−</span><span class="ctl">×</span>
+            <button class="ctl win-close" tabindex="-1" aria-label="close" title="close">×</button>
           </div>
           <div class="window-body podbay-body">
             <button class="engage pb-launch" id="podLaunchBtn" data-hint-key="L" tabindex="-1"><span class="pb-launch-label" id="pbLaunchLabel"></span><span class="pb-launch-status" id="pbLaunchStatus"></span></button>
@@ -278,7 +277,7 @@
           <div class="window-title">
             <span class="grip" data-grip><span class="bar"></span><span class="bar"></span><span class="bar"></span></span>
             <span class="name">Nav Plot</span>
-            <span class="ctl">−</span><span class="ctl">×</span>
+            <button class="ctl win-close" tabindex="-1" aria-label="close" title="close">×</button>
           </div>
           <div class="window-body navplot-body">
             <div class="np-stage">
