@@ -19,7 +19,7 @@ import { RESIDENT_UI_TEXT } from '@data/resident-ui-text';
 import { hasIntegrity, isInfected, getAiCore } from '@state/selectors';
 import { shipSummaryAt } from '@systems/map-run';
 import { unknownShown } from '@systems/signals';
-import { hitsLanding } from '@systems/map-hop';
+import { hitsLanding, cardArrives } from '@systems/map-hop';
 import { unitArrival, type ArrivalPreview } from '@systems/arrival-preview';
 import { MAP_TEXT } from '@data/map-text';
 import { TOOL_WORD } from '@data/fs-tools';
@@ -138,6 +138,9 @@ export interface DraftCardView extends DraftCard {
   tag: string;        // FILE · 2 BLOCKS / UPGRADE / AI CORE / ON ARRIVAL
   key: string;        // '1', '2', '3'
   picked: boolean;
+  // Playtest 1 (Q19): a charge card the destination's room cannot take whole says so on itself (`+12 · ONLY 4 FIT ON
+  // HALCYON`), picked or not; null when all of it would arrive, and for every other card.
+  fitNote: string | null;
 }
 
 // The picked card's new file, riding in the packet (a file card only): a chip of its own beside the unit's.
@@ -205,6 +208,9 @@ export interface PacketRoom {
   tone: 'quiet' | 'squeezed' | 'zero' | 'over';
   tooMany: string | null;      // 20 TOO MANY FOR THE ROOM (or LINK) · LEAVE FILES BEHIND: TRANSMIT ▸ waits
   confirm: string | null;      // the charge may arrive at 0: TRANSMIT ▸ asks this first (ARRIVE WITH NO REPAIR CHARGE?)
+  // Playtest 1 (Q19): the picked card's charge that arrives (the room bar's `+12` segment, inside the charge's); null when
+  // no charge card is picked.
+  card: { blocks: number; arrives: number; label: string } | null;
 }
 
 // The chip's words after the owner (THREAT_TEXT.uninvitedChip reads `owner · n BLOCKS · NOT YOURS · RIDES FREE`).
@@ -324,11 +330,25 @@ function sendOnHelps(plan: Readonly<TransitPlan>, preview: Readonly<ArrivalPrevi
   return preview.tooMany !== null && plan.deliveries.some((chip) => !chip.sendOn);
 }
 
+// Playtest 1 (Q19): what a charge card would bring if picked, against the room as the packet stands with that pick (the
+// card's note says what the room cannot take); null for any other card, or when all of it would arrive.
+function cardFitNote(state: Readonly<GameState>, plan: Readonly<TransitPlan>, id: DraftCardId, ship: string): string | null {
+  const blocks = pickCharge(id);
+  if (blocks === 0) return null;
+  const fit = unitArrival(state, { hop: plan.hop, threat: plan.threat, dropped: plan.dropped, pick: id, deliveries: plan.deliveries, packAs: plan.packAs }).fit;
+  if (fit.word === 'leave') return null;
+  const arrives = cardArrives(fit, blocks);
+  return arrives < blocks ? TRANSMIT_TEXT.cardFits(blocks, arrives, ship) : null;
+}
+
 function packetRoom(preview: Readonly<ArrivalPreview>, plan: Readonly<TransitPlan>): PacketRoom {
   const fit = preview.fit;
   const line = fit.floor > 0 ? MAP_TEXT.packet.room(fit.room, fit.files, fit.floor) : MAP_TEXT.packet.roomNoFloor(fit.room, fit.files);
   const tooMany = sendOnHelps(plan, preview) ? REPO_TEXT.packet.overWithDeliveries(Math.max(fit.overLink, fit.over)) : preview.tooMany;
-  return { fit, line, charge: preview.charge, tone: preview.tone, tooMany, confirm: preview.confirm };
+  const blocks = pickCharge(plan.pick);
+  const arrives = blocks > 0 ? cardArrives(fit, blocks) : 0;
+  const card = blocks > 0 ? { blocks, arrives, label: TRANSMIT_TEXT.cardSegment(arrives) } : null;
+  return { fit, line, charge: preview.charge, tone: preview.tone, tooMany, confirm: preview.confirm, card };
 }
 
 function requirePlan(state: Readonly<GameState>): TransitPlan {
@@ -443,7 +463,7 @@ export function transmitModel(state: Readonly<GameState>): TransmitModel {
       // Slice 5 (review B1): a departed resident's skill card has no pool form (its skill is granted, no link room).
       const def = card.id === 'skill' ? null : getUpgrade(card.id);
       const tag = def === null ? RESIDENT_UI_TEXT.deck.skillTag : DRAFT_TEXT.form(def.form, def.blocks);
-      return { ...card, tag, key: String(i + 1), picked: card.id === plan.pick };
+      return { ...card, tag, key: String(i + 1), picked: card.id === plan.pick, fitNote: cardFitNote(state, plan, card.id, ship.name) };
     }),
     pick: plan.pick,
     cardFile: cardFileChip(plan.pick),

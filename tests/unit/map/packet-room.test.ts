@@ -20,6 +20,9 @@ import { REPO_TEXT } from '@data/repo-text';
 import type { DeliveryChip, RepoRequest } from '@/types/repo';
 import { run1Map } from './run1-fixture';
 import { unknownShown } from '@systems/signals';
+import { TRANSMIT_TEXT } from '@data/script';
+import { CHARGE_ARRIVAL_FLOOR, CHARGE_CARD_BLOCKS } from '@data/tuning';
+import type { DraftCard } from '@data/upgrades';
 
 // The unit on run 1's arm at the end of `route`, its ship ended, on the PACKET to `to`.
 function packetTo(
@@ -110,6 +113,39 @@ const spare = model.chips.find((chip) => chip.lock === null && !chip.dropped)!;
 check('…a file can be left behind though it buys no charge (01 §3.16: TRANSMIT ▸ waits)',
   spare.chargeGain === 0 && spare.toggleable && toggleDrop(store, spare.segId) === null);
 check('…and the room count follows', packetFit(store.getState(), store.getState().run.transit!).over === Math.max(0, over - spare.blocks));
+// Playtest 1 (Q19): the +12 card counts after the floor and the room bar shows its own segment; a room that cannot take it
+// whole says so on the card.
+{
+  const chargeCard: DraftCard = { id: 'charge', title: '+12 REPAIR CHARGE', effect: '', why: '', boosted: false };
+  const offered = (store: Store<GameState>, pick: 'charge' | null): Store<GameState> => {
+    store.update((draft) => { draft.run.transit!.offer = [chargeCard]; draft.run.transit!.pick = pick; });
+    return store;
+  };
+  let card = transmitModel(offered(packetTo([0, 2, 5], 11, { charge: 0 }), 'charge').getState());
+  check('Q19: no charge held, the card picked into VESPER (FULL): the floor\'s 12, then the card\'s 12, a `+12` segment',
+    card.room.fit.chargeArrives === CHARGE_ARRIVAL_FLOOR + CHARGE_CARD_BLOCKS && card.room.card?.arrives === CHARGE_CARD_BLOCKS
+    && card.room.card.label === TRANSMIT_TEXT.cardSegment(12) && card.room.card.label === '+12' && card.cards[0]!.fitNote === null,
+    JSON.stringify(card.room));
+  card = transmitModel(offered(packetTo([0, 2, 5], 11, { charge: 0 }), null).getState());
+  check('…not picked: no segment, the floor alone', card.room.card === null && card.room.fit.chargeArrives === CHARGE_ARRIVAL_FLOOR
+    && card.cards[0]!.fitNote === null);
+  card = transmitModel(offered(packetTo([0, 2, 5], 8, { charge: 40 }), null).getState());
+  check('…into LAPWING with its room full of charge: the card says `+12 · NO ROOM FOR IT ON LAPWING`, picked or not',
+    card.cards[0]!.fitNote === TRANSMIT_TEXT.cardFits(12, 0, 'LAPWING') && card.cards[0]!.fitNote === '+12 · NO ROOM FOR IT ON LAPWING',
+    card.cards[0]!.fitNote ?? 'null');
+  const lapwing = offered(packetTo([0, 2, 5], 8, { charge: 0 }), 'charge');
+  card = transmitModel(lapwing.getState());
+  const room = card.room.fit.room - card.room.fit.files;
+  check(`…LAPWING with no charge held: the card fits whole when the room has 12 (room left ${room})`,
+    room >= 12 ? card.room.card?.arrives === 12 && card.cards[0]!.fitNote === null
+      : card.room.card?.arrives === room && card.cards[0]!.fitNote === TRANSMIT_TEXT.cardFits(12, room, 'LAPWING'),
+    `${JSON.stringify(card.room.card)} ${card.cards[0]!.fitNote}`);
+  const squeezed = offered(packetTo([0, 2, 5], 8, { charge: 0, room: card.room.fit.files + 4 }), 'charge');
+  card = transmitModel(squeezed.getState());
+  check('…a room with 4 blocks left: `+12 · ONLY 4 FIT ON LAPWING`, and the segment is `+4`',
+    card.cards[0]!.fitNote === '+12 · ONLY 4 FIT ON LAPWING' && card.room.card?.arrives === 4 && card.room.card.label === '+4',
+    `${JSON.stringify(card.room.card)} ${card.cards[0]!.fitNote}`);
+}
 check('hitsLanding is the ECC line\'s count', hitsLanding(hopBetween(run1Map(4), 5, 11), 0) === 4);
 // --- 3b: the DELIVERIES chips, IN TRANSIT and SALVAGE ------------------------------------------------------------------
 const chip = (key: string, file: DeliveryChip['file'], blocks: number, arrivedYear: number, sendOn = false): DeliveryChip => ({

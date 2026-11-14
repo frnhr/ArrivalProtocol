@@ -249,13 +249,13 @@ function pick(id: UpgradeId): void {
     && capabilitiesNow(state()).threads === 3, `capacity ${capacity}`);
 }
 
-// +12 REPAIR CHARGE: with the stars, before the floor; the boot's charge line says it.
+// +12 REPAIR CHARGE: after the floor (playtest 1, Q19); the boot's charge line says it.
 {
   toTransmit(5);
   pick('charge');
   const carried = state().run.transit!.chargeCarried;
   h.transmit();
-  const expected = Math.max(CHARGE_ARRIVAL_FLOOR, carried + CHARGE_CARD_BLOCKS);
+  const expected = Math.max(CHARGE_ARRIVAL_FLOOR, carried + state().run.pendingStarCredit) + CHARGE_CARD_BLOCKS;
   check('+12 REPAIR CHARGE arrives on top of what was carried', chargeLeft(state()) === expected && state().run.arrival?.cardCharge === CHARGE_CARD_BLOCKS,
     `${chargeLeft(state())} vs ${expected}`);
   h.stepUntil(() => state().run.phase === 'flight', 15);

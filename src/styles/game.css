@@ -2493,6 +2493,20 @@ body.reduced-motion.beamed-out .desktop > .tools-view .window-body { animation: 
 }
 .tx-bar-files { height: 100%; background: color-mix(in srgb, var(--transmit-line) 55%, transparent); transition: width 0.25s ease-out; }
 .tx-bar-charge { height: 100%; background: color-mix(in srgb, var(--transmit-charge) 50%, transparent); transition: width 0.25s ease-out; }
+/* Playtest 1 (Q19): the +12 card's blocks that arrive, brighter than the rest of the charge, with their count; they flash
+   once when the card is picked, so the bar visibly moves for it. */
+.tx-bar-card {
+  height: 100%; overflow: hidden; white-space: nowrap; text-align: center;
+  font-size: 10px; line-height: 16px; letter-spacing: 0.08em; color: var(--bg);
+  background: color-mix(in srgb, var(--transmit-charge) 85%, transparent); transition: width 0.25s ease-out;
+}
+.tx-bar-card[hidden] { display: none; }
+.tx-bar-card.flash { animation: tx-card-flash 0.9s ease-out 2; }
+@keyframes tx-card-flash {
+  0% { background: var(--accent-bright); box-shadow: 0 0 14px var(--accent-bright); }
+  100% { background: color-mix(in srgb, var(--transmit-charge) 85%, transparent); box-shadow: none; }
+}
+body.reduced-motion .tx-bar-card.flash { animation: none; }
 /* Charge with no room on the link: still charge (the bar's green, faded and dashed: outside the link), in muted
    words, not the warning red (post-handover: red read as damage; it is only the link being full). Its title says why. */
 .tx-bar-over {
@@ -2611,6 +2625,8 @@ body.reduced-motion.beamed-out .desktop > .tools-view .window-body { animation: 
   font-size: 11px; line-height: 1.35; letter-spacing: 0.02em; color: var(--report-dim);
 }
 .tx-card.boosted .tx-card-why { color: var(--star); }
+.tx-card-fit { font-size: 10px; letter-spacing: 0.12em; color: var(--warn); }
+.tx-card-fit[hidden] { display: none; }
 .tx-card.boosted .tx-card-why::before { content: '◆ '; }
 .tx-card-picked {
   position: absolute; top: -9px; right: 10px; padding: 1px 7px;

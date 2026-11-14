@@ -3,7 +3,7 @@
 // star credit, card and floor, layoutCarried's seeds before the charge), and the memory classes' numbers it reads
 // (FULL / COMPACT / TIGHT: 384 / 320 / 256 blocks, room 152 / 152 / 88, floor 12 / 12 / 0).
 import { check, finish } from '../landing/checks';
-import { roomFit, hopBetween } from '@systems/map-hop';
+import { roomFit, hopBetween, cardArrives } from '@systems/map-hop';
 import { arrivalCharge, BEAM_SEED_LAYOUT_BLOCKS } from '@systems/carry';
 import { MEMORY_LAYOUTS, layoutForTotal, rackOf, rackStartOf } from '@data/memory';
 import { run1Map } from './run1-fixture';
@@ -36,6 +36,26 @@ check('the star credit and the card arrive on top of what crossed (20 + 18 + 12 
 const bonusSqueezed = roomFit({ files: files(120), charge: 3, bonus: { starCredit: 18, card: 12 } }, hop('FULL'));
 check('…and the room can squeeze them (152 − 120 = 32 of 33)', bonusSqueezed.word === 'squeezed' && bonusSqueezed.chargeArrives === 32 && bonusSqueezed.roomLost === 1,
   json(bonusSqueezed));
+check('…the card\'s 12 arrive whole there: the room cuts the last block, of the card (11 of 12)',
+  cardArrives(bonus, 12) === 12 && cardArrives(bonusSqueezed, 12) === 11, `${cardArrives(bonus, 12)} ${cardArrives(bonusSqueezed, 12)}`);
+// Playtest 1 (Q19): the card counts after the floor. A unit arriving with little charge used to get the floor either way, so
+// the card could visibly do nothing (`max(12, 0 + 12)` = 12 = the floor alone); now it is the floor plus 12.
+const cardLow = roomFit({ files: files(70), charge: 0, bonus: { starCredit: 0, card: 12 } }, hop('FULL'));
+const noCardLow = roomFit({ files: files(70), charge: 0 }, hop('FULL'));
+check('Q19: 0 charge and the card into a FULL ship: the floor\'s 12, then the card\'s 12 (24, the floor adding 12)',
+  cardLow.word === 'fits' && cardLow.wanted === 24 && cardLow.chargeArrives === 24 && cardLow.floorAdded === 12
+  && cardLow.wanted === arrivalCharge(0, 0, 12).blocks && noCardLow.chargeArrives === 12 && cardArrives(cardLow, 12) === 12, json(cardLow));
+const cardTop = roomFit({ files: files(70), charge: 5, bonus: { starCredit: 0, card: 12 } }, hop('COMPACT'));
+check('…5 carried and the card: 12 + 12 (the floor tops up 7, never the card)', cardTop.wanted === 24 && cardTop.floorAdded === 7
+  && cardTop.carried + cardTop.bonus + cardTop.floorAdded === cardTop.wanted, json(cardTop));
+const cardTight = roomFit({ files: files(80), charge: 0, bonus: { starCredit: 0, card: 12 } }, hop('TIGHT'));
+check('…into a TIGHT room of 88 with 80 of files: only 8 of the card fit (`+12 · ONLY 8 FIT`)',
+  cardTight.word === 'squeezed' && cardTight.chargeArrives === 8 && cardArrives(cardTight, 12) === 8 && cardTight.roomLost === 4, json(cardTight));
+const cardFull = roomFit({ files: files(120), charge: 40, bonus: { starCredit: 0, card: 12 } }, hop('FULL', 200));
+check('…a room already full of charge takes none of the card', cardFull.chargeArrives === 32 && cardArrives(cardFull, 12) === 0, json(cardFull));
+let cardOver = false;
+try { cardArrives(cardLow, 13); } catch { cardOver = true; }
+check('…a card larger than the bonus it sits in throws', cardOver);
 
 // (b) The link's loss and the room's are apart; squeezed means the room.
 const lapwing = roomFit({ files: files(79), charge: 30 }, hop('TIGHT', 117));

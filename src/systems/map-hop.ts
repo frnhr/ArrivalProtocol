@@ -90,8 +90,9 @@ export interface UnitLoad {
 // How a unit meets a destination's link and room (01 §3.16, the spec amendment of 02 §3.3 in slice-3a-plan's review
 // follow-up): files must cross the link (the review's B1: files over it are `leave`, not a throw at SET COURSE); files
 // plus the charge floor must fit the room (on a TIGHT ship there is no floor: files alone); the link limits files plus
-// charge, as phase 2's packUnit does. The charge that arrives is arrivalCharge's (what crossed, plus the star credit and
-// the card, never below the floor), laid out by data/memory.ts fillRoom, the rule layoutCarried lays the unit out by:
+// charge, as phase 2's packUnit does. The charge that arrives is arrivalCharge's (what crossed, plus the star credit,
+// never below the floor, then the card on top: playtest 1 Q19), laid out by data/memory.ts fillRoom, the rule
+// layoutCarried lays the unit out by:
 // • fits: every block that crossed or was earned arrives (with the fewest seeds);
 // • squeezed: the room leaves some of it behind (roomLost > 0: `CHARGE SQUEEZED: 15 ARRIVES`, `26 WON'T FIT`);
 // • leave: files are over the link, or files plus the floor over the room: the PACKET waits until files are left;
@@ -108,8 +109,8 @@ export function roomFit(unit: Readonly<UnitLoad>, hop: Readonly<Pick<Hop, 'linkB
     return blocks / BEAM_SEED_LAYOUT_BLOCKS;
   };
   const charge = whole(unit.charge, 'charge');
-  const bonus = whole(unit.bonus?.starCredit ?? 0, 'star credit') + whole(unit.bonus?.card ?? 0, 'card charge')
-    + whole(unit.bonus?.gift ?? 0, 'gift charge');
+  const card = whole(unit.bonus?.card ?? 0, 'card charge');
+  const bonus = whole(unit.bonus?.starCredit ?? 0, 'star credit') + card + whole(unit.bonus?.gift ?? 0, 'gift charge');
   const seedsMin = seeds(unit.seedBlocksMin ?? 0, 'seed blocks (fewest)');
   const seedsMax = seeds(unit.seedBlocksMax ?? 0, 'seed blocks (most)');
   if (seedsMin > seedsMax) throw new Error(`roomFit: ${seedsMin} seeds at the fewest, ${seedsMax} at the most`);
@@ -121,7 +122,9 @@ export function roomFit(unit: Readonly<UnitLoad>, hop: Readonly<Pick<Hop, 'linkB
   const overLink = Math.max(0, files - link);
   const leave = over > 0 || overLink > 0;
   const carried = Math.max(0, Math.min(charge, link - files));
-  const wanted = Math.max(floor, carried + bonus);
+  // Playtest 1 (Q19): the card counts after the floor, as carry.ts arrivalCharge (the floor tops up the rest, never the card).
+  const floored = Math.max(floor, carried + bonus - card);
+  const wanted = floored + card;
   const arrive = (count: number): number => (leave ? 0 : fillRoom(room, files, floor, wanted, count).charge);
   const chargeArrives = arrive(seedsMin);
   const chargeArrivesMin = arrive(seedsMax);
@@ -136,4 +139,14 @@ export function roomFit(unit: Readonly<UnitLoad>, hop: Readonly<Pick<Hop, 'linkB
     files, link, room, floor, carried, bonus, wanted, floorAdded: wanted - (carried + bonus), seedsMin, seedsMax,
     chargeArrives, chargeArrivesMin, linkLost, roomLost, over, overLink, word,
   };
+}
+
+// The part of a card's `card` blocks of charge (inside `fit`'s bonus) that the room takes, with the fewest seeds (playtest 1
+// Q19): the PACKET's `+12` segment on the room bar and the card's `ONLY 4 FIT ON HALCYON`. The card counts after the floor,
+// so this is what the room adds for it: the charge that arrives, less what would arrive without it.
+export function cardArrives(fit: Readonly<RoomFit>, card: number): number {
+  if (!(Number.isInteger(card) && card >= 0 && card <= fit.bonus)) throw new Error(`cardArrives: card ${card} of a bonus of ${fit.bonus}`);
+  if (fit.word === 'leave') return 0;
+  const without = fillRoom(fit.room, fit.files, fit.floor, fit.wanted - card, fit.seedsMin).charge;
+  return fit.chargeArrives - without;
 }

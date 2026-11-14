@@ -189,9 +189,20 @@ function cardNode(card: DraftCardView, look: LeftoverDeckView['cards'][number] |
     make('span', 'tx-card-title', card.title),
     make('span', 'tx-card-effect', card.effect),
     make('span', 'tx-card-why', DRAFT_TEXT.why(card.why)),
+    make('span', 'tx-card-fit'),
     make('span', 'tx-card-picked', DRAFT_TEXT.picked),
   );
+  paintCardFit(button, card);
   return button;
+}
+
+// Playtest 1 (Q19): the charge card's own room note (`+12 · ONLY 4 FIT ON HALCYON`), patched in place as files are left
+// behind (the deal does not change, so the card is not rebuilt).
+function paintCardFit(button: HTMLElement, card: DraftCardView): void {
+  const note = button.querySelector<HTMLElement>('.tx-card-fit');
+  if (!note) throw new Error('TransmitScreen: a card lost its fit note');
+  note.hidden = card.fitNote === null;
+  note.textContent = card.fitNote ?? '';
 }
 
 // The keys that pick the cards, in order ([1] [2] [3], the top row or the number pad). Checked against the
@@ -209,6 +220,7 @@ interface PacketParts {
   roomBar: HTMLElement;
   roomFiles: HTMLElement;
   roomCharge: HTMLElement;
+  roomCard: HTMLElement;
   roomOver: HTMLElement;
   roomLine: HTMLElement;
   roomCharges: HTMLElement;
@@ -242,7 +254,9 @@ function buildPacketParts(root: HTMLElement): PacketParts {
   const roomBar = make('div', 'tx-bar tx-room-bar');
   const roomFiles = make('span', 'tx-bar-files');
   const roomCharge = make('span', 'tx-bar-charge');
-  roomBar.append(roomFiles, roomCharge);
+  // Playtest 1 (Q19): the +12 card's blocks that arrive, a segment of their own after the rest of the charge.
+  const roomCard = make('span', 'tx-bar-card');
+  roomBar.append(roomFiles, roomCharge, roomCard);
   const roomOver = make('div', 'tx-bar-over');
   roomOver.hidden = true;
   const roomLine = make('div', 'tx-packet-line tx-room-line');
@@ -280,7 +294,7 @@ function buildPacketParts(root: HTMLElement): PacketParts {
   inTransit.hidden = true;
   chips.after(deliveries, inTransit);
   return {
-    back, room, roomBar, roomFiles, roomCharge, roomOver, roomLine, roomCharges, linkLabel, control, confirm, confirmQ, confirmYes,
+    back, room, roomBar, roomFiles, roomCharge, roomCard, roomOver, roomLine, roomCharges, linkLabel, control, confirm, confirmQ, confirmYes,
     confirmNo, stamp, sendControl, deliveries, deliveryChips, inTransit,
   };
 }
@@ -323,6 +337,7 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
   let sending = false;
   let model: TransmitModel | null = null;
   let shownDeal = '';
+  let shownCard = '';   // the pick whose `+12` segment last flashed on the room bar
   // The TIGHT ship's inline confirm is up (TRANSMIT ▸ on a packet that arrives with no charge), and whether this PACKET
   // has already buzzed its `→ 0 ON ARRIVAL` (once per screen, not per repaint).
   let confirming = false;
@@ -389,7 +404,11 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
       shownDeal = dealKey;
       cardsEl.replaceChildren(...next.cards.map((card, i) => cardNode(card, deck.cards[i])));
     } else {
-      cardsEl.querySelectorAll<HTMLElement>('.tx-card').forEach((node) => node.classList.toggle('picked', node.dataset.card === next.pick));
+      cardsEl.querySelectorAll<HTMLElement>('.tx-card').forEach((node) => {
+        node.classList.toggle('picked', node.dataset.card === next.pick);
+        const card = next.cards.find((view) => view.id === node.dataset.card);
+        if (card) paintCardFit(node, card);
+      });
     }
     cardsEl.classList.toggle('has-pick', next.pick !== null);
     paintGo(next);
@@ -413,7 +432,22 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
     parts.room.dataset.tone = room.tone;
     parts.roomBar.style.setProperty('--link-blocks', String(fit.room));
     parts.roomFiles.style.width = pct(Math.min(fit.files, fit.room));
-    parts.roomCharge.style.width = pct(Math.max(0, Math.min(fit.chargeArrives, fit.room - fit.files)));
+    const charge = Math.max(0, Math.min(fit.chargeArrives, fit.room - fit.files));
+    const card = Math.min(room.card?.arrives ?? 0, charge);
+    parts.roomCharge.style.width = pct(charge - card);
+    parts.roomCard.style.width = pct(card);
+    parts.roomCard.hidden = card === 0;
+    parts.roomCard.textContent = card > 0 ? room.card?.label ?? '' : '';
+    // The `+12` flashes when the card is picked (a new pick, not every repaint): the bar visibly moves for it.
+    const cardKey = card > 0 ? `${current.pick ?? ''}` : '';
+    if (cardKey !== shownCard) {
+      shownCard = cardKey;
+      parts.roomCard.classList.remove('flash');
+      if (cardKey !== '') {
+        void parts.roomCard.offsetWidth;   // restart the animation
+        parts.roomCard.classList.add('flash');
+      }
+    }
     const hang = room.tone === 'over' ? fit.over : fit.roomLost;
     parts.roomOver.hidden = hang <= 0;
     parts.roomOver.textContent = room.tone === 'over' ? `+${fit.over}` : hang > 0 ? MAP_TEXT.packet.wontFit(hang) : '';
@@ -466,6 +500,7 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
     cardsEl.classList.remove('sending', 'nudge');
     goBtn.classList.remove('nudge');
     shownDeal = '';
+    shownCard = '';
     confirming = false;
     zeroAnnounced = false;
     parts.confirm.hidden = true;
