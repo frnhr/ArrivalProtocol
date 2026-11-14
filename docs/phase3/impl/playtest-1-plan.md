@@ -935,3 +935,52 @@ Track A-UI (notes 1, 14, 21, 22 and OD 144), built on 47aa873. Where the build d
      keys then equal those of a first visit.
 5. **The checklist.** Item 49's belt sentence is updated, and items 50–53 are added under "Playtest 1, Batch A (A-UI)" at
    the end of `docs/playtest-checklist.md`. A-LAND's items may conflict with them textually there.
+
+## Deviations (A-LAND)
+
+Built on `a-land` from 47aa873. Each item says what differs from §1, §3.4.3, §3.6 or §4, and why.
+
+1. **Scope.** Built: Q8 (the band), Q19 (+12 after the floor), §3.6's owned copies (note 12), §3.4.3's centred confirm
+   (note 23) and note 10's POD BAY words. **Not built: note 18's words** (`SITE 4 · MOVE AN LZ HERE`, the refused move on
+   the strip). The track's brief named Q8, Q19, §3.6 and §3.4.3 only, and the strip flash needs `survey.ts`, which A-LAND
+   does not own. It is left for C-SITES or a follow-up.
+2. **Q19, one count for the card.** `map-hop.ts cardArrives(fit, card)` returns the part of the card that the room takes
+   (with the fewest seeds). Both the room bar's segment and the card's note read it. `RoomFit` keeps its shape, so the
+   suites that build one by hand (`map/text`, `skills/ui-models`) do not change.
+3. **Q19, the words.** `+12 · ONLY 4 FIT ON KESTREL`, and when nothing fits, `+12 · NO ROOM FOR IT ON LAPWING` (the plan
+   gave only the first form; `ONLY 0 FIT` read badly). The note shows on the card whether it is picked or not, because it
+   is the reason to pick it or not. The segment reads its real count (`+12`, or `+4` when only 4 fit), and it flashes
+   (twice, 0.9 s) when the card is picked. Reduced motion turns the flash off. The words are in `script.ts TRANSMIT_TEXT`
+   (`cardFits`, `cardSegment`): no Batch A track owns that block, and A-WORDS' `DRAFT_TEXT` is left alone.
+4. **Q19, files outside the §4 list.** `transmit.ts` (`PacketRoom.card`, `DraftCardView.fitNote`) and `game.css` (the
+   `.tx-bar-card` and `.tx-card-fit` rules beside the PACKET's other bar rules). B-ORDER owns `transmit.ts` in Batch B,
+   so the new fields are small and named.
+5. **§3.6, the row.** The owned count is a line of its own under the row (`.rp-have`): `YOU HAVE 1`, `YOU HAVE 0 · 1 ON THE
+   WAY`. The plan had it at the end of the row's text. Kept apart, `RepoRow.text` and every test and e2e reader of
+   `.rp-text` are unchanged. A row with none owned and none coming is drawn in the accent colour. The patch adds no copy,
+   so its row says the version the unit runs: `YOU RUN REPAIR v1`. `owned` is the kind's *working* copies (the
+   recommendation's own `workingCopies`: usable and not infected), so a broken Mv counts as 0. The CSS is in `desk.css`
+   (B-DESK's in Batch B).
+6. **§3.4.3, where the request is built.** `landing-controls.ts launchConfirmRequest(text, onYes)` builds [L]'s question,
+   and `main.ts` only passes it to `askInline`. A unit suite can then check the keys without the DOM. `InlineConfirm.ts`
+   exports `confirmAnswerFor` and `CONFIRM_ANSWER_CODES` (ENTER, ESC, `KeyL`, `KeyN`). The confirm layer hears all four
+   and answers only with the keys the open question names, so a tool's delete still ignores [L] and [N]. `askInline`
+   throws when a question names a key the layer does not hear, or names one key for both answers. ConfirmRequest also
+   takes `keys`, the hint under the buttons (`[L] or [ENTER] yes · [N] or [ESC] no`). `index.html` is untouched: the
+   default ENTER / ESC hint is cloned at mount and restored afterwards.
+7. **§3.4.3, the words.** `LZ-A IS FULL · LAND IT ANYWAY? scores 150` and `DOT OFF-SITE · LAUNCH ANYWAY? PLAINS · scores
+   100` keep the score, as before. The buttons read `[L] YES` / `[N] NO`. The no-go question (`LAUNCH INTO LAVA? scores
+   0`) is unchanged. The centred pill dims the screen behind it with a shadow, which takes no clicks: a click elsewhere
+   still answers no.
+8. **Q8, the frame.** `landingPlotViewRadius` is `max(▲ × 1.05, ring.max × 1.5)`, with ▲ never inside the ship. An open
+   path (the ship leaving during the landing) falls back to the ship's frame. The blue mini-plot (`MiniHud.ts`) still
+   uses the ship's frame; no Batch A track owns it. It is a one-line follow-up if the breathing shows there too.
+9. **Q8, the edges.** Each edge's altitude is set in small type along the bottom of its circle. The lower edge's sits
+   just inside the band and the upper edge's just outside it, so neither lands on the planet's rim and its LZ brackets.
+   Each is drawn only when its arc holds it whole, and is an obstacle for the markers' labels. The ring's name while
+   landing is `LAUNCH BAND 1,610–4,110 KM` (`BAND_TEXT.ringLanding(low, high)`, now a function). The rest of the loop
+   (out of the band) is drawn in the plain accent at 75% while landing, so the dotted amber launch run stands out from
+   it.
+10. **+12 moves the charge economy (OPEN-DECISIONS 132).** A unit arriving with less than the floor now gets floor + 12
+    with the card, not the floor alone. Above the floor nothing changes. The quick unit tier needed no re-baseline (see
+    the report), and the balance report is the lead's after Batch B (§3.3.4).

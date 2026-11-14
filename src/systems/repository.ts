@@ -191,6 +191,13 @@ export interface RepoRow {
   recommended: boolean;
   requested: boolean;
   focus: boolean;                     // the last-rm prompt lights this row (04 §3.3)
+  // Playtest 1 (Fran's note 12, plan §3.6): what the unit already has of it, so a duplicate is asked for knowingly
+  // (duplicates stay allowed). A tool row: its kind's working copies in memory (workingCopies, the recommendation's own
+  // count). The patch: the best Repair version the unit runs (it gives no copy, it upgrades them). `coming`: requests of
+  // this file in transit or waiting in a receiver (not this desk's pick: that row already says REQUESTED).
+  owned: number;
+  coming: number;
+  have: string;                       // `YOU HAVE 1` / `YOU HAVE 1 · 1 ON THE WAY` / `YOU RUN REPAIR v1`
 }
 
 // An IN TRANSIT row: a request still on its way (or waiting in a receiver), and what it does toward the selected
@@ -238,9 +245,13 @@ export function repoModel(state: Readonly<GameState>, selected: number | null): 
   const focus = lastRmPrompt(state);
   const available = REPO_FILE_IDS.map((id): RepoRow => {
     const def = REPO_FILES[id];
+    const kind = repoToolKind(id);
+    const owned = kind === null ? bestRepairVersion(state.memory) : workingCopies(state, kind);
+    const coming = state.run.repo.requests.filter((request) => request.file === id && (request.status === 'in-transit' || request.status === 'waiting')).length;
     return {
       id, name: def.name, blocks: def.blocks, effect: def.effect, text: REPO_TEXT.row(def.name, def.blocks, def.effect),
       recommended: recommended === id, requested: pick === id, focus: focus && id === 'rm',
+      owned, coming, have: kind === null ? REPO_TEXT.haveVersion(owned, coming) : REPO_TEXT.have(owned, coming),
     };
   });
   const outlook = target === null ? [] : hopOutlook(state, from, target);

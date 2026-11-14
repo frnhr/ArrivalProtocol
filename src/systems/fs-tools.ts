@@ -27,6 +27,16 @@ export interface ConfirmRequest {
   text: ConfirmText;
   answers?: { yes: string; no: string };
   onYes: () => void;
+  // Playtest 1 (note 23, plan §3.4.3): where the pill opens. 'cursor' (the default): next to the mouse, for a tool's
+  // delete. 'centre': big, in the middle of the screen over the NAV PLOT, for a question asked by a key ([L]'s guards),
+  // where the cursor is wherever the kid last left it.
+  placement?: 'cursor' | 'centre';
+  // The keys that answer (KeyboardEvent.code; left out: ENTER yes, ESC no). Each must be one of InlineConfirm's
+  // CONFIRM_ANSWER_CODES (askInline throws otherwise). `keys`: the hint under the buttons, with [KEY] caps (left out: the
+  // ENTER / ESC hint).
+  yesCodes?: readonly string[];
+  noCodes?: readonly string[];
+  keys?: string;
 }
 
 export interface ToolDeps {

@@ -134,6 +134,18 @@ const memory = h.store.getState().memory;
 {
   check('arrival charge: carried + 6 per ★', arrivalCharge(14, 18).blocks === 32 && arrivalCharge(14, 18).floorAdded === 0);
   check('…never below 12 (the floor tops it up)', arrivalCharge(3, 6).blocks === CHARGE_ARRIVAL_FLOOR && arrivalCharge(3, 6).floorAdded === 3);
+  // Playtest 1 (Q19): the +12 card counts after the floor, so it always adds its 12 (before, 3 + 6 + 12 = 21 was 21 either
+  // way, and 0 + 0 + 12 got the floor's 12 with or without the card).
+  check('…the +12 card adds after the floor: 0 carried + card = 12 + 12 (the floor tops up only the rest)',
+    arrivalCharge(0, 0, 12).blocks === CHARGE_ARRIVAL_FLOOR + 12 && arrivalCharge(0, 0, 12).floorAdded === CHARGE_ARRIVAL_FLOOR);
+  check('…3 carried + 6 credit + card = 12 + 12, the floor adding 3', arrivalCharge(3, 6, 12).blocks === 24 && arrivalCharge(3, 6, 12).floorAdded === 3);
+  check('…above the floor the card simply adds: 14 + 18 + 12 = 44', arrivalCharge(14, 18, 12).blocks === 44 && arrivalCharge(14, 18, 12).floorAdded === 0);
+  check('…on a TIGHT ship (no floor) the card is 12 whatever crossed', arrivalCharge(0, 0, 12, 0).blocks === 12 && arrivalCharge(0, 0, 12, 0).floorAdded === 0);
+  check('…a gift counts before the floor, like the credit: 4 + gift 5 + card = 12 + 12', arrivalCharge(4, 0, 12, 12, 5).blocks === 24
+    && arrivalCharge(4, 0, 12, 12, 5).floorAdded === 3);
+  let cardThrew = false;
+  try { arrivalCharge(0, 0, -12); } catch { cardThrew = true; }
+  check('…a negative card throws', cardThrew);
   const packet = packUnit(memory, link, []);
   const rackEBlocks = packet.rackE.reduce((sum, seg) => sum + seg.size, 0);
   const filesBlocks = rackEBlocks + packet.rackF.reduce((sum, seg) => sum + seg.size, 0);

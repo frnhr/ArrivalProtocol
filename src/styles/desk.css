@@ -536,6 +536,9 @@ body.reduced-motion .title-save-btn.primary { animation: none; }
 .rp-req { grid-column: 3; }
 .rp-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .rp-text { font-size: 12px; letter-spacing: 0.06em; color: var(--desk-bright); }
+/* Playtest 1 (note 12): what the unit already has of the file. */
+.rp-have { font-size: 10px; letter-spacing: 0.1em; color: var(--desk-dim); }
+.rp-have.none { color: var(--desk-accent); }
 .rp-eta { margin-top: 4px; font-size: 10px; letter-spacing: 0.06em; line-height: 1.35; color: var(--desk-dim); }
 .rp-eta.eta-in-time { color: var(--desk-good); }
 .rp-eta.eta-late { color: var(--desk-accent); }

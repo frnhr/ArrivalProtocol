@@ -158,8 +158,8 @@ export interface RunMapState {
 }
 
 // The card's fit line and the PACKET's room bar (01 §3.16; systems/map-hop.ts roomFit): how the unit's files and
-// charge meet a destination's link and room. Charge in blocks: what the link lets cross, plus the star credit and the +12
-// card (arrivalCharge), never below the floor; then the room by data/memory.ts fillRoom: files, the floor, the beam seeds,
+// charge meet a destination's link and room. Charge in blocks: what the link lets cross, plus the star credit, never below
+// the floor, then the +12 card on top (arrivalCharge, playtest 1 Q19); then the room by data/memory.ts fillRoom: files, the floor, the beam seeds,
 // the rest (SEEDS FIRST). systems/arrival-preview.ts turns it into every arrival number the kid reads.
 export interface RoomFit {
   files: number;
@@ -168,7 +168,7 @@ export interface RoomFit {
   floor: number;
   carried: number;              // the charge the link lets cross (min(charge, link − files); none while files are over it)
   bonus: number;                // what arrives on top of it: the star credit and the card's charge
-  wanted: number;               // what would arrive with room to spare: max(floor, carried + bonus)
+  wanted: number;               // what would arrive with room to spare: max(floor, carried + bonus − card) + card
   floorAdded: number;           // ARRIVAL CONTROL's top-up to the floor inside `wanted`
   seedsMin: number;             // the fewest beam seeds the beam brings (the tutorial's scripted seed: 1)
   seedsMax: number;             // the most

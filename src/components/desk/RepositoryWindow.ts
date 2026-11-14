@@ -7,8 +7,8 @@ import { REPO_TEXT } from '@data/repo-text';
 // systems/repository.ts repoModel only (Track REPO owns the rule; this view never works out an ETA). Three lists:
 // • AVAILABLE: the ETA for the selected ship once above the list (`ARRIVES 2337 · HALCYON APPROACH 2352 · IN TIME` in green,
 //   `4 YRS LATE → …` in amber, NEVER in red: the years are every file's), then each file with its number key ([1]–[7]),
-//   size and effect, ARRIVAL CONTROL's one `:) RECOMMENDED FOR YOU` tag, and its REQUEST toggle (one request per transmit;
-//   a second click clears it);
+//   size and effect, what the unit already has of it (`YOU HAVE 1`, playtest 1), ARRIVAL CONTROL's one `:) RECOMMENDED FOR
+//   YOU` tag, and its REQUEST toggle (one request per transmit; a second click clears it);
 // • IN TRANSIT: the requests behind the unit (`Swap · 4 YRS BEHIND YOU`), green when they catch up at the selected ship;
 // • RESTRICTED: the locked rows and why (`Train it yourself :)`).
 // After the last rm was lost the desk opens here with Rm lit and the warning on top (04 §3.3, round 3).
@@ -28,6 +28,10 @@ function availableNode(row: Readonly<RepoRow>, index: number): HTMLButtonElement
   const key = make('kbd', 'keycap rp-key', String(index + 1));
   const main = make('span', 'rp-main');
   main.appendChild(make('span', 'rp-text', row.text));
+  // Playtest 1 (note 12): the copies already owned, dim (`YOU HAVE 1`); none owned and none coming stands out.
+  const have = make('span', 'rp-have', row.have);
+  have.classList.toggle('none', row.owned === 0 && row.coming === 0);
+  main.appendChild(have);
   if (row.recommended) main.appendChild(make('span', 'rp-tag', REPO_TEXT.window.recommended));
   const toggle = make('span', 'rp-req', row.requested ? REPO_TEXT.window.requested : REPO_TEXT.window.request);
   node.append(key, main, toggle);

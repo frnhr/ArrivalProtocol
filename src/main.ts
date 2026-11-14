@@ -81,8 +81,7 @@ import { mountFsToolPill } from '@components/memory-view/FsToolPill';
 import { actionScan, actionRepair } from '@state/actions';
 import { mountLicences } from '@systems/licences';
 import { mountLanding, setLoadNext } from '@systems/landing';
-import { registerLandingKeys, type LaunchConfirm } from '@systems/landing-controls';
-import { LAUNCH_CONFIRM_TEXT } from '@data/landing-text';
+import { registerLandingKeys, launchConfirmRequest, type LaunchConfirm } from '@systems/landing-controls';
 import { mountDropCache } from '@systems/drop-cache';
 import { mountFaults } from '@systems/faults';
 import { mountHollow } from '@systems/hollow';
@@ -118,12 +117,9 @@ const toolDeps: ToolDeps = {
   ask: askInline,
 };
 
-// [L]'s guards (LAUNCH OFF-SITE? …, LZ-A IS FULL — LAUNCH ANYWAY? …) through the same inline confirm.
-const launchConfirm: LaunchConfirm = (text, onYes) => askInline({
-  text: { question: text, detail: '' },
-  answers: { yes: LAUNCH_CONFIRM_TEXT.yes, no: LAUNCH_CONFIRM_TEXT.no },
-  onYes,
-});
+// [L]'s guards (DOT OFF-SITE · LAUNCH ANYWAY? …, LZ-A IS FULL · LAND IT ANYWAY? …) through the same inline confirm, centred
+// (landing-controls.ts launchConfirmRequest, playtest 1 note 23).
+const launchConfirm: LaunchConfirm = (text, onYes) => askInline(launchConfirmRequest(text, onYes));
 
 // DetailPanel action buttons dispatch through this. The actions re-check everything at the click
 // (pause, operating, the target rules, a free thread), exactly as for a tool click. (SWAP is a tool

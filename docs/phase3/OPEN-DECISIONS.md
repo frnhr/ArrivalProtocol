@@ -727,3 +727,16 @@ renumbers them at CLOSE. "Before → after" is the number the change moved; trac
        holds on once `KEEP HOLDING` is gone is a guidance question for the lead.
 112. **traces-sweep takes `TS_CASES`.** BUILT: `TS_CASES=<id>,<id>` flies only those cases, so a track can re-measure its
      own rows. With it unset, every case flies, as before.
+
+## Playtest 1, Batch A (A-LAND)
+
+132. **The +12 REPAIR CHARGE card counts after the arrival floor** (playtest 1, Q19). BUILT, **[FRAN]**. Before,
+     `max(floor, carried + credit + card + gift)`: a unit that would arrive under the floor got the 12-block floor with or
+     without the card, and the room bar did not move. Now `max(floor, carried + credit + gift) + card`, in
+     `carry.ts arrivalCharge` and `map-hop.ts roomFit`. The card always brings its 12 as far as the room takes them; when
+     the room cannot, the card says so (`+12 · ONLY 4 FIT ON KESTREL`).
+     - Balance: it moves charge only for kids who pick the card while short of the floor (the card is boosted exactly
+       then: `you are down to n REPAIR CHARGE`), by up to +12 at that arrival. Not measured yet: the lead re-runs
+       `npm run balance:report -- --quick` after Batch B, with B-ORDER's link change, and reads MERGE's price (OD 108)
+       and the arrival charge then.
+     - To reverse: the card back inside the `max` in both functions (one line each).

@@ -36,8 +36,8 @@ export { BEAM_SEED_LAYOUT_BLOCKS };
 //    by size, 15–35 each. The best copy of every tool kind (an fs-tool kind or an AI tool's role) never
 //    drops below 60, and the Core takes at most 15 per hit and never drops below its emergency reset
 //    (25). A crash adds 3 hits and Core −25, BEAM OUT 2 hits (run.ts passes them in).
-// 3. arrivalCharge: +6 per ★ of the last ship, +12 for the charge card, and never fewer than the destination's floor
-//    (§6.5's 12 blocks on FULL and COMPACT ships; none on a TIGHT one, 01 §3.16).
+// 3. arrivalCharge: +6 per ★ of the last ship, never fewer than the destination's floor (§6.5's 12 blocks on FULL and
+//    COMPACT ships; none on a TIGHT one, 01 §3.16), and +12 for the charge card on top of that (playtest 1, Q19).
 // 4. layoutCarried: the files back into memory, 01-landing §3.16's pooled receiver: rack E's list and rack F's
 //    list as one block from rack E's start (with a hunting ground between them on a ship whose seeds hunt tools), then
 //    the charge; a block longer than the receiver spills backward
@@ -254,7 +254,10 @@ export function crashCoreToll(from: number, coreHit: number): number {
 }
 
 // The REPAIR CHARGE the unit has on arrival (step 3): what crossed plus the star credit, never fewer
-// than CHARGE_ARRIVAL_FLOOR blocks (a guarantee, §8.1: a kid who lost every star still gets a fight).
+// than CHARGE_ARRIVAL_FLOOR blocks (a guarantee, §8.1: a kid who lost every star still gets a fight), then the card.
+// Playtest 1 (Q19, OPEN-DECISIONS 132): the +12 card adds AFTER the floor. Added before it, a unit that would arrive with
+// little charge got the floor either way, so the card could visibly do nothing (Fran's note 19: the room bar did not
+// move). Now the card's 12 always arrive, as far as the room takes them.
 export interface ArrivalCharge {
   blocks: number;
   floorAdded: number;
@@ -271,9 +274,10 @@ export function arrivalCharge(
 ): ArrivalCharge {
   if (!(Number.isInteger(floor) && floor >= 0)) throw new Error(`arrivalCharge: floor ${floor}`);
   if (!(Number.isInteger(giftCharge) && giftCharge >= 0)) throw new Error(`arrivalCharge: gift ${giftCharge}`);
-  const earned = chargeCarried + starCredit + cardCharge + giftCharge;
-  const blocks = Math.max(floor, earned);
-  return { blocks, floorAdded: blocks - earned };
+  if (!(Number.isInteger(cardCharge) && cardCharge >= 0)) throw new Error(`arrivalCharge: card ${cardCharge}`);
+  const earned = chargeCarried + starCredit + giftCharge;
+  const floored = Math.max(floor, earned);
+  return { blocks: floored + cardCharge, floorAdded: floored - earned };
 }
 
 export interface CarriedLayout {

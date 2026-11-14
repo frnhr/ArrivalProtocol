@@ -30,6 +30,21 @@
 .navplot-svg .np-lz-label.look-full { fill: var(--soul); }
 .navplot-svg .np-lz-label.look-candidate { fill: var(--accent-bright); }
 
+/* ── NAV PLOT: the launch band while landing (playtest 1, Q8) ──
+   The band's edges as crisp circles with their altitudes (NavPlotWindow paintBandEdges), the band's fill quieter, and the
+   in-band part of the loop in the launch colour, dotted like the pod arc: where a pod can launch on this loop, not the
+   band itself. The rest of the loop steps back to the plain accent. */
+.np-band-edges { fill: none; stroke: var(--good); stroke-opacity: 0.9; stroke-width: 1.1; vector-effect: non-scaling-stroke; }
+.navplot-svg .np-band-edge-label {
+  fill: var(--good); fill-opacity: 0.9; stroke: none;
+  font-size: calc(5.4px * var(--np-ring-scale, 1)); letter-spacing: 0.16em;
+}
+.np-path.np-path-green.landing {
+  stroke: var(--accent-bright); stroke-width: 3.2; stroke-dasharray: 0.1 4.6;
+  filter: drop-shadow(0 0 2px var(--accent-bright));
+}
+.np-path.np-path-flyby.landing { stroke: var(--accent); stroke-opacity: 0.75; }
+
 /* ── NAV PLOT: the pod arc and the drop dot ── */
 .np-pod-arc {
   fill: none;

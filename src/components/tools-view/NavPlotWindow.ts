@@ -25,7 +25,7 @@ import { BAND_TEXT, TOUCHDOWN_FLOAT_TEXT } from '@data/landing-text';
 import { AUTO_PLOT_TEXT } from '@data/skill-text';
 import { on } from '@systems/events';
 import { getDropSolution } from '@systems/drop-cache';
-import { plotLandingModel, ringLabel, dragStamp, type GoLowMarks } from '@systems/landing-hud';
+import { plotLandingModel, ringLabel, dragStamp, landingPlotViewRadius, landingBandEdges, type BandEdge, type GoLowMarks } from '@systems/landing-hud';
 import { landingBurnOffer, decayForecast } from '@systems/landing-orbit';
 import { noGoAt } from '@systems/landing-rules';
 import { replayAnimation } from '@components/dom';
@@ -142,6 +142,16 @@ const RING_LABEL_TEXT = BAND_TEXT.ringFlight;
 // drawn only once the arc holds it whole.
 const RING_LABEL_CHAR_ALONG = 6.2 * (0.6 + 0.22);
 
+// Playtest 1 (Q8): while landing each band edge carries its altitude in small type, along the edge at the bottom of the
+// ring (centred on 6 o'clock, ±BAND_EDGE_LABEL_HALF_DEG): the lower edge's just inside the band, the upper edge's just
+// outside it, BAND_EDGE_LABEL_GAP units off the line. Its letters (game.css .np-band-edge-label: 5.4 px, 0.6 em advance
+// plus 0.16 em spacing, caps about 0.72 em tall) are drawn only once the arc holds them whole, as the ring's name is.
+const BAND_EDGE_LABEL_HALF_DEG = 26;
+const BAND_EDGE_LABEL_GAP = 1.4;
+const BAND_EDGE_FONT_UNITS = 5.4;
+const BAND_EDGE_CAP_UNITS = BAND_EDGE_FONT_UNITS * 0.72;
+const BAND_EDGE_CHAR_ALONG = BAND_EDGE_FONT_UNITS * (0.6 + 0.16);
+
 // Hazard zones (WP9). The hatching's stripe spacing and width, the band hatched along the path's run through a
 // zone, and the fragments flecking a debris cloud: a fixed sunflower spiral (no randomness: the same cloud
 // looks the same every frame), drawn only once the cloud is big enough on screen to hold them.
@@ -208,6 +218,9 @@ interface PlotNodes {
   ring: SVGPathElement;
   ringArc: SVGPathElement;
   ringLabel: SVGTextElement;
+  // Playtest 1 (Q8): the band's two edges as crisp circles while landing, each with its altitude (landingBandEdges).
+  bandEdges: SVGPathElement;
+  bandEdgeLabels: { side: BandEdge['side']; arc: SVGPathElement; label: SVGTextElement; text: SVGTextPathElement }[];
   band: SVGPathElement;
   pathFlyby: SVGPathElement;
   pathGreen: SVGPathElement;
@@ -245,6 +258,19 @@ function build(svg: SVGSVGElement): PlotNodes {
   ringText.textContent = RING_LABEL_TEXT;
   ringLabel.appendChild(ringText);
 
+  const bandEdgeLabels = (['lower', 'upper'] as const).map((side) => {
+    const arc = svgEl('path', '');
+    arc.id = `npBandEdgeArc-${side}`;
+    defs.appendChild(arc);
+    const label = svgEl('text', `np-band-edge-label ${side}`);
+    const text = svgEl('textPath', '');
+    text.setAttribute('href', `#${arc.id}`);
+    text.setAttribute('startOffset', '50%');
+    text.setAttribute('text-anchor', 'middle');
+    label.appendChild(text);
+    return { side, arc, label, text };
+  });
+
   // The hatch fills (WP9): diagonal stripes in the zone's verdict colour (the stripe's class takes its token).
   for (const [verdict, id] of Object.entries(ZONE_HATCH_IDS)) {
     const pattern = svgEl('pattern', '');
@@ -273,6 +299,8 @@ function build(svg: SVGSVGElement): PlotNodes {
     ring: svgEl('path', 'np-ring'),
     ringArc,
     ringLabel,
+    bandEdges: svgEl('path', 'np-band-edges'),
+    bandEdgeLabels,
     band: svgEl('path', 'np-band'),
     pathFlyby: svgEl('path', 'np-path np-path-flyby'),
     pathGreen: svgEl('path', 'np-path np-path-green'),
@@ -298,7 +326,8 @@ function build(svg: SVGSVGElement): PlotNodes {
   // AUTOBURN's marks (slice 4) are styled in game.css (.np-auto-ghost, .np-lock, .np-lock-label).
 
   svg.append(
-    nodes.planet, nodes.surface, nodes.atm, nodes.ring, nodes.ringLabel, nodes.zones,
+    nodes.planet, nodes.surface, nodes.atm, nodes.ring, nodes.bandEdges, ...nodes.bandEdgeLabels.map((edge) => edge.label),
+    nodes.ringLabel, nodes.zones,
     nodes.autoGhost, nodes.band, nodes.pathFlyby, nodes.pathGreen, nodes.pathImpact, nodes.lockRun, nodes.hazardCasing, nodes.hazard,
     nodes.startBurn.glyph, nodes.goLowTarget.glyph, nodes.goLow.glyph, nodes.impact.glyph, nodes.peri.glyph, nodes.apo.glyph,
     ...nodes.trail, nodes.flame, nodes.ship,
@@ -314,6 +343,22 @@ function topArc(cx: number, cy: number, radius: number): string {
   const toAngle = (RING_LABEL_TO_DEG * Math.PI) / 180;
   return `M${fmt(cx + radius * Math.cos(fromAngle))},${fmt(cy - radius * Math.sin(fromAngle))}`
     + `A${fmt(radius)},${fmt(radius)} 0 0,1 ${fmt(cx + radius * Math.cos(toAngle))},${fmt(cy - radius * Math.sin(toAngle))}`;
+}
+
+// The arc a band edge's altitude runs along: the bottom of a circle, left to right (so its letters stand upright, their
+// tops toward the centre), centred on 6 o'clock.
+function bottomArc(cx: number, cy: number, radius: number): string {
+  const fromAngle = ((270 - BAND_EDGE_LABEL_HALF_DEG) * Math.PI) / 180;
+  const toAngle = ((270 + BAND_EDGE_LABEL_HALF_DEG) * Math.PI) / 180;
+  return `M${fmt(cx + radius * Math.cos(fromAngle))},${fmt(cy - radius * Math.sin(fromAngle))}`
+    + `A${fmt(radius)},${fmt(radius)} 0 0,0 ${fmt(cx + radius * Math.cos(toAngle))},${fmt(cy - radius * Math.sin(toAngle))}`;
+}
+
+// The baseline radius (viewBox units) of a band edge's altitude, at `scale` units a km and the labels' `fontScale` (a
+// phone's): its letters stand on the far side of their edge (their tops toward the centre, so the baseline is a cap's
+// height further out), which puts the lower edge's just inside the band and the upper edge's just outside it.
+function bandEdgeBaseline(edge: Readonly<BandEdge>, scale: number, fontScale: number): number {
+  return edge.radiusKm * scale + BAND_EDGE_LABEL_GAP + BAND_EDGE_CAP_UNITS * fontScale;
 }
 
 function show(node: SVGElement, visible: boolean): void {
@@ -525,6 +570,20 @@ function ringNameBoxes(cx: number, cy: number, radius: number, scale: number): B
   for (let i = 0; i <= steps; i++) {
     const angle = from + ((to - from) * i) / steps;
     boxes.push(boxAround({ x: cx + radius * Math.cos(angle), y: cy - radius * Math.sin(angle) }, RING_NAME_HALF * scale));
+  }
+  return boxes;
+}
+
+// The boxes a band edge's altitude covers (an obstacle for the markers' labels), along its bottom arc.
+function bandEdgeBoxes(cx: number, cy: number, baseline: number, scale: number): Box[] {
+  const mid = baseline - (BAND_EDGE_CAP_UNITS * scale) / 2;
+  const from = ((270 - BAND_EDGE_LABEL_HALF_DEG) * Math.PI) / 180;
+  const to = ((270 + BAND_EDGE_LABEL_HALF_DEG) * Math.PI) / 180;
+  const steps = Math.max(1, Math.ceil((mid * (to - from)) / RING_NAME_STEP));
+  const boxes: Box[] = [];
+  for (let i = 0; i <= steps; i++) {
+    const angle = from + ((to - from) * i) / steps;
+    boxes.push(boxAround({ x: cx + mid * Math.cos(angle), y: cy - mid * Math.sin(angle) }, (BAND_EDGE_CAP_UNITS / 2 + 0.6) * scale));
   }
   return boxes;
 }
@@ -981,7 +1040,8 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
     const forecast = landing && state.landing.drag ? decayForecast(state.orbit, planet.mu, ring, true) : null;
     paintDecay(noSignal ? null : decayChip(state, forecast, offer), caps.telemetryScramble);
     const chipArea = chipBox();
-    const viewR = clearOfChip(plotViewRadius(state), ship, chipArea);
+    // Playtest 1 (Q8): while landing the frame is the whole orbit's (its ▲), so the band holds still on screen.
+    const viewR = clearOfChip(landing ? landingPlotViewRadius(state) : plotViewRadius(state), ship, chipArea);
     const proj = makeProjector(viewR, VIEWBOX, MARGIN);
     const scale = proj.scale;
     const blind = plot.mode === 'uncertain';
@@ -1007,11 +1067,16 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
       nodes.ringArc.setAttribute('d', topArc(half, half, ringMidR));
       const arcLength = (ringMidR * (RING_LABEL_FROM_DEG - RING_LABEL_TO_DEG) * Math.PI) / 180;
       show(nodes.ringLabel, arcLength >= ringText.length * RING_LABEL_CHAR_ALONG * ringScale);
+      paintBandEdges(landingBandEdges(state), scale);
       const paths = pathsByColour(pred, proj);
       // Blind or dark, the coloured line is not drawn at all: a grey band (or nothing) instead.
       const colours = !blind && !noSignal;
       nodes.pathFlyby.setAttribute('d', colours ? paths.flyby : '');
       nodes.pathGreen.setAttribute('d', colours ? paths.green : '');
+      // Playtest 1 (Q8): while landing the in-band part of the loop is where a pod can launch on it: drawn in the launch
+      // colour, dotted like the pod arc, not in the band's green (it read as the band itself, moving with every burn).
+      nodes.pathGreen.classList.toggle('landing', landing);
+      nodes.pathFlyby.classList.toggle('landing', landing);
       nodes.pathImpact.setAttribute('d', colours ? paths.impact : '');
       // The path's run through a zone that can still hurt, hatched over its colour (not on a blind plot).
       const hazard = colours ? hazardPath(pred, proj) : '';
@@ -1081,6 +1146,7 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
     }
     const ringMidUnits = ((ring.min + ring.max) / 2) * scale;
     if (nodes.ringLabel.style.display !== 'none') obstacles.boxes.push(...ringNameBoxes(half, half, ringMidUnits, ringScale));
+    for (const edge of bandEdgesShown) obstacles.boxes.push(...bandEdgeBoxes(half, half, edge.baseline, ringScale));
     if (chipArea) obstacles.boxes.push(chipArea);
 
     paintMarker(nodes.impact, markers.impact, proj, 'np-impact-mark', 'np-label np-impact-label',
@@ -1159,6 +1225,25 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
     paintLabel(highestEl, readouts.highest, scramblers.highest.apply(readouts.highest.text, scramble));
     paintLabel(rangeEl, readouts.range, scramblers.range.apply(readouts.range.text, scramble));
     paintLabel(statusEl, readouts.status);
+  }
+
+  // The band's edges while landing (playtest 1, Q8): two crisp circles and their altitudes; none in flight. Each altitude
+  // is drawn only when its arc holds it whole (the far zoom of a long loop), and is an obstacle for the markers' labels.
+  let bandEdgesShown: { baseline: number }[] = [];
+  function paintBandEdges(edges: readonly BandEdge[] | null, scale: number): void {
+    nodes.bandEdges.setAttribute('d', edges === null ? '' : edges.map((edge) => circlePath(half, half, edge.radiusKm * scale)).join(''));
+    bandEdgesShown = [];
+    for (const node of nodes.bandEdgeLabels) {
+      const edge = edges?.find((candidate) => candidate.side === node.side) ?? null;
+      if (edge === null) { show(node.label, false); continue; }
+      const baseline = bandEdgeBaseline(edge, scale, ringScale);
+      node.arc.setAttribute('d', bottomArc(half, half, baseline));
+      if (node.text.textContent !== edge.text) node.text.textContent = edge.text;
+      const arcLength = (baseline * 2 * BAND_EDGE_LABEL_HALF_DEG * Math.PI) / 180;
+      const fits = arcLength >= edge.text.length * BAND_EDGE_CHAR_ALONG * ringScale;
+      show(node.label, fits);
+      if (fits) bandEdgesShown.push({ baseline });
+    }
   }
 
   // The decay chip under the line-state chip (slice 1b): its key cap rendered, its number garbled by a damaged Telemetry.

@@ -6,6 +6,8 @@ import type { LaunchIntent, LaunchResult } from '@/types/landing';
 import { registerKeys } from '@systems/input';
 import { requestLaunch } from '@systems/landing';
 import { autodropKeyDown, autodropKeyUp, pressAutodrop } from '@systems/autodrop';
+import type { ConfirmRequest } from '@systems/fs-tools';
+import { LAUNCH_CONFIRM_TEXT } from '@data/landing-text';
 
 // The kid's landing controls (01-landing §3.3, plan §1.4): [L] and every launch button (the POD BAY window, the phone
 // bar) go through playerLaunch, so the inline confirm loop lives in one place. DOM-free: the confirm is injected
@@ -26,6 +28,22 @@ export function playerLaunch(store: Store<GameState>, confirm: LaunchConfirm, po
     confirm(result.text, () => { requestLaunch(store, { ...intent, confirmed: ask }); });
   }
   return result;
+}
+
+// The question a guard asks, as the inline confirm shows it (main.ts's LaunchConfirm passes it to askInline). Playtest 1
+// (note 23, plan §3.4.3): centred and big, over the NAV PLOT (next to a mouse the kid was not using it went unseen), and
+// answered by a second [L] or ENTER, or [N] or ESC. The first [L]'s keyup goes to the game layer that saw its keydown
+// (input.ts), so one press never answers its own question.
+export function launchConfirmRequest(text: string, onYes: () => void): ConfirmRequest {
+  return {
+    text: { question: text, detail: '' },
+    answers: { yes: LAUNCH_CONFIRM_TEXT.yes, no: LAUNCH_CONFIRM_TEXT.no },
+    onYes,
+    placement: 'centre',
+    yesCodes: ['KeyL', 'Enter', 'NumpadEnter'],
+    noCodes: ['KeyN', 'Escape'],
+    keys: LAUNCH_CONFIRM_TEXT.keys,
+  };
 }
 
 export interface LandingKeyDeps {

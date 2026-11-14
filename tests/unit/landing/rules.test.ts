@@ -213,12 +213,12 @@ function solution(dotDeg: number, inBand = true, block: DropSolution['block'] = 
 {
   const lzs = [lz('LZ-A', 90, 1)];
   const offSite = launchGuard(fakeState({ lzs, pods: [pod(1)], memory: [driver(1)] }), solution(120));
-  check('[L] off-site on a GENTLE world asks `LAUNCH OFF-SITE? PLAINS · scores 100`', offSite?.ask === 'off-site'
-    && LAUNCH_CONFIRM_TEXT.offSite('PLAINS', offSite.points) === 'LAUNCH OFF-SITE? PLAINS · scores 100');
+  check('[L] off-site on a GENTLE world asks `DOT OFF-SITE · LAUNCH ANYWAY? PLAINS · scores 100`', offSite?.ask === 'off-site'
+    && LAUNCH_CONFIRM_TEXT.offSite('PLAINS', offSite.points) === 'DOT OFF-SITE · LAUNCH ANYWAY? PLAINS · scores 100');
   const fullState = fakeState({ lzs, memory: [driver(2)], pods: [pod(1, { kind: 'falling', launch: launch(90 * DEG) }), pod(2)] });
   const full = launchGuard(fullState, solution(90));
-  check('[L] at a full LZ asks `LZ-A IS FULL — LAUNCH ANYWAY? scores 150`', full?.ask === 'full' && full.lz === 'LZ-A'
-    && LAUNCH_CONFIRM_TEXT.full('LZ-A', full.points) === 'LZ-A IS FULL — LAUNCH ANYWAY? scores 150');
+  check('[L] at a full LZ asks `LZ-A IS FULL · LAND IT ANYWAY? scores 150`', full?.ask === 'full' && full.lz === 'LZ-A'
+    && LAUNCH_CONFIRM_TEXT.full('LZ-A', full.points) === 'LZ-A IS FULL · LAND IT ANYWAY? scores 150');
   const hardOff = launchGuard(fakeState({ lzs, pods: [pod(1)], memory: [driver(1, 40)], forgiveness: 'rough' }), solution(120));
   check('a hard driver off-site on a ROUGH world scores 25', hardOff?.points === 25);
   check('no guard with the dot in a bracket with room', launchGuard(fakeState({ lzs, pods: [pod(1)], memory: [driver(1)] }), solution(90)) === null);

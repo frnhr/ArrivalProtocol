@@ -737,6 +737,12 @@ export const TRANSMIT_TEXT = {
   // arrival (slice 7c, R32), named as its own part so the sum reads what the total counts (the 7c review).
   arrival: (carried: number, starCredit: number, stars: number, floorAdded: number, total: number, cardCharge = 0, giftCharge = 0): string =>
     `ON ARRIVAL: ${arrivalParts(carried, starCredit, stars, floorAdded, cardCharge, giftCharge)} = ${total} REPAIR CHARGE`,
+  // Playtest 1 (Q19): the +12 card says on itself when the destination's room cannot take all of it (the charge card
+  // counts after the floor, so the room is the only thing that can shrink it). `fit` of `card` blocks arrive.
+  cardFits: (card: number, fit: number, ship: string): string =>
+    (fit === 0 ? `+${card} · NO ROOM FOR IT ON ${ship}` : `+${card} · ONLY ${fit} FIT ON ${ship}`),
+  // The room bar's segment for the card's blocks that arrive (it flashes when the card is picked).
+  cardSegment: (fit: number): string => `+${fit}`,
   infected: (count: number): string => `⚠ ${count === 1 ? '1 FILE' : `${count} FILES`} WILL ARRIVE INFECTED`,
   chipInfected: '⚠ WILL ARRIVE INFECTED',
   // The files: when every block of REPAIR CHARGE already fits there is nothing to leave behind for.

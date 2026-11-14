@@ -28,9 +28,9 @@ import { draftContext } from '@systems/draft';
 import { draftCards, draftEntries } from '@data/upgrades';
 import { reachableFrom } from '@systems/map-hop';
 import { currentSlot, armShipAt } from '@systems/map-streams';
-import { hasUsableTool } from '@state/selectors';
+import { hasUsableTool, isUsableTool } from '@state/selectors';
 import { createRng } from '@systems/rng';
-import { REPAIR_V2_VERSION } from '@data/tuning';
+import { REPAIR_V2_VERSION, MAX_LINE_CHARS } from '@data/tuning';
 import { byDepth } from '../depth';
 import { armRun, toDesk, send, giveTools, dropTools, addRequest, throws } from './repo-fixture';
 
@@ -39,6 +39,7 @@ const row = (store: Store<GameState>, selected: number | null, id: string) => re
 // The window's one ETA toward `selected` (review m5: once above the list, the same for every file).
 const eta = (store: Store<GameState>, selected: number | null) => repoModel(state(store), selected).eta;
 const forecast = (store: Store<GameState>, selected: number | null) => repoModel(state(store), selected).forecast;
+const toolCount = (store: Store<GameState>, kind: string): number => state(store).memory.filter((seg) => seg.type === 'fs-tool' && seg.fsTool === kind && isUsableTool(seg) && seg.infected === undefined).length;
 
 // --- The catalogue ---------------------------------------------------------------------------------------------------------
 check('catalogue v1: Mv 2, Rm 1, Cp 3, Swap 1, Repair.bak 4, Scan.bak 3, REPAIR v2 patch 2, in that order, sound',
@@ -89,6 +90,18 @@ check('VESPER\'s desk: IN TRANSIT `Swap · 4 YRS BEHIND YOU`; toward CORMORANT `
   && repoModel(state(run), 15).inTransit.map((entry) => `${entry.text}:${entry.catchesUp}`).join() === `${REPO_TEXT.transit.catchesUp('Swap', 'CORMORANT')}:true`,
   JSON.stringify(repoModel(state(run), 15).inTransit));
 check('…the Swap in flight counts as owned: the tag is neither Swap nor Rm (risk 4)', !['swap', 'rm'].includes(recommendation(state(run)) ?? ''), String(recommendation(state(run))));
+// Playtest 1 (note 12, plan §3.6): each row says what the unit already has of it (working copies; the patch: the version).
+{
+  const have = (id: string): string => row(run, null, id).have;
+  const repairs = toolCount(run, 'repair');
+  check('…the rows say what the unit has: Mv 1 (HALCYON\'s), Rm 1 (KESTREL\'s), Swap 0 · 1 ON THE WAY, Cp none, the patch v1',
+    have('mv') === 'YOU HAVE 1' && have('rm') === 'YOU HAVE 1' && have('swap') === 'YOU HAVE 0 · 1 ON THE WAY'
+    && row(run, null, 'swap').owned === 0 && row(run, null, 'swap').coming === 1 && have('cp') === REPO_TEXT.have(0, 0)
+    && have('repair-v2') === 'YOU RUN REPAIR v1' && row(run, null, 'repair-bak').owned === repairs && repairs > 0,
+    repoModel(state(run), null).available.map((entry) => `${entry.id}=${entry.have}`).join(' | '));
+  check('…and the words fit a line with the longest counts', REPO_TEXT.have(99, 99).length <= MAX_LINE_CHARS
+    && REPO_TEXT.haveVersion(9, 99).length <= MAX_LINE_CHARS);
+}
 check('…Cp toward CORMORANT: `44 YRS LATE → FOLLOWS YOUR ROUTE · SHIP 6 AT THE EARLIEST`', eta(run, 15) === REPO_TEXT.eta.late(44, 6), eta(run, 15) ?? '');
 send(run, 15, 'cp');
 toDesk(run);

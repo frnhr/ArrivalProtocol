@@ -1243,6 +1243,22 @@ body.inline-confirm-open .cursor-follower { visibility: hidden; }
 }
 .inline-confirm[hidden] { display: none; }
 @keyframes inline-confirm-in { from { opacity: 0; transform: translateY(-4px); } }
+/* Playtest 1 (note 23): a question a key asked ([L]'s guards) opens big in the middle of the screen, over the NAV PLOT. */
+.inline-confirm.centre {
+  left: 50%; top: 42%; transform: translate(-50%, -50%);
+  width: min(560px, calc(100vw - 32px)); max-width: none; padding: 18px 22px 14px;
+  border-width: 2px; text-align: center;
+  box-shadow:
+    0 0 0 100vmax color-mix(in srgb, var(--bg) 45%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--warn) 35%, transparent),
+    0 0 40px color-mix(in srgb, var(--warn) 45%, transparent);
+  animation: inline-confirm-centre-in 0.16s ease-out;
+}
+.inline-confirm.centre .ic-question { font-size: 32px; line-height: 1.15; }
+.inline-confirm.centre .ic-buttons { gap: 14px; margin-top: 14px; }
+.inline-confirm.centre .ic-btn { padding: 10px 14px; font-size: 15px; font-weight: 700; }
+.inline-confirm.centre .ic-keys { margin-top: 10px; font-size: 11px; }
+@keyframes inline-confirm-centre-in { from { opacity: 0; transform: translate(-50%, -50%) scale(0.94); } }
 .ic-question {
   font-family: 'VT323', monospace;
   font-size: 20px;
@@ -2493,6 +2509,20 @@ body.reduced-motion.beamed-out .desktop > .tools-view .window-body { animation: 
 }
 .tx-bar-files { height: 100%; background: color-mix(in srgb, var(--transmit-line) 55%, transparent); transition: width 0.25s ease-out; }
 .tx-bar-charge { height: 100%; background: color-mix(in srgb, var(--transmit-charge) 50%, transparent); transition: width 0.25s ease-out; }
+/* Playtest 1 (Q19): the +12 card's blocks that arrive, brighter than the rest of the charge, with their count; they flash
+   once when the card is picked, so the bar visibly moves for it. */
+.tx-bar-card {
+  height: 100%; overflow: hidden; white-space: nowrap; text-align: center;
+  font-size: 10px; line-height: 16px; letter-spacing: 0.08em; color: var(--bg);
+  background: color-mix(in srgb, var(--transmit-charge) 85%, transparent); transition: width 0.25s ease-out;
+}
+.tx-bar-card[hidden] { display: none; }
+.tx-bar-card.flash { animation: tx-card-flash 0.9s ease-out 2; }
+@keyframes tx-card-flash {
+  0% { background: var(--accent-bright); box-shadow: 0 0 14px var(--accent-bright); }
+  100% { background: color-mix(in srgb, var(--transmit-charge) 85%, transparent); box-shadow: none; }
+}
+body.reduced-motion .tx-bar-card.flash { animation: none; }
 /* Charge with no room on the link: still charge (the bar's green, faded and dashed: outside the link), in muted
    words, not the warning red (post-handover: red read as damage; it is only the link being full). Its title says why. */
 .tx-bar-over {
@@ -2611,6 +2641,8 @@ body.reduced-motion.beamed-out .desktop > .tools-view .window-body { animation: 
   font-size: 11px; line-height: 1.35; letter-spacing: 0.02em; color: var(--report-dim);
 }
 .tx-card.boosted .tx-card-why { color: var(--star); }
+.tx-card-fit { font-size: 10px; letter-spacing: 0.12em; color: var(--warn); }
+.tx-card-fit[hidden] { display: none; }
 .tx-card.boosted .tx-card-why::before { content: '◆ '; }
 .tx-card-picked {
   position: absolute; top: -9px; right: 10px; padding: 1px 7px;

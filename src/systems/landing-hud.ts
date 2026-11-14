@@ -30,7 +30,7 @@ import {
 import {
   AUTODROP_PLAN_MAX_PASSES, BAND_OK_MIN, WINDOW_TACTICAL_LEAD_TAC,
   BAND_FAILING_MIN, BAY_RELOAD_TAC, BAY_SLOTS, BEACON_LAG_FRAC, DRAG_STAMP_MIN_KM, GROUND_TRACK_AHEAD_MAX, GROUND_TRACK_SPAN_KM,
-  POD_FIRST_DESCENT_SEC, STREAK_TRAIL_FRAC, TERRAIN_ALT_SHARE, TERRAIN_STRETCH_DEG,
+  POD_FIRST_DESCENT_SEC, STREAK_TRAIL_FRAC, TERRAIN_ALT_SHARE, TERRAIN_STRETCH_DEG, PLOT_SHIP_MARGIN, PLOT_RING_FACTOR,
 } from '@data/tuning';
 
 // What the landing's own screens show (01-landing §4), as plain data: the NAV PLOT's brackets, dot, pod arc, streaks,
@@ -273,9 +273,48 @@ function noGoModels(noGo: readonly NoGoArcState[]): NoGoModel[] {
   return noGo.map((arc) => ({ centreRad: arc.centreRad, halfWidthRad: arc.halfWidthRad, word: arc.word }));
 }
 
-// The NAV PLOT's ring name (§4): `SAFE ORBIT · LAUNCH BAND` in flight, `LAUNCH BAND` while landing.
+// The NAV PLOT's ring name (§4): `SAFE ORBIT · LAUNCH BAND` in flight, `LAUNCH BAND 820–1,400 KM` while landing (playtest
+// 1, Q8: the band's altitudes, so it reads as a place, not as the orbit).
 export function ringLabel(state: Readonly<GameState>): string {
-  return state.run.phase === 'landing' ? BAND_TEXT.ringLanding : BAND_TEXT.ringFlight;
+  if (state.run.phase !== 'landing') return BAND_TEXT.ringFlight;
+  const { ring, planet } = state.level;
+  return BAND_TEXT.ringLanding(ring.min - planet.R, ring.max - planet.R);
+}
+
+// --- The launch band while landing (playtest 1, Q8: "is the launch band drawn wrongly?") -----------------------------------
+// The band never moved: it is the annulus ring.min … ring.max. Three things made it look as if it did, and two are fixed
+// here (the third, the in-band path's colour, is NavPlotWindow's class on the path):
+// • the frame zoomed with the ship (flight-hud plotViewRadius: the ship's radius), so on an elliptical orbit the band grew
+//   and shrank once a loop. While landing the frame is the whole orbit's: its ▲ (apoapsis), so it changes only when a burn
+//   changes ▲. An open path (the ship leaving during the landing) falls back to the ship's frame;
+// • the band's edges were faint: they are drawn as crisp circles, each with its altitude (landingBandEdges).
+export function landingPlotViewRadius(state: Readonly<GameState>): number {
+  const { ring, planet } = state.level;
+  const el = elementsFromState(state.orbit, planet.mu);
+  const shipRadius = Math.hypot(state.orbit.x, state.orbit.y);
+  // ra = rp (1 + e) / (1 − e); never inside the ship (a numerically closed orbit read at its ▲).
+  const apoapsis = el.e < 1 ? Math.max(shipRadius, (el.rp * (1 + el.e)) / (1 - el.e)) : null;
+  const outer = apoapsis !== null && Number.isFinite(apoapsis) ? apoapsis : shipRadius;
+  return Math.max(outer * PLOT_SHIP_MARGIN, ring.max * PLOT_RING_FACTOR);
+}
+
+// One edge of the band: its radius (km from the planet's centre) and its altitude's words; `side` says which edge (the
+// lower one's label sits inside it, the upper one's outside).
+export interface BandEdge {
+  side: 'lower' | 'upper';
+  radiusKm: number;
+  text: string;
+}
+
+// The band's two edges while landing (null in flight: there the band is the target, named by the ring alone).
+export function landingBandEdges(state: Readonly<GameState>): BandEdge[] | null {
+  if (state.run.phase !== 'landing') return null;
+  const { ring, planet } = state.level;
+  if (!(ring.min > planet.R && ring.max > ring.min)) throw new Error(`landingBandEdges: a band ${ring.min}–${ring.max} km over a planet of ${planet.R} km`);
+  return [
+    { side: 'lower', radiusKm: ring.min, text: BAND_TEXT.edge(ring.min - planet.R) },
+    { side: 'upper', radiusKm: ring.max, text: BAND_TEXT.edge(ring.max - planet.R) },
+  ];
 }
 
 // The radius of the live conic at world angle `rad` (r = p / (1 + e·cos(rad − ω)), either direction of travel), or null
