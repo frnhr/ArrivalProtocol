@@ -49,8 +49,6 @@ export const TRAINING_TEXT = {
   // Playtest 1 (B-DESK, §3.6, note 15): there is no TRAINING tab any more. The REPOSITORY holds two halves, FROM EARTH (the
   // requests) and COMPILE HERE (the skills); [T] opens it on this one, and its head shows the key.
   key: 'T',
-  // (Until the merged screen lands: the TRAINING tab's label.)
-  tab: 'TRAINING [T]',
   // The REPOSITORY tab's cycles badge while any are unspent (desk.ts deskTabBadges.training).
   badge: (n: number): string => cycles(n),
   // The half's head (03 §4): `COMPILE HERE`, the bank in VT323 on the right (the unit's name is the desk's head already).
@@ -173,7 +171,6 @@ export const TRAINING_TEXT = {
     },
   } satisfies Record<SkillId, SkillWords>,
   // A purchase of this desk (03 §3.3: UNDO until TRANSMIT ▸), as the model lists it; the ledger shows it as `−3 AUTOBURN v1`.
-  pendingTitle: 'TRAINED AT THIS DESK',
   pendingRow: (what: string, cost: number): string => `${what} · ${cycles(cost)}`,
   pendingRestore: (what: string, cost: number): string => `RESTORED ${what} · ${cycles(cost)}`,
   undo: 'UNDO',

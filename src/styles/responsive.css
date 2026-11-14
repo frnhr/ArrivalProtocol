@@ -500,11 +500,10 @@
 }
 
 /* ── Slice 4: TRAINING on a phone (03 §4: "one of the desk's tabs, with one accordion per branch and the newest branch
-      open"). The sheet takes most of the screen; the branches stack, a tap on a branch's head opens it, the detail is one
-      column, and the cards stack. ── */
+      open"), the REPOSITORY's COMPILE HERE since playtest 1 (B-DESK; its sheet's height is desk.css's). The branches stack,
+      a tap on a branch's head opens it, the detail is one column, and the cards stack. ── */
 @media (max-width: 768px) {
-  .desk-screen[data-tab='training'] .desk-card-win { height: 78vh; max-height: 78vh; }
-  .desk-training { padding: 6px 10px 12px; }
+  .desk-repo { padding: 6px 10px 12px; }
   .tr-grid { flex-direction: column; gap: 6px; }
   .tr-branch-head { cursor: pointer; padding: 7px 8px; }
   .tr-branch-head::after { content: '▸'; margin-left: 8px; color: var(--desk-dim); }

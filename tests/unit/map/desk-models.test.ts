@@ -5,6 +5,8 @@
 // boarding beam (M3), the TIMELINE, the greying beat (`2 SHIPS NOW OUT OF YOUR REACH` at KESTREL), the steps and ← →.
 // Slice 3b (Track UI): the first desk's file step, the DELIVERIES row and TIMELINE marks (in time, late, catching up), the
 // request toggle, the tab and its badge.
+// Playtest 1 (B-DESK, §3.6): one REPOSITORY with two halves; 'training' is the alias for its COMPILE HERE half (it lights the
+// REPOSITORY tab), and handing the keys to FROM EARTH disarms a picked cell.
 import { check, finish } from '../landing/checks';
 import { createStore, type Store } from '@state/store';
 import type { GameState } from '@state/schema';
@@ -26,6 +28,7 @@ import { recommendation } from '@systems/repository';
 import { THREAT_TEXT } from '@data/threat-text';
 import { run1Map } from './run1-fixture';
 import { shipResultOf } from '@systems/run';
+import { shownTab } from '@components/desk/DeskTabs';
 
 // The unit on run 1's arm at the end of `route` (slots, ARES-VII first), on the DESK.
 function deskAt(route: readonly number[]): Store<GameState> {
@@ -134,6 +137,14 @@ check('…a second toggle clears it (one request, changeable until TRANSMIT ▸)
 openDeskWindow(ares, 'repository');
 check('openDeskWindow: the REPOSITORY tab, then back to the card (null)', ares.getState().ui.deskWindow === 'repository'
   && (openDeskWindow(ares, null), ares.getState().ui.deskWindow === null));
+check('playtest 1: the tabs are CARD / REPOSITORY / INBOX; \'training\' (COMPILE HERE, [T]) lights the REPOSITORY',
+  shownTab(null) === 'card' && shownTab('repository') === 'repository' && shownTab('training') === 'repository' && shownTab('inbox') === 'inbox');
+openDeskWindow(ares, 'training');
+ares.update((draft) => { draft.ui.trainingArmed = true; });
+openDeskWindow(ares, 'repository');
+check('…COMPILE HERE with a cell armed, then FROM EARTH: the keys move up and the cell is disarmed (ENTER sets course again)',
+  ares.getState().ui.deskWindow === 'repository' && !ares.getState().ui.trainingArmed);
+openDeskWindow(ares, null);
 
 // --- KESTREL's desk, 2467 (route ARES-VII → HALCYON → KESTREL) ------------------------------------------------------------
 const kestrel = deskAt([0, 2, 5]);

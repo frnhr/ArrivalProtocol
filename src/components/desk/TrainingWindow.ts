@@ -1,31 +1,37 @@
-// Slices 4c–4e: the lead owns this file (slice-4cde-plan.md §7.2). Others ask by message.
+// Playtest 1: Track B-DESK owns this file (docs/phase3/impl/playtest-1-plan.md §3.6, §4 Batch B). Others ask by message.
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import type { TrainingModel, TrainingCellView, TrainingBranch, TrainingCard, TrainingDetail } from '@systems/training-model';
 import { trainingModel } from '@systems/training-model';
+import { cyclesLedger, type CyclesLedger } from '@systems/cycles-ledger';
 import {
   selectTrainingCell, stepTrainingCell, startTrainingHold, cancelTrainingHold, advanceTrainingHold, undoTraining,
 } from '@systems/desk';
 import { play } from '@systems/audio';
 import { make } from '@components/dom';
 import { renderKeyCaps } from '@components/hud/keycaps';
+import { halfHead } from '@components/desk/RepositoryWindow';
 import { TRAINING_TEXT, type DemoArt } from '@data/training-text';
 import { WALL_FRAME_MAX_SEC, TRAINING_BANK_ROLL_SEC, TRAINING_CHIRP_SEC } from '@data/tuning';
 
-// TRAINING (phase 3 slice 4; 03-skills §4; slice-4-plan §2.5, §3 steps 1 and 3): the desk's [T] tab, drawn from
-// systems/training-model.ts trainingModel only. In the desk's amber, in the right window, which widens while it is open
-// (desk.css). Top to bottom:
-// • the head: `TRAINING · UNIT-047`, the demos (`FROM YOUR FLIGHTS · 1 CAPTURE`), the bank in VT323 digits (`5 CYCLES`),
-//   which rolls down as a purchase lands; ARRIVAL CONTROL's first-visit line; `+2 CYCLES`;
+// COMPILE HERE, the REPOSITORY's lower half (phase 3 slice 4's TRAINING tab; 03-skills §4; slice-4-plan §2.5, §3 steps 1
+// and 3; playtest 1 B-DESK, §3.6: one REPOSITORY, FROM EARTH above, this half below, [T] opens it here), drawn from
+// systems/training-model.ts trainingModel and systems/cycles-ledger.ts cyclesLedger only. In the desk's amber, in the right
+// window, which widens while the REPOSITORY is open (desk.css). Top to bottom:
+// • the head: `COMPILE HERE [T]`, the bank in VT323 digits (`5 CYCLES`, what cycles are on hover), which rolls down as a
+//   purchase lands;
+// • the ledger (Fran's note 15: cycles "just magically appear"): where they came from and where they went, one signed row
+//   each: CARRIED OVER, the ship just left as its LANDING REPORT said it (`+5 HALCYON · ARRIVED +1 · LANDED 83% +4`), the
+//   CORE RESERVE or a lesson, then this desk's purchases (`−3 AUTOBURN v1`) with UNDO (it was its own section);
+// • ARRIVAL CONTROL's line;
 // • visit 1: CHOOSE YOUR FIRST SKILL over the cards (4a: AUTOBURN v1 alone), each with its key ([1], [2]), its pitch, a
-//   looping mini-demo and `3 CYCLES · 6 BLOCKS`; a picked card is stamped TRAINED, and the bank says what it saves;
+//   looping mini-demo and `3 CYCLES · 6 BLOCKS`; a picked card is stamped TRAINED;
 // • from visit 2: the grid, a column per open branch (versions down, LOCK RANGE on a side axis), traces that light from
 //   the parent as cells are held, the closed branches as one `NOT YET` row each (why on hover); then the selected cell's
 //   detail with its 4-second demo and TRAIN (or RESTORE on a lost cell);
 // • TRAIN fills its bar over TRAINING_HOLD_SEC (wall time) with the op chirps, then the purchase lands with the ORBIT
 //   LOCKED arpeggio (RESTORE: the repair-won sparkle); a refusal buzzes;
-// • this desk's purchases with UNDO, the AHEAD row, the packet preview (its tone: quiet, warn below the floor, red over),
-//   and the last unit's line.
+// • the AHEAD row, the packet preview (its tone: quiet, warn below the floor, red over), and the last unit's line.
 // Clicks select a cell (or a card), press TRAIN, UNDO, or open a branch's accordion on a phone; DeskScreen routes the keys
 // here (training.key/press/step) while the tab is open. Repainted whole when what it shows changes; the TRAIN bar and the
 // rolling bank are patched in place, frame by frame.
@@ -253,17 +259,34 @@ function detailNode(detail: TrainingDetail): HTMLElement {
   return box;
 }
 
+// The ledger's rows, each with UNDO while the purchase can be taken back.
+function ledgerNode(ledger: Readonly<CyclesLedger>): HTMLElement {
+  const box = make('div', 'tr-ledger');
+  for (const entry of ledger.rows) {
+    const line = make('div', `tr-ledger-row kind-${entry.kind}`);
+    line.append(make('span', 'tr-ledger-amount', entry.amountText), make('span', 'tr-ledger-text', entry.text));
+    if (entry.undo !== null) {
+      const undo = make('button', 'tr-undo', TRAINING_TEXT.undo);
+      undo.tabIndex = -1;
+      undo.dataset.undo = String(entry.undo);
+      line.appendChild(undo);
+    }
+    box.appendChild(line);
+  }
+  return box;
+}
+
 // What the window shows, as opposed to how far a bar has filled or the bank has rolled: a change here repaints it whole.
-function structureKey(model: Readonly<TrainingModel>, openBranch: string | null): string {
+function structureKey(model: Readonly<TrainingModel>, ledger: Readonly<CyclesLedger>, openBranch: string | null): string {
   return JSON.stringify([
-    model.visit, model.firstPick, model.title, model.bank, model.demos, model.control, model.topUp, model.cards, model.closed,
-    model.branches.map((branch) => [branch.skill, branch.versions, branch.locks]), model.detail, model.pending, model.saved,
+    model.visit, model.firstPick, model.title, model.bank, model.control, model.cards, model.closed, ledger.rows,
+    model.branches.map((branch) => [branch.skill, branch.versions, branch.locks]), model.detail,
     model.ahead, model.aheadSite, model.preview, model.lastUnitLine, model.hold !== null, model.holdText, openBranch,
   ]);
 }
 
 export function mountTrainingWindow(store: Store<GameState>): TrainingWindowView {
-  const root = make('div', 'desk-card desk-training');
+  const root = make('div', 'desk-training');
   const phone = window.matchMedia(PHONE_QUERY);
   let lastKey = '';
   let shownBank: number | null = null;
@@ -308,20 +331,18 @@ export function mountTrainingWindow(store: Store<GameState>): TrainingWindowView
     if (text) text.textContent = model.holdText ?? '';
   }
 
-  function render(model: Readonly<TrainingModel>): void {
+  function render(model: Readonly<TrainingModel>, ledger: Readonly<CyclesLedger>): void {
     const parts: HTMLElement[] = [];
-    const head = make('div', 'tr-head');
-    const titles = make('div', 'tr-titles');
-    titles.append(make('div', 'tr-title', model.title), make('div', 'tr-demos', model.demos));
+    const head = make('div', 'rp-half-head tr-head');
+    head.title = TRAINING_TEXT.bankWhy;
     bankEl = make('div', 'tr-bank', TRAINING_TEXT.bank(shownBank ?? model.bank));
-    head.append(titles, bankEl);
-    parts.push(head);
+    head.append(halfHead(model.title, TRAINING_TEXT.key), bankEl);
+    parts.push(head, ledgerNode(ledger));
     if (model.control !== null) {
       const control = make('div', 'tr-control');
       control.append(make('span', 'tr-control-tag', TRAINING_TEXT.controlTag), make('span', 'tr-control-text', model.control));
       parts.push(control);
     }
-    if (model.topUp !== null) parts.push(make('div', 'tr-topup', model.topUp));
 
     if (model.firstPick) {
       parts.push(make('div', 'tr-choose', TRAINING_TEXT.chooseFirst));
@@ -330,7 +351,6 @@ export function mountTrainingWindow(store: Store<GameState>): TrainingWindowView
       parts.push(cards);
       const action = actionNode(model.detail);
       if (action !== null) parts.push(action);
-      if (model.saved !== null) parts.push(make('div', 'tr-saved', model.saved));
     } else {
       const grid = make('div', 'tr-grid');
       const open = openBranch ?? model.branches.find((branch) => branch.newest)?.skill ?? null;
@@ -350,22 +370,6 @@ export function mountTrainingWindow(store: Store<GameState>): TrainingWindowView
       if (model.detail !== null) parts.push(detailNode(model.detail));
     }
 
-    if (model.pending.length > 0) {
-      const pending = make('div', 'tr-pending');
-      pending.appendChild(make('div', 'tr-section', TRAINING_TEXT.pendingTitle));
-      for (const row of model.pending) {
-        const line = make('div', 'tr-pending-row');
-        line.appendChild(make('span', 'tr-pending-text', row.text));
-        if (row.undoable) {
-          const undo = make('button', 'tr-undo', TRAINING_TEXT.undo);
-          undo.tabIndex = -1;
-          undo.dataset.undo = String(row.index);
-          line.appendChild(undo);
-        }
-        pending.appendChild(line);
-      }
-      parts.push(pending);
-    }
     const ahead = make('div', 'tr-ahead');
     if (model.ahead !== null) ahead.appendChild(make('div', 'tr-ahead-line', model.ahead));
     // Slice 6 (R15): the selected ship's site data, a second line (the AHEAD line is 69 characters at its worst).
@@ -387,10 +391,11 @@ export function mountTrainingWindow(store: Store<GameState>): TrainingWindowView
     const state = store.getState();
     if (state.run.phase !== 'desk') return;
     const model = trainingModel(state);
-    const key = structureKey(model, openBranch);
+    const ledger = cyclesLedger(state);
+    const key = structureKey(model, ledger, openBranch);
     if (key !== lastKey) {
       lastKey = key;
-      render(model);
+      render(model, ledger);
     }
     paintBank(model);
     paintHold(model);

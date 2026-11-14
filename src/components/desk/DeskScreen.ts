@@ -1,5 +1,5 @@
-// Slice 4: Track UI owns this file (docs/phase3/impl/slice-4-plan.md §5.2): [T], the step list, the SET COURSE bar's
-// blocker. Others ask by message.
+// Playtest 1: Track B-DESK owns this file (docs/phase3/impl/playtest-1-plan.md §3.6, §4 Batch B): everything inside the
+// desk screen. B-ORDER owns how the desk is reached (run.ts openDesk, deskUiOnOpen). Others ask by message.
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import type { ChartNode } from '@systems/desk';
@@ -21,7 +21,7 @@ import { renderKeyCaps } from '@components/hud/keycaps';
 import { paintTraceMeter } from '@components/hud/TraceMeter';
 import { mountStarChart } from '@components/desk/StarChart';
 import { renderShipCard } from '@components/desk/ShipCard';
-import { buildDeskTabs, type DeskTab } from '@components/desk/DeskTabs';
+import { buildDeskTabs, shownTab, type DeskTab } from '@components/desk/DeskTabs';
 import { renderRepository } from '@components/desk/RepositoryWindow';
 import { mountInboxView } from '@components/desk/InboxView';
 import { mountTrainingWindow } from '@components/desk/TrainingWindow';
@@ -52,6 +52,13 @@ import { DESK_GREY_STEP_MS, DESK_TYPE_CPS, DESK_SHEET_PEEK_PX } from '@data/tuni
 // chart's empty sky (a click puts it away), CONTROL says `UNIT-047 got here first. :)`, the opening beat turns the last
 // unit's newly passed colonies green after the greying (a rising chime each), and a key in the chart's corner says what
 // the trail's marks are (a phone drops it: the card's LAST UNIT row says it there).
+// Playtest 1 (B-DESK, §3.6, Fran's note 15): TRAINING is merged into the REPOSITORY. Its one scrolling host holds two
+// halves, FROM EARTH (RepositoryWindow.ts: the requests) over COMPILE HERE (TrainingWindow.ts: the skills, and the cycles
+// ledger that says where they come from). The tabs are CARD / REPOSITORY [R] / INBOX [I]. `ui.deskWindow` says which half
+// has the keys: 'repository' FROM EARTH ([1]–[7] request a row), 'training' COMPILE HERE ([1] [2] pick a card, ↑ ↓ step
+// the grid, ENTER trains an armed cell), so the save codec and run.ts deskUiOnOpen keep 'training' as the alias for it.
+// [R] and [T] open their half (scrolled to it) or, when it already has the keys, go back to the card; a click inside a
+// half gives it the keys without scrolling.
 
 const PHONE_QUERY = '(max-width: 768px)';
 // The REPOSITORY's number keys, one per catalogue row (data/repository.ts REPO_FILE_IDS has seven).
@@ -104,14 +111,16 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
   const tabs = buildDeskTabs();
   cardTitle.append(make('span', 'desk-win-grip'), tabs.root, cardClose);
   const cardHost = make('div', 'desk-card');
+  // The REPOSITORY: FROM EARTH over COMPILE HERE, one scroll (playtest 1, B-DESK). The run's first desk opens on COMPILE
+  // HERE (run.ts deskUiOnOpen's 'training').
   const repoHost = make('div', 'desk-card desk-repo');
+  const earthHost = make('div', 'rp-earth');
+  const training = mountTrainingWindow(store);
+  repoHost.append(earthHost, training.root);
   const inbox = mountInboxView(store, 'desk');
   const inboxHost = make('div', 'desk-card desk-inbox');
   inboxHost.appendChild(inbox.root);
-  // Slice 4: TRAINING [T] (components/desk/TrainingWindow.ts); the run's first desk opens on it (run.ts deskUiOnOpen).
-  const training = mountTrainingWindow(store);
-  const trainingHost = training.root;
-  cardWin.append(cardTitle, cardHost, repoHost, trainingHost, inboxHost);
+  cardWin.append(cardTitle, cardHost, repoHost, inboxHost);
   body.append(chartWin, cardWin);
 
   const foot = make('div', 'desk-foot');
@@ -134,6 +143,10 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
   // The desk visit whose opening (the greying chimes, CONTROL's typed line, BEAM OUT's blackout) has played: one per ship
   // left, keyed by the run and run.ships.length (the review's m3: every ◀ CHART return replayed it).
   let openedVisit: string | null = null;
+  // The REPOSITORY half last scrolled to (null: the REPOSITORY is closed), and whether the half changed by a click inside
+  // it (no scroll: the kid is looking at it).
+  let scrolledHalf: 'earth' | 'compile' | null = null;
+  let halfByClick = false;
   let timers: ReturnType<typeof setTimeout>[] = [];
   let typing: ReturnType<typeof setInterval> | null = null;
   const stopTimers = (): void => {
@@ -196,17 +209,26 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
     }
     const showing = inspected ?? selected;
     const tab = state.ui.deskWindow;
+    const half = tab === 'repository' ? 'earth' : tab === 'training' ? 'compile' : null;
     tabs.paint(tab, deskTabBadges(state));
     cardHost.hidden = tab !== null;
-    repoHost.hidden = tab !== 'repository';
+    repoHost.hidden = half === null;
     inboxHost.hidden = tab !== 'inbox';
-    trainingHost.hidden = tab !== 'training';
-    root.dataset.tab = tab ?? 'card';
+    root.dataset.tab = shownTab(tab);
+    if (half === null) delete root.dataset.half;
+    else root.dataset.half = half;
     if (tab === null) renderShipCard(cardHost, showing === null ? null : cardModel(state, showing), MAP_TEXT.desk.pickShip);
     // The REPOSITORY's ETAs are for the ship SET COURSE goes to (the selection, not a ship only inspected).
-    if (tab === 'repository') renderRepository(repoHost, repoModel(state, selected));
+    if (half !== null) {
+      renderRepository(earthHost, repoModel(state, selected));
+      training.paint();
+    }
     if (tab === 'inbox') inbox.paint();
-    if (tab === 'training') training.paint();
+    if (half !== scrolledHalf) {
+      if (half !== null && !halfByClick) repoHost.scrollTop = half === 'earth' ? 0 : training.root.offsetTop;
+      scrolledHalf = half;
+    }
+    halfByClick = false;
     root.classList.toggle('sheet-open', sheetOpen && (showing !== null || tab !== null));
     root.classList.toggle('has-card', showing !== null || tab !== null);
     root.classList.add('has-tabs');
@@ -390,6 +412,7 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
     stopTimers();
     beatPending = [];
     greenPending = [];
+    scrolledHalf = null;
     root.hidden = true;
     closeModal?.();
     closeModal = null;
@@ -415,7 +438,18 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
     event.stopPropagation();
     request(file);
   };
-  repoHost.addEventListener('click', onRepoClick);
+  earthHost.addEventListener('click', onRepoClick);
+  // A click in a half gives it the keys (before the half's own handler: a cell clicked in COMPILE HERE is armed for ENTER).
+  const focusHalf = (id: 'repository' | 'training') => (): void => {
+    const state = store.getState();
+    if (state.run.phase !== 'desk' || state.ui.deskWindow === id) return;
+    halfByClick = true;
+    openDeskWindow(store, id);
+  };
+  const onEarthDown = focusHalf('repository');
+  const onCompileDown = focusHalf('training');
+  earthHost.addEventListener('click', onEarthDown, true);
+  training.root.addEventListener('click', onCompileDown, true);
   // The departures block goes away on a click (it is the opening desk's news, not a control).
   const onLeaveClick = (event: MouseEvent): void => { event.stopPropagation(); leaveBox.hidden = true; };
   leaveBox.addEventListener('click', onLeaveClick);
@@ -478,7 +512,9 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
     unsubPick();
     unsubTrace();
     unsubTabs();
-    repoHost.removeEventListener('click', onRepoClick);
+    earthHost.removeEventListener('click', onRepoClick);
+    earthHost.removeEventListener('click', onEarthDown, true);
+    training.root.removeEventListener('click', onCompileDown, true);
     leaveBox.removeEventListener('click', onLeaveClick);
     inbox.destroy();
     training.destroy();
