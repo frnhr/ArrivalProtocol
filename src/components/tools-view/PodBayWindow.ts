@@ -9,7 +9,7 @@ import { capabilitiesNow } from '@systems/capabilities';
 import { getDropSolution } from '@systems/drop-cache';
 import { getPrediction } from '@systems/predict';
 import { endLanding } from '@systems/landing';
-import { launchDown, launchUp, playerLaunch, type LaunchConfirm } from '@systems/landing-controls';
+import { launchDown, type LaunchConfirm } from '@systems/landing-controls';
 import { bayWindowModel, type AutodropBayModel, type BayWindowModel } from '@systems/landing-hud';
 import { pressAutodrop, setPassCount } from '@systems/autodrop';
 import { podBayRestoredRow } from '@systems/last-landing-hud';  // slice 7b, Track VIEW's marked edit
@@ -35,11 +35,10 @@ import { POD_BAY_OPEN_DELAY_MS } from '@data/tuning';
 // missing `NO BAY CTRL` in red with LAUNCH disabled (never "offline" next to pods, §3.10); under the counters the class
 // line (`PLAINS · off-site pods score half`) and the no-go arcs' words (`NO-GO: LAVA`).
 // Slice 4c (plan §3.8): AUTODROP. Its pip joins the title's pips (a click jumps to AUTODROP.skl in the MIND, as the Engine
-// window's AUTOBURN pip does); under the counters its key line (`HOLD [L] · AUTODROP CENTRES EVERY POD`, `AUTODROP ▸ PASS
-// [G]`) with the [G] button (v2 and v3; it rides in the phone bar on a phone), v2's rows (`A [−] 2 [+]` and their
-// `BAY HAS 1 BY THEN`), and v3's plan table with its check line (`PLAN · 2 PASSES · A 1,000 · B 800 ✓`), forecast rows dim.
-// The LAUNCH button is a hold for AUTODROP v1 (pointer down / up through landing-controls launchDown / launchUp, as [L]);
-// a click with no pointer before it (a script, an assistive tool) is the manual launch.
+// window's AUTOBURN pip does); under the counters its key line (`AUTODROP ▸ CENTRE [G] · ONE WINDOW`, `AUTODROP ▸ PASS
+// [G]`) with the arm button (playtest 1, §3.4.2: from v1, `AUTO · CENTRE [G]`, `ARMED · LZ-B · 2 PODS` while armed, as the
+// AUTO button reads; it rides in the phone bar on a phone), v2's rows (`A [−] 2 [+]` and their `BAY HAS 1 BY THEN`), and
+// v3's plan table with its check line (`PLAN · 2 PASSES · A 1,000 · B 800 ✓`), forecast rows dim. LAUNCH is a plain click.
 
 export interface PodBayDeps {
   confirm: LaunchConfirm;
@@ -218,34 +217,15 @@ export function mountPodBayWindow(store: Store<GameState>, deps: PodBayDeps): ()
     }
   }
 
-  // The launch: the one path (landing-controls launchDown: AUTODROP's hold, or playerLaunch → requestLaunch), the confirm
-  // through the inline pill. The button is pressed on pointer down, as [L] is on keydown, so AUTODROP v1 can take the
-  // hold; pointer up (anywhere: the finger may slide off) and a lost pointer let go. The click that follows is swallowed.
-  let pointerPressed = false;
-  let holding = false;
-  const letGo = (): void => {
-    if (!holding) return;
-    holding = false;
-    launchUp(store);
-  };
-  const onLaunchDown = (event: PointerEvent): void => {
-    if (event.button !== 0) return;
-    event.stopPropagation();
-    pointerPressed = true;
-    holding = launchDown(store, deps.confirm) === 'held';
-  };
+  // The launch: the one path (landing-controls launchDown → playerLaunch → requestLaunch), the confirm through the pill.
+  // Playtest 1 (plan §3.4.2): a plain click, as [L] is a plain press (the pointer hold for AUTODROP v1 went).
   const onLaunch = (event: MouseEvent): void => {
     event.stopPropagation();
-    if (pointerPressed) { pointerPressed = false; return; }
-    playerLaunch(store, deps.confirm);
+    launchDown(store, deps.confirm);
   };
-  launchBtn.addEventListener('pointerdown', onLaunchDown);
   launchBtn.addEventListener('click', onLaunch);
-  window.addEventListener('pointerup', letGo);
-  window.addEventListener('pointercancel', letGo);
-  window.addEventListener('blur', letGo);
 
-  // AUTODROP's [G], its pass rows' [−] / [+], and its pip (a jump to the file in the MIND).
+  // AUTODROP's [G] (the arm button, from v1), its pass rows' [−] / [+], and its pip (a jump to the file in the MIND).
   const onGo = (event: MouseEvent): void => {
     event.stopPropagation();
     pressAutodrop(store);
@@ -303,11 +283,7 @@ export function mountPodBayWindow(store: Store<GameState>, deps: PodBayDeps): ()
   paint();
 
   return () => {
-    launchBtn.removeEventListener('pointerdown', onLaunchDown);
     launchBtn.removeEventListener('click', onLaunch);
-    window.removeEventListener('pointerup', letGo);
-    window.removeEventListener('pointercancel', letGo);
-    window.removeEventListener('blur', letGo);
     goBtn.removeEventListener('click', onGo);
     passEl.removeEventListener('click', onPassClick);
     adPip.removeEventListener('click', onPip);

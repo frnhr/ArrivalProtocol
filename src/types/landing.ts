@@ -445,29 +445,33 @@ export interface OnTargetTally {
 
 // --- Slice 4c: AUTODROP's machine (slice-4cde-plan §2.2, §3; Track DROP fills it, the FOUNDATION typed it) ---
 
-// What [G] armed: v2's one pass, or v3's whole plan.
-export type AutodropArm = 'pass' | 'plan';
-// Why the last pass or plan ended (the strip's words). 'released': v1's [L] let go before the volley's first launch, so
-// nothing went (R4's one-time `HOLD [L]` lesson reads it; foundation review M2).
-export type AutodropEnd = 'pass-done' | 'plan-done' | 'cancel' | 'downgraded' | 'off' | 'offline' | 'landing-over' | 'released';
+// What [G] armed: v1's one window (playtest 1, note 9, plan §3.4.2: the volley of the next sure window), v2's one pass, or
+// v3's whole plan. `armed` is null at every save point (the codec's rule), so 'centre' needs no save bump.
+export type AutodropArm = 'centre' | 'pass' | 'plan';
+// Why the last window, pass or plan ended (the strip's words). 'centre-done': v1's armed volley was flown (playtest 1).
+// 'released' is no longer written (v1's hold on [L] went in playtest 1); the codec still reads it from older saves.
+export type AutodropEnd = 'centre-done' | 'pass-done' | 'plan-done' | 'cancel' | 'downgraded' | 'off' | 'offline' | 'landing-over'
+  | 'released';
 
 export interface AutodropState {
-  held: boolean;                    // v1: [L] (or a LAUNCH button) held on the SHIP screen
-  armed: AutodropArm | null;        // v2's [G] (this pass), v3's [G] (the plan)
+  held: boolean;                    // always false since playtest 1 (v1 is armed by [G]); the v10 save bump drops it
+  armed: AutodropArm | null;        // v1's [G] (this window), v2's [G] (this pass), v3's [G] (the plan)
   pass: Record<string, number>;     // v2: pods per LZ for this pass (the POD BAY's [−] n [+]), kept between passes
   sent: Record<string, number>;     // launched since [G] (`PASS DONE · A +2 · B +1`)
   armedAtTSec: number | null;       // game s at [G]: a pass ends one period later
-  claimed: boolean;                 // holds its Core thread for the volley at hand
+  claimed: boolean;                 // holds its Core thread for the volley at hand (v2, v3: v1 holds none)
   waitingSinceTSec: number | null;  // its claim found no thread free (it launches late)
   flownAs: EffectiveVersion;        // the version it flew at the last tick (a downgrade acts once)
-  end: AutodropEnd | null;          // why the last pass or plan ended (the strip's words)
+  end: AutodropEnd | null;          // why the last window, pass or plan ended (the strip's words)
   endAtAi: number | null;
 }
 
 // The guidance slot AUTODROP fills (slice-4cde-plan §3.7; autodrop.ts autodropLineOf, read by landing-guidance.ts
-// buildLandingContext): its own row (AD-hold, AD-fly, AD-wait, AD-done), checked after L2, L12-bay and L12-nodrop and before
-// L3–L7, and the tail it puts on L13's waits (` · [G] AUTODROP`). Either may be null.
+// buildLandingContext): its own row (AD-fly, AD-armed, AD-wait, AD-done), checked after L2, L12-bay and L12-nodrop and before
+// L3–L7; the tail it puts on L13's waits (` · [G] AUTODROP`); and (playtest 1, §3.4.2) the tail it puts on GET READY and
+// LAUNCH NOW while [G] would arm v1 for that window (` · or [G] AUTO`). Any may be null.
 export interface AutodropLine {
   row: { id: string; text: string; keys: string[]; urgency: Urgency; layer: GuideLayer } | null;
   tail: { text: string; key: string | null } | null;
+  launchTail: { text: string; key: string } | null;
 }

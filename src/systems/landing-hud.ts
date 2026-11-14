@@ -16,8 +16,9 @@ import { capabilitiesNow, skillLive, BAND_COPY, type Band, type Capabilities } f
 import { dragLineKm } from '@systems/landing-orbit';
 import { paid } from '@systems/skill-levels';
 import { passCounts, passRows, planLanding } from '@systems/autodrop-plan';
-import { repairWord, whoGoesLower } from '@systems/autodrop';
+import { autodropNextLaunch, repairWord, whoGoesLower } from '@systems/autodrop';
 import { AUTODROP_TEXT } from '@data/autodrop-text';
+import { SKILL_TREE } from '@data/skills';
 import { surveyGroundBrackets, surveyUnmapped, type RimArc } from '@systems/survey-hud';
 import {
   bayMembers, bayShown, driverTouch, dropFactors, isLaunchable, launchGuard, launchRefusal, lzAt, lzDownFill, lzProjectedFill, nextToLaunch,
@@ -757,7 +758,7 @@ export interface AutodropBayModel {
   // The BAY window's AUTODROP pip (03 §4: `AUTODROP v2▸v1`; a click jumps to the file, as every pip does).
   pip: { segId: string | null; label: string; look: AutodropPipLook; glyph: string; reading: string; title: string };
   version: number;                  // what it works as now (0: OFF)
-  // What [L] and [G] do now, and the [G] button (shown from v2: it arms, or cancels while armed).
+  // What [G] does now, and the arm button (shown from v1 since playtest 1: it arms, or cancels while armed).
   key: { text: string; look: 'go' | 'armed' | 'off' | 'wait' };
   go: { shown: boolean; label: string; armed: boolean };
   // v2's rows (`A [−] 2 [+]`), while AUTODROP works as v2.
@@ -794,13 +795,18 @@ export function autodropBayModel(state: Readonly<GameState>, sol: Readonly<DropS
       : live.version === nominal ? words.pipOk(nominal) : words.pipDamaged(nominal, live.version, BAND_OK_MIN),
   };
   const ad = state.landing.autodrop;
-  const armed = ad.armed !== null && live.version >= 2;
+  // Playtest 1 (Track B-DROP, plan §3.4.2): v1 is armed by [G] too ('centre'), so the key line and the arm button are there
+  // from v1 (`AUTO · CENTRE [G]`; armed, what it waits for: `ARMED · LZ-B · 2 PODS`, as the AUTO button reads).
+  const armed = ad.armed !== null && live.version >= (ad.armed === 'centre' ? 1 : 2);
   let key: AutodropBayModel['key'];
   if (live.version === 0) key = { text: words.keyOff, look: 'off' };
   else if (armed && ad.waitingSinceTSec !== null) key = { text: words.keyWaiting, look: 'wait' };
-  else if (armed) key = { text: ad.armed === 'plan' ? words.keyArmedPlan : words.keyArmedPass, look: 'armed' };
-  else key = { text: live.version >= 3 ? words.keyPlan : live.version === 2 ? words.keyPass : words.keyHold, look: 'go' };
-  const go = { shown: live.version >= 2 || armed, label: armed ? words.goButtonArmed : words.goButton, armed };
+  else if (armed) key = { text: ad.armed === 'plan' ? words.keyArmedPlan : ad.armed === 'pass' ? words.keyArmedPass : words.keyArmedCentre, look: 'armed' };
+  else key = { text: live.version >= 3 ? words.keyPlan : live.version === 2 ? words.keyPass : words.keyCentre, look: 'go' };
+  const next = armed ? autodropNextLaunch(state) : null;
+  const label = !armed ? words.goButton(SKILL_TREE.autodrop.versions[Math.max(0, live.version - 1)]?.mode ?? 'CENTRE')
+    : next === null ? words.goButtonArmedIdle : words.goButtonArmed(next.lz, next.n);
+  const go = { shown: live.version >= 1 || armed, label, armed };
   const landing = state.run.phase === 'landing' && state.landing.ended === null && sol !== null && sol.block === null && sol.dot !== null;
   if (!landing) return { pip, version: live.version, key, go: { ...go, shown: false }, pass: null, plan: null };
   const view = landingViewOf(state, sol, capabilitiesNow(state).bay.cadenceTac);
@@ -872,12 +878,8 @@ export function bayWindowModel(
     look = 'blocked';
     status = LAUNCH_REFUSAL_TEXT['BAY OFFLINE'];
   }
+  // (Playtest 1: the LAUNCH button's `AUTODROP HOLDS FOR THE CENTRE` went with v1's hold on [L]: LAUNCH is always the kid's.)
   if (aboard.length === 0) status = POD_BAY_STATUS_TEXT.allAway;
-  // Slice 4c: held for AUTODROP v1, the button says AUTODROP times the volley (the dot's off-site ask is not the kid's).
-  else if (landing.autodrop.held) {
-    look = 'go';
-    status = AUTODROP_TEXT.bay.launchHeld;
-  }
 
   const nextDriver = nextToLaunch(state);
   // The NEXT pod's drop (risk 19: LOAD NEXT changes the dot): the solved dot's own width, which drop-cache solves for

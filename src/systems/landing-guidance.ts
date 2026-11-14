@@ -82,7 +82,9 @@ import {
 // state.landing.window (landing.ts writes it from the in-band span, risk 13); L13 names an out-of-band window only when
 // the landing waits on nothing in band (OUT OF BAND).
 
-// 'AD' (slice 4c): AUTODROP's own rows (AD-hold, AD-fly, AD-wait, AD-done; their ids are autodrop.ts's).
+// 'AD' (slice 4c): AUTODROP's own rows (AD-fly, AD-armed, AD-mind, AD-wait, AD-done; their ids are autodrop.ts's). Playtest 1
+// (B-DROP): AD-hold and AD-held went with v1's hold on [L]; v1 is offered as L4's and L7's ` · or [G] AUTO` tail instead, and
+// while AUTODROP is armed AD-armed stands over a WIDE DROP window, so L5 and L3b never ask for a WIDE [L] (OPEN-DECISIONS 120).
 export type LandingRow = 'L0' | 'L1' | 'L2' | 'L3' | 'L3b' | 'L4' | 'L5' | 'L6' | 'L7' | 'L8' | 'L9' | 'L10' | 'L11' | 'L12' | 'L12b' | 'L13'
   | 'AD';
 
@@ -288,6 +290,15 @@ function withAutoTail(objective: LandingObjective, ctx: LandingContext): Landing
   }, objective);
 }
 
+// Playtest 1 (B-DROP, plan §3.4.2): GET READY's and LAUNCH NOW's manual launch carry AUTODROP v1's ` · or [G] AUTO` while
+// [G] would arm v1 for that window (autodrop.ts autodropLineOf's launchTail), as the flight's capture lines carry AUTOBURN's
+// ` · or [B] AUTO`. A tail only, when it still fits; the row's own key stays first.
+function withLaunchTail(objective: LandingObjective, ctx: LandingContext): LandingObjective {
+  const tail = ctx.autodrop?.launchTail ?? null;
+  if (tail === null || (objective.text + tail.text).length > MAX_LINE_CHARS) return objective;
+  return { ...objective, text: objective.text + tail.text, keys: [...objective.keys, tail.key] };
+}
+
 function line(
   row: LandingRow, text: string, keys: string[], urgency: Urgency, layer: GuideLayer, ctx: LandingContext,
   extra: Partial<Pick<LandingObjective, 'repairs' | 'highlight' | 'id'>> = {},
@@ -404,7 +415,7 @@ function evaluate(ctx: LandingContext): LandingObjective | null {
   const open = ctx.open;
   const burnNear = flightBurnNear(ctx);
   if (flight !== null && burnNear && !(open !== null && ctx.aboard > 0 && ctx.canLaunch)) return flightLine(flight, ctx);
-  // Slice 4c (plan §3.7): AUTODROP's own row, before the window rows it flies (AD-hold, AD-fly, AD-wait, AD-done).
+  // Slice 4c (plan §3.7): AUTODROP's own row, before the window rows it flies (AD-fly, AD-armed, AD-mind, AD-wait, AD-done).
   const autodropRow = ctx.aboard > 0 ? ctx.autodrop?.row ?? null : null;
   if (autodropRow !== null) {
     // Review m4: AD-armed is only a wait over a window the machine leaves alone; a sinking orbit outranks it (L10, as it
@@ -429,10 +440,10 @@ function evaluate(ctx: LandingContext): LandingObjective | null {
       // (landingMoment's launch moment), so the first pod never goes half off-site. L5 is for a dot that won't fit at all.
       if (ctx.canLaunch && open.sureInTac !== null) {
         if (flight !== null && burnNear) return flightLine(flight, ctx);
-        return line('L7', LANDING_LINES.L7(open.lz, open.sureInTac), [], 'now', 'ship', ctx);
+        return withLaunchTail(line('L7', LANDING_LINES.L7(open.lz, open.sureInTac), [], 'now', 'ship', ctx), ctx);
       }
       if (ctx.canLaunch && ctx.bayReady) {
-        if (open.sure) return line('L4', LANDING_LINES.L4(open.lz, open.down, open.count), ['L'], 'now', 'ship', ctx);
+        if (open.sure) return withLaunchTail(line('L4', LANDING_LINES.L4(open.lz, open.down, open.count), ['L'], 'now', 'ship', ctx), ctx);
         if (ctx.lavaInReach !== null) {
           return line('L5', LANDING_DROP_LINES.L5noGo(ctx.lavaInReach), ['L'], 'now', 'ship', ctx, { id: 'landing-L5-nogo' });
         }
@@ -444,7 +455,7 @@ function evaluate(ctx: LandingContext): LandingObjective | null {
   if (flight !== null && burnNear) return flightLine(flight, ctx);
   const next = ctx.next;
   if (ctx.aboard > 0 && ctx.canLaunch && next !== null && next.inBand && !next.full && next.launchInTac <= WINDOW_TACTICAL_LEAD_TAC) {
-    return line('L7', LANDING_LINES.L7(next.lz, next.launchInTac), [], 'now', 'ship', ctx);
+    return withLaunchTail(line('L7', LANDING_LINES.L7(next.lz, next.launchInTac), [], 'now', 'ship', ctx), ctx);
   }
   // L10 above L8 and L9: a sinking orbit undoes any repair or GO LOWER.
   const decay = decayLine(ctx);

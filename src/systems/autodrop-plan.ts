@@ -108,18 +108,27 @@ export interface Volley {
   spacingSec: number;
 }
 
-// The slots of the biggest volley of at most `maxN` pods that straddles `centre` + `offsetSec` inside `span` (R6: the first
-// at centre − (n − 1) × cadence × AUTODROP_SPACING_FRAC + offset, each later one a cadence on), never before `earliest` (now,
-// the bay's cadence, a volley already flying), and its last slot an edge margin inside the sure part's close: the AI tick
-// launches up to a tick after a slot, and a pod launched past the edge would leave with its dot over it. A volley that
-// would start before `earliest` starts there instead (the kid held [L] late, a claim came late): it shrinks to what is left.
+// Where a volley is timed from (playtest 1, OPEN-DECISIONS 120). 'centre': it straddles the window's centre (v1 CENTRE, v3's
+// plan: plan R6). 'cue': it starts at the strip's cue, the sure part's opening (`LAUNCH NOW`), as AIM is measured (item 6:
+// autodrop-plan dropDemoOffset), each later pod a cadence on: v2 PASS, which flies a pass's count and so wants every slot the
+// sure part has (CORMORANT's LZ-B: the hand kid got 3 pods in from LAUNCH NOW, v2 centred 2, 4.5 s later).
+export type VolleyAnchor = 'centre' | 'cue';
+
+// The slots of the biggest volley of at most `maxN` pods inside `span`, timed from `anchor`: straddling `centre` + `offsetSec`
+// (R6: the first at centre − (n − 1) × cadence × AUTODROP_SPACING_FRAC + offset), or from the cue (the first at span.lo +
+// offset), each later one a cadence on, never before `earliest` (now, the bay's cadence, a volley already flying), and its
+// last slot an edge margin inside the sure part's close: the AI tick launches up to a tick after a slot, and a pod launched
+// past the edge would leave with its dot over it. A volley that would start before `earliest` starts there instead (the kid
+// pressed [G] late, a claim came late): it shrinks to what is left.
 export function volleySlots(
   span: Readonly<Span>, centre: number, earliest: number, offsetSec: number, cadenceSec: number, maxN: number, marginSec: number,
+  anchor: VolleyAnchor = 'centre',
 ): { n: number; first: number } | null {
   const lo = Math.max(span.lo, earliest);
   const hi = span.hi - marginSec;
   for (let n = Math.min(maxN, BAY_SLOTS); n >= 1; n--) {
-    const first = Math.max(centre - (n - 1) * cadenceSec * AUTODROP_SPACING_FRAC + offsetSec, lo);
+    const from = anchor === 'cue' ? span.lo : centre - (n - 1) * cadenceSec * AUTODROP_SPACING_FRAC;
+    const first = Math.max(from + offsetSec, lo);
     if (first + (n - 1) * cadenceSec <= hi) return { n, first };
   }
   // An offset pushed even one pod out of a short sure part (review B2's probe: a 0.3 tac s sure part against a learned 0.33 s
@@ -184,13 +193,13 @@ export function centredVolley(
 
 function volleyOn(
   win: Readonly<WindowAt>, span: Readonly<Span> | null, nowTSec: number, offsetTac: number, cadenceTac: number, warp: number,
-  room: number, bay: Readonly<BayState>, planned: readonly number[], notBefore = -Infinity,
+  room: number, bay: Readonly<BayState>, planned: readonly number[], notBefore = -Infinity, anchor: VolleyAnchor = 'centre',
 ): Volley | null {
   if (span === null || room < 1 || !(cadenceTac > 0)) return null;
   const cadenceSec = cadenceTac * warp;
   const earliest = Math.max(earliestLaunch(bay, nowTSec, warp), notBefore);
   for (let maxN = Math.min(room, BAY_SLOTS); maxN >= 1; maxN--) {
-    const slots = volleySlots(span, win.centre, earliest, offsetTac * warp, cadenceSec, maxN, AUTODROP_EDGE_MARGIN_TAC * warp);
+    const slots = volleySlots(span, win.centre, earliest, offsetTac * warp, cadenceSec, maxN, AUTODROP_EDGE_MARGIN_TAC * warp, anchor);
     if (slots === null) return null;
     if (bayBy(bay, cadenceTac, planned, nowTSec, slots.first, warp) >= slots.n) {
       return { lz: win.lz, n: slots.n, firstAtTSec: slots.first, spacingSec: cadenceSec };
@@ -200,9 +209,9 @@ function volleyOn(
   return null;
 }
 
-// The volley AUTODROP v1 (held) or v2 (a pass) would fly next, and its window: the first in-band window, by opening, of an
-// LZ that `wants` pods (null: any LZ with room) whose sure part is not over, with `want(lz)` capping the count. A v2 pass
-// passes `inPass` to keep to its own windows.
+// The volley AUTODROP v1 (armed for a window) or v2 (a pass) would fly next, and its window: the first in-band window, by
+// opening, of an LZ that `wants` pods (null: any LZ with room) whose sure part is not over, with `want(lz)` capping the count.
+// A v2 pass passes `inPass` to keep to its own windows, and `anchor` 'cue' (OPEN-DECISIONS 120).
 export interface NextVolley {
   win: WindowAt;
   volley: Volley;
@@ -210,6 +219,7 @@ export interface NextVolley {
 
 export function nextVolley(
   state: Readonly<GameState>, view: Readonly<LandingView>, want: (lz: string) => number, inPass: (win: Readonly<WindowAt>) => boolean = () => true,
+  anchor: VolleyAnchor = 'centre',
 ): NextVolley | null {
   const cadenceTac = view.bay.cadenceTac;
   if (cadenceTac === null) return null;
@@ -220,7 +230,7 @@ export function nextVolley(
   for (const win of windowsAhead(view.solution, now, 2)) {
     const n = Math.min(want(win.lz), view.remaining[win.lz] ?? 0);
     if (n < 1 || win.sure === null || win.sure.hi <= now || !inPass(win)) continue;
-    const volley = volleyOn(win, win.sure, now, offset, cadenceTac, warp, n, view.bay, []);
+    const volley = volleyOn(win, win.sure, now, offset, cadenceTac, warp, n, view.bay, [], -Infinity, anchor);
     if (volley !== null) return { win, volley };
   }
   return null;
@@ -253,9 +263,10 @@ export function passRows(state: Readonly<GameState>, view: Readonly<LandingView>
     if (room < 1 || byLz.has(win.lz)) continue;
     const want = Math.max(0, Math.min(room, Math.round(pass[win.lz] ?? 0)));
     const span = win.sure !== null && win.sure.hi > now ? win.sure : null;
-    // What the window can fly, the bay aside (a full bay of BAY_SLOTS stands in for the count).
+    // What the window can fly, the bay aside (a full bay of BAY_SLOTS stands in for the count), timed from the cue as the
+    // pass flies it (OPEN-DECISIONS 120).
     const geometric = cadenceTac === null || span === null ? null
-      : volleySlots(span, win.centre, earliestLaunch(view.bay, now, warp), offset * warp, cadenceTac * warp, room, AUTODROP_EDGE_MARGIN_TAC * warp);
+      : volleySlots(span, win.centre, earliestLaunch(view.bay, now, warp), offset * warp, cadenceTac * warp, room, AUTODROP_EDGE_MARGIN_TAC * warp, 'cue');
     const fits = geometric?.n ?? 0;
     const flown = Math.min(want, fits);
     let bayHas: number | null = null;

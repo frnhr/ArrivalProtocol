@@ -1,3 +1,4 @@
+// Playtest 1: Track B-DROP's (playtest-1-plan.md §3.4.2): v1 armed by [G], its POD BAY button, no WIDE [L] while armed.
 // Slice 4c–4e: Track DROP owns this file (docs/phase3/impl/slice-4cde-plan.md §2.1, §7.2): every AUTODROP string (the
 // strip, the POD BAY, the radio, the echo, the Skills row). The FOUNDATION seeded the once-only lessons with the plan's
 // words (§3.7); DROP rewords freely and adds the rest. Every line is ≤ MAX_LINE_CHARS (70) at its worst case
@@ -20,31 +21,31 @@ function split(counts: Readonly<Record<string, number>>, sign: '×' | '+'): stri
 // (data/script.ts REFUSAL_LINES, `AUTODROP|<word>`). Review M4: `NOTHING SET` is v2's (its [+]); v3 has no [+] and says
 // `NOTHING TO PLAN`; and with no sure window on this orbit for any LZ, either says `NO SURE WINDOW` with the REPAIR that
 // would give one (landing-rules bestRepairForDrop), one word per fix so the strip's flash can name it.
-export type AutodropRefusalWord = 'NOT LANDING' | 'MERGE FLYING' | 'NO AUTODROP' | 'AUTODROP OFF' | 'NOTHING SET' | 'NOTHING TO PLAN' | 'PAUSED'
-  | 'ONLY v1' | 'NO SURE WINDOW' | 'NO SURE WINDOW · SENSOR INTERP' | 'NO SURE WINDOW · NAV PLOTTER' | 'NO SURE WINDOW · DRIVERS';
+// Playtest 1 (Track B-DROP, plan §3.4.2): `ONLY v1` went (v1 arms with [G] too); `NOTHING TO CENTRE` is v1's empty word.
+export type AutodropRefusalWord = 'NOT LANDING' | 'MERGE FLYING' | 'NO AUTODROP' | 'AUTODROP OFF' | 'NOTHING SET' | 'NOTHING TO PLAN'
+  | 'NOTHING TO CENTRE' | 'PAUSED' | 'NO SURE WINDOW' | 'NO SURE WINDOW · SENSOR INTERP' | 'NO SURE WINDOW · NAV PLOTTER'
+  | 'NO SURE WINDOW · DRIVERS';
 
 export const AUTODROP_TEXT = {
   // The once-only lessons (data/script.ts SKILL_4CDE_RULES; their conditions are autodrop.ts autodropTutorialDue's).
-  // v1's is R4's: said once, after a tap on [L] let go before the volley's first launch (nothing went).
+  // v1's is never due since playtest 1 (R4's tap lesson went with the hold on [L]); its words stay for the rule's table.
   tutorial: {
-    v1: 'HOLD [L] — AUTODROP waits for the centre',
+    v1: 'AUTODROP v1 — [G] before a window: each pod leaves dead centre',
     v2: 'AUTODROP v2 — set the split in the POD BAY, then [G]',
     v3: 'AUTODROP v3 — [G] flies the whole plan',
   },
 
   // --- The strip (autodrop.ts autodropLineOf: AUTODROP's guidance rows and its tails on L13's waits, plan §3.7) ---
   strip: {
-    // AD-hold: v1 works on the SHIP screen, and a sure window is open or within GET READY's 8 tac s.
-    hold: (lz: string): string => `WINDOW ${lz} — hold [L]: AUTODROP waits for the centre`,
-    // AD-held: [L] held, AUTODROP times the volley (n pods, the first in `time`, or now).
-    held: (lz: string, n: number, time: string | null): string =>
-      `HOLD [L] — AUTODROP · ${lz} ×${n} · ${time === null ? 'LAUNCHING' : `first in ${time}`}`,
-    // AD-fly: v2/v3 armed, a volley within 8 tac s or flying.
+    // AD-fly: armed (v1's window, v2's pass, v3's plan), a volley within 8 tac s or flying.
     fly: (lz: string, n: number, time: string | null): string =>
       `AUTODROP — ${lz} ×${n} · ${time === null ? 'LAUNCHING' : time} · [G] to cancel`,
-    // AD-armed: a window open that the armed machine leaves alone (flown already, or not this pass's): it waits.
+    // AD-armed: a window open that the armed machine leaves alone (flown already, not this pass's, or a WIDE DROP: OD 120,
+    // no WIDE [L] while armed): it waits.
     armedNext: (lz: string, n: number, time: string): string => `AUTODROP ARMED — next ${lz} ×${n} in ${time} · [G] to cancel`,
     armedIdle: 'AUTODROP ARMED — nothing more this window · [G] to cancel',
+    // AD-mind: v1 armed while the kid is in the MIND, its window near or open (v1 flies from the SHIP screen only, R8).
+    centreMind: 'AUTODROP v1 FLIES FROM THE SHIP SCREEN — [TAB]',
     // AD-wait: its claim found no Core thread (R8).
     wait: (time: string | null): string =>
       `AUTODROP NEEDS A THREAD ${time === null ? 'NOW' : `IN ${time}`} — × AN OP`,
@@ -52,21 +53,28 @@ export const AUTODROP_TEXT = {
     passDone: (sent: Readonly<Record<string, number>>): string => `PASS DONE · ${split(sent, '+')} — set the next pass, [G]`,
     planDone: (sent: Readonly<Record<string, number>>): string => `PLAN DONE · ${split(sent, '+')}`,
     // The tails on L13's waits.
+    tailCentre: ' · [G] AUTODROP',
     tailPass: ' · [G] AUTODROP',
     tailPlan: ' · [G] FLIES THE PLAN',
     tailArmed: ' · AUTODROP ARMED',
+    // Playtest 1 (§3.4.2, AUTOBURN's ` · or [B] AUTO`): on GET READY and LAUNCH NOW while [G] would arm v1 for that window.
+    launchTail: ' · or [G] AUTO',
   },
 
   // --- The TERMINAL (say 'sys', critical) ---
   radio: {
+    // Playtest 1: v1's [G] arms one window's volley, centred.
+    armedCentre: (lz: string, n: number): string => `AUTODROP ARMED · ${lz} ×${n} · EACH POD DEAD CENTRE`,
     armedPass: (pass: Readonly<Record<string, number>>): string => `AUTODROP ARMED · THIS PASS: ${split(pass, '×')}`,
-    armedPlan: (passes: number): string => `AUTODROP ARMED · THE PLAN: ${passes} PASS${passes === 1 ? '' : 'ES'} · [F] BETWEEN THEM`,
+    // Playtest 1 (B-TIME's hold [F], plan §3.1): an armed AUTODROP's windows are soft stops of the hold.
+    armedPlan: (passes: number): string => `AUTODROP ARMED · THE PLAN: ${passes} PASS${passes === 1 ? '' : 'ES'} · HOLD [F] BETWEEN THEM`,
     cancel: 'AUTODROP OFF — you have the [L]',
+    centreDone: (sent: Readonly<Record<string, number>>): string => `AUTODROP · ${split(sent, '+')} · [G] FOR THE NEXT WINDOW`,
     passDone: (sent: Readonly<Record<string, number>>): string => `PASS DONE · ${split(sent, '+')}`,
     planDone: (sent: Readonly<Record<string, number>>): string => `PLAN DONE · ${split(sent, '+')}`,
     // 03 §3.5's steps down while it flies (plan §3.5), and the OFFs.
     v3to2: 'AUTODROP v3 → v2 — this pass flies; set the next one',
-    v2to1: 'AUTODROP v2 → v1 — hold [L] for the rest',
+    v2to1: 'AUTODROP v2 → v1 — [G] arms one window at a time',
     damaged: 'AUTODROP.skl DAMAGED — DROP BY HAND',
     offline: 'AUTODROP OFF WHILE IT IS REPAIRED — you have the [L]',
     refused: (word: AutodropRefusalWord): string => `> [G] ${AUTODROP_TEXT.refusal[word]}`,
@@ -81,8 +89,8 @@ export const AUTODROP_TEXT = {
     'AUTODROP OFF': 'AUTODROP.skl IS TOO DAMAGED — REPAIR IT',
     'NOTHING SET': 'NOTHING SET — use the POD BAY\'s [+]',
     'NOTHING TO PLAN': 'NOTHING TO PLAN — NO POD CAN GO YET',
+    'NOTHING TO CENTRE': 'NOTHING TO CENTRE — NO POD CAN GO YET',
     PAUSED: 'PAUSED',
-    'ONLY v1': 'AUTODROP v1 — HOLD [L] IN A WINDOW',
     'NO SURE WINDOW': 'NO SURE WINDOW ON THIS ORBIT',
     'NO SURE WINDOW · SENSOR INTERP': 'NO SURE WINDOW — REPAIR SENSOR INTERP',
     'NO SURE WINDOW · NAV PLOTTER': 'NO SURE WINDOW — REPAIR NAV PLOTTER',
@@ -105,12 +113,11 @@ export const AUTODROP_TEXT = {
       : `AUTODROP.skl v${nominal} — WORKS AS v${effective}: REPAIR it to ${okMin}% for v${nominal}`),
     pipOffline: (version: number): string => `AUTODROP.skl v${version} — offline while REPAIR or MOVE runs`,
     pipMissing: 'AUTODROP.skl is gone: RESTORE it at the next desk',
-    // The key line under the pip, by what [L] / [G] does now.
-    keyHold: 'HOLD [L] · AUTODROP CENTRES EVERY POD',
-    // The LAUNCH button's status while it (or [L]) is held for v1.
-    launchHeld: 'AUTODROP HOLDS FOR THE CENTRE',
+    // The key line under the pip, by what [G] does now (playtest 1: v1 arms with [G] too; [L] is always the plain launch).
+    keyCentre: 'AUTODROP ▸ CENTRE [G] · ONE WINDOW',
     keyPass: 'AUTODROP ▸ PASS [G]',
     keyPlan: 'AUTODROP ▸ PLAN [G]',
+    keyArmedCentre: 'AUTODROP CENTRES THIS WINDOW · [G] CANCELS',
     keyArmedPass: 'AUTODROP FLIES THIS PASS · [G] CANCELS',
     keyArmedPlan: 'AUTODROP FLIES THE PLAN · [G] CANCELS',
     keyOff: 'AUTODROP OFF — DROP BY HAND',
@@ -147,8 +154,11 @@ export const AUTODROP_TEXT = {
       const how = lower === 'v3' ? 'AUTOBURN v3 GOES LOWER' : 'fly lower';
       return repair === null ? `${lz} NEVER FITS — ${how}` : `${lz} NEVER FITS — REPAIR ${repair}, or ${how}`;
     },
-    goButton: '[G] AUTODROP',
-    goButtonArmed: '[G] CANCEL',
+    // The arm button (playtest 1, §3.4.2: AUTOBURN's `AUTO · GREEN [B]`), from v1: the mode [G] arms, and while armed what
+    // it waits for (`ARMED · LZ-B · 2 PODS`), as the AUTO button says what it flies. It rides in the phone bar on a phone.
+    goButton: (mode: string): string => `AUTO · ${mode} [G]`,
+    goButtonArmed: (lz: string, n: number): string => `ARMED · ${lz} · ${n} POD${n === 1 ? '' : 'S'}`,
+    goButtonArmedIdle: 'ARMED · [G] CANCELS',
   },
 
   // --- The Skills window's row (autodrop.ts autodropStatus) ---
@@ -157,7 +167,6 @@ export const AUTODROP_TEXT = {
     untrained: (mode: string, aim: number): string => `${mode} · UNTRAINED ${aim}% · DROP BY HAND TO TEACH IT`,
     armed: (lz: string, n: number, time: string): string => `ARMED · ${lz} ×${n} IN ${time}`,
     armedIdle: 'ARMED · WAITING FOR ITS WINDOW',
-    holding: 'HOLDING [L] · IT CENTRES THE VOLLEY',
     waiting: 'WAITING FOR A THREAD — × AN OP',
     worksAs: (effective: number, nominal: number): string => `WORKS AS v${effective} — REPAIR IT FOR v${nominal}`,
   },
