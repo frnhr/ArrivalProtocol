@@ -650,6 +650,19 @@
       <div class="title-notes" id="titleNotes" hidden></div>
       <button class="title-receive" id="titleReceive" tabindex="-1">[ RECEIVE TRANSMISSION ]</button>
       <div class="title-note" id="titleNote"></div>
+      <!-- Playtest 1 (note 1): ERASE ALL RECORDS at the title's foot, in every archive state (TitleCard). A click asks first
+           (ERASE [DEL] / KEEP [ENTER], ESC keeps); the erase removes every key of the game's and reloads to a first visit. -->
+      <div class="title-erase" id="titleErase" hidden>
+        <button class="title-erase-btn" id="titleEraseBtn" tabindex="-1"></button>
+        <div class="title-erase-ask" id="titleEraseAsk" role="alertdialog" aria-labelledby="titleEraseLine" hidden>
+          <div class="title-erase-line" id="titleEraseLine"></div>
+          <div class="title-erase-choices">
+            <button class="title-save-btn warn" id="titleEraseYes" tabindex="-1"></button>
+            <button class="title-save-btn" id="titleEraseNo" tabindex="-1"></button>
+          </div>
+        </div>
+        <div class="title-erase-failed" id="titleEraseFailed" role="alert" hidden></div>
+      </div>
     </div>
   </div>
 

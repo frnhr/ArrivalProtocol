@@ -115,7 +115,7 @@ import { infectedSegments, fileLabel } from '@state/selectors';
 import type { HollowState } from '@state/schema';
 import {
   archiveLineage, archiveMeta, freshMeta, saveMeta, lineageOf, recordRunStart, recordRunEnd, recordTutorialDone, ghostLine, browserStorage,
-  LAST_CAUSES, type LastCause, type Meta,
+  LAST_CAUSES, eraseAllRecords, gameKeysIn, type LastCause, type Meta,
 } from '@systems/meta';
 import { pickCard, draftContext, cardFiles, planPacket, type PickRefusal } from '@systems/draft';
 import { upgradeRepairsToV2 } from '@systems/delivery-boot';
@@ -297,6 +297,11 @@ interface DebugHooks {
   archiveAs: (cause: LastCause, landed?: number, ending?: Partial<EndingRecord>) => Meta;
   archiveCorrupt: () => void;
   archiveClear: () => void;
+  // Playtest 1 (note 1): the title's ERASE ALL RECORDS without its confirm: every key of the game's removed (systems/meta.ts
+  // eraseAllRecords), then the page reloads (`reload: false` keeps it, for a check of what is left: storedKeys). storedKeys
+  // lists the game's keys the browser holds now.
+  eraseAll: (opts?: { reload?: boolean }) => 'ok' | 'failed';
+  storedKeys: () => string[];
   // Phase 3 slice 3c: the run save. save is the page's save state and what is stored under RUN_SAVE_KEY; saveCorrupt
   // writes JSON that does not read (reload: RUN SAVE CAN'T RESUME); saveClear forgets the save; updateArm runs the world
   // update on this run's arm as if the run ended after `route` (default: the route so far; colony where a pod landed).
@@ -1161,6 +1166,12 @@ export function mountDebug(store: Store<GameState>): void {
     archiveAs: (cause, landed, ending) => debugArchiveAs(store, cause, landed, ending),
     archiveCorrupt: () => { browserStorage().setItem(META_STORAGE_KEY, '{ this is not an archive'); },
     archiveClear: () => { browserStorage().removeItem(META_STORAGE_KEY); },
+    eraseAll: (opts = {}) => {
+      const result = eraseAllRecords();
+      if (result === 'ok' && opts.reload !== false) window.location.reload();
+      return result;
+    },
+    storedKeys: () => gameKeysIn(browserStorage).filter((key) => browserStorage().getItem(key) !== null),
     save: () => ({ state: structuredClone(store.getState().save), stored: browserStorage().getItem(RUN_SAVE_KEY) }),
     saveCorrupt: () => { browserStorage().setItem(RUN_SAVE_KEY, '{ this is not a run save'); },
     saveClear: () => { browserStorage().removeItem(RUN_SAVE_KEY); },

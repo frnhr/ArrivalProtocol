@@ -18,7 +18,9 @@ import { traceNextLines } from '@systems/trace-hud';
 //   TRANSMISSION is hidden while a save is there;
 // • `runs save between ships` under it (said only while the page can save);
 // • the archive's one-off notes (an older archive not carried over, the arm redrawn), said once: the view clears them with
-//   systems/meta.ts archiveNotesSaid when the kid leaves the title.
+//   systems/meta.ts archiveNotesSaid when the kid leaves the title;
+// • (playtest 1 note 1) ERASE ALL RECORDS at the title's foot, in every archive state, with its confirm's keys
+//   (titleEraseKey).
 
 export type TitleSaveBlock =
   | { kind: 'resume'; line: string; confirm: string }
@@ -45,6 +47,9 @@ export interface TitleModel {
   // Slice 7c (02 §3.12: the traces are "shown on the title and the final card"): the NEXT RUN: lines the last unit's ending
   // left this run (systems/trace-hud.ts traceNextLines, the final card's own), none on run 1 or after a run with no ending.
   traces: string[];
+  // Playtest 1 (note 1, §3.12): ERASE ALL RECORDS is offered, on the title (not while it boots), whatever the archive's
+  // state: OFFLINE and CORRUPT included (the remove may fail there, and the title says so).
+  erase: boolean;
 }
 
 // The archive's one-off notes as the title reads them (systems/meta.ts Meta.notes; null with no archive behind the page).
@@ -101,6 +106,7 @@ export function titleModel(state: Readonly<Pick<GameState, 'run' | 'save' | 'arc
   return {
     unit, unitLine, launch, save: block, receive,
     traces: ending === null ? [] : traceNextLines(ending),
+    erase: state.run.phase === 'title',
     saveNote: save.status === 'ok' && save.resume === null && state.archive.status === 'ok' ? MAP_TEXT.title.savesBetweenShips : null,
     notes: notes === null ? [] : [
       ...(notes.olderArchive ? [MAP_TEXT.save.olderArchive] : []),
@@ -129,4 +135,30 @@ export const TITLE_ABANDON_CODES: readonly string[] = ['Delete', 'Backspace'];
 
 export function titleAbandonKey(block: Readonly<TitleSaveBlock> | null, asking: boolean): TitleSaveAction | null {
   return block?.kind === 'resume' && asking ? 'abandon' : null;
+}
+
+// ERASE ALL RECORDS' confirm (playtest 1 note 1, §3.12), pure: while it asks, [DEL] (Delete, or the Mac's backspace-labelled
+// delete) erases, and ENTER and ESC keep the records. Every other key does nothing, and the save block's keys wait: one
+// question at a time on the title. Not asking: nothing (the button itself opens the question).
+export type TitleEraseAction = 'erase' | 'keep';
+export const TITLE_ERASE_CODES: readonly string[] = TITLE_ABANDON_CODES;
+export const TITLE_ERASE_KEEP_CODES: readonly string[] = ['Enter', 'NumpadEnter', 'Escape'];
+
+export function titleEraseKey(code: string, asking: boolean): TitleEraseAction | null {
+  if (!asking) return null;
+  if (TITLE_ERASE_CODES.includes(code)) return 'erase';
+  if (TITLE_ERASE_KEEP_CODES.includes(code)) return 'keep';
+  return null;
+}
+
+// Whether the erase confirm is up (TitleCard sets it): RECEIVE TRANSMISSION's ENTER and SPACE (systems/boot.ts) wait while
+// it asks, so the ENTER that keeps the records never also starts a run. The page's one title, so one flag.
+let eraseAsking = false;
+
+export function setTitleEraseAsking(on: boolean): void {
+  eraseAsking = on;
+}
+
+export function titleEraseAsking(): boolean {
+  return eraseAsking;
 }

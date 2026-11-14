@@ -948,3 +948,21 @@ body.tool-active .seg.valid-target:hover {
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--accent-dim); }
+
+/* ── Playtest 1 (note 1): ERASE ALL RECORDS at the title's foot (TitleCard). Kept small and dim, in the archive box's
+      type, so it never competes with RECEIVE; its confirm is a framed warning box like ARCHIVE CORRUPT's. Here because this
+      track owned no title stylesheet (A-UI, playtest-1-plan §4); its buttons reuse desk.css's .title-save-btn. ── */
+.title-erase { margin-top: 26px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.title-erase[hidden], .title-erase-ask[hidden], .title-erase-btn[hidden], .title-erase-failed[hidden] { display: none; }
+.title-erase-btn {
+  appearance: none; background: none; border: 0; border-bottom: 1px dotted currentColor; padding: 2px 0; cursor: pointer;
+  font: inherit; font-size: 9px; letter-spacing: 0.28em; color: var(--text-dim); transition: color var(--t-fast);
+}
+.title-erase-btn:hover, .title-erase-btn:focus-visible { color: var(--warn); outline: none; }
+.title-erase-ask {
+  max-width: min(560px, calc(100vw - 32px)); display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 10px 16px 12px; border: 1px solid var(--warn); background: color-mix(in srgb, var(--warn) 8%, var(--bg));
+}
+.title-erase-line { font-size: 11px; letter-spacing: 0.14em; line-height: 1.5; font-weight: 700; color: var(--warn); }
+.title-erase-choices { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+.title-erase-failed { font-size: 10px; letter-spacing: 0.12em; color: var(--warn); }
