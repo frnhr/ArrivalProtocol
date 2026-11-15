@@ -11,6 +11,7 @@ import { armShipAt } from '@systems/map-streams';
 import { unitTrailOf, olderColonies } from '@systems/lineage';
 import { unitName } from '@data/hollow-text';
 import { hollowLabel } from '@systems/say';
+import { palLines } from '@systems/companion';
 import { hopBetween, reachable, reachableFrom, hitsLanding } from '@systems/map-hop';
 import { layerOf, solLy } from '@systems/map-geometry';
 import { seedAllowance } from '@systems/map-noise';
@@ -758,16 +759,17 @@ export function deskOpening(state: Readonly<GameState>, lastVisit: string | null
   return { visit, replay, blackoutSec: replay && state.burn.status === 'abandoned' ? BEAM_OUT_BLACKOUT_SEC : 0 };
 }
 
-// CONTROL's line as the desk opens (02 §2): the first desk of a run only. From run 2, when the unit ahead has taken a ship
-// on this chart, CONTROL is delighted about that instead (02 §4: `UNIT-047 got here first. :)`).
+// PAL's line as the desk opens (02 §2): the first desk of a run only. From run 2, when the unit ahead has taken a ship
+// on this chart, PAL remarks on that instead (02 §4: `UNIT-047 got here first. :)`). Playtest 1 (B-VOICE): the
+// companion's, in the run's preset; it was CONTROL's.
 export function deskControlLine(state: Readonly<GameState>): string | null {
   const map = state.run.map;
   if (map.route.length !== 1) return null;
   const trail = map.run > 1 ? chartTrail(state.run) : null;
   if (trail !== null && trail.marks.some((mark) => mark.kind === 'taken' && mark.ship !== null)) {
-    return MAP_TEXT.chart.controlFirst(unitName(trail.unit));
+    return palLines(state.run).gotHereFirst(unitName(trail.unit));
   }
-  return MAP_TEXT.desk.controlPick(state.run.unitNumber);
+  return palLines(state.run).deskHello(state.run.unitNumber);
 }
 
 // --- Actions ---------------------------------------------------------------------------------------------------------------

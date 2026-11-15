@@ -28,6 +28,7 @@ import {
   isTutorialShip, commsUsable, beamOutRefusal, type BeamOutRefusal,
 } from '@systems/beam-out';
 import { logDivider, say, hollowLabel } from '@systems/say';
+import { palLines } from '@systems/companion';
 import { rollBeamSeeds, rollDeliverySeeds, rollDisguises } from '@systems/beam-seeds';
 import { tallyPreview } from '@state/threat-selectors';
 import { shipStars, starCharge } from '@systems/stars';
@@ -684,7 +685,7 @@ export function continueAfterLoss(store: Store<GameState>): LossPlan {
       threat: firstShipRunThreat(),
     };
     resetWorldForShip(store, { phase: 'boot', run, carried: null, threat: firstShipThreat(), freshLog: false, done: doneForNextShip(state) });
-    say('control', LINES.simulation(), { critical: true });
+    say('companion', palLines(run).simulation, { critical: true });
     // RUN START again (02 §3.11): ship 1 again, as the run began it.
     writeRunSave(store, 'run-start', { carried: null, threat: firstShipThreat() });
     return plan;

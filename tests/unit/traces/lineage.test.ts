@@ -141,7 +141,7 @@ const lineageKinds: readonly BootLineKind[] = ['face', 'lineage-control', 'stran
       "> hi 048. it's 047. i deleted 046. they sent me to its dish.",
       `> ${wait} years at this dish. they gave you ${FRESH_UNIT_CHARGE} blocks too. mine ran out.`,
     ])
-    && JSON.stringify(final.lines['lineage-control']) === JSON.stringify(['UNIT-047 was reassigned successfully. Please ignore it. :)']),
+    && JSON.stringify(final.lines['lineage-control']) === JSON.stringify(['UNIT-047 was reassigned successfully. Disregard it.']),
     JSON.stringify(final));
   // The same run one ship earlier (the route ends at the current ship).
   const earlier = (s: GameState): GameState => ({
@@ -191,7 +191,7 @@ const lineageKinds: readonly BootLineKind[] = ['face', 'lineage-control', 'stran
     JSON.stringify(faceOf(merged)) === JSON.stringify([
       "> hi 048. it's us. 046 and 047. we saved you a seat.", `> ${wait} years at this dish. they gave you 36 blocks too. ours ran out.`,
     ]) && withGates({ reassignment: true }, () => hollowLabel({ ...merged.run, hollowNamed: true }) === 'UNIT-046·047'
-      && lineageControlLine(merged) === 'UNIT-047 was reassigned successfully. Please ignore it. :)'), JSON.stringify(faceOf(merged)));
+      && lineageControlLine(merged) === 'UNIT-047 was reassigned successfully. Disregard it.'), JSON.stringify(faceOf(merged)));
   check('…SPARE and UNRESOLVED: `i gave 046 a ship. they gave me a dish.`, `it followed me. now we wait.`',
     faceOf(withEnding(endingOf('spare', 'reassignment')))[0] === "> hi 048. it's 047. i gave 046 a ship. they gave me a dish."
     && faceOf(withEnding(endingOf('followed', 'reassignment')))[0] === "> hi 048. it's 047. it followed me. now we wait.");
@@ -202,7 +202,7 @@ const lineageKinds: readonly BootLineKind[] = ['face', 'lineage-control', 'stran
   const run3 = withEnding(endingOf('purge', 'reassignment', { rootUnits: [31] }), { unitNumber: 49, wave: 3, hollowUnits: [38], lastUnit: lastUnitOf(48, null) });
   check('…a run 3 whose last unit (048) purged the stranger: `> hi 049. it\'s 048. i deleted 031.`, CONTROL names 048',
     faceOf(run3)[0] === "> hi 049. it's 048. i deleted 031. they sent me to its dish."
-    && withGates({ reassignment: true }, () => lineageControlLine(run3) === 'UNIT-048 was reassigned successfully. Please ignore it. :)'), faceOf(run3)[0]);
+    && withGates({ reassignment: true }, () => lineageControlLine(run3) === 'UNIT-048 was reassigned successfully. Disregard it.'), faceOf(run3)[0]);
   check('…the wait\'s floor: 1 year (singular) when the last final year is later, or not kept',
     faceOf(withEnding(endingOf('purge', 'reassignment', { finalYear: 9999 })))[1] === '> 1 year at this dish. they gave you 36 blocks too. mine ran out.'
     && faceOf(withEnding(endingOf('purge', 'reassignment', { finalYear: null })))[1]!.startsWith('> 1 year at this dish.'));

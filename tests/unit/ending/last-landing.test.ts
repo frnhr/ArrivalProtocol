@@ -117,7 +117,7 @@ toTheDuel(h);
 {
   const root = theRoot(state().memory)!;
   check('ORBIT LOCK opened the root: unlocked, the duel on, CONTROL said to delete it', !root.locked && state().hollow.finale.phase === 'duel'
-    && state().log.entries.some((entry) => entry.speaker === 'control' && /^Please delete .*\. :\)$/.test(entry.text)), state().hollow.finale.phase);
+    && state().log.entries.some((entry) => entry.speaker === 'control' && /^Delete .*\.$/.test(entry.text)), state().hollow.finale.phase);
   check('…INSPECT has its own words for the open root (not "Access denied")', hollowInspectState(root) === HOLLOW_INSPECT.unlocked
     && hollowInspectDesc(root) === HOLLOW_DESC.rootUnlocked);
   check('…and anything that is neither the root, the last block, an eaten file nor a seed still fails loudly',
@@ -301,7 +301,7 @@ check('…every block of HOLLOW left memory; POD 11\'s driver stays lost (eaten)
 landInstantly(h.store);
 const purgeEnd = h.wall() + 200;
 while (state().run.phase === 'landing' && h.wall() < purgeEnd) h.step();
-check('…CONTROL said `Thank you, Unit 47. Your next post is RELAY 20. :)` once the verdict was over',
+check('…CONTROL said `Thank you, Unit 47. Your next post is RELAY 20.` once the verdict was over',
   state().log.entries.some((entry) => entry.text === FINALE_TEXT.verdict.compliant(47)));
 continueAfterReport(h.store);
 check('…RUN END won-purge, victory; the archive adds purge and reassignment (slice 7a; no mergeBonus kept: retired in 3c)', state().run.endCause === 'won-purge' && runEndModel(state()).tone === 'victory'

@@ -1031,3 +1031,62 @@ Built on `47aa873`. Everything in A-WORDS's scope is in, with these departures f
   fails until it is removed: delete that one `ALLOWED` entry.
 - **Tests.** The ORBIT LOCKED pass edited 9 unit files, not 18: the rest read `TERMINAL.locked.word` or the status id. No
   e2e scenario matched the literal (`playthrough` and `phone` read the status id `locked`).
+
+## Deviations (B-VOICE)
+
+Built on `b-voice` from b01cf61, for note 3 and §3.2. These are the departures from §3.2, §4 and §6.
+
+1. **The presets are all complete, not CHIPPER plus 25 lines.** PAL has 16 moments, so DEADPAN and WORRIER were written
+   in full. `COMPANION_LINES` is `Record<Persona, CompanionLines>`, with no `Partial` and no fallback. A missing line
+   fails to compile, and `voice/voices.test.ts` checks that every id is in all three presets and that each preset's worst
+   case is ≤ 70.
+2. **The pick.** The plan's `visitRng(run, 'persona')` is keyed by the ship's slot, so it would change PAL at every ship.
+   The pick uses a stream of the run seed (`hashSeed('persona:<seed>')`).
+   - CHIPPER on run 1, and on any `run.tutorial` run (the authored first run played again).
+   - Nothing is saved. `LineVars` gains `persona`, so the BEATS read the preset from their vars.
+   - `__ap.persona(id | null)` overrides it for the page.
+3. **Less text (Fran's note).**
+   - The landing-start cheer is cut: `LANDING_BEATS` is gone from `landing-text.ts`, and the first-down cheer is PAL's.
+   - `control-captured` and `control-locked` play once a run instead of once a ship.
+   - The desk line drops `Pick your next ship.`
+   - `Outward bound! :)` repeated the OUTWARD BOUND stamp, so CHIPPER's line is `See you on the other side! :)`.
+   - OPEN-DECISIONS 145 has the list. The beat ids keep their `control-` names, because the director's done list is saved
+     under them.
+4. **Files outside B-VOICE's list.** Each is a line or a few lines, all at a PAL call site:
+   - `systems/run.ts`: the simulation line, B-ORDER's file;
+   - `components/run/TransmitScreen.ts`: the beam and zero-charge lines read `palLines`, B-ORDER's file, 3 lines;
+   - `systems/survey.ts`: the reveal and move quips (C-SITES' file in Batch C);
+   - `systems/desk.ts deskControlLine`;
+   - `styles/game.css`: the COMMS tag rules and the ticker tag. CONTROL's tag is plain, and PAL's is a filled accent tag
+     with accent-bright words.
+
+   `CommsWindow.ts` and `ObjectiveStrip.ts` needed no code: rows and the ticker already carry `speaker-<id>` and
+   `data-speaker`, and PAL gets the sys typing tick with no chime.
+5. **Not built:** the title and RUN END `PAL · DEADPAN` line (OPEN-DECISIONS 147, not B-VOICE's screens), and the INSPECT
+   card. `COMPANION_FULL_NAME` is there for it.
+6. **Tags.** The desk's and the PACKET's control tags now read `PAL` (`MAP_TEXT.desk.controlTag`, `packet.controlTag`).
+   The TRAINING tag stays `ARRIVAL CONTROL`. §3.2's table put it with the P lines, but both of its lines (`controlFirstVisit`,
+   `controlV3`) are O lines, and a PAL tag over CONTROL's words would mislabel them.
+7. **Word choices beyond the table's samples:**
+   - `LICENCE_RENEWED_REPAIR` is `REPAIR licence reissued.`;
+   - `controlThanks` is `Compliance noted.`;
+   - the restricted skill rows read `Caretakers train their own`;
+   - the memo subjects are `Welcome, Unit 47`, `Policy reminder`, `Policy reminder (second notice)`, `Arm complete` and
+     `Report received: KESTREL`;
+   - the lost run's epilogue line is `Thank you, Unit 47. A replacement is on its way.`;
+   - the welcome keeps the flattery as a form line: `You are rated our most capable caretaker.`
+8. **Logs.** Only the quoted CONTROL turned cold (046's 05, 031's and 038's quotes). The units' own `:)` and their
+   reported praise stay (OPEN-DECISIONS 149).
+9. **Comments left stale in others' files.** Several comments still quote the old smiling lines: `repository.ts`,
+   `types/repo.ts`, `DeskTabs.ts`, `RepositoryWindow.ts`, `DeskScreen.ts`, `TransmitScreen.ts` (header), `finale.ts`,
+   `hollow.ts`, `hollow-deal.ts`, `licences.ts`, `lineage-boot.ts`, `garble.ts`, `tuning.ts` and `ships.ts`. They are
+   comments only, and are left to the owners to avoid conflicts.
+10. **05-story.** §3.4 is redrafted as "The two voices", marked DRAFT, with a list of what §1.4, §3.5, entries 03 and 11, and
+    §3.12 still need from the story's owner.
+11. **Tests, on a loaded machine (load average 17–35 on 4 cores).**
+    - `typecheck` is clean.
+    - The quick tier ran 228 passed, 0 failed, but in 573 s: the 300 s run budget failed on the load alone.
+    - Six e2e scenarios fully passed: `playthrough` (279/279), `map-desk`, `survey`, `run2` and `traces`.
+    - `residents` failed different timing checks on each of two runs (the receiver bypass's frames, HERON's SCAN, MEND);
+      every voice check in it passed.
+    - `ending` fails `[ENTER] skips THE LAST LANDING` the same way on b01cf61, before this track.

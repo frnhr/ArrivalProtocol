@@ -200,11 +200,8 @@ export const LANDING_LESSONS = {
   splitShort: splitCounts,
 } as const;
 
-// ARRIVAL CONTROL's beats (§2): at the landing's start and at the first touchdown.
-export const LANDING_BEATS = {
-  start: "Lovely orbit! Let's get them down. :)",
-  firstDown: "They're down! :)",
-} as const;
+// The first touchdown's cheer is PAL's (playtest 1, B-VOICE: data/companion-text.ts firstDown); the landing-start one is
+// cut (it followed the STABLE ORBIT quip in the same tick).
 
 // The radio line from the ground at a ship's first touchdown: `POD 01 · OKAFOR: "Is it morning?"`.
 export function groundRadioLine(pod: number, family: string, firstWords: string): string {

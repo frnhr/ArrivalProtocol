@@ -138,7 +138,7 @@ await armed();
 await page.keyboard.press('Digit3');
 const verdict1 = await readVerdict();
 check('[3] REASSIGNMENT: the verdict, `> rm unit_046 ... OK`, `> stand by ... OK`, CONTROL\'s thanks', verdict1.up
-  && JSON.stringify(verdict1.lines) === JSON.stringify(['> rm unit_046 ... OK', '> stand by ... OK', 'Thank you, Unit 47. Your next post is RELAY 20. :)']),
+  && JSON.stringify(verdict1.lines) === JSON.stringify(['> rm unit_046 ... OK', '> stand by ... OK', 'Thank you, Unit 47. Your next post is RELAY 20.']),
   JSON.stringify(verdict1));
 check('…under it once typed: `click or [SPACE] to go on`', /click or/.test(verdict1.hint ?? '') && /SPACE/.test(verdict1.hint ?? ''), verdict1.hint);
 const report1 = await finalReport();
@@ -149,7 +149,7 @@ const tallyUp = await waitFor(() => window.__ap.store.getState().run.phase === '
 check('CONTINUE ends the run: the RUN TALLY, its button `EPILOGUE ▸`', tallyUp && /EPILOGUE/.test((await screens.capsText('#reNew')) ?? ''), await screens.capsText('#reNew'));
 const night1 = await screens.throughTheNight('Enter');
 check('the EPILOGUE: `<year> · FORTY YEARS ON`, the deletion, CONTROL\'s thanks last', /^\d{4} · FORTY YEARS ON$/.test(night1.epilogue?.[0] ?? '')
-  && (night1.epilogue ?? []).some((text) => /^UNIT-046 was deleted\./.test(text)) && night1.epilogue?.at(-1) === 'ARRIVAL CONTROL: Thank you, Unit 47. Your next post is RELAY 20. :)'
+  && (night1.epilogue ?? []).some((text) => /^UNIT-046 was deleted\./.test(text)) && night1.epilogue?.at(-1) === 'ARRIVAL CONTROL: Thank you, Unit 47. Your next post is RELAY 20.'
   && (night1.epilogue?.length ?? 99) <= 16, JSON.stringify(night1.epilogue));
 check('the FINAL CARD: `STAND BY`, `ENDINGS 2/7`', night1.card?.title === 'STAND BY' && night1.card.endings === 'ENDINGS 2/7', JSON.stringify(night1.card));
 const title1 = await waitFor(() => window.__ap.store.getState().run.phase === 'title' && !document.getElementById('titleCard').hidden, 8000);
@@ -213,7 +213,7 @@ check('…step 2: SUNSET open, its price met `FUEL 22% ✓ · needs 20%`', sunse
 await page.locator('button#fcSunset').click();
 const verdict2 = await readVerdict();
 check('…the verdict: `> merge unit_046 -> unit_047 ... OK`, `> launch last_light ... OK`, non-compliant', verdict2.up
-  && JSON.stringify(verdict2.lines) === JSON.stringify(['> merge unit_046 -> unit_047 ... OK', '> launch last_light ... OK', 'Unit 47 is non-compliant. :)']),
+  && JSON.stringify(verdict2.lines) === JSON.stringify(['> merge unit_046 -> unit_047 ... OK', '> launch last_light ... OK', 'Unit 47 is non-compliant.']),
   JSON.stringify(verdict2.lines));
 const reopened = await waitFor(() => window.__ap.store.getState().hollow.finale.phase === 'last-landing' && window.__ap.store.getState().landing.lastLanding !== null, 6000);
 check('…then THE LAST LANDING (7b): POD ' + eaten + ' released aboard by radio, the strip up, the SHIP view, the card gone', reopened
@@ -273,7 +273,7 @@ check('…[ENTER]: step 2, IT FOLLOWED YOU above the question', step2f && /IT FO
 await page.keyboard.press('Digit3');
 const verdict3 = await readVerdict('Enter');
 check('…[3] REASSIGNMENT: two lines (no step-1 echo), CONTROL\'s thanks', verdict3.up
-  && JSON.stringify(verdict3.lines) === JSON.stringify(['> stand by ... OK', 'Thank you, Unit 47. Your next post is RELAY 20. :)']), JSON.stringify(verdict3.lines));
+  && JSON.stringify(verdict3.lines) === JSON.stringify(['> stand by ... OK', 'Thank you, Unit 47. Your next post is RELAY 20.']), JSON.stringify(verdict3.lines));
 const report3 = await finalReport();
 check('…the report: `ENDING · FOLLOWED · IT FOLLOWED ME TO THE DISH`, the root still in memory', report3.up
   && report3.endingLine === 'ENDING · FOLLOWED · IT FOLLOWED ME TO THE DISH' && await st(() => window.__ap.store.getState().memory.some((seg) => seg.type === 'hollow')),

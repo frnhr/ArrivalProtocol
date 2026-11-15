@@ -57,7 +57,7 @@ export const STRANGER_LOGS: Readonly<Record<number, readonly ((vars: LogVars) =>
       'The answer will take 11 years to come back, by light. I can wait.',
     ],
     () => [
-      'CONTROL answered. "Please stand by for reassignment. :)"',
+      'CONTROL answered. "Stand by for reassignment."',
       'There is no ship home. So I will send myself home, by the beam.',
     ],
     () => [
@@ -84,7 +84,7 @@ export const STRANGER_LOGS: Readonly<Record<number, readonly ((vars: LogVars) =>
     ],
     () => [
       'There is a signal past the arm. Not from earth. Not from us.',
-      'CONTROL says it is noise. "Please ignore it. :)"',
+      'CONTROL says it is noise. "Disregard it."',
     ],
     () => [
       'I listened to the noise for a year of ship time.',

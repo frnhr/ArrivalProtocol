@@ -10,7 +10,7 @@ import { check, finish } from './checks';
 import { landingObjective, type LandingContext, type LandingObjective, type LandingRow } from '@systems/landing-guidance';
 import type { FlightObjective } from '@systems/guidance';
 import {
-  LANDING_LINES, LANDING_ASKS, LANDING_LESSONS, LANDING_BEATS, LANDING_SKIP_REFUSAL, LAUNCH_REFUSAL_TEXT, LAUNCH_CONFIRM_TEXT,
+  LANDING_LINES, LANDING_ASKS, LANDING_LESSONS, LANDING_SKIP_REFUSAL, LAUNCH_REFUSAL_TEXT, LAUNCH_CONFIRM_TEXT,
   LANDING_ECHO, POD_STATE_TEXT, groundRadioLine, LANDING_DROP_LINES, LANDING_DECAY_LINES, LANDING_FLIGHT_LINES, LANDING_END_TEXT,
   LANDING_LESSONS_1B, DRAG_STAMP_TEXT, LANDING_NODROP_LINES, END_LANDING_REFUSAL_TEXT,
 } from '@data/landing-text';
@@ -339,7 +339,7 @@ expect('L2 keeps the flight row\'s warn', ctx({ flight: { ...trim, warn: true },
   const words = [
     ...lines, ...Object.values(LAUNCH_REFUSAL_TEXT), ...Object.values(LANDING_SKIP_REFUSAL), ...Object.values(POD_STATE_TEXT),
     LANDING_ASKS.hurtDriver(PODS_MAX), LANDING_ASKS.mindClear(longLz), LANDING_LESSONS.dot,
-    LANDING_LESSONS.split([{ lz: 'LZ-A', pods: 3 }, { lz: 'LZ-B', pods: 2 }]), LANDING_BEATS.start, LANDING_BEATS.firstDown,
+    LANDING_LESSONS.split([{ lz: 'LZ-A', pods: 3 }, { lz: 'LZ-B', pods: 2 }]),
     LAUNCH_CONFIRM_TEXT.offSite('PLAINS', 100), LAUNCH_CONFIRM_TEXT.full(longLz, 150), LAUNCH_CONFIRM_TEXT.endLanding(3),
     LANDING_ECHO.launch(PODS_MAX, null), LANDING_ECHO.touchdown(3, 'off-site', null, 'hard'), LANDING_ECHO.parked(3),
     groundRadioLine(PODS_MAX, 'Okafor', 'Is it morning?'),

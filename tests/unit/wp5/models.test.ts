@@ -12,7 +12,7 @@ import { createHarness5 } from './harness5';
 import { DRIVER_RULES, BEATS, WORST_CASE_VARS } from '@data/script';
 import {
   LAUNCH_REFUSAL_TEXT, LAUNCH_CONFIRM_TEXT, LANDING_ECHO, hostLine, POD_STATE_TEXT, PARK_REASON_TEXT, LANDING_LINES,
-  LANDING_SKIP_REFUSAL, LANDING_ASKS, LANDING_LESSONS, LANDING_BEATS, groundRadioLine, DRIVER_TOOL_TEXT, COLONY_NAME_POOL,
+  LANDING_SKIP_REFUSAL, LANDING_ASKS, LANDING_LESSONS, groundRadioLine, DRIVER_TOOL_TEXT, COLONY_NAME_POOL,
   familyColonyName, podCode, driverName,
 } from '@data/landing-text';
 import { formatCount } from '@data/format';
@@ -67,7 +67,6 @@ add('ask hurtDriver', LANDING_ASKS.hurtDriver(16));
 add('ask mindClear', LANDING_ASKS.mindClear('LZ-D'));
 add('lesson dot', LANDING_LESSONS.dot);
 add('lesson split', LANDING_LESSONS.split([{ lz: 'LZ-A', pods: 4 }, { lz: 'LZ-B', pods: 4 }, { lz: 'LZ-C', pods: 4 }, { lz: 'LZ-D', pods: 4 }]));
-for (const [key, text] of Object.entries(LANDING_BEATS)) add(`LANDING_BEATS.${key}`, text);
 for (const words of FIRST_WORDS_POOL) add('groundRadioLine', groundRadioLine(16, longFamily, words));
 for (const [key, text] of Object.entries(DRIVER_TOOL_TEXT)) add(`DRIVER_TOOL_TEXT.${key}`, text);
 for (const name of [...COLONY_NAME_POOL, familyColonyName(longFamily)]) add('colony name', name);

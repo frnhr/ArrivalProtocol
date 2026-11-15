@@ -301,7 +301,7 @@ toArmCard();
   const refusal = chooseEnding(h.store, 'purge', 'reassignment', { verdict: 'type' });
   const lines = state().hollow.finale.ending?.lines.map((line) => line.text) ?? [];
   const unit = state().mission.transmissionNum;
-  check('PURGE + REASSIGNMENT: `> rm unit_046 ... OK`, `> stand by ... OK`, `Thank you, Unit 47. Your next post is RELAY 20. :)`', refusal === null
+  check('PURGE + REASSIGNMENT: `> rm unit_046 ... OK`, `> stand by ... OK`, `Thank you, Unit 47. Your next post is RELAY 20.`', refusal === null
     && JSON.stringify(lines) === JSON.stringify(['> rm unit_046 ... OK', '> stand by ... OK', FINALE_TEXT.verdict.compliant(unit)]) && unit === 47,
     JSON.stringify(lines));
   check('…a click ends it: \'done\' at once, the report may come', skipFinaleEnding(h.store) && state().hollow.finale.phase === 'done' && !finalePending(state()));

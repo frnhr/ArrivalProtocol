@@ -2,7 +2,7 @@
 // 5 pods on a FLAT guess, LZ-B 4 pods on a ROCKY one; SITE 5 WIDE FLAT ROOM 6, SITE 4 a wreck), reached by ?debug's __ap.route
 // along the worked route [0, 2, 5, 11, 15]. Each part re-arrives there and quiets the ship (HOLLOW asleep, the beam's seeds
 // freed, drivers and Thrust Ctrl healed) so the strip shows the ship's own rows.
-// • No SURVEY: the boot's `> SITE DATA POOR · ARRIVAL CONTROL GUESSED 2 LZs`, CONTROL's `We guessed the landing sites! :)` in
+// • No SURVEY: the boot's `> SITE DATA POOR · ARRIVAL CONTROL GUESSED 2 LZs`, CONTROL's `Landing sites are estimates.` in
 //   COMMS, the SITES window open by itself on CONTROL's guesses (`UNSURVEYED`); locked at once (__ap.lockOn), the kid launches
 //   [L] in LZ-B's window ([F] between): the first pod down on LZ-B lands hard, the stamp `LZ-B · ROCKY ✕`, CONTROL's `LZ-B is a
 //   little rocky :)`, the echo's tail; the LANDING REPORT's LZ-B row ends `· ROCKY · n HARD`.
@@ -89,8 +89,8 @@ const sites = (st) => st(() => {
   const boot = await arrive(game, null);
   check('no SURVEY: CORMORANT\'s boot types `> SITE DATA POOR · ARRIVAL CONTROL GUESSED 2 LZs`',
     boot.includes('> SITE DATA POOR · ARRIVAL CONTROL GUESSED 2 LZs'), boot.filter((line) => /SITE/.test(line)).join(' | '));
-  const quip = await waitFor(() => document.getElementById('commsLog').innerText.includes('We guessed the landing sites! :)'), 15000);
-  check('…CONTROL says `We guessed the landing sites! :)` in COMMS', quip);
+  const quip = await waitFor(() => document.getElementById('commsLog').innerText.includes('Landing sites are estimates.'), 15000);
+  check('…CONTROL says `Landing sites are estimates.` in COMMS', quip);
   const opened = await waitFor(() => !document.getElementById('sitesWin').hidden, 5000);
   const view = await sites(st);
   check('…the SITES window opens by itself on CONTROL\'s guesses: `NO SURVEY`, both LZs `UNSURVEYED`',
@@ -119,7 +119,7 @@ const sites = (st) => st(() => {
   check('…the first pod down on LZ-B lands hard and shows its ground (revealed by touchdown)',
     shown.touch[0] === 'hard' && JSON.stringify(shown.reveals) === '[{"site":"guess-B","by":"touchdown"}]', JSON.stringify({ touch: shown.touch, reveals: shown.reveals }));
   check('…the stamp `LZ-B · ROCKY ✕`', shown.stamps.includes('LZ-B · ROCKY ✕'), shown.stamps.join(' | '));
-  check('…CONTROL says `LZ-B is a little rocky :)` in COMMS', await waitFor(() => document.getElementById('commsLog').innerText.includes('LZ-B is a little rocky :)'), 15000));
+  check('…PAL says `LZ-B is a little rocky :)` in COMMS', await waitFor(() => document.getElementById('commsLog').innerText.includes('LZ-B is a little rocky :)'), 15000));
   check('…the echo carries the tail (`> podNN ... LANDED · HARD · LZ-B IS ROCKY`)', shown.tail.length === 1 && /^> pod\d\d \.\.\. LANDED · HARD · LZ-B IS ROCKY$/.test(shown.tail[0]), shown.tail.join(' | '));
   const lzBRow = await st(() => document.querySelector('#sitesWin .sw-lzs .sw-row:nth-child(2)')?.textContent ?? '');
   check('…SITES\'s LZ-B row now reads `ROCKY ✕`', /ROCKY ✕$/.test(lzBRow.replace(/\s+/g, ' ').trim()), lzBRow);
@@ -186,7 +186,7 @@ const sites = (st) => st(() => {
   const moved = { view: await sites(st), lz: await st(() => window.__ap.store.getState().landing.lzs.find((lz) => lz.label === 'LZ-B')), stamps: await st(() => window.__e2eStamps) };
   check('…the pill moves LZ-B to SITE 5: the stamp `LZ-B → SITE 5`, its row `LZ-B · SITE 5 · 4 PODS · WIDE · FLAT ★★★`',
     moved.lz.site === 'site-5' && moved.stamps.includes('LZ-B → SITE 5') && moved.view.lzs[1] === 'LZ-B · SITE 5 · 4 PODS · WIDE · FLAT ★★★', JSON.stringify(moved));
-  check('…CONTROL: `You moved LZ-B? Bold! :)`', await waitFor(() => document.getElementById('commsLog').innerText.includes('You moved LZ-B? Bold! :)'), 15000));
+  check('…PAL: `You moved LZ-B? Bold! :)`', await waitFor(() => document.getElementById('commsLog').innerText.includes('You moved LZ-B? Bold! :)'), 15000));
   await page.screenshot({ path: join(SHOTS, 'survey-2-moved.png') });
   // Off the planet (the LANDING REPORT, then the DESK): the window and its dock item go (review Tests 6).
   const kit2 = runKit(page, game);

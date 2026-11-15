@@ -54,6 +54,7 @@ import { getPrediction } from '@systems/predict';
 import { GUIDE_RULES } from '@data/script';
 import { SURVEY_TEXT } from '@data/survey-text';
 import { SWATH_TEXT } from '@data/swath-text';
+import { COMPANION_LINES } from '@data/companion-text';
 import { REACTOR_CAP_BY_BAND, REACTOR_THREAD_SHARE } from '@data/tuning';
 import type { LaunchRecord } from '@/types/landing';
 import { assignRefusal, dropSwathOn } from '@systems/survey-model';
@@ -135,7 +136,7 @@ withSurveyBuilt(() => {
       draft.ui.memoryRev++;
     });
     h.step();
-    check('CONTROL\'s quip at the first flight tick (`We guessed the landing sites! :)`), once, with no SURVEY aboard',
+    check('CONTROL\'s quip at the first flight tick (`Landing sites are estimates.`), once, with no SURVEY aboard',
       said('control', SWATH_TEXT.control.boot) === 1 && survey().lines.controlBoot && survey().site === 'poor');
     start = structuredClone(s());
   }
@@ -158,8 +159,8 @@ withSurveyBuilt(() => {
       && survey().sites.find((site) => site.id === 'guess-B')!.groundKnown && JSON.stringify(survey().reveals) === '[{"site":"guess-B","by":"touchdown"}]',
       JSON.stringify(reveals));
     const tails = saidLike(/LZ-B IS ROCKY$/);
-    check('…its echo carries the tail (`> pod.. ... LANDED · HARD · LZ-B IS ROCKY`), once; CONTROL says `LZ-B is a little rocky :)` once',
-      tails.length === 1 && /^> pod\d\d \.\.\. LANDED · HARD · LZ-B IS ROCKY$/.test(tails[0]!) && said('control', SWATH_TEXT.control.reveal('LZ-B', 'rocky')) === 1, tails.join(' | '));
+    check('…its echo carries the tail (`> pod.. ... LANDED · HARD · LZ-B IS ROCKY`), once; PAL says `LZ-B is a little rocky :)` once',
+      tails.length === 1 && /^> pod\d\d \.\.\. LANDED · HARD · LZ-B IS ROCKY$/.test(tails[0]!) && said('companion', COMPANION_LINES.chipper.siteReveal('LZ-B', 'rocky')) === 1, tails.join(' | '));
     const shipsBefore = s().run.ships.length;
     toDesk(h.store);
     const record = s().run.ships[shipsBefore]?.survey;
@@ -198,8 +199,8 @@ withSurveyBuilt(() => {
     check(`…LZ-B moved to SITE 2 in the flight (${movedAt}): its centre, width and ground, sitesRev 1, the move with its \`from\``,
       movedAt === 'flight null' && lz('LZ-B').site === two.id && lz('LZ-B').centreRad === two.centreRad && lz('LZ-B').halfWidthRad === two.halfWidthRad
       && lz('LZ-B').ground === 'flat' && s().landing.sitesRev === 1 && JSON.stringify(survey().moves) === JSON.stringify([{ lz: 'LZ-B', from: 'guess-B', site: two.id }]));
-    check('…\'lz-moved\' emitted, CONTROL says `You moved LZ-B? Bold! :)` once',
-      JSON.stringify(events('lz-moved', from)) === JSON.stringify([{ lz: 'LZ-B', from: 'guess-B', to: two.id }]) && said('control', SWATH_TEXT.control.moved('LZ-B')) === 1);
+    check('…\'lz-moved\' emitted, PAL says `You moved LZ-B? Bold! :)` once',
+      JSON.stringify(events('lz-moved', from)) === JSON.stringify([{ lz: 'LZ-B', from: 'guess-B', to: two.id }]) && said('companion', COMPANION_LINES.chipper.siteMoved('LZ-B')) === 1);
     check('…a second move onto the same site is refused (`same`), and onto the wreck (`wreck`)',
       assignSite(h.store, 'LZ-B', two.id) === 'same' && assignSite(h.store, 'LZ-B', siteId(4)) === 'wreck' && s().landing.sitesRev === 1);
     let releasedWhenDone = false;
@@ -235,7 +236,7 @@ withSurveyBuilt(() => {
     const podsAway = s().landing.pods.filter((record) => record.fate.kind !== 'aboard').length;
     check('v2: LZ-B\'s ROCKY guess revealed by SURVEY before a pod goes: one \'site-revealed\' by survey, `> SURVEY: LZ-B IS ROCKY ✕`, CONTROL\'s line',
       podsAway === 0 && JSON.stringify(events('site-revealed', from)) === JSON.stringify([{ lz: 'LZ-B', siteId: 'guess-B', ground: 'rocky', by: 'survey' }])
-      && said('mind-sys', SWATH_TEXT.terminal.revealed('LZ-B', 'rocky')) === 1 && said('control', SWATH_TEXT.control.reveal('LZ-B', 'rocky')) === 1,
+      && said('mind-sys', SWATH_TEXT.terminal.revealed('LZ-B', 'rocky')) === 1 && said('companion', COMPANION_LINES.chipper.siteReveal('LZ-B', 'rocky')) === 1,
       `${podsAway} ${JSON.stringify(events('site-revealed', from))}`);
     const rated = events('site-rated', from).length;
     check(`…every site found is rated (${rated} 'site-rated'), its ground known`,
@@ -477,7 +478,7 @@ withSurveyBuilt(() => {
     h.step();
     check('m7: LZ-B moved onto WET SITE 3 at v1, then rated by v2: revealed by survey, `> SURVEY: LZ-B IS WET ✕`, and CONTROL says nothing about a lake',
       moved === null && JSON.stringify(events('site-revealed', from)) === JSON.stringify([{ lz: 'LZ-B', siteId: siteId(3), ground: 'wet', by: 'survey' }])
-      && said('mind-sys', SWATH_TEXT.terminal.revealed('LZ-B', 'wet')) === 1 && said('control', SWATH_TEXT.control.reveal('LZ-B', 'wet')) === 0,
+      && said('mind-sys', SWATH_TEXT.terminal.revealed('LZ-B', 'wet')) === 1 && said('companion', COMPANION_LINES.chipper.siteReveal('LZ-B', 'wet')) === 0,
       JSON.stringify(events('site-revealed', from)));
   }
 
@@ -494,7 +495,7 @@ withSurveyBuilt(() => {
       moved === 'null' && downB.length > 0 && downB.every((touch) => touch === 'hard')
       && JSON.stringify(events('site-revealed', from)) === JSON.stringify([{ lz: 'LZ-B', siteId: siteId(3), ground: 'wet', by: 'touchdown' }])
       && tails.length === 1 && /^> pod\d\d \.\.\. LANDED · HARD · LZ-B IS WET$/.test(tails[0]!), tails.join(' | '));
-    check('…CONTROL makes no lake joke (m7: the site was the kid\'s pick, not CONTROL\'s guess)', said('control', SWATH_TEXT.control.reveal('LZ-B', 'wet')) === 0);
+    check('…PAL makes no lake joke (m7: the site was the kid\'s pick, not CONTROL\'s guess)', said('companion', COMPANION_LINES.chipper.siteReveal('LZ-B', 'wet')) === 0);
     const suffix = surveyLzRowSuffix(s(), 'LZ-B');
     check(`…the report's LZ-B row names the site, the ground and the hard pods (\`${suffix}\`)`,
       suffix === SITES_TEXT.report.site('SITE 3') + SITES_TEXT.report.hard('wet', downB.length));
@@ -528,7 +529,7 @@ withSurveyBuilt(() => {
     check(`mislanded (${JSON.stringify(launched)}): the pod into full LZ-B is mislanded and lands hard on its ROCKY guess, and shows it (by touchdown, CONTROL's line)`,
       mislanded !== undefined && mislanded.fate.kind === 'down' && mislanded.fate.touchdown.touch === 'hard' && mislanded.fate.touchdown.lz === 'LZ-B'
       && JSON.stringify(events('site-revealed', from)) === JSON.stringify([{ lz: 'LZ-B', siteId: 'guess-B', ground: 'rocky', by: 'touchdown' }])
-      && said('control', SWATH_TEXT.control.reveal('LZ-B', 'rocky')) === 1);
+      && said('companion', COMPANION_LINES.chipper.siteReveal('LZ-B', 'rocky')) === 1);
   }
 
   // --- The machine with a dead Nav Plotter: no dot, so no dot swath; no throw, the ship's swath still maps ---------------------

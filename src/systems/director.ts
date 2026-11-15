@@ -130,7 +130,7 @@ export interface Beat {
   when(ctx: DirectorCtx): boolean;
   lines: readonly BeatLine[];
   once: boolean;
-  // A one-shot that belongs to one ship, not the run (CONTROL's "Captured! Mostly. :)"): the next ship,
+  // A one-shot that belongs to one ship, not the run (PAL's touchdown cheer, `They're down! :)`): the next ship,
   // or ship 1 again after the simulation, hears it again (systems/run.ts forgets it at the reset).
   perShip?: true;
 }

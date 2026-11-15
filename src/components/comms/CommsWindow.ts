@@ -14,7 +14,9 @@ import { LOG_VIEW_KEEP_ROWS } from '@data/tuning';
 
 // COMMS (§6.3, §7.1): the amber radio under Telemetry. ARRIVAL CONTROL and ship notices arrive
 // here (say() routes them by speaker), each typed at COMMS_TYPE_CPS with a relay tick per
-// letter; a CONTROL line opens with its C-E-G chime. A click on the log finishes every line at
+// letter; a CONTROL line opens with its C-E-G chime. Playtest 1 (B-VOICE): PAL, the companion, talks here too, with no
+// chime; its row is `speaker-companion`, drawn bright (game.css) against CONTROL's plain official lines, so the two voices
+// read apart. A click on the log finishes every line at
 // once. Lines spoken while the kid is in blue wait (the ticker showed them); on the way back the
 // older ones appear at once and the newest types itself, so the radio never chatters from a
 // screen nobody is looking at, and never makes the kid wait through old news.

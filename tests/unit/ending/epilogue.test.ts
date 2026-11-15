@@ -152,7 +152,7 @@ check('…then the pieces: PURGE (2), REASSIGNMENT with its charge (2), the next
   && lines.includes('UNIT-046 was deleted. The relays were quiet for a while.')
   && lines.includes('UNIT-047 stood by at RELAY 20. A dish on a rock. 26 blocks of charge.')
   && lines.includes('UNIT-048 came in 3 years behind you, and found your beacons.')
-  && lines.at(-1) === 'ARRIVAL CONTROL: Thank you, Unit 47. Your next post is RELAY 20. :)', lines.join(' | '));
+  && lines.at(-1) === 'ARRIVAL CONTROL: Thank you, Unit 47. Your next post is RELAY 20.', lines.join(' | '));
 check('…PURGE counts the fleet home: 5 of 6 (CORMORANT crashed)', lines.includes(EPILOGUE_TEXT.step1.purgeFleet(5, 6)));
 check(`…every line ≤ ${MAX_LINE_CHARS}, at most ${EPILOGUE_MAX_LINES}`, lines.every((text) => text.length <= MAX_LINE_CHARS) && lines.length <= EPILOGUE_MAX_LINES);
 
@@ -195,7 +195,7 @@ check(`…every line ≤ ${MAX_LINE_CHARS}, at most ${EPILOGUE_MAX_LINES}`, line
     && texts(model).includes("UNIT-046 gave back the NOVAK pod's driver. It came down too.")
     && texts(model).includes('LAST LIGHT left orbit with two caretakers and 23% fuel.')
     && texts(model).includes(EPILOGUE_TEXT.mergeSunset.us)
-    && texts(model).at(-1) === 'ARRIVAL CONTROL: Unit 47 is non-compliant. :)', texts(model).join(' | '));
+    && texts(model).at(-1) === 'ARRIVAL CONTROL: Unit 47 is non-compliant.', texts(model).join(' | '));
   const mergeNone = epilogueOf(endState(WORKED), null, record('merge', 'reassignment'));
   check('…a MERGE with no driver given back: it is part of you; REASSIGNMENT after MERGE keeps a seat',
     texts(mergeNone).includes(EPILOGUE_TEXT.step1.mergeNone('UNIT-046', 'UNIT-047')) && texts(mergeNone).includes(EPILOGUE_TEXT.step2.reassignmentSeat));

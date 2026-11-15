@@ -22,7 +22,7 @@ import {
 
 // The two voices (§6.3). Every line in the game is spoken through say(), which routes it by
 // speaker to one of two channels:
-// • the RADIO (amber COMMS window): ARRIVAL CONTROL and ship notices;
+// • the RADIO (amber COMMS window): ARRIVAL CONTROL, PAL (the companion, playtest 1) and ship notices;
 // • the MIND (blue TERMINAL pane): HOLLOW, command echoes and the unit's own boot/ECC lines.
 // A line spoken on the screen the kid is not looking at stays unread; the ticker on the
 // objective strip shows the newest one for a few seconds.
@@ -32,12 +32,14 @@ import {
 //   spaced SAY_SPACING_SEC apart;
 // • a waiting line lives SAY_QUEUE_TTL_SEC, and the queue releases one line per
 //   SAY_FLUSH_INTERVAL_SEC;
-// • a CONTROL quip is dropped while anything in the mind is at warn or worse (no jokes while
-//   colonists are being eaten).
+// • a quip (PAL's, since playtest 1: CONTROL no longer jokes) is dropped while anything in the mind
+//   is at warn or worse (no jokes while colonists are being eaten).
 // say() is called only from the director and system ticks, never from store listeners.
 
 export const CHANNEL_OF: Record<Speaker, Channel> = {
   control: 'radio',
+  // Playtest 1 (B-VOICE): PAL talks on the same radio, with no chime (the chime is the protocol's).
+  companion: 'radio',
   sys: 'radio',
   hollow: 'mind',
   'hollow-cmd': 'mind',
@@ -235,7 +237,8 @@ export function assertLineFits(text: string): void {
 }
 
 // ARRIVAL CONTROL reaches you over the AI Comms file (C6): a damaged one loses letters on the way
-// in. Only CONTROL: the ship's own notices and the mind's lines never pass through the radio link.
+// in. Only CONTROL: the ship's own notices and the mind's lines never pass through the radio link, and PAL rides in the
+// unit's own packet (playtest 1: a seed that bites it is a later idea, plan §3.2's pal.sys).
 function garbleOnArrival(state: Readonly<GameState>, speaker: Speaker): number {
   return speaker === 'control' ? COMMS_GARBLE_BY_BAND[roleHealth(state, 'comms').band] : 0;
 }

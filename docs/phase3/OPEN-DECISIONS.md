@@ -740,3 +740,34 @@ renumbers them at CLOSE. "Before → after" is the number the change moved; trac
        `npm run balance:report -- --quick` after Batch B, with B-ORDER's link change, and reads MERGE's price (OD 108)
        and the arrival charge then.
      - To reverse: the card back inside the `max` in both functions (one line each).
+
+## Playtest 1, Batch B (B-VOICE)
+
+125. **The companion is PAL** ("Personal Assistance Layer"). BUILT, **[FRAN]**. Its tag on COMMS and the ticker is `PAL`
+     (`data/companion-text.ts COMPANION_NAME`). To rename it, change that one constant.
+126. **Three hand-written presets: CHIPPER, DEADPAN and WORRIER.** BUILT, **[FRAN]**. Each preset is a complete table of
+     PAL's 16 lines, and the type makes a missing line a compile error. WARMTH and STABILITY are kept as data only.
+     - Run 1, or any run that plays the run-1 lessons, is CHIPPER.
+     - Later runs take their preset from the run seed (`systems/companion.ts`). It is not saved.
+     - `?debug` has `__ap.persona(id | null)`.
+127. **PAL keeps `:)`; CONTROL has none.** BUILT. Only CHIPPER smiles; DEADPAN and WORRIER do not.
+     `tests/unit/voice/voices.test.ts` fails on a smiley, an `!` or a cheer word in any CONTROL line.
+128. **05-story §3.4 is rewritten:** the radio's personality is PAL, and CONTROL is cold. DRAFT in 05-story §3.4,
+     **[FRAN]** and the story owner. §1 item 4, §3.5's beats, entries 03 and 11, and §3.12's samples are still to follow.
+145. **Fewer PAL lines than CONTROL had.** BUILT, **[FRAN]**:
+     - The capture and orbit cheers (`Captured! Mostly. :)`, `Great orbit! Probably. :)`) play once a run, not once a
+       ship. The CAPTURED and STABLE ORBIT stamps carry the later ships.
+     - The landing-start cheer (`Lovely orbit! Let's get them down. :)`) is cut. It came in the same tick as the orbit
+       cheer.
+     - The desk line loses `Pick your next ship.`, which the strip already says.
+     - The beam's `Outward bound! :)` repeated its own stamp. It is now `See you on the other side! :)`.
+     - To reverse: put `perShip: true` back on `control-captured` and `control-locked` in `script.ts` BEATS.
+146. **A later run's preset can be CHIPPER again.** BUILT. Each preset comes up about a third of the time from run 2.
+     The alternative is to roll only DEADPAN or WORRIER after run 1. That is one line in `derivedPersona`.
+147. **The persona is not named on the title or RUN END** (the plan's `PAL · DEADPAN` line). NOT BUILT: those screens are
+     not B-VOICE's. It is a follow-up for whoever owns `TitleCard.ts` and RUN END: one line from `PERSONA_WORD`.
+148. **PAL is never garbled and has no chime.** BUILT. Only CONTROL comes over the radio link, so a damaged AI Comms
+     garbles only CONTROL, and the chime is the protocol's. A seed-bitten `pal.sys` remains a later idea (plan §3.2).
+149. **The caretakers' logs keep their own `:)`, beside the CONTROL they report.** BUILT as the plan says. For example,
+     `ARRIVAL CONTROL says I'm the best they've ever built. :)`. Only quoted CONTROL turned cold (`"Disregard it."`).
+     **[FRAN]** and the story owner: entry 01 could read `PAL says…` to tie the habit to the companion.

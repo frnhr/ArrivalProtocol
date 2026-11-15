@@ -64,8 +64,8 @@ console.log(`INFO  ${all.length} messages on the worked route (05 §3.3 estimate
 check('ARES-VII: the welcome, SENT 2280 · RECEIVED 2288',
   ids(at(all, 1)) === want('welcome') && stamp(byId(all, 'welcome')) === 'SENT 2280 · RECEIVED 2288', ids(at(all, 1)));
 check('…it recommends mv and is ARRIVAL CONTROL\'s (FROM, subject, sign-off)',
-  byId(all, 'welcome')!.body.some((line) => line.includes('Recommended for you: mv :)')) && byId(all, 'welcome')!.from === INBOX_TEXT.from.control
-  && byId(all, 'welcome')!.subject === 'Welcome, Unit 47! :)');
+  byId(all, 'welcome')!.body.some((line) => line.includes('Recommended: mv')) && byId(all, 'welcome')!.from === INBOX_TEXT.from.control
+  && byId(all, 'welcome')!.subject === 'Welcome, Unit 47');
 check('HALCYON: the reply to ARES-VII (2308 / 2337) and RIVERSIDE year 1 (2301 / 2322)',
   ids(at(all, 2)) === want(`postcard:${ARES}:1 reply:${ARES}`) && stamp(byId(all, `reply:${ARES}`)) === 'SENT 2308 · RECEIVED 2337'
   && stamp(byId(all, `postcard:${ARES}:1`)) === 'SENT 2301 · RECEIVED 2322', ids(at(all, 2)));

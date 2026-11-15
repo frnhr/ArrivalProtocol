@@ -6,6 +6,7 @@ import type { LeaveWords } from '@/types/lineage';
 import type { SiteData } from '@/types/survey';
 import { formatCount } from '@data/format';
 import { SITES_TEXT } from '@data/sites-text';
+import { COMPANION_NAME } from '@data/companion-text';
 
 // PLACEHOLDER(05): every word slice 3a puts on screen (slice 3c's foundation added the save, the trail and the bridge) for the galaxy map (docs/phase3/02-map.md §4, 01-landing §3.16's
 // MEMORY row and room bar, 05-story.md §3.11–§3.12's title and trail; slice-3a-plan §3), drafted from the specs' sample
@@ -70,10 +71,10 @@ export const MAP_TEXT = {
     setCourse: (ship: string): string => `SET COURSE ▸ ${ship} [ENTER]`,
     // Slice 4 review (M3): while a TRAINING cell is armed ENTER trains it, so the step names SET COURSE's other key.
     setCourseSpace: (ship: string): string => `SET COURSE ▸ ${ship} [SPACE]`,
-    controlPick: (unit: number): string => `Lovely work, Unit ${unit}! :) Pick your next ship.`,
     greyed: (count: number): string => `${count} ${count === 1 ? 'SHIP' : 'SHIPS'} NOW OUT OF YOUR REACH`,
     onlyNext: 'ONE SHIP IN REACH',
-    controlTag: 'ARRIVAL CONTROL',
+    // Playtest 1 (B-VOICE): the desk's opening line is PAL's (data/companion-text.ts deskHello, gotHereFirst).
+    controlTag: COMPANION_NAME,
     stepPick: 'A SHIP',
     // Slice 3b: the first desk's file step (02 §4: ship → file → SET COURSE).
     stepFile: 'A FILE',
@@ -142,8 +143,6 @@ export const MAP_TEXT = {
     // run (`PASSED OVER TWICE · IT WON'T WAIT AGAIN`), on its card always.
     reportedHome: 'REPORTED HOME',
     passedOver,
-    // CONTROL's one-liner at the first desk when the unit ahead took a ship there (PLACEHOLDER(05)).
-    controlFirst: (unit: string): string => `${unit} got here first. :)`,
   },
 
   // --- The SHIP CARD (02 §4; 01 §3.16's MEMORY row) --------------------------------------------------------------------
@@ -238,9 +237,9 @@ export const MAP_TEXT = {
       `ON THE WAY: ${hits} HITS · ${ecc} FIXED WHILE YOU SLEEP (${yrs(years)}) → ${land} ${land === 1 ? 'LANDS' : 'LAND'}`,
     backToChart: '◀ CHART [ESC]',
     stamp: 'OUTWARD BOUND',
-    control: 'Outward bound! :)',
-    controlTag: 'CONTROL',
-    controlZero: 'Travelling light! Very light. :)',
+    // Playtest 1 (B-VOICE): the line under the light-years and the zero-charge one are PAL's (data/companion-text.ts
+    // beamOut, travellingLight).
+    controlTag: COMPANION_NAME,
     roomLabel: 'ROOM',
     linkLabel: 'LINK',
     confirmYes: 'TRANSMIT',

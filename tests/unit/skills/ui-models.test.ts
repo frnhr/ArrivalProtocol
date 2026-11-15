@@ -64,7 +64,7 @@ const look = (model: Readonly<TrainingModel>, key: string): string | undefined =
       && model.cards[1]!.name === 'AUTODROP v1' && model.cards[1]!.cost === '3 CYCLES · 4 BLOCKS' && model.cards[1]!.key === '2'
       && model.cards[1]!.pitch === TRAINING_TEXT.skills.autodrop.pitch && model.cards[1]!.demo === 'centre' && !model.cards[1]!.trained,
     JSON.stringify(model.cards));
-  check('…ARRIVAL CONTROL: `Training outside approved hours is discouraged. :)`, the head `TRAINING · UNIT-047` and the bank',
+  check('…ARRIVAL CONTROL: `Training outside approved hours is discouraged.`, the head `TRAINING · UNIT-047` and the bank',
     model.control === TRAINING_TEXT.controlFirstVisit && model.title === 'TRAINING · UNIT-047' && model.bankText === TRAINING_TEXT.bank(bank) && bank >= 3);
   check('…SET COURSE waits (firstPickWaits), the strip\'s first step is A SKILL, the tab\'s badge names the cycles',
     model.blocked && firstPickWaits(store.getState()) && deskSteps(store.getState())[0]!.id === 'train' && !deskSteps(store.getState())[0]!.done

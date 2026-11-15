@@ -2,7 +2,7 @@
 // • the catalogue v1 and its checks; restricted rows are never sent; one request per transmit, changeable across ◀ CHART,
 //   cleared (and turned into a request) by TRANSMIT ▸;
 // • ARRIVAL CONTROL's tag on run 1's worked route (Mv, Rm, Swap at KESTREL; a request in flight counts as owned, risk 4),
-//   rules 4 and 5 (Repair.bak, REPAIR v2), and none at CORMORANT (`You have everything you need :)`);
+//   rules 4 and 5 (Repair.bak, REPAIR v2), and none at CORMORANT (`No further software is required.`);
 // • the REPOSITORY's model: the ETAs at the worked route's desks (IN TIME, `4 YRS LATE → … SHIP 5`, NEVER), no ETA toward a
 //   ship out of reach, IN TRANSIT from the one outlook rule, RESTRICTED;
 // • the last-rm prompt (the desk opens on the REPOSITORY with Rm lit);
@@ -45,8 +45,8 @@ const toolCount = (store: Store<GameState>, kind: string): number => state(store
 check('catalogue v1: Mv 2, Rm 1, Cp 3, Swap 1, Repair.bak 4, Scan.bak 3, REPAIR v2 patch 2, in that order, sound',
   REPO_FILE_IDS.map((id) => `${REPO_FILES[id].name}:${REPO_FILES[id].blocks}`).join() === 'Mv:2,Rm:1,Cp:3,Swap:1,Repair.bak:4,Scan.bak:3,REPAIR v2 patch:2'
   && validateCatalogue().length === 0 && REPO_CATALOGUE_VERSION === 1, validateCatalogue().join('; '));
-check('…the restricted rows: the four .skl files (Train it yourself :)), THREAD+, FIREWALL.sys',
-  RESTRICTED_ROWS.map((entry) => entry.name).join() === 'AUTOBURN.skl,AUTODROP.skl,SURVEY.skl,SENTRY.skl,THREAD+,FIREWALL.sys' && RESTRICTED_ROWS[0]!.why === 'Train it yourself :)');
+check('…the restricted rows: the four .skl files (Caretakers train their own), THREAD+, FIREWALL.sys',
+  RESTRICTED_ROWS.map((entry) => entry.name).join() === 'AUTOBURN.skl,AUTODROP.skl,SURVEY.skl,SENTRY.skl,THREAD+,FIREWALL.sys' && RESTRICTED_ROWS[0]!.why === 'Caretakers train their own');
 
 // --- Run 1's worked route, desk by desk ------------------------------------------------------------------------------------
 const run = armRun();
@@ -108,7 +108,7 @@ toDesk(run);
 const cormorant = repoModel(state(run), 19);
 check('CORMORANT\'s desk: the ETA toward LAST LIGHT says `NOTHING WILL REACH YOU IN TIME`',
   cormorant.eta === REPO_TEXT.eta.never && cormorant.forecast?.kind === 'never');
-check('…and so no tag at all, `Nothing can reach you in time now :)` (review M3: it tagged Repair.bak, which could never arrive)',
+check('…and so no tag at all, `No delivery can reach you in time.` (review M3: it tagged Repair.bak, which could never arrive)',
   recommendation(state(run)) === null && nothingArrives(state(run)) && cormorant.recommended === null
   && cormorant.recommendLine === REPO_TEXT.window.nothingCanReach, `${recommendation(state(run))} ${cormorant.recommendLine}`);
 check('…Swap arrived here (delivered at CORMORANT, 2659); Cp is still behind and catches up at LAST LIGHT',
@@ -121,7 +121,7 @@ check('…Swap arrived here (delivered at CORMORANT, 2659); Cp is still behind a
   giveTools(store, ['repair', 'move', 'delete', 'swap']);
   send(store, 2);
   toDesk(store);
-  check('HALCYON with Mv, Rm, Swap and both Repair copies: no tag, `You have everything you need :)`',
+  check('HALCYON with Mv, Rm, Swap and both Repair copies: no tag, `No further software is required.`',
     recommendation(store.getState()) === null && repoModel(store.getState(), 5).recommendLine === REPO_TEXT.window.nothingToRecommend,
     String(recommendation(store.getState())));
   store.update((draft) => { draft.run.stats.repairs = 5; });
@@ -209,7 +209,7 @@ check('…Swap arrived here (delivered at CORMORANT, 2659); Cp is still behind a
   toDesk(second);
   check('…a run 2 arm with ENGINE FAULT in reach of ship 1: the first desk tags Swap, and the welcome recommends swap',
     recommendation(state(second)) === 'swap'
-    && inboxMessages(state(second)).find((m) => m.id === 'welcome')!.body.some((line) => line.includes('Recommended for you: swap :)')),
+    && inboxMessages(state(second)).find((m) => m.id === 'welcome')!.body.some((line) => line.includes('Recommended: swap')),
     String(recommendation(state(second))));
   const plain = armRun(mvSeed ?? 1001, 2);
   toDesk(plain);

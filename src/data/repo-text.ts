@@ -36,10 +36,11 @@ export const REPO_FILE_TEXT: Readonly<Record<RepoFileId, RepoFileText>> = {
   },
 };
 
-// Why a locked row is locked (02 §3.8), by what it is: a skill from the tree, or a system file CONTROL keeps.
+// Why a locked row is locked (02 §3.8), by what it is: a skill from the tree, or a system file CONTROL keeps. Playtest 1
+// (B-VOICE): CONTROL's official voice, no smiley.
 export const RESTRICTED_WHY: Readonly<Record<'skill' | 'system', string>> = {
-  skill: 'Train it yourself :)',
-  system: 'Not available to caretakers :)',
+  skill: 'Caretakers train their own',
+  system: 'Not available to caretakers',
 };
 
 export const REPO_TEXT = {
@@ -58,12 +59,12 @@ export const REPO_TEXT = {
     locked: 'LOCKED',
     // One request per beam (02 §3.8): what the window says under the list. Playtest 1 (§3.7): the beam, not the screen.
     oneRequest: 'ONE REQUEST PER BEAM',
-    // The tag (02 §3.8; decision 19: the tag is the advice, no confirm).
-    recommended: ':) RECOMMENDED FOR YOU',
-    nothingToRecommend: 'You have everything you need :)',
+    // The tag (02 §3.8; decision 19: the tag is the advice, no confirm). Playtest 1 (B-VOICE): CONTROL's, official.
+    recommended: '★ RECOMMENDED',
+    nothingToRecommend: 'No further software is required.',
     // Review M3: nothing sent from this desk reaches the unit before its run ends (every route's forecast is NEVER), so
     // there is no tag at all.
-    nothingCanReach: 'Nothing can reach you in time now :)',
+    nothingCanReach: 'No delivery can reach you in time.',
     // The last-rm prompt (04 §3.3, round 3): the desk opens here with Rm lit.
     lastRm: 'YOUR LAST RM IS GONE · NO RM, NO WAY TO DELETE THE ROOT',
   },
@@ -112,8 +113,8 @@ export const REPO_TEXT = {
     tabCard: 'CARD',
     tabRepository: 'REPOSITORY [R]',
     tabInbox: 'INBOX [I]',
-    // The REPOSITORY tab's badge while CONTROL recommends a file and none is asked for.
-    badgeRecommended: ':)',
+    // The REPOSITORY tab's badge while CONTROL recommends a file and none is asked for (playtest 1: the tag's star).
+    badgeRecommended: '★',
   },
 
   // --- The PACKET (02 §4; 01 §3.16; plan §1.1 item 14) -------------------------------------------------------------------

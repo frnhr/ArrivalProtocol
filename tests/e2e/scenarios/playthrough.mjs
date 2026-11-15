@@ -44,7 +44,7 @@
 // Phase 3 slice 3b (the repository, deliveries, the INBOX; slice-3b-plan §3, §6.3): the interim licences are gone, so the
 // kid's tools come by request. At each DESK, after clicking the next ship, the kid opens the REPOSITORY [R] and clicks
 // REQUEST on the worked route's file (Mv, Rm, Swap, Cp), checking its ETA (IN TIME / `4 YRS LATE → …` / NEVER on every row
-// at CORMORANT) and ARRIVAL CONTROL's `:) RECOMMENDED FOR YOU` tag; KESTREL's desk shows VESPER's `Swap ✗ 4 YRS LATE` and
+// at CORMORANT) and ARRIVAL CONTROL's `★ RECOMMENDED` tag; KESTREL's desk shows VESPER's `Swap ✗ 4 YRS LATE` and
 // its red TIMELINE mark, VESPER's shows CORMORANT's `Swap ✓ CATCHES UP HERE`. The PACKETs carry the delivery chips (Mv into
 // HALCYON, Rm into KESTREL, none into VESPER, Swap into CORMORANT, Cp into LAST LIGHT) and the SALVAGE draft without
 // REPAIR v2; the boots say `> DELIVERY: …`. The INBOX: ARES-VII's dock reads `INBOX 1` and the kid opens the welcome there;
@@ -520,8 +520,8 @@ for (const [index, name] of SHIPS.entries()) {
       check(`${tag}: …the boot types \`> SITE DATA POOR · ARRIVAL CONTROL GUESSED 2 LZs\` after the ECC lines, before the deliveries (slice 6)`,
         at > lastEcc && lastEcc >= 0 && (firstDelivery < 0 || at < firstDelivery), JSON.stringify({ at, lastEcc, firstDelivery }));
       // CONTROL's quip at the first flight tick (read now: the log keeps only its latest lines by the landing).
-      check(`${tag}: …CONTROL says \`We guessed the landing sites! :)\` as the flight starts (slice 6)`,
-        await waitFor(() => window.__ap.log().some((entry) => entry.speaker === 'control' && entry.text === 'We guessed the landing sites! :)'), 5000));
+      check(`${tag}: …CONTROL says \`Landing sites are estimates.\` as the flight starts (slice 6)`,
+        await waitFor(() => window.__ap.log().some((entry) => entry.speaker === 'control' && entry.text === 'Landing sites are estimates.'), 5000));
     } else {
       check(`${tag}: …no SITE DATA POOR line (its site data is GOOD)`, !order.some((text) => /^> SITE DATA POOR/.test(text)));
     }
@@ -552,8 +552,8 @@ for (const [index, name] of SHIPS.entries()) {
       lines: [...document.querySelectorAll('#inboxWin .ib-line')].map((line) => line.textContent), dock: document.getElementById('inboxDockLabel').innerText,
       read: window.__ap.inbox().read,
     }));
-    check(`${tag}: …the kid opens the INBOX from the dock and the welcome: SENT 2280 · RECEIVED 2288, \`Recommended for you: mv :)\`; read`, welcome.shown
-      && welcome.stamps === 'SENT 2280 · RECEIVED 2288' && welcome.lines.includes('Need software? Ask our repository. Recommended for you: mv :)') && welcome.read.includes('welcome')
+    check(`${tag}: …the kid opens the INBOX from the dock and the welcome: SENT 2280 · RECEIVED 2288, \`Recommended: mv\`; read`, welcome.shown
+      && welcome.stamps === 'SENT 2280 · RECEIVED 2288' && welcome.lines.includes('Software is available from the repository. Recommended: mv') && welcome.read.includes('welcome')
       && welcome.dock !== 'INBOX 1', JSON.stringify(welcome));
     await shot('1a2-inbox-welcome');
     await tap(page.locator('.dock-item[data-tool="inbox"]'));
@@ -865,13 +865,13 @@ for (const [index, name] of SHIPS.entries()) {
         done.trace ?? 'no TRACE line');
     }
     if (name === 'CORMORANT') {
-      // Slice 6: no SURVEY aboard, so the first pod down on LZ-B's ROCKY guess showed it: the stamp, CONTROL's reveal line, the
+      // Slice 6: no SURVEY aboard, so the first pod down on LZ-B's ROCKY guess showed it: the stamp, PAL's reveal line, the
       // report's row. The pods there landed hard; the checks above read the points from the page.
       const poor = await st(() => ({
         reveals: window.__ap.survey().reveals, stamps: window.__e2eStamps ?? [],
-        control: window.__ap.log().filter((entry) => entry.speaker === 'control' && /landing sites|rocky|lake/.test(entry.text)).map((entry) => entry.text),
+        control: window.__ap.log().filter((entry) => entry.speaker === 'companion' && /rocky|lake/.test(entry.text)).map((entry) => entry.text),
       }));
-      check(`${tag}: …the first pod down on LZ-B showed its ROCKY guess: the stamp \`LZ-B · ROCKY ✕\`, CONTROL's reveal line, the row's \`· ROCKY · n HARD\` (slice 6)`,
+      check(`${tag}: …the first pod down on LZ-B showed its ROCKY guess: the stamp \`LZ-B · ROCKY ✕\`, PAL's reveal line, the row's \`· ROCKY · n HARD\` (slice 6)`,
         JSON.stringify(poor.reveals) === '[{"site":"guess-B","by":"touchdown"}]' && poor.stamps.includes('LZ-B · ROCKY ✕')
         && poor.control.includes('LZ-B is a little rocky :)')
         && rows.rows.some((row) => /^LZ-B .* · ROCKY · \d+ HARD$/.test(row)), JSON.stringify({ ...poor, rows: rows.rows }));
@@ -980,8 +980,8 @@ for (const [index, name] of SHIPS.entries()) {
     } else {
       const row = repo.rows.find((entry) => entry.file === want.file);
       const fileName = row?.text.split(' · ')[0] ?? want.file;
-      check(`${tag}: [R] the REPOSITORY toward ${next.name}: ${fileName} \`${want.eta}\`${want.tagged ? ', tagged `:) RECOMMENDED FOR YOU`' : ''}`, repo.tab === 'repository'
-        && row?.eta === want.eta && row.tone === want.tone && tagged.length <= 1 && (!want.tagged || (tagged[0] === want.file && row.tag === ':) RECOMMENDED FOR YOU')),
+      check(`${tag}: [R] the REPOSITORY toward ${next.name}: ${fileName} \`${want.eta}\`${want.tagged ? ', tagged `★ RECOMMENDED`' : ''}`, repo.tab === 'repository'
+        && row?.eta === want.eta && row.tone === want.tone && tagged.length <= 1 && (!want.tagged || (tagged[0] === want.file && row.tag === '★ RECOMMENDED')),
         JSON.stringify({ tab: repo.tab, row, tagged }));
       await tap(page.locator(`#deskScreen .rp-row[data-file="${want.file}"]`));
       await page.waitForTimeout(400);

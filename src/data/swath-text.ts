@@ -11,11 +11,10 @@ const GROUND_WORD: Readonly<Record<BadGround, string>> = { rocky: 'ROCKY', wet: 
 export const WIDTH_WORD: Readonly<Record<LzWidth, string>> = { wide: 'WIDE', standard: 'STANDARD', narrow: 'NARROW' };
 
 export const SWATH_TEXT = {
-  // ARRIVAL CONTROL (say('control', …, { critical: true }), once each per ship: plan R21).
+  // ARRIVAL CONTROL (say('control', …, { critical: true }), once per ship: plan R21). Playtest 1 (B-VOICE): official, and
+  // only the boot's notice; the reveal and the first move are PAL's quips (data/companion-text.ts siteReveal, siteMoved).
   control: {
-    boot: 'We guessed the landing sites! :)',
-    reveal: (lz: string, ground: BadGround): string => (ground === 'wet' ? `${lz} is in a lake :)` : `${lz} is a little rocky :)`),
-    moved: (lz: string): string => `You moved ${lz}? Bold! :)`,
+    boot: 'Landing sites are estimates.',
   },
   // The TERMINAL (the first find, a v2 reveal, a wreck, PLANET MAPPED; other finds only ping).
   terminal: {

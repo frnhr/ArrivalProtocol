@@ -58,8 +58,8 @@ function summary(): string {
     `${(locked.wall - lastCount.wall).toFixed(2)} s`);
   check('events: burn-point GET READY and NOW both fired', names.includes('burn-point')
     && h.events.some((event) => event.name === 'burn-point' && (event.payload as { stage: string }).stage === 'now'));
-  const radio = h.log().filter((entry) => entry.speaker === 'control').map((entry) => entry.text);
-  check('voice: CONTROL said hello, clear, captured and locked', radio.length === 4
+  const radio = h.log().filter((entry) => entry.speaker === 'companion').map((entry) => entry.text);
+  check('voice: PAL said hello, clear, captured and locked', radio.length === 4
     && radio[0]!.startsWith('Hello') && radio[2] === 'Captured! Mostly. :)' && radio[3] === 'Great orbit! Probably. :)',
     radio.join(' | '));
 }
@@ -135,7 +135,7 @@ for (const mistake of mistakes()) {
   const alarmAt = h.events.find((event) => event.name === 'countdown-beep' && (event.payload as { kind: string }).kind === 'impact');
   check('(b) the impact beeps start 10 s before the crash', alarmAt !== undefined && Math.abs(h.wall() - alarmAt.wall - 10) < 0.3,
     alarmAt ? `${(h.wall() - alarmAt.wall).toFixed(2)} s before` : 'no beep');
-  check('(b) CONTROL: "Oh no. :)"', h.log().some((entry) => entry.text === 'Oh no. :)'));
+  check('(b) PAL: "Oh no. :)"', h.log().some((entry) => entry.text === 'Oh no. :)'));
 }
 
 // --- A SPACE held through a skipped boot does not burn until pressed again --------------------------

@@ -56,11 +56,11 @@ export const TRAINING_TEXT = {
   step: 'A SKILL',
   stepText: 'CHOOSE YOUR FIRST SKILL — [1], then [ENTER]',
   stepDone: (skill: string, version: number): string => `${skill} v${version} TRAINED · UNDO TILL TRANSMIT ▸`,
-  // ARRIVAL CONTROL on the first visit (03 §7).
+  // ARRIVAL CONTROL on the first visit (03 §7). Playtest 1 (B-VOICE): the protocol's official voice, no smiley.
   controlTag: 'ARRIVAL CONTROL',
-  controlFirstVisit: 'Training outside approved hours is discouraged. :)',
+  controlFirstVisit: 'Training outside approved hours is discouraged.',
   // ...and at a desk whose purchases train a v3 (03 §7; slice-4cde-plan §5.4), for any skill.
-  controlV3: 'Our repository has everything you need. :)',
+  controlV3: 'The repository holds all the software you require.',
   // The first-pick floor (03 §3.1): on the report of a run's first ship, and in the window's head at the first desk.
   // Playtest 1 (§3.7): the number alone; `FIRST SKILL ON THE HOUSE` talked about the game.
   onTheHouse: (n: number): string => `+${cycles(n)}`,

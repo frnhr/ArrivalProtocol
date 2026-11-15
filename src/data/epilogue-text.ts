@@ -179,9 +179,9 @@ export const EPILOGUE_TEXT = {
   // CONTROL's last line (05 §3.12): thanks for a compliant ending, non-compliant for SPARE, SUNSET, STAY or CONTACT
   // (systems/ending-rules.ts controlCompliant, the verdict's rule too), and a run lost on the way.
   control: {
-    compliant: (unitNo: number): string => `ARRIVAL CONTROL: Thank you, Unit ${unitNo}. Your next post is RELAY 20. :)`,
-    nonCompliant: (unitNo: number): string => `ARRIVAL CONTROL: Unit ${unitNo} is non-compliant. :)`,
-    lost: (unitNo: number): string => `ARRIVAL CONTROL: Thank you, Unit ${unitNo}. Another unit is on its way. :)`,
+    compliant: (unitNo: number): string => `ARRIVAL CONTROL: Thank you, Unit ${unitNo}. Your next post is RELAY 20.`,
+    nonCompliant: (unitNo: number): string => `ARRIVAL CONTROL: Unit ${unitNo} is non-compliant.`,
+    lost: (unitNo: number): string => `ARRIVAL CONTROL: Thank you, Unit ${unitNo}. A replacement is on its way.`,
   },
   // The epilogue's way on, once it has typed (one click finishes the typing, a second goes on: §2.10).
   goOn: 'GO ON ▸ [ENTER]',

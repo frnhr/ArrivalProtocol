@@ -20,6 +20,7 @@ import { requireById, make, replayAnimation } from '@components/dom';
 import { renderKeyCaps } from '@components/hud/keycaps';
 import { TRANSMIT_TEXT, DRAFT_TEXT } from '@data/script';
 import { MAP_TEXT } from '@data/map-text';
+import { palLines } from '@systems/companion';
 import { REPO_TEXT } from '@data/repo-text';
 import { PACKET_SKILL_TEXT } from '@data/training-text';
 import { skillFileView } from '@systems/skills';
@@ -281,7 +282,8 @@ function buildPacketParts(root: HTMLElement): PacketParts {
   stamp.hidden = true;
   inner.append(stamp);
   const sendControl = make('div', 'tx-send-control');
-  sendControl.append(make('span', 'tx-control-tag', MAP_TEXT.packet.controlTag), make('span', 'tx-control-text', MAP_TEXT.packet.control));
+  // Playtest 1 (B-VOICE): PAL's line, in the run's preset, is filled in as the packet goes.
+  sendControl.append(make('span', 'tx-control-tag', MAP_TEXT.packet.controlTag), make('span', 'tx-control-text'));
   send.append(sendControl);
   // 3b: the DELIVERIES row and the IN TRANSIT line, under the unit's own files.
   const chips = root.querySelector<HTMLElement>('.tx-chips');
@@ -457,7 +459,7 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
     parts.roomCharges.dataset.tone = room.tone;
     const zero = room.confirm !== null;
     parts.control.hidden = !zero;
-    parts.control.replaceChildren(make('span', 'tx-control-tag', MAP_TEXT.packet.controlTag), make('span', 'tx-control-text', MAP_TEXT.packet.controlZero));
+    parts.control.replaceChildren(make('span', 'tx-control-tag', MAP_TEXT.packet.controlTag), make('span', 'tx-control-text', palLines(store.getState().run).travellingLight));
     parts.confirmQ.textContent = room.confirm ?? MAP_TEXT.packet.zeroConfirm;
     if (zero && !zeroAnnounced && !root.hidden) {
       zeroAnnounced = true;
@@ -577,6 +579,7 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
     // The picked card goes with the packet; the ones left behind fade.
     cardsEl.classList.add('sending');
     sendLine.textContent = TRANSMIT_TEXT.sending(unitName(store.getState().run.unitNumber), current.shipName);
+    parts.sendControl.lastElementChild!.textContent = palLines(store.getState().run).beamOut;
     sendEl.hidden = false;
     // The BEAM stamp (05 §3.12): OUTWARD BOUND over the screen as the packet goes.
     parts.stamp.hidden = false;

@@ -81,7 +81,7 @@ const licenceEvents = (): number => h.events.filter((event) => event.name === 'l
   check('…with fresh ids (an eaten old copy may hold the licence\'s own)', files.length > 0 && files.every((file) => /~\d+$/.test(file.id)), files.map((file) => file.id).join(', '));
   check('…the licence\'s sound and chip (a `licence` event)', licenceEvents() === eventsBefore + 1, `${licenceEvents() - eventsBefore}`);
   check('…recorded for this ship', state().run.repairRenewedOn === 1 && state().run.licences.filter((kind) => kind === 'repair').length === 1);
-  check('…and CONTROL says `Your REPAIR licence is renewed. :)` once the flight starts', state().run.phase === 'flight' && renewedSaid() === 1, `${renewedSaid()}`);
+  check('…and CONTROL says `REPAIR licence reissued.` once the flight starts', state().run.phase === 'flight' && renewedSaid() === 1, `${renewedSaid()}`);
 }
 
 // 2. The only copy left is infected (it is eaten on arrival, §6.9) → reissued too.

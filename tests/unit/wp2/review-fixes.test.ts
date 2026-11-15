@@ -165,9 +165,9 @@ const h: Harness2 = createHarness2(1);
   h.resetTo('flight');
   followDirector(h, { reactionSec: 1.5, maxWall: 400 });
   h.stepFor(1);
-  const control = h.log().filter((entry) => entry.speaker === 'control').map((entry) => entry.text);
+  const control = h.log().filter((entry) => entry.speaker === 'companion').map((entry) => entry.text);
   const expected = ['Hello, Unit 47! ARES-VII is about to hit a planet. :)', 'Nice! Now please orbit it. :)', 'Captured! Mostly. :)', 'Great orbit! Probably. :)'];
-  check('clear quip: a kid reacting in 1.5 s hears all four CONTROL lines', h.status() === 'locked' && expected.every((text) => control.includes(text)),
+  check('clear quip: a kid reacting in 1.5 s hears all four of PAL\'s lines', h.status() === 'locked' && expected.every((text) => control.includes(text)),
     `${h.status()} | ${control.join(' | ')}`);
 }
 
