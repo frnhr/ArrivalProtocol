@@ -54,7 +54,13 @@ check(`…and every ship's built world past ARES-VII (its ship slices from a bea
 // (OPEN-DECISIONS 108) changes HOLLOW's `> keep 16 charge for me, 047.` line, said one hop from the final ship. The first
 // moment that moves is CORMORANT's desk, every ship's outcome and the run's end (won-purge) are as before, and an A/B copy
 // of src/ at 20 (tests/unit/balance/ab.mjs) still gives de4d1e6da04d568e.
-const PINNED_RUN = '8ceb50b18060dcb5';
+// Playtest 1, B-TIME re-recorded it again (it was 8ceb50b18060dcb5), and found what moved it: the landing's strip offers
+// `· hold [F]` wherever holding fast-forwards (pace fastForwardBlockReason; the tap's `[F] to SKIP` only where a SKIP would
+// start), so on LAST LIGHT's final landing the strip-following kid's reaction clock restarts at other moments and its
+// first launch comes 0.15 AI s earlier. The only moment that moves is LAST LIGHT's end; every boot, every flight, every
+// desk and every outcome (won-purge) are as before, and the end state differs only in times and positions (a diff of the
+// two end states: 0.25 AI s, 1e-9 of game time, nothing else).
+const PINNED_RUN = 'b0f45b2087cb0757';
 const REQUESTS: readonly (RepoFileId | null)[] = ['mv', 'rm', 'swap', 'cp', null];
 const h = createHarness11(1, { soulsFound: false });
 const state = (): Readonly<GameState> => h.store.getState();
