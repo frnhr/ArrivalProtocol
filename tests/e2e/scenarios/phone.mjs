@@ -114,10 +114,15 @@ await page.waitForTimeout(1500);
 const bootLine = await visibleText('#objectiveText');
 check('the boot\'s strip says `click to skip` (no [BURN]: SPACE skips there)', /click to skip/.test(bootLine ?? '') && !/BURN/.test(bootLine ?? ''), bootLine);
 await shot('02-boot');
-// The boot skips with a tap (its catcher is the title card's layer).
+// The boot skips with taps (its catcher is the title card's layer). Playtest 1 (C-UNROLL): the boot is the SELF-CHECK; the
+// first tap hurries its stage (still in blue), the second skips the rest, and the cut follows once its findings are seen.
 const bootStart = Date.now();
 await page.tap('#titleCard');
-check('a tap skips the boot', await waitFor(() => window.__ap.store.getState().run.phase === 'flight', 6000) && Date.now() - bootStart < 6000);
+await page.waitForTimeout(200);
+const hurried = await st(() => window.__ap.store.getState().run.phase === 'boot' && document.querySelectorAll('#memWrap .seg.check-pending').length >= 0);
+await page.tap('#titleCard');
+check('two taps skip the boot (the first hurries the SELF-CHECK, still in blue)', hurried
+  && await waitFor(() => window.__ap.store.getState().run.phase === 'flight', 6000) && Date.now() - bootStart < 6000);
 await waitFor(() => window.__ap.store.getState().run.phase === 'flight' && window.__ap.store.getState().ui.mode === 'tools', 20000);
 await page.waitForTimeout(1500);
 await shot('03-amber');

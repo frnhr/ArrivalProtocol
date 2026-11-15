@@ -488,6 +488,14 @@ for (const [index, name] of SHIPS.entries()) {
     && new RegExp(`^${name} · \\d{4}$`).test(boot.crumb) && /\[SPACE\] to skip/.test(boot.line), JSON.stringify(boot));
   await page.waitForTimeout(1500);
   check(`${tag}: …the TERMINAL types the boot`, await st(() => document.getElementById('mindTermLines').innerText.length > 0));
+  // Playtest 1 (C-UNROLL, plan §3.5): the boot is the SELF-CHECK. The files it has not reached are dimmed; the first SPACE
+  // hurries its stage (still in blue), the second skips the rest, and the cut follows once its findings have been seen.
+  const checking = await st(() => ({ dimmed: document.querySelectorAll('#memWrap .seg.check-pending').length, line: window.__ap.director().shown?.text ?? '' }));
+  check(`${tag}: …the SELF-CHECK dims the files it has not reached, and the strip names its stage`, checking.dimmed > 0
+    && /^(RECEIVING TRANSMISSION|SELF-CHECK · [A-Z ]+) — /.test(checking.line), JSON.stringify(checking));
+  await page.keyboard.press('Space');
+  await page.waitForTimeout(150);
+  check(`${tag}: …the first SPACE hurries the check (still in blue)`, await st(() => window.__ap.store.getState().run.phase === 'boot'));
   await page.keyboard.press('Space');
   const flying = await waitFor(() => window.__ap.store.getState().run.phase === 'flight', 20000);
   check(`${tag}: SPACE skips the boot into the flight`, flying);
@@ -1096,7 +1104,7 @@ for (const [index, name] of SHIPS.entries()) {
         deskPicked.card?.rows.includes('threat=??? WILL FIND YOU ON THIS BEAM') === true, JSON.stringify(deskPicked.card?.rows));
       // Slice 6: CORMORANT is POOR on seed 7 (LZ-B on a ROCKY guess); the kid trains no SURVEY.
       check(`${tag}: …and \`SITE DATA · POOR · ARRIVAL CONTROL GUESSED\`, \`LZ: 2 · SURVEY NEEDED\` (slice 6)`,
-        deskPicked.card?.rows.includes('site=POOR · ARRIVAL CONTROL GUESSED') === true && deskPicked.card.rows.includes('lzs=LZ: 2 · SURVEY NEEDED'),
+        deskPicked.card?.rows.includes('site=POOR · ARRIVAL CONTROL GUESSED') === true && deskPicked.card.rows.some((row) => /^planet=.* · LZ: 2 · SURVEY NEEDED( · |$)/.test(row)),
         JSON.stringify(deskPicked.card?.rows));
     }
     // Playtest 1: the PACKET asks only with a question (here a delivery to SEND ON); with none it beams at once, its rows

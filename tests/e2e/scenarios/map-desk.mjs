@@ -304,10 +304,12 @@ async function toFirstDesk(tab, tap = false) {
   check('…HALCYON\'s card leads: Tessaly · 5 PODS, 1,000 COLONISTS, YOU SLEEP 31 YRS · ECC FIXES 1, 3 HITS ON THE WAY → 2 LAND',
     card?.slot === HALCYON && card.name === 'HALCYON' && card.sub === 'Tessaly · 5 PODS' && card.colonists === '1,000 COLONISTS'
     && card.sched === 'YOU SLEEP 31 YRS IN ITS RECEIVER · ECC FIXES 1' && card.cost === '3 HITS ON THE WAY → 2 LAND', JSON.stringify(card));
-  check('…its rows: YOU FIT first, then FLYBY, TOO WIDE · MEMORY 320 · COMPACT · ROOM FOR YOU 152 · LZ: 2 · 21 LY · NOISE CLEAN · RESIDENT none · SITE DATA GOOD',
-    card?.rows[0] === 'fit=YOU FIT' && ['problems=FLYBY, TOO WIDE', 'memory=MEMORY 320 · COMPACT · ROOM FOR YOU 152', 'lzs=LZ: 2 · SET BY ARRIVAL CONTROL',
-      'beam=21 LY', 'noise=NOISE CLEAN · SEEDS: none', 'resident=none', 'site=GOOD'].every((row) => card?.rows.includes(row))
-    && card?.rows.some((row) => /^run=YOUR 2ND SHIP · \d(–\d)? MORE TO THE FINAL SHIP$/.test(row)), JSON.stringify(card?.rows));
+  // Playtest 1 (C-UNROLL, plan §3.5): the card's rows trimmed: ROOM (the room, the class and the fit), LANDING (the ground,
+  // its class, its LZs), BEAM with its noise; no MEMORY, LZ, NOISE or `YOUR 2ND SHIP` rows of their own.
+  check('…its rows: ROOM 152 · COMPACT · YOU FIT first, then FLYBY, TOO WIDE · LANDING with 2 LZs · 21 LY · NOISE CLEAN · RESIDENT none · SITE DATA GOOD',
+    card?.rows[0] === 'fit=152 · COMPACT · YOU FIT' && ['problems=FLYBY, TOO WIDE', 'beam=21 LY · NOISE CLEAN · SEEDS: none', 'resident=none', 'site=GOOD']
+      .every((row) => card?.rows.includes(row)) && card?.rows.some((row) => /^planet=[A-Z]+ · (GENTLE|STANDARD|ROUGH) · 2 LZs$/.test(row))
+    && !card?.rows.some((row) => /^(memory|lzs|noise|run|nogo)=/.test(row)) && card.rows.length <= 8, JSON.stringify(card?.rows));
   check('…and the TIMELINE `2300 you leave · 2321 you get there · 2352 ▲ approach`', card?.timeline === '2300 you leave · 2321 you get there · 2352 ▲ approach', card?.timeline);
   check('3b: …the guidance moves to the file: `REQUEST mv · RECOMMENDED [R]` (the ship\'s step done)', view.step === 'REQUEST mv · RECOMMENDED [R]'
     && (await run.deskTabs()).steps.join(' | ') === '1 A SKILL ✓ | 2 A SHIP ✓ | 3 A FILE ◀ | 4 SET COURSE', `${view.step} / ${(await run.deskTabs()).steps.join(' | ')}`);
@@ -316,7 +318,7 @@ async function toFirstDesk(tab, tap = false) {
   await page.waitForTimeout(300);
   const albatross = (await run.desk()).card;
   check('…ALBATROSS\'s card: ARK, 51 LY · 7 HITS, SLEEP 14 YRS and ONLY FROM HERE in red', albatross?.name === 'ALBATROSS' && albatross.tags.includes('ARK')
-    && albatross.rows.some((row) => /^beam=51 LY$/.test(row)) && /^7 HITS/.test(albatross.cost ?? '') && albatross.sched === 'YOU SLEEP 14 YRS IN ITS RECEIVER · ECC FIXES 0'
+    && albatross.rows.some((row) => /^beam=51 LY · NOISE /.test(row)) && /^7 HITS/.test(albatross.cost ?? '') && albatross.sched === 'YOU SLEEP 14 YRS IN ITS RECEIVER · ECC FIXES 0'
     && albatross.rows.some((row) => /^only=ONLY FROM HERE/.test(row)), JSON.stringify(albatross));
   // Slice 5: ALBATROSS's resident left (BOSUN), which its card never says before the ship: `unknown`, as for a sleeper or a surprise.
   check('…and its RESIDENT row reads `unknown` (a departed resident is not named before the ship)', albatross?.rows.includes('resident=unknown') === true,
@@ -528,8 +530,8 @@ async function toFirstDesk(tab, tap = false) {
   await run.clickNode(LAPWING);
   await page.waitForTimeout(400);
   view = await run.desk();
-  check('LAPWING (TIGHT) with no charge aboard: MEMORY 256 · TIGHT · ROOM FOR YOU 88, NO CHARGE ARRIVES', view.selected === LAPWING
-    && view.card?.rows.includes('memory=MEMORY 256 · TIGHT · ROOM FOR YOU 88') && view.card.rows.includes('fit=NO CHARGE ARRIVES'), JSON.stringify(view.card?.rows));
+  check('LAPWING (TIGHT) with no charge aboard: ROOM 88 · TIGHT · NO CHARGE ARRIVES', view.selected === LAPWING
+    && view.card?.rows.includes('fit=88 · TIGHT · NO CHARGE ARRIVES'), JSON.stringify(view.card?.rows));
   check('3b: …and Repair.bak (requested by __ap) waits there: `Repair.bak ✓ WAITING HERE`', view.card?.rows.includes('deliveries=Repair.bak ✓ WAITING HERE'), JSON.stringify(view.card?.rows));
   await page.keyboard.press('Enter');
   await waitFor(() => window.__ap.store.getState().run.phase === 'transmit', 4000);
@@ -662,7 +664,7 @@ async function toFirstDesk(tab, tap = false) {
   const poorTone = await st(() => [...(document.querySelector('#deskScreen .desk-card .dc-row.key-site')?.classList ?? [])].join(' '));
   check('slice 6: from VESPER\'s DESK, KITTIWAKE\'s card: `SITE DATA · POOR · ARRIVAL CONTROL GUESSED` in the warning tone, `LZ: 2 · SURVEY NEEDED`',
     view.card?.name === 'KITTIWAKE' && view.card.rows.includes('site=POOR · ARRIVAL CONTROL GUESSED') && /warn/.test(poorTone)
-    && view.card.rows.includes('lzs=LZ: 2 · SURVEY NEEDED'), JSON.stringify({ rows: view.card?.rows, poorTone }));
+    && view.card.rows.some((row) => /^planet=.* · LZ: 2 · SURVEY NEEDED( · |$)/.test(row)), JSON.stringify({ rows: view.card?.rows, poorTone }));
   await shot('10-poor-card');
   await page.keyboard.press('KeyT');
   await page.waitForTimeout(500);

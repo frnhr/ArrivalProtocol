@@ -112,6 +112,8 @@ let sensorsAtSec: number | null = null;
 // Presses honoured so far (the first hurries a stage, the next skips the rest).
 let hurried = false;
 let skipped = false;
+// ?debug's skip asked for before a press could be honoured (inside the grace, while the ghost types): made as soon as it can.
+let skipQueued = false;
 // The lines said, by plan index (none twice).
 let saidLines = new Set<number>();
 let closeModal: (() => void) | null = null;
@@ -131,6 +133,7 @@ function resetBootTimers(): void {
   sensorsAtSec = null;
   hurried = false;
   skipped = false;
+  skipQueued = false;
   saidLines = new Set();
   resetCheckView();
 }
@@ -557,11 +560,25 @@ export function skipBoot(store: Store<GameState>): boolean {
   return true;
 }
 
+// ?debug's `__ap.skipBoot()` (the e2e scenarios' skip): every press that is honoured now, and when none can be yet (the
+// grace, the ghost), the same as soon as one can. True when it pressed or queued; false outside the boot.
+export function skipBootAll(store: Store<GameState>): boolean {
+  if (store.getState().run.phase !== 'boot') return false;
+  let honoured = false;
+  for (let i = 0; i < 6 && store.getState().run.phase === 'boot' && skipBoot(store); i++) honoured = true;
+  if (!honoured && store.getState().run.phase === 'boot') skipQueued = true;
+  return true;
+}
+
 function advanceBoot(store: Store<GameState>, dtWall: number): void {
   ensurePlanned(store);
   elapsedSec += dtWall;
   advanceGhost(store, false);
   pump(store);
+  if (skipQueued && store.getState().run.phase === 'boot' && elapsedSec >= Math.max(BOOT_SKIP_GRACE_SEC, ghostSeenAtSec())) {
+    skipQueued = false;
+    skipBootAll(store);
+  }
 }
 
 let mounted = false;
@@ -587,7 +604,7 @@ export function mountBoot(store: Store<GameState>, bootHooks: BootHooks = {}): (
   });
   // A reset (a new ship, the simulation retry, a NEW RUN) starts the boot's clock over.
   const offReset = onWorldReset('boot', resetBootTimers, () => ({
-    elapsedSec, klaxonPlayed, ghost, ghostPlanned, plan, steps, cursor, active, sensorsAtSec, hurried, skipped,
+    elapsedSec, klaxonPlayed, ghost, ghostPlanned, plan, steps, cursor, active, sensorsAtSec, hurried, skipped, skipQueued,
     said: saidLines.size, check: checkSnapshot(),
   }));
   // The modal follows the phase: a reset runs before the new ship's slices are in the store

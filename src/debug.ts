@@ -44,7 +44,7 @@ import {
 } from '@systems/flight-hud';
 import { say, sayChoice, tickerEntry, queuedLines, hollowLabel, openChoiceEntry, type SayOpts, type SayResult } from '@systems/say';
 import { setMode } from '@systems/mode';
-import { receiveTransmission, skipBoot } from '@systems/boot';
+import { receiveTransmission, skipBoot, skipBootAll } from '@systems/boot';
 import { emit, onAny, type GameEventName, type GameEvents } from '@systems/events';
 import {
   isAudioUnlocked, isMuted, setMuted, play, measureCue, recentCues, type Cue, type CueParams, type CueMeasure,
@@ -195,7 +195,10 @@ interface DebugHooks {
   director: () => { shown: ObjectiveLine | null; done: string[] };
   setMode: (mode: ViewMode) => void;
   receive: () => boolean;
-  skipBoot: () => boolean;
+  // Playtest 1 (C-UNROLL): the boot's skip as a scenario wants it (boot.ts skipBootAll): the presses that skip the SELF-CHECK
+  // (a hold let go, a hurry, a skip), and when none can be honoured yet (the grace, the ghost) the same as soon as one can.
+  // The cut to amber follows once the findings have been seen. skipBoot.once() is one press, as a key's.
+  skipBoot: (() => boolean) & { once: () => boolean };
   emit: <Name extends GameEventName>(name: Name, payload: GameEvents[Name]) => void;
   stamp: (text: string, tone?: StampTone) => boolean;
   shake: (px: number) => void;
@@ -1057,7 +1060,7 @@ export function mountDebug(store: Store<GameState>): void {
     director: () => store.getState().director,
     setMode: (mode) => setMode(store, mode),
     receive: () => receiveTransmission(store),
-    skipBoot: () => skipBoot(store),
+    skipBoot: Object.assign(() => skipBootAll(store), { once: () => skipBoot(store) }),
     emit,
     stamp: (text, tone = 'plain') => showStamp(text, tone),
     shake,
