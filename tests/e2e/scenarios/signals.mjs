@@ -95,11 +95,18 @@ const lapwing = await cardOf(8);
 const label = await st(() => document.querySelector('#deskScreen [data-slot="8"] .cn-label, #deskScreen [data-slot="8"] text')?.textContent ?? null);
 const unknownRows = (card) => (card?.rows ?? []).filter((row) => row.endsWith('=??? · NO TRANSPONDER')).map((row) => row.split('=')[0]);
 const publicRows = (card) => (card?.rows ?? []).filter((row) => !row.endsWith('=??? · NO TRANSPONDER')).map((row) => row.split('=')[0]);
+// Playtest 1 (C-UNROLL): the card's rows merged. The LANDING row ('planet') carries the planet, its LZs and the no-go zones,
+// the ROOM row ('fit') the memory and the fit, the BEAM row ('beam') the beam and its noise. A `?` card hides LANDING whole
+// (no LZ count, no no-go words) and keeps ROOM and BEAM.
+const rowOf = (card, key) => (card?.rows ?? []).find((row) => row.startsWith(`${key}=`))?.slice(key.length + 1) ?? null;
 check('HALCYON\'s DESK: LAPWING (the old colony `?` ship) reads `??? COLONISTS` and `??? · NO TRANSPONDER` for its problems, resident, planet and LZs',
   lapwing.card !== null && lapwing.card.colonists === '??? COLONISTS' && /\?\?\? PODS/.test(lapwing.card.sub)
-  && ['problems', 'resident', 'planet', 'lzs'].every((key) => unknownRows(lapwing.card).includes(key)), JSON.stringify(lapwing.card));
+  && ['problems', 'resident', 'planet'].every((key) => unknownRows(lapwing.card).includes(key))
+  && !lapwing.card.rows.some((row) => /\bLZs?\b|NO-GO/.test(row)), JSON.stringify(lapwing.card));
 check('…its public schedule stands: the years, the memory, the beam and its noise, the fit', lapwing.card !== null && lapwing.card.sched !== null
-  && ['memory', 'beam', 'noise', 'fit'].every((key) => publicRows(lapwing.card).includes(key)), JSON.stringify(publicRows(lapwing.card)));
+  && ['fit', 'beam'].every((key) => publicRows(lapwing.card).includes(key))
+  && /^\d+ · (TIGHT|COMPACT|FULL)\b/.test(rowOf(lapwing.card, 'fit') ?? '') && / LY · NOISE /.test(rowOf(lapwing.card, 'beam') ?? ''),
+  JSON.stringify(publicRows(lapwing.card)));
 const others = await st(() => [10, 14, 4].map((slot) => ({ slot, shown: window.__ap.unknown(slot).shown, event: window.__ap.unknown(slot).event })));
 check('…PLOVER (gone resident) and KITTIWAKE (signal) are `?` cards too, HERON is not; no `▓░` glyph while no fragment is held',
   others[0].shown && others[0].event === 'gone-resident' && others[1].shown && others[1].event === 'signal' && !others[2].shown && (await anyGlyph()) === 0,

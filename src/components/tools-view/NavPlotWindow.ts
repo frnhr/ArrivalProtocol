@@ -841,10 +841,14 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
   // each other), first; then `cost`, what it hits otherwise (the path, the glyphs, the chip, the ring, and those labels
   // with LABEL_SPACING around them). A side over less text wins at once, past the hysteresis and the hold; among sides
   // over as much text (none, nearly always) the hysteresis and the hold (mayMove) decide as before, so a label still
-  // never hops on a touch of the path or the ring, and never moves onto another label's text to get off the path.
+  // never hops on a touch of the path, and never moves onto another label's text to get off the path.
+  // Playtest 1 (Batch C's e2e): zoomed far out the small ring and the planet are judged second, as `onRing`, before
+  // `cost`: a side over less of them wins at once too. As one more cost, a touch under LABEL_HOP_MIN_AREA was ridden out,
+  // and on a phone (whose bigger labels square that allowance) HALCYON's START BURN, on the planet side of its tick by
+  // design, sat on the ring after a weak-engine burn (label-hops, 390×844).
   function placeClear(label: SVGTextElement, lines: readonly string[], spot: Vec2, preferred: Vec2, obstacles: Obstacles,
     charW: number = CHAR_W, path: PathObstacle | null = null): void {
-    interface Option { layout: LabelLayout; onText: number; cost: number }
+    interface Option { layout: LabelLayout; onText: number; onRing: number; cost: number }
     const turns = LABEL_TRY_TURNS_DEG.length;
     const tryTurn = (index: number): Option => {
       const gap = LABEL_GAP + Math.floor(index / turns) * LABEL_GAP_FAR * labelScale;
@@ -857,26 +861,28 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
         onText += overlapArea(ink, inkBox(box, labelScale));
         cost += overlapArea(layout.box, padded(box, LABEL_SPACING));
       }
-      if (obstacles.ring) cost += areaOverDisc(layout.box, obstacles.ring);
-      else if (index >= turns) cost += areaOverDisc(layout.box, obstacles.disc);
-      return { layout, onText, cost };
+      const onRing = obstacles.ring ? areaOverDisc(layout.box, obstacles.ring) : 0;
+      if (!obstacles.ring && index >= turns) cost += areaOverDisc(layout.box, obstacles.disc);
+      return { layout, onText, onRing, cost };
     };
     const better = (option: Option, than: Option): boolean =>
-      option.onText < than.onText || (option.onText === than.onText && option.cost < than.cost);
+      option.onText < than.onText || (option.onText === than.onText
+        && (option.onRing < than.onRing || (option.onRing === than.onRing && option.cost < than.cost)));
     // A label just shown starts from its own side.
     const now = performance.now();
     const turn = labelTurns.get(label) ?? { index: 0, since: -Infinity };
     const kept = tryTurn(turn.index);
     let best = kept;
     let bestIndex = turn.index;
-    if (kept.onText > 0 || kept.cost > 0) {
+    if (kept.onText > 0 || kept.onRing > 0 || kept.cost > 0) {
       for (let index = 0; index < (1 + LABEL_FAR_STEPS) * turns; index++) {
         const option = tryTurn(index);
         if (better(option, best)) { best = option; bestIndex = index; }
-        if (best.onText === 0 && best.cost === 0) break;
+        if (best.onText === 0 && best.onRing === 0 && best.cost === 0) break;
       }
       const offText = best.onText < kept.onText;
-      if (!offText && !mayMove(best.cost, kept.cost, now - turn.since)) { best = kept; bestIndex = turn.index; }
+      const offRing = best.onText === kept.onText && best.onRing < kept.onRing;
+      if (!offText && !offRing && !mayMove(best.cost, kept.cost, now - turn.since)) { best = kept; bestIndex = turn.index; }
     }
     labelTurns.set(label, bestIndex === turn.index ? turn : { index: bestIndex, since: now });
     writeLabel(label, lines, best.layout, labelScale);
