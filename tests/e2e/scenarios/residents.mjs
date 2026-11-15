@@ -53,6 +53,8 @@ const drop = async () => {
   if ((await st(() => window.__ap.store.getState().ui.activeTool)) !== null) await page.keyboard.press('Escape');
   await page.waitForTimeout(200);
 };
+// HOLLOW put to sleep for the rest of this ship (as runKit's lockInRing({ sleep: true }) does at the lock): no wake, no bite.
+const hollowSleeps = () => st(() => window.__ap.store.update((d) => { d.hollow.phase = 'dormant'; }));
 const clickSeg = (id) => page.locator(`#memWrap .seg[data-id="${id}"]`).first().click();
 const opsDone = () => waitFor(() => window.__ap.ops().length === 0, 15000);
 const toMind = async () => {
@@ -255,6 +257,10 @@ async function arrive(route, name, bypass = null) {
 // --- CURLEW: BARNABY asleep -------------------------------------------------------------------------------------------------
 {
   const { ok, from } = await arrive([0, 1, 7], 'CURLEW');
+  // CURLEW's HOLLOW sleeps through BARNABY (none of its checks are HOLLOW's): it wakes after 30 calm AI s and bites a file
+  // beside its seed, and this section's waits (the offer's typing, the MEND) run past that on a loaded machine. The bitten
+  // file stays infected in the unit's files that __ap.route carries on to HERON, where an infected SCAN refuses both reads.
+  await hollowSleeps();
   await st(() => {
     const ap = window.__ap;
     for (const kind of ['scan', 'delete', 'repair']) if (!ap.store.getState().run.licences.includes(kind)) ap.install(kind);
@@ -321,6 +327,8 @@ async function arrive(route, name, bypass = null) {
 // --- HERON: HELM left ---------------------------------------------------------------------------------------------------------
 {
   const { ok } = await arrive([0, 2, 4], 'HERON');
+  // So does HERON's, for the same 30 calm AI s: its reads are SCAN's, and a first bite beside its seed could take SCAN.
+  await hollowSleeps();
   await toMind();
   const before = (await stamps()).length;
   await hold('scan');
