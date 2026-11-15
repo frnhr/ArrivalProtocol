@@ -342,7 +342,7 @@ export function mountLandingReport(store: Store<GameState>): () => void {
   }
 
   // Slice 4 (plan §1.1 4a item 1, §2.4): the training cycles the ship pays, on the arm, rolled up under the charge
-  // (`TRAINING CYCLES +5 · ARRIVED +1 · LANDED 83% +4`, `PERFECT LANDING · +6`, the final ship's `NO DESK AHEAD`), a tick
+  // (`+5 CYCLES TO COMPILE · ARRIVED +1 · LANDED 83% +4`, `… · PERFECT LANDING`, the final ship's `NO DESK AHEAD`), a tick
   // per cycle; on a run's first ship below the first-pick floor, `+2 CYCLES` under it. From
   // the same earning endShip records at CONTINUE (run-score.ts shipCycles). Reduced motion: the line stands whole.
   // Returns the seconds its roll takes (0 with no line, or under reduced motion), for the gift's line under it (slice 5).

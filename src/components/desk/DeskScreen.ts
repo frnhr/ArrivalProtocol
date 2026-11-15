@@ -21,7 +21,7 @@ import { renderKeyCaps } from '@components/hud/keycaps';
 import { paintTraceMeter } from '@components/hud/TraceMeter';
 import { mountStarChart } from '@components/desk/StarChart';
 import { renderShipCard } from '@components/desk/ShipCard';
-import { buildDeskTabs, shownTab, type DeskTab } from '@components/desk/DeskTabs';
+import { buildDeskTabs, type DeskTab } from '@components/desk/DeskTabs';
 import { renderRepository } from '@components/desk/RepositoryWindow';
 import { mountInboxView } from '@components/desk/InboxView';
 import { mountTrainingWindow } from '@components/desk/TrainingWindow';
@@ -214,7 +214,9 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
     cardHost.hidden = tab !== null;
     repoHost.hidden = half === null;
     inboxHost.hidden = tab !== 'inbox';
-    root.dataset.tab = shownTab(tab);
+    // data-tab is the window's id as the store has it ('training' for COMPILE HERE: the e2e drivers read it); data-half the
+    // REPOSITORY's half with the keys.
+    root.dataset.tab = tab ?? 'card';
     if (half === null) delete root.dataset.half;
     else root.dataset.half = half;
     if (tab === null) renderShipCard(cardHost, showing === null ? null : cardModel(state, showing), MAP_TEXT.desk.pickShip);
@@ -246,7 +248,7 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
     if (phone.matches) sheetOpen = true;
     paint();
   }
-  // R, T and I open their tab, or go back to the card when it is already open.
+  // R, T and I open their tab (R and T: their REPOSITORY half), or go back to the card when it already has the keys.
   function toggleTab(id: Exclude<DeskTab, 'card'>): void {
     showTab(store.getState().ui.deskWindow === id ? 'card' : id);
   }
@@ -285,7 +287,7 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
   function go(): void {
     const state = store.getState();
     if (state.run.phase !== 'desk') return;
-    // Slice 4: SET COURSE waits for the first pick (setCourse throws on it): a buzz, and TRAINING comes up.
+    // Slice 4: SET COURSE waits for the first pick (setCourse throws on it): a buzz, and COMPILE HERE comes up.
     if (firstPickWaits(state)) {
       play('buzz');
       if (state.ui.deskWindow !== 'training') showTab('training', false);
@@ -300,7 +302,7 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
     setCourse(store, state.ui.deskSelected);
   }
 
-  // A key TRAINING takes while its tab is open (`act` says whether it did; then it ticks).
+  // A key COMPILE HERE takes while it has the keys (`act` says whether it did; then it ticks).
   function trainingKey(act: () => boolean): boolean {
     const state = store.getState();
     if (state.run.phase !== 'desk' || state.ui.deskWindow !== 'training') return false;
@@ -466,7 +468,7 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
     registerKeys({ layer: 'desk', codes: ['Space'], onDown: go }),
     registerKeys({ layer: 'desk', codes: ['ArrowRight'], onDown: () => cycle(1) }),
     registerKeys({ layer: 'desk', codes: ['ArrowLeft'], onDown: () => cycle(-1) }),
-    // ↑ ↓ move through the grid while TRAINING is open (from visit 2), else they cycle the ships like → ←.
+    // ↑ ↓ move through the grid while COMPILE HERE has the keys (from visit 2), else they cycle the ships like → ←.
     registerKeys({ layer: 'desk', codes: ['ArrowDown'], onDown: () => { if (!trainingKey(() => training.step(1))) cycle(1); } }),
     registerKeys({ layer: 'desk', codes: ['ArrowUp'], onDown: () => { if (!trainingKey(() => training.step(-1))) cycle(-1); } }),
     registerKeys({
@@ -482,7 +484,7 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
     registerKeys({ layer: 'desk', codes: ['KeyR'], onDown: () => toggleTab('repository') }),
     registerKeys({ layer: 'desk', codes: ['KeyI'], onDown: () => toggleTab('inbox') }),
     registerKeys({ layer: 'desk', codes: ['KeyT'], onDown: () => toggleTab('training') }),
-    // The number keys request a REPOSITORY row there, and pick a card on TRAINING's first visit ([1], [2]).
+    // The number keys request a row in FROM EARTH, and pick a card in COMPILE HERE on the first visit ([1], [2]).
     ...REQUEST_KEY_CODES.map((codes, index) => registerKeys({
       layer: 'desk', codes, onDown: () => { if (!trainingKey(() => training.card(index))) requestRow(index); },
     })),

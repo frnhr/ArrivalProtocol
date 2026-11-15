@@ -645,7 +645,7 @@ body.reduced-motion .ib-row.tone-hollow, body.reduced-motion .ib-reader.tone-hol
   .desk-screen.has-tabs:not(.has-card) .desk-card-win { transform: translateY(calc(100% - 32px)); }
   .desk-screen[data-tab='inbox'] .desk-card-win { height: 70vh; }
   /* The REPOSITORY's two halves take most of the screen (slice 4 gave TRAINING 78vh). */
-  .desk-screen[data-tab='repository'] .desk-card-win { height: 78vh; max-height: 78vh; }
+  .desk-screen[data-half] .desk-card-win { height: 78vh; max-height: 78vh; }
   .ib-head, .ib-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) 56px; }
 }
 
@@ -661,8 +661,8 @@ body.reduced-motion .desk-tab.pulse .desk-tab-cycles { animation: none; }
 .desk-go.blocked { color: var(--desk-accent); border-color: var(--desk-accent-dim); letter-spacing: 0.24em; }
 
 /* The right window widens while the REPOSITORY is open: COMPILE HERE's grid and its detail need the room the card does not. */
-.desk-screen[data-tab='repository'] .desk-body { grid-template-columns: minmax(0, 1fr) 620px; }
-@media (max-width: 1439px) { .desk-screen[data-tab='repository'] .desk-body { grid-template-columns: minmax(0, 1fr) 540px; } }
+.desk-screen[data-half] .desk-body { grid-template-columns: minmax(0, 1fr) 620px; }
+@media (max-width: 1439px) { .desk-screen[data-half] .desk-body { grid-template-columns: minmax(0, 1fr) 540px; } }
 .desk-training { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; }
 
 .tr-head { cursor: help; }

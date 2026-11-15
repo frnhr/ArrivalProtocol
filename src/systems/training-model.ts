@@ -454,7 +454,7 @@ export function trainingModel(state: Readonly<GameState>): TrainingModel {
 
 export interface CyclesReport {
   total: number;               // what the ship pays (1..6), the line's rolling number
-  line: string;                // TRAINING CYCLES +5 · ARRIVED +1 · LANDED 83% +4 / PERFECT LANDING · +6 / … NO DESK AHEAD
+  line: string;                // +5 CYCLES TO COMPILE · ARRIVED +1 · LANDED 83% +4 / … · PERFECT LANDING / … NO DESK AHEAD
   lineAt: (shown: number) => string;   // the same line while it rolls up to `total`
   topUp: string | null;        // a run's first ship below the first-pick floor: +2 CYCLES
 }
