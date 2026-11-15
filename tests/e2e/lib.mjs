@@ -147,8 +147,8 @@ export function runKit(page, kit) {
       return String(err).split('\n')[0];
     }
   };
-  // PICK ONE TO CARRY by its key ([1] [2] [3]) once the PACKET takes input (TRANSMIT_ARM_SEC after it opens): pressed
-  // until the pick shows. Returns the card picked (null: none after the tries).
+  // The salvage by its key ([1] [2] [3]) once LEAVE ORBIT takes input (TRANSMIT_ARM_SEC after it opens; playtest 1: the
+  // cards moved there from the PACKET): pressed until the pick shows. Returns the card picked (null: none after the tries).
   const pickCard = async (index = 0) => {
     for (let i = 0; i < 8; i++) {
       await page.keyboard.press(`Digit${index + 1}`);
@@ -228,5 +228,49 @@ export function runKit(page, kit) {
     await page.keyboard.press(key);   // NEW RUN
     return { epilogue, card };
   };
-  return { lockInRing, landToReport, finishReport, capsText, desk, clickNode, pickCard, deskTabs, deskMarks, finaleTwoSteps, throughTheNight };
+  // Playtest 1 (B-ORDER, note 5): LEAVE ORBIT after a ship's end, before the DESK. Waits for the screen (and the input it
+  // takes TRANSMIT_ARM_SEC after it comes up), reads its title and cards, closes a LOG READER open over it (`reader`: the
+  // entry it showed), picks card `index` by its key ([1] [2] [3]), presses ENTER until the DESK opens. `index` null: ENTER
+  // alone (refused while cards wait). Returns what was seen.
+  const leaveOrbit = async (index = 0) => {
+    const up = await waitFor(() => window.__ap.store.getState().run.phase === 'leave' && !document.getElementById('leaveScreen').hidden, 10000);
+    const seen = await st(() => ({
+      title: document.getElementById('loTitle').textContent, sub: document.getElementById('loSub').textContent,
+      why: document.getElementById('loWhy').hidden ? null : document.getElementById('loWhy').textContent,
+      heading: document.getElementById('loHeading').textContent,
+      cards: [...document.querySelectorAll('#loCards .tx-card')].map((card) => card.dataset.card),
+    }));
+    // On run 1 the LOG READER opens by itself over the first LEAVE ORBIT (entry 01): seen, then closed with SPACE.
+    await page.waitForTimeout(600);
+    const reader = await st(() => (document.getElementById('logReader').hidden ? null : document.querySelector('#lgRows .lg-row.open')?.dataset.entry ?? '?'));
+    for (let i = 0; i < 4 && (await st(() => !document.getElementById('logReader').hidden)); i++) {
+      await page.keyboard.press('Space');
+      await page.waitForTimeout(500);
+    }
+    const pick = up && index !== null ? await pickCard(index) : null;
+    for (let i = 0; i < 8 && (await st(() => window.__ap.store.getState().run.phase)) === 'leave'; i++) {
+      await page.keyboard.press('Enter');
+      await page.waitForTimeout(500);
+    }
+    const desk = await waitFor(() => window.__ap.store.getState().run.phase === 'desk' && !document.getElementById('deskScreen').hidden, 6000);
+    return { up, desk, pick, reader, ...seen };
+  };
+  // The beam once the PACKET is up (SET COURSE pressed): a PACKET with a question waits for TRANSMIT ▸ (clicked here, and its
+  // inline confirm answered yes); one with none beams by itself (`direct`). Returns 'direct', 'sent', or null (no PACKET).
+  const beam = async () => {
+    const up = await waitFor(() => window.__ap.store.getState().run.phase === 'transmit' && !document.getElementById('transmitScreen').hidden, 6000);
+    if (!up) return null;
+    // A beam already under way (a direct one) needs nothing.
+    if (await st(() => document.getElementById('transmitScreen').classList.contains('sending'))) return 'direct';
+    if (await st(() => document.getElementById('transmitScreen').classList.contains('direct'))) return 'direct';
+    await page.waitForTimeout(1100);
+    await page.locator('#txGo').click();
+    await page.waitForTimeout(300);
+    if (await st(() => !document.querySelector('#transmitScreen .tx-confirm').hidden)) await page.keyboard.press('Enter');
+    return 'sent';
+  };
+  return {
+    lockInRing, landToReport, finishReport, capsText, desk, clickNode, pickCard, deskTabs, deskMarks, finaleTwoSteps, throughTheNight, leaveOrbit,
+    beam,
+  };
 }

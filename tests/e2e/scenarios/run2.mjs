@@ -2,7 +2,7 @@
 // between runs as the next unit meets it. Seed 4; UNIT-047's run 1 on the worked route written through the real record and
 // update (__ap.archiveAs('won-purge')), then a reload:
 // • the title: `UNIT-048 · YEAR <y> · LAUNCHED <gap> YEARS AFTER UNIT-047`, rolled up before its stamp (`+<gap> YEARS`)
-//   lands, the lineage line, `runs save between ships`, and on the faint chart 047's dashed trail and its marks;
+//   lands, the lineage line (playtest 1 cut `runs save between ships`), and on the faint chart 047's dashed trail and its marks;
 // • run 2's HOLLOW is the relay stranger UNIT-031 (slice 7c, R34), and the won run 1 leaves no ghost line at the boot (R36);
 // • ARES-VIII's boot says the INBOX's new messages; its LANDING REPORT `LZ-A · A BEACON WAS ALREADY THERE · SET BY UNIT-047 ·
 //   <gap> YEARS AGO`;
@@ -50,7 +50,8 @@ const titleLook = (kit) => kit.st(() => {
     phase: window.__ap.store.getState().run.phase, unit: document.getElementById('titleUnit').textContent,
     stamp: shown('titleStamp') ? document.getElementById('titleStamp').textContent : null,
     lineage: shown('titleLineage') ? document.getElementById('titleLineage').textContent : null,
-    note: shown('titleNote') ? document.getElementById('titleNote').textContent : null, receive: shown('titleReceive'),
+    // Playtest 1 cut the `runs save between ships` note (OD 152): no element, so `note` reads null.
+    note: document.getElementById('titleNote') !== null && shown('titleNote') ? document.getElementById('titleNote').textContent : null, receive: shown('titleReceive'),
     save: shown('titleSave') ? { kind: document.getElementById('titleSave').dataset.kind, line: document.getElementById('titleSaveLine').textContent } : null,
     abandon: shown('titleAbandon'), resume: shown('titleResume'),
     trailLine: chart?.querySelector('.trail-last') !== null,
@@ -103,6 +104,8 @@ async function firstShip({ page, kit, screens }) {
   const report = await kit.st(() => ({ beacon: document.getElementById('lrBeacon').hidden ? null : document.getElementById('lrBeacon').textContent,
     ship: window.__ap.store.getState().level.shipName }));
   await screens.finishReport();
+  // Playtest 1 (note 5): LEAVE ORBIT first, its first card taken, then the DESK.
+  await screens.leaveOrbit(0);
   const desk = await kit.waitFor(() => window.__ap.store.getState().run.phase === 'desk' && !document.getElementById('deskScreen').hidden, 8000);
   // The opening beat: the greying, the green turn, CONTROL's line typed.
   await page.waitForTimeout(3500);
@@ -129,8 +132,8 @@ const stamp = history.valveYears > 0 ? `+${years(gap)} · THE ARM MOVED ON` : ga
 check(`run 2's title: \`${launchLine}\` (the archive's next arm: run 2, UNIT-048, the gap the update rolled)`, title.unit === launchLine && history.run === 2 && history.unit === 48
   && history.lastUnitNumber === 47 && history.startYear === 2300 + gap && gap >= 0 && gap <= 35, JSON.stringify({ title: title.unit, history: { ...history, departures: undefined } }));
 check(`…its stamp \`${stamp}\` lands once the year has rolled up (hidden at first)`, title.stamp === stamp && early.stamp === null, JSON.stringify({ early: [early.unit, early.stamp], settled: title.stamp }));
-check('…the lineage line `last: UNIT-047 · 11,000 landed · …`, `runs save between ships`, RECEIVE TRANSMISSION, no RESUME block', /^last: UNIT-047 · 11,000 landed · /.test(title.lineage ?? '')
-  && title.note === 'runs save between ships' && title.receive && title.save === null, JSON.stringify(title));
+check('…the lineage line `last: UNIT-047 · 11,000 landed · …`, no meta note (playtest 1 cut `runs save between ships`), RECEIVE TRANSMISSION, no RESUME block', /^last: UNIT-047 · 11,000 landed · /.test(title.lineage ?? '')
+  && title.note === null && title.receive && title.save === null, JSON.stringify(title));
 const titleTaken = title.marks.filter((mark) => mark.kind === 'taken');
 check('…the faint chart: 047\'s dashed trail, a mark per stop (RIVERSIDE\'s colony, the TAKEN ones), the new final ship\'s beacon', title.trailLine && title.marks.length === 6
   && title.marks[0]?.kind === 'colony' && /^\S.* · \d+ YEARS? OLD · UNIT-047$/.test(title.marks[0].tip) && titleTaken.length === 5

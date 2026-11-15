@@ -171,10 +171,10 @@ for (let i = 0; i < 8 && (await phase()) === 'report'; i++) {
   await page.keyboard.press('Space');
   await page.waitForTimeout(1300);
 }
-check('LANDING REPORT CONTINUE leads to the DESK (no auto-send)', (await phase()) === 'desk');
-await throughDesk(2, 'HALCYON');
+// Playtest 1 (note 5): LEAVE ORBIT comes first, then the DESK.
+check('LANDING REPORT CONTINUE leads to LEAVE ORBIT (no desk yet, no auto-send)', (await phase()) === 'leave');
 
-// --- 2b. Slice 2: on run 1 the LOG READER opens by itself on entry 01 over the PACKET; SPACE finishes it, then closes it ---
+// --- 2b. Slice 2: on run 1 the LOG READER opens by itself on entry 01 over LEAVE ORBIT; SPACE finishes it, then closes it -
 const readerUp = await waitFor(() => !document.getElementById('logReader').hidden, 4000, 50);
 await page.waitForTimeout(400);
 const reader = await st(() => {
@@ -185,31 +185,38 @@ const reader = await st(() => {
     count: document.getElementById('lgCount').innerText, rows: document.querySelectorAll('#lgRows .lg-row').length,
     open: open?.dataset.entry ?? null, missing: document.querySelectorAll('#lgRows .lg-row.missing').length,
     next: document.getElementById('lgNext').innerText, entry: s.ui.logReader?.entry ?? null,
-    transmit: !document.getElementById('transmitScreen').hidden, phase: s.run.phase,
+    leave: !document.getElementById('leaveScreen').hidden, phase: s.run.phase,
   };
 });
-check('the LOG READER opens by itself over TRANSMIT on entry 01: 046.log, 1 / 12 found, a row per entry, the next key',
+check('the LOG READER opens by itself over LEAVE ORBIT on entry 01: 046.log, 1 / 12 found, a row per entry, the next key',
   readerUp && reader.title === '046.log' && /LOG READER/.test(reader.kicker) && /^1 \/ 12 found$/.test(reader.count) && reader.rows === 12
-  && reader.open === '1' && reader.entry === 1 && reader.missing === 11 && /^NEXT KEY: /.test(reader.next) && reader.transmit && reader.phase === 'transmit',
+  && reader.open === '1' && reader.entry === 1 && reader.missing === 11 && /^NEXT KEY: /.test(reader.next) && reader.leave && reader.phase === 'leave',
   JSON.stringify(reader));
 await shot('1a-log-reader');
-// SPACE finishes the typing (if it is still typing), and the next SPACE closes it: TRANSMIT under it sends nothing.
+// SPACE finishes the typing (if it is still typing), and the next SPACE closes it: LEAVE ORBIT under it takes nothing.
 for (let i = 0; i < 3 && (await st(() => !document.getElementById('logReader').hidden)); i++) {
   await page.keyboard.press('Space');
   await page.waitForTimeout(500);
 }
 const readerClosed = await st(() => ({
   hidden: document.getElementById('logReader').hidden, read: window.__ap.store.getState().run.log.read,
-  phase: window.__ap.store.getState().run.phase, sent: document.querySelectorAll('#txChips .tx-chip.sent').length,
+  phase: window.__ap.store.getState().run.phase, pick: window.__ap.store.getState().run.leave.pick,
   entry01: (document.querySelector('#lgRows .lg-row[data-entry="1"] .lg-text')?.textContent ?? '').length,
 }));
-check('…SPACE closes it, entry 01 recorded read, and TRANSMIT under it sent nothing', readerClosed.hidden && readerClosed.read.includes(1)
-  && readerClosed.phase === 'transmit' && readerClosed.sent === 0 && readerClosed.entry01 > 0, JSON.stringify(readerClosed));
-await page.waitForTimeout(500);
+check('…SPACE closes it, entry 01 recorded read, and LEAVE ORBIT under it took nothing', readerClosed.hidden && readerClosed.read.includes(1)
+  && readerClosed.phase === 'leave' && readerClosed.pick === null && readerClosed.entry01 > 0, JSON.stringify(readerClosed));
+// LEAVE ORBIT: the salvage, [1] takes the first card, ENTER the DESK.
+const leftAres = await kit.leaveOrbit(0);
+check('LEAVE ORBIT: `LEAVE ORBIT`, `ARES-VII · WHAT IS LEFT ON BOARD`, `SALVAGE · TAKE ONE WITH YOU`, three cards; [1] and ENTER open the DESK',
+  leftAres.up && leftAres.title === 'LEAVE ORBIT' && leftAres.sub === 'ARES-VII · WHAT IS LEFT ON BOARD' && leftAres.heading === 'SALVAGE · TAKE ONE WITH YOU'
+  && leftAres.cards.length === 3 && leftAres.pick === leftAres.cards[0] && leftAres.desk, JSON.stringify(leftAres));
+await throughDesk(2, 'HALCYON');
 const tx = await st(() => ({
   visible: !document.getElementById('transmitScreen').hidden,
+  direct: document.getElementById('transmitScreen').classList.contains('direct'),
   next: document.getElementById('txNext').innerText,
-  packet: document.getElementById('txPacketLine').innerText,
+  packet: document.querySelector('#transmitScreen .tx-room-line')?.innerText ?? '',
+  salvage: document.querySelector('#transmitScreen .tx-salvage')?.innerText ?? '',
   chips: document.querySelectorAll('#txChips .tx-chip').length,
   locked: document.querySelectorAll('#txChips .tx-chip.locked').length,
   hits: document.getElementById('txHits').innerText,
@@ -226,8 +233,11 @@ const tx = await st(() => ({
 // Slice 2: 046.log rides along as a fifth locked chip (it isn't yours to leave behind), and nothing uninvited rides yet.
 // Slice 4 (plan §2.6, TREE deviation 13): the first pick's AUTOBURN v1 is a sixth, the fresh file trained at this desk
 // (DropLock 'trained': UNDO is the way back, not leaving it behind).
-check('TRANSMIT shows NEXT: HALCYON · 1,000 COLONISTS · 21 LY · SLEEP 31 YRS, the packet line, the files as chips (6 locked: 046.log and the trained AUTOBURN.skl among them)', tx.visible
-  && tx.next === 'NEXT: HALCYON · 1,000 COLONISTS · 21 LY · SLEEP 31 YRS' && /^LINK 123 · FILES \d+ · CHARGE \d+ → FITS$/.test(tx.packet) && tx.chips >= 10 && tx.locked === 6,
+// Playtest 1 (note 5): nothing to ask on this hop (everything fits, no delivery), so SET COURSE beams at once: the PACKET comes
+// up already sending, its rows shown as the files stream out.
+check('TRANSMIT beams at once (nothing to ask) and shows NEXT: HALCYON · 1,000 COLONISTS · 21 LY · SLEEP 31 YRS, the room line, SALVAGE, the files as chips (6 locked: 046.log and the trained AUTOBURN.skl among them)', tx.visible
+  && tx.direct && tx.next === 'NEXT: HALCYON · 1,000 COLONISTS · 21 LY · SLEEP 31 YRS' && /^ROOM 152 · FILES \d+ \+ FLOOR 12$/.test(tx.packet)
+  && tx.salvage.startsWith('SALVAGE · ') && tx.chips >= 10 && tx.locked === 6,
   JSON.stringify(tx));
 check('…slice 4: the one skill chip is the first pick\'s `AUTOBURN.skl v1`, locked `TRAINED HERE · ◀ CHART TO UNDO`, fresh, no PACK AS', tx.skills.length === 1
   && tx.skills[0].name === 'AUTOBURN.skl' && tx.skills[0].badge === 'v1' && tx.skills[0].locked && tx.skills[0].fresh
@@ -243,16 +253,11 @@ check('…no uninvited chip and no TRACE line on the beam to HALCYON', await st(
 check('…the crossing\'s cost (ECC while asleep) and the charge waiting on arrival', tx.hits === 'ON THE WAY: 3 HITS · 1 FIXED WHILE YOU SLEEP (31 YRS) → 2 LAND'
   && /^ON ARRIVAL: \d+ CARRIED/.test(tx.arrival), `${tx.hits} | ${tx.arrival}`);
 await shot('1-transmit');
-// Everything fits: a click on a file does nothing (and says so with a buzz).
-await page.locator('#txChips .tx-chip', { hasText: 'TELEMETRY' }).first().click();
-await page.waitForTimeout(200);
-check('…everything fits: clicking a file leaves nothing behind', await st(() => window.__ap.store.getState().run.transit.dropped.length === 0));
+// Everything fits: a click on a file does nothing (and the beam is under way anyway).
+await page.locator('#txChips .tx-chip', { hasText: 'TELEMETRY' }).first().click({ timeout: 2000 }).catch(() => {});
+check('…everything fits: clicking a file leaves nothing behind', await st(() => (window.__ap.store.getState().run.transit?.dropped.length ?? 0) === 0));
 
-// --- 3. TRANSMIT ▸: the send, the white-out, HALCYON's boot ---------------------------------------------------
-// WP8 part 2: PICK ONE TO CARRY is mandatory on the screen (TRANSMIT ▸ waits for it): [1] picks the first card.
-await kit.pickCard(0);
-await page.keyboard.press('Space');
-await page.waitForTimeout(1100);
+// --- 3. The beam (no TRANSMIT ▸ to press): the send, the white-out, HALCYON's boot ------------------------------
 const sending = await st(() => ({
   ly: document.getElementById('txSendLy').innerText,
   sent: document.querySelectorAll('#txChips .tx-chip.sent').length,
@@ -320,11 +325,9 @@ await kit.lockInRing();
 check('HALCYON locks, lands, and reaches its LANDING REPORT', await kit.landToReport());
 await kit.finishReport();
 // WP9: HALCYON is no longer the last ship. CONTINUE → the DESK → KESTREL (locked at once here).
-check('CONTINUE on HALCYON goes on to the DESK (KESTREL picked there)', (await phase()) === 'desk');
+check('CONTINUE on HALCYON goes on to LEAVE ORBIT, then the DESK (KESTREL picked there)', (await phase()) === 'leave' && (await kit.leaveOrbit(0)).desk);
 await throughDesk(5, 'KESTREL', 'rm');
-await page.waitForTimeout(1200);
-await kit.pickCard(0);
-await page.locator('#txGo').click();
+await kit.beam();
 await waitFor(() => window.__ap.store.getState().run.phase === 'flight' && window.__ap.store.getState().level.shipName === 'KESTREL', 30000);
 // Slice 2: KESTREL's beam brought one seed, scripted next to Telemetry on run 1 (the scripted first seed at depth 3 on the
 // arm); DELETE came with it (slice 3b: the Rm requested at HALCYON's desk, its boot line `> DELIVERY: rm (arrived 2436)`),
@@ -360,15 +363,14 @@ const kestrelReport = await kit.finishReport();
 check('…its report\'s TRACE line: the seed left behind reports home (TRACE □□□ → ■□□)', /^1 SEED LEFT BEHIND · IT REPORTS HOME · TRACE □□□ → ■□□$/.test(kestrelReport.trace ?? ''),
   JSON.stringify(kestrelReport));
 // WP10: KESTREL is no longer the last ship either. The DESK → VESPER (locked at once here, its HOLLOW put to sleep).
-check('CONTINUE on KESTREL goes on to the DESK (VESPER picked there)', (await phase()) === 'desk');
+check('CONTINUE on KESTREL goes on to LEAVE ORBIT, then the DESK (VESPER picked there)', (await phase()) === 'leave' && (await kit.leaveOrbit(0)).desk);
 await throughDesk(11, 'VESPER');
-await page.waitForTimeout(1200);
+await page.waitForTimeout(600);
 // Slice 3a: on the arm HOLLOW does not board on the beam into VESPER (M3 forces it one hop from the final ship: CORMORANT).
 const toVesper = await packetThreat();
 check('the PACKET to VESPER: nothing uninvited rides (HOLLOW boards one hop from the final ship, at CORMORANT), no NO RM',
   toVesper.chip === null && toVesper.noRm === null, JSON.stringify(toVesper));
-await kit.pickCard(0);
-await page.locator('#txGo').click();
+await kit.beam();
 const vesperBoot = await waitFor(() => window.__ap.store.getState().run.phase === 'boot' && window.__ap.store.getState().level.shipName === 'VESPER', 30000, 50);
 await waitFor(() => window.__ap.store.getState().run.phase === 'flight' && window.__ap.store.getState().level.shipName === 'VESPER', 30000);
 await page.waitForTimeout(600);
@@ -381,7 +383,7 @@ check('VESPER boots clean: the unpack stops at 100%, no root aboard; 16 pods', v
 await kit.lockInRing({ sleep: true });
 check('VESPER (locked at once) lands and reaches its LANDING REPORT', await kit.landToReport());
 await kit.finishReport();
-check('CONTINUE on VESPER goes on to the DESK (CORMORANT picked there)', (await phase()) === 'desk');
+check('CONTINUE on VESPER goes on to LEAVE ORBIT, then the DESK (CORMORANT picked there)', (await phase()) === 'leave' && (await kit.leaveOrbit(0)).desk);
 // Slice 6: a POOR card on seed 4. Slice 7d made CORMORANT a `?` ship (below), so the POOR card is KITTIWAKE's, in reach from
 // VESPER's DESK too: a click on its node first (CORMORANT's click in throughDesk picks the course after it).
 await waitFor(() => window.__ap.store.getState().run.phase === 'desk' && !document.getElementById('deskScreen').hidden, 8000);
@@ -399,7 +401,7 @@ check('…CORMORANT\'s card said ??? WILL FIND YOU ON THIS BEAM before SET COURS
 // `??? · NO TRANSPONDER` (POOR all the same: its boot's SITE DATA POOR line and its report, below).
 check('…and, a `?` ship not visited yet, `??? · NO TRANSPONDER` for its SITE DATA and its LZs',
   cormorantDesk.card?.rows.includes('site=??? · NO TRANSPONDER') && cormorantDesk.card.rows.includes('lzs=??? · NO TRANSPONDER'), JSON.stringify(cormorantDesk.card?.rows));
-await page.waitForTimeout(1200);
+await page.waitForTimeout(600);
 // Slice 2's boarding, on the arm's beam into CORMORANT: the uninvited chip rides after the unit's own, locked, free.
 const toCormorant = await packetThreat();
 check('the PACKET to CORMORANT: the uninvited chip `??? · n BLOCKS · NOT IN YOUR PACKET`, boarding, locked, after the unit\'s own',
@@ -408,8 +410,7 @@ check('the PACKET to CORMORANT: the uninvited chip `??? · n BLOCKS · NOT IN YO
 check('…its TRACE line says HOLLOW finds the unit on this beam, and no NO RM (DELETE aboard)',
   /^TRACE [■□]{3} · (IT FOUND YOU ANYWAY|\?\?\? WILL FIND YOU ON THIS BEAM)$/.test(toCormorant.trace ?? '') && toCormorant.noRm === null, JSON.stringify(toCormorant));
 await shot('5c-packet-uninvited');
-await kit.pickCard(0);
-await page.locator('#txGo').click();
+await kit.beam();
 const cormorantBoot = await waitFor(() => window.__ap.store.getState().run.phase === 'boot' && window.__ap.store.getState().level.shipName === 'CORMORANT', 30000, 50);
 await waitFor(() => window.__ap.store.getState().run.phase === 'flight' && window.__ap.store.getState().level.shipName === 'CORMORANT', 30000);
 await page.waitForTimeout(600);
@@ -446,20 +447,22 @@ await kit.finishReport();
 // WP11: the final ship. The DESK → LAST LIGHT (locked at once, HOLLOW asleep), whose duel is fought by clicks (DELETE on the
 // root), then the FINALE's two steps on the card (slice 7a: PURGE, then REASSIGNMENT, once the landing has settled), and its
 // report ends the run.
-check('CONTINUE on CORMORANT goes on to the DESK (LAST LIGHT picked there)', (await phase()) === 'desk');
+check('CONTINUE on CORMORANT goes on to LEAVE ORBIT (LAST LIGHT picked at the desk after it)', (await phase()) === 'leave');
+// Slice 5: the salvage out of CORMORANT is what PURSER left: headed LEFT BEHIND BY PURSER, three cards; [1] is a pool card
+// (playtest 1: on LEAVE ORBIT now, before the chart).
+await waitFor(() => !document.getElementById('leaveScreen').hidden, 8000);
+const purserDeck = await st(() => ({ title: document.getElementById('loHeading').textContent,
+  cards: window.__ap.draft()?.offer.map((card) => `${card.id}${card.leftover ? `@${card.leftover.segId}` : ''}`) ?? [] }));
+check('…its salvage is PURSER\'s leftover deck: `LEFT BEHIND BY PURSER`, three cards, the first a pool card it left', purserDeck.title === 'LEFT BEHIND BY PURSER'
+  && purserDeck.cards.length === 3 && purserDeck.cards[0].endsWith('@leftover1') && !purserDeck.cards[0].startsWith('skill'), JSON.stringify(purserDeck));
+check('…[1] and ENTER: the DESK', (await kit.leaveOrbit(0)).desk);
 await throughDesk(19, 'LAST LIGHT');
-await page.waitForTimeout(1200);
+await page.waitForTimeout(600);
 const toLastLight = await packetThreat();
 check('the PACKET to LAST LIGHT: HOLLOW rides along (the uninvited chip, not boarding now), no NO RM with DELETE aboard',
   toLastLight.chip !== null && /^\?\?\? · \d+ BLOCKS · NOT IN YOUR PACKET$/.test(toLastLight.chip.label ?? '') && !toLastLight.chip.boards && toLastLight.noRm === null,
   JSON.stringify(toLastLight));
-// Slice 5: the draft out of CORMORANT is what PURSER left: headed LEFT BEHIND BY PURSER, three cards; [1] is a pool card.
-const purserDeck = await st(() => ({ title: document.getElementById('txDraftTitle').textContent,
-  cards: window.__ap.draft()?.offer.map((card) => `${card.id}${card.leftover ? `@${card.leftover.segId}` : ''}`) ?? [] }));
-check('…its draft is PURSER\'s leftover deck: `LEFT BEHIND BY PURSER`, three cards, the first a pool card it left', purserDeck.title === 'LEFT BEHIND BY PURSER'
-  && purserDeck.cards.length === 3 && purserDeck.cards[0].endsWith('@leftover1') && !purserDeck.cards[0].startsWith('skill'), JSON.stringify(purserDeck));
-await kit.pickCard(0);
-await page.locator('#txGo').click();
+await kit.beam();
 await waitFor(() => window.__ap.store.getState().run.phase === 'flight' && window.__ap.store.getState().level.shipName === 'LAST LIGHT', 30000);
 await kit.lockInRing({ sleep: true });
 await waitFor(() => window.__ap.store.getState().hollow.finale.phase === 'duel', 25000);
@@ -812,6 +815,7 @@ const warpReport = await waitFor(() => {
 }, 60000, 500);
 check('CORMORANT (by __ap.route) locks, lands, and reaches its LANDING REPORT', warpReport);
 await kit.finishReport();
+check('…CONTINUE: LEAVE ORBIT, then [1] and ENTER: the DESK', (await kit.leaveOrbit(0)).desk);
 const lastRmDesk = await throughDesk(19, 'LAST LIGHT');
 check('…the DESK after the last rm went opens on the REPOSITORY (the last-rm prompt)', lastRmDesk.openedOn === 'repository', JSON.stringify({ openedOn: lastRmDesk.openedOn }));
 await page.waitForTimeout(1200);

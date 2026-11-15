@@ -192,6 +192,8 @@ const sites = (st) => st(() => {
   const kit2 = runKit(page, game);
   await kit2.landToReport();
   await kit2.finishReport();
+  // Playtest 1 (note 5): LEAVE ORBIT comes first.
+  await kit2.leaveOrbit(0);
   await waitFor(() => window.__ap.store.getState().run.phase === 'desk', 8000);
   const gone = await st(() => ({ win: document.getElementById('sitesWin').hidden, survey: document.body.classList.contains('survey'),
     dock: getComputedStyle(document.querySelector('.dock-item[data-tool="sites"]')).display }));
@@ -228,6 +230,8 @@ const sites = (st) => st(() => {
   const kit3 = runKit(page, game);
   await kit3.landToReport();
   await kit3.finishReport();
+  await game.waitFor(() => window.__ap.store.getState().run.phase === 'leave', 10000);
+  await st(() => { const offer = window.__ap.draft().offer; if (offer.length > 0) window.__ap.pick(offer[0].id); window.__ap.leave(); });
   await game.waitFor(() => window.__ap.store.getState().run.phase === 'desk', 8000);
   const closed = await st(() => ({ win: document.getElementById('sitesWin').hidden, dock: getComputedStyle(document.querySelector('.dock-item[data-tool="sites"]')).display }));
   check('phone: at the DESK the SITES tab and its window are gone', closed.win && closed.dock === 'none', JSON.stringify(closed));
