@@ -17,8 +17,8 @@
 //   its card as a bottom sheet, SET COURSE pinned at the bottom, ✕ closes the sheet, a tap on SET COURSE opens the PACKET.
 // Slice 3b (the repository, deliveries, the INBOX; slice-3b-plan §6.3):
 // • The tabs CARD / REPOSITORY [R] / INBOX [I] on the first DESK, their badges (`★` while CONTROL recommends a file, the
-//   unread count); [R] shows the catalogue (no ship picked: no ETA; Mv tagged `★ RECOMMENDED`; six RESTRICTED
-//   rows since slice 4: the four .skl, THREAD+, FIREWALL.sys), [I] the welcome, opened by a click (its stamps; the badge goes).
+//   unread count); [R] shows the catalogue (no ship picked: no ETA; Mv tagged `★ RECOMMENDED`; two RESTRICTED
+//   rows since playtest 1: THREAD+, FIREWALL.sys), [I] the welcome, opened by a click (its stamps; the badge goes).
 // • Request toggling on ALBATROSS (1 YR LATE from ARES-VII): a click REQUESTs Mv (the badge names it, the card's DELIVERIES
 //   row `Mv ✗ 1 YR LATE` and its TIMELINE mark in red), a second click clears it, the number key [1] requests it again;
 //   on HALCYON it is IN TIME (`Mv ✓ WAITING HERE`, a green mark); the PACKET's chip; `> DELIVERY: mv (arrived 2337)`.
@@ -31,11 +31,14 @@
 // • The phone: the tab bar peeks at the bottom; a tap on a tab opens the sheet on it (REPOSITORY, a tap REQUESTs; INBOX).
 // Slices 4c–4e: the first pick has two cards, [1] AUTOBURN v1 and [2] AUTODROP v1, each with its mini-demo; [2] arms
 // AUTODROP, [1] then AUTOBURN, and the kid keeps AUTOBURN (the run stays the same). On the phone both cards fit the width.
-// Slice 4 (the skill tree; its review's M3): the first DESK opens on TRAINING [T] (four tabs: CARD / REPOSITORY [R] /
-// TRAINING [T] / INBOX [I]) with the required first pick: the steps `1 A SKILL · 2 A SHIP · 3 A FILE · 4 SET COURSE`, the bar
-// `CHOOSE YOUR FIRST SKILL`, SPACE refused with a buzz; [1] arms the card (the bar reads `TRAIN ▸ 3 CYCLES [ENTER]`), ENTER
-// fills the 1.5 s bar and trains AUTOBURN v1 (A SKILL ✓), ESC goes back to the card. On the phone the sheet opens on
-// TRAINING: a tap on the card, a tap on the bar (it reads TRAIN), then the CARD tab.
+// Slice 4 (the skill tree; its review's M3): the first DESK opens on the required first pick: the steps `1 A SKILL · 2 A SHIP ·
+// 3 A FILE · 4 SET COURSE`, the bar `CHOOSE YOUR FIRST SKILL`, SPACE refused with a buzz; [1] arms the card (the bar reads
+// `TRAIN ▸ 3 CYCLES [ENTER]`), ENTER fills the 1.5 s bar and trains AUTOBURN v1 (A SKILL ✓), ESC goes back to the card. On
+// the phone the sheet opens on it: a tap on the card, a tap on the bar (it reads TRAIN), then the CARD tab.
+// Playtest 1 (B-DESK, §3.6, note 15): TRAINING is the REPOSITORY's lower half, COMPILE HERE. Three tabs (CARD / REPOSITORY
+// [R] / INBOX [I]); the first desk opens the REPOSITORY scrolled to COMPILE HERE (its head lit, `[T]` on it), whose ledger
+// says where the cycles came from (`+n ARES-VII · …`, the bank's hover what they are) and where they went (`−3 AUTOBURN v1`
+// with UNDO). [R] hands the keys to FROM EARTH (scrolled to the top); a click inside COMPILE HERE takes them back.
 // Slice 6: HALCYON's card has `SITE DATA · GOOD`; from VESPER's DESK (__ap.route along the worked route) KITTIWAKE's card says
 // `SITE DATA · POOR · ARRIVAL CONTROL GUESSED` (warn) and `LZ: 2 · SURVEY NEEDED`, and TRAINING's AHEAD row its second line.
 // Usage: node tests/e2e/scenarios/map-desk.mjs   (env E2E_BASE_URL; tests/e2e/run.mjs runs it). Shots: tests/.out/e2e/shots/map-desk-*.
@@ -139,10 +142,34 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
     JSON.stringify({ reached, ...view, nodes: undefined, names: undefined, clocks }));
   // --- Slice 4: the required first pick, by the desk's keys ([1], then ENTER) -----------------------------------------------
   let tabs = await run.deskTabs();
-  check('slice 4: the first desk opens on TRAINING: four tabs, `1 A SKILL ◀ | 2 A SHIP | 3 A FILE | 4 SET COURSE`, the bar `CHOOSE YOUR FIRST SKILL`',
-    tabs.tab === 'training' && tabs.tabs.map((tab) => tab.label).join(' / ') === 'CARD / REPOSITORY [R] / TRAINING [T] / INBOX [I]'
+  check('slice 4: the first desk opens on the first pick: three tabs, `1 A SKILL ◀ | 2 A SHIP | 3 A FILE | 4 SET COURSE`, the bar `CHOOSE YOUR FIRST SKILL`',
+    tabs.tab === 'training' && tabs.tabs.map((tab) => tab.label).join(' / ') === 'CARD / REPOSITORY [R] / INBOX [I]'
     && tabs.steps.join(' | ') === '1 A SKILL ◀ | 2 A SHIP | 3 A FILE | 4 SET COURSE' && view.step === 'CHOOSE YOUR FIRST SKILL — [1], then [ENTER]'
     && view.go === 'CHOOSE YOUR FIRST SKILL', JSON.stringify({ tab: tabs.tab, labels: tabs.tabs.map((tab) => tab.label), steps: tabs.steps, step: view.step, go: view.go }));
+  // Playtest 1 (B-DESK): COMPILE HERE, the REPOSITORY's lower half, has the keys and is scrolled into view.
+  const compileLook = () => st(() => {
+    const root = document.getElementById('deskScreen');
+    const host = root.querySelector('.desk-repo');
+    const head = root.querySelector('.desk-training .rp-half-head');
+    const earthHead = root.querySelector('.rp-earth .rp-half-head');
+    const box = host.getBoundingClientRect();
+    const inView = (el) => { const r = el?.getBoundingClientRect(); return r !== undefined && r.top >= box.top - 1 && r.bottom <= box.bottom + 1; };
+    return {
+      half: root.dataset.half ?? null, lit: root.querySelector('.desk-tab.on')?.dataset.tab ?? null,
+      head: head?.querySelector('.rp-half-name')?.firstChild?.textContent ?? null, key: head?.querySelector('.rp-half-key')?.textContent ?? null,
+      bank: head?.querySelector('.tr-bank')?.textContent ?? null, why: head?.title ?? '',
+      headInView: inView(head), earthInView: inView(earthHead), scrollTop: Math.round(host.scrollTop),
+      ledger: [...root.querySelectorAll('.tr-ledger-row')].map((row) => `${row.querySelector('.tr-ledger-amount')?.textContent} ${row.querySelector('.tr-ledger-text')?.textContent}${row.querySelector('.tr-undo') ? ' [UNDO]' : ''}`),
+    };
+  });
+  let compile = await compileLook();
+  const shipPaid = await st(() => window.__ap.store.getState().run.skills.earned[0]);
+  check('playtest 1: the REPOSITORY tab is lit on its COMPILE HERE half ([T] on its head), scrolled into view, the bank with its hover',
+    compile.half === 'compile' && compile.lit === 'repository' && compile.head === 'COMPILE HERE' && compile.key === 'T' && compile.headInView
+    && /^\d+ CYCLES$/.test(compile.bank ?? '') && compile.why.startsWith('CYCLES: time your Core spends learning from your own flights'), JSON.stringify(compile));
+  check('…its ledger says where the cycles came from: `+n ARES-VII · …` first, as the LANDING REPORT said it',
+    compile.ledger[0] === `+${shipPaid.arrived + shipPaid.landed} ARES-VII · ${shipPaid.landed === 5 ? 'PERFECT LANDING' : `ARRIVED +1 · LANDED ${shipPaid.pct}% +${shipPaid.landed}`}`,
+    JSON.stringify(compile.ledger));
   let from = await cues();
   await page.keyboard.press('Space');
   await page.waitForTimeout(300);
@@ -167,13 +194,36 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   check('…[1] arms AUTOBURN v1 instead: the bar reads `TRAIN ▸ 3 CYCLES [ENTER]`', view.go === 'TRAIN ▸ 3 CYCLES [ENTER]'
     && cards.map((card) => card.selected).join(',') === 'true,false', `${view.go} ${JSON.stringify(cards)}`);
   await page.keyboard.press('Enter');
-  const trained = await waitFor(() => window.__ap.store.getState().run.skills.pending.length === 1, 4000, 100)
+  // 10 s: the 1.5 s bar runs on wall frames, and a headless Chromium on a busy machine draws the desk at a few frames a
+  // second (4.6 s measured at b01cf61, before the merge).
+  const trained = await waitFor(() => window.__ap.store.getState().run.skills.pending.length === 1, 10000, 100)
     && (await st(() => window.__ap.store.getState().run.skills.pending[0]?.skill)) === 'autoburn';
   await page.waitForTimeout(300);
   view = await run.desk();
   tabs = await run.deskTabs();
   check('…ENTER fills the bar and trains it: A SKILL ✓, the ship next, the bar back to SET COURSE', trained && tabs.steps.join(' | ') === '1 A SKILL ✓ | 2 A SHIP ◀ | 3 A FILE | 4 SET COURSE'
     && view.go === 'SET COURSE ▸ … [ENTER]', JSON.stringify({ trained, steps: tabs.steps, go: view.go }));
+  compile = await compileLook();
+  check('…and the ledger says where they went: `−3 AUTOBURN v1` with UNDO, last', compile.ledger.at(-1) === '−3 AUTOBURN v1 [UNDO]', JSON.stringify(compile.ledger));
+  // [R] hands the keys to FROM EARTH (scrolled to the top); a click in COMPILE HERE takes them back, without scrolling.
+  await page.keyboard.press('KeyR');
+  await page.waitForTimeout(400);
+  compile = await compileLook();
+  const earthKeys = await st(() => getComputedStyle(document.querySelector('#deskScreen .rp-key')).opacity);
+  check('[R] from COMPILE HERE: FROM EARTH has the keys, scrolled to the top, its number keys lit', compile.half === 'earth' && compile.lit === 'repository'
+    && compile.scrollTop === 0 && compile.earthInView && earthKeys === '1', JSON.stringify({ ...compile, earthKeys }));
+  const scrolled = compile.scrollTop;
+  await page.locator('#deskScreen .desk-training .tr-ledger').click();
+  await page.waitForTimeout(300);
+  compile = await compileLook();
+  const compileKeys = await st(() => getComputedStyle(document.querySelector('#deskScreen .rp-key')).opacity);
+  check('…a click in COMPILE HERE takes the keys back (FROM EARTH\'s number keys dim), the scroll where it was', compile.half === 'compile'
+    && compile.scrollTop === scrolled && Number(compileKeys) < 1, JSON.stringify({ ...compile, compileKeys }));
+  await page.keyboard.press('KeyT');
+  await page.waitForTimeout(300);
+  check('…[T] on COMPILE HERE goes back to the card', (await run.deskTabs()).tab === 'card');
+  await page.keyboard.press('KeyT');
+  await page.waitForTimeout(300);
   await shot('02a-first-pick');
   await page.keyboard.press('Escape');
   await page.waitForTimeout(400);
@@ -189,28 +239,30 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
 
   // --- Slice 3b: the tabs, the REPOSITORY with no ship picked, the welcome in the INBOX tab ----------------------------------
   tabs = await run.deskTabs();
-  check('3b: ESC → the right window\'s tabs CARD / REPOSITORY [R] / TRAINING [T] / INBOX [I], the card lit; badges `★` (CONTROL recommends a file) and 1 (the welcome unread)',
-    tabs.tab === 'card' && tabs.tabs.map((tab) => tab.label).join(' / ') === 'CARD / REPOSITORY [R] / TRAINING [T] / INBOX [I]' && tabs.tabs.find((tab) => tab.id === 'card')?.on
+  const cyclesBadge = await st(() => document.querySelector('#deskScreen .desk-tab[data-tab="repository"] .desk-tab-cycles')?.textContent ?? null);
+  check('3b: ESC → the right window\'s tabs CARD / REPOSITORY [R] / INBOX [I], the card lit; badges `★` (CONTROL recommends a file), the cycles left and 1 (the welcome unread)',
+    tabs.tab === 'card' && tabs.tabs.map((tab) => tab.label).join(' / ') === 'CARD / REPOSITORY [R] / INBOX [I]' && tabs.tabs.find((tab) => tab.id === 'card')?.on
+    && /^\d+ CYCLES?$/.test(cyclesBadge ?? '')
     && badgeOf(tabs, 'repository') === '★' && badgeOf(tabs, 'inbox') === '1' && badgeOf(tabs, 'card') === null, JSON.stringify(tabs.tabs));
   check('…the first desk\'s guidance has four steps (A SKILL · A SHIP · A FILE · SET COURSE), the ship next', tabs.steps.join(' | ') === '1 A SKILL ✓ | 2 A SHIP ◀ | 3 A FILE | 4 SET COURSE',
     tabs.steps.join(' | '));
   await page.keyboard.press('KeyR');
   await page.waitForTimeout(400);
   tabs = await run.deskTabs();
-  const noShip = 'PICK A SHIP TO SEE WHEN A FILE GETS THERE';
   check('[R] opens the REPOSITORY: seven files in catalogue order with their keys, no ETA until a ship is picked, nothing requested',
     tabs.tab === 'repository' && tabs.repoShown && !tabs.cardShown && tabs.rows.map((row) => row.file).join(',') === 'mv,rm,cp,swap,repair-bak,scan-bak,repair-v2'
-    && tabs.rows[0].text === 'Mv · 2 BLOCKS · MOVE' && tabs.rows.every((row) => row.eta === noShip && row.req === 'REQUEST' && !row.requested) && tabs.pick === null,
+    && tabs.rows[0].text === 'Mv · 2 BLOCKS · MOVE' && tabs.rows.every((row) => row.eta === null && row.req === 'REQUEST' && !row.requested) && tabs.pick === null,
     JSON.stringify(tabs.rows));
   check('…ARRIVAL CONTROL tags Mv, and only Mv, `★ RECOMMENDED`', tabs.rows.filter((row) => row.tag !== null).map((row) => `${row.file}:${row.tag}`).join() === 'mv:★ RECOMMENDED',
     JSON.stringify(tabs.rows.map((row) => row.tag)));
-  // Slice 4 (03 §3.11; TREE deviation 21): every skill of the tree is restricted, a `.skl` row each in the tree's order
-  // (built yet or not), before the two system rows.
-  const RESTRICTED = ['LOCKED AUTOBURN.skl Caretakers train their own', 'LOCKED AUTODROP.skl Caretakers train their own', 'LOCKED SURVEY.skl Caretakers train their own',
-    'LOCKED SENTRY.skl Caretakers train their own', 'LOCKED THREAD+ Not available to caretakers', 'LOCKED FIREWALL.sys Not available to caretakers'];
-  check('…RESTRICTED: the four skills AUTOBURN/AUTODROP/SURVEY/SENTRY.skl (Caretakers train their own), THREAD+ and FIREWALL.sys (Not available to caretakers), in that order, locked; IN TRANSIT: nothing; ONE REQUEST PER BEAM',
-    tabs.locked.join(' | ') === RESTRICTED.join(' | ')
-    && tabs.transit.length === 0 && tabs.transitNone === 'NOTHING ON THE WAY' && tabs.foot === 'ONE REQUEST PER BEAM', JSON.stringify({ locked: tabs.locked, transit: tabs.transit, none: tabs.transitNone, foot: tabs.foot }));
+  // Playtest 1 (B-DESK): the skills' `.skl` rows are gone (COMPILE HERE is where skills come from); the two system rows stay.
+  // Nothing in transit: no IN TRANSIT section at all. ONE REQUEST PER BEAM is FROM EARTH's head.
+  const RESTRICTED = ['LOCKED THREAD+ Not available to caretakers', 'LOCKED FIREWALL.sys Not available to caretakers'];
+  const earthHead = await st(() => ({ name: document.querySelector('#deskScreen .rp-earth .rp-half-name')?.firstChild?.textContent ?? null,
+    rule: document.querySelector('#deskScreen .rp-earth .rp-rule')?.textContent ?? null, transitSection: document.querySelector('#deskScreen .rp-transit') !== null }));
+  check('…FROM EARTH [R] · ONE REQUEST PER BEAM; RESTRICTED: THREAD+ and FIREWALL.sys (Not available to caretakers), no skill rows; no IN TRANSIT section',
+    tabs.locked.join(' | ') === RESTRICTED.join(' | ') && earthHead.name === 'FROM EARTH' && earthHead.rule === 'ONE REQUEST PER BEAM'
+    && tabs.transit.length === 0 && !earthHead.transitSection && tabs.transitNone === null, JSON.stringify({ locked: tabs.locked, earthHead, none: tabs.transitNone }));
   // Playtest 1 (A-LAND, note 12): each row says what the unit already has of it, under its name.
   const have = await st(() => [...document.querySelectorAll('#deskScreen .rp-row')].map((row) => `${row.dataset.file}:${row.querySelector('.rp-have')?.textContent ?? ''}`));
   check('…each row says what the unit already has (`YOU HAVE n`; the patch `YOU RUN REPAIR v1`)', have.length === 7
@@ -607,8 +659,11 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   await page.keyboard.press('KeyT');
   await page.waitForTimeout(500);
   const aheadSite = await st(() => document.querySelector('#deskScreen .tr-ahead-site')?.textContent ?? null);
-  check('…TRAINING\'s AHEAD row says `SITE DATA POOR · SURVEY FINDS BETTER SITES` (SURVEY\'s branch opens at visit 4)',
-    aheadSite === 'SITE DATA POOR · SURVEY FINDS BETTER SITES', String(aheadSite));
+  const vesperCompile = await compileLook();
+  check('…[T] opens the REPOSITORY on COMPILE HERE, scrolled to it; its AHEAD row says `SITE DATA POOR · SURVEY FINDS BETTER SITES` (SURVEY\'s branch opens at visit 4)',
+    aheadSite === 'SITE DATA POOR · SURVEY FINDS BETTER SITES' && vesperCompile.half === 'compile' && vesperCompile.lit === 'repository' && vesperCompile.headInView && vesperCompile.scrollTop > 0,
+    JSON.stringify({ aheadSite, vesperCompile }));
+  await shot('10b-compile-here');
   check('desktop: no page errors', errors.length === 0, errors.slice(0, 4).join(' | '));
   await context.close();
 }
@@ -647,7 +702,8 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   await shot('02-desk');
   // Slice 4: the sheet opens on TRAINING for the required first pick: a tap on the card arms it, a tap on the bar trains it.
   const firstTab = await run.deskTabs();
-  check('slice 4 phone: the sheet is up on TRAINING, the bar `CHOOSE YOUR FIRST SKILL`', firstTab.tab === 'training'
+  check('slice 4 phone: the sheet is up on the REPOSITORY\'s COMPILE HERE, the bar `CHOOSE YOUR FIRST SKILL`', firstTab.tab === 'training'
+    && (await st(() => document.querySelector('#deskScreen .desk-tab.on')?.dataset.tab)) === 'repository'
     && (await run.capsText('#deskGo')) === 'CHOOSE YOUR FIRST SKILL', `${firstTab.tab} ${await run.capsText('#deskGo')}`);
   // Slices 4c–4e: both cards, side by side or stacked, inside the screen's width.
   const phoneCards = await firstCards(st);
@@ -657,7 +713,7 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   await page.waitForTimeout(400);
   const armedGo = await run.capsText('#deskGo');
   await page.tap('#deskGo');
-  const phoneTrained = await waitFor(() => window.__ap.store.getState().run.skills.pending.length === 1, 4000, 100)
+  const phoneTrained = await waitFor(() => window.__ap.store.getState().run.skills.pending.length === 1, 10000, 100)
     && (await st(() => window.__ap.store.getState().run.skills.pending[0]?.skill)) === 'autoburn';
   check('…a tap on card 1 arms AUTOBURN (the bar reads `TRAIN ▸ 3 CYCLES [ENTER]`), a tap on the bar trains it', armedGo === 'TRAIN ▸ 3 CYCLES [ENTER]' && phoneTrained,
     `${armedGo} ${phoneTrained}`);

@@ -48,11 +48,8 @@ export const REPO_TEXT = {
   window: {
     title: 'REPOSITORY',
     tab: 'REPOSITORY [R]',
-    available: 'AVAILABLE',
     inTransit: 'IN TRANSIT',
     restricted: 'RESTRICTED',
-    noShip: 'PICK A SHIP TO SEE WHEN A FILE GETS THERE',
-    nothingInTransit: 'NOTHING ON THE WAY',
     request: 'REQUEST',
     requested: 'REQUESTED',
     clear: 'CLEAR',
@@ -67,6 +64,9 @@ export const REPO_TEXT = {
     nothingCanReach: 'No delivery can reach you in time.',
     // The last-rm prompt (04 §3.3, round 3): the desk opens here with Rm lit.
     lastRm: 'YOUR LAST RM IS GONE · NO RM, NO WAY TO DELETE THE ROOT',
+    // Playtest 1 (B-DESK, §3.6): the window's upper half, what Earth sends by light, with its key; COMPILE HERE is below.
+    fromEarth: 'FROM EARTH',
+    key: 'R',
   },
   // An AVAILABLE row: `Mv · 2 BLOCKS · MOVE`, then its ETA for the selected destination.
   row: (name: string, size: number, effect: string): string => `${name} · ${blocks(size)} · ${effect}`,

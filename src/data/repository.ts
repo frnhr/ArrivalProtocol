@@ -1,19 +1,17 @@
-// Slice 4: Track TREE owns this file (docs/phase3/impl/slice-4-plan.md §5.2): the four skl: restricted rows. Others
-// ask by message.
+// Playtest 1: Track B-DESK owns the RESTRICTED rows (docs/phase3/impl/playtest-1-plan.md §4 Batch B). Others ask by message.
 import type { FsToolKind } from '@/types/fs-tool';
 import type { RepoFileDef, RepoFileId, RestrictedRowDef } from '@/types/repo';
 import type { FsToolSegment, Segment, UpgradeSegment } from '@/types/segment';
 import { TOOL_FILES, createToolFiles } from '@data/fs-tools';
 import { REPO_FILE_TEXT, RESTRICTED_WHY, REPO_TEXT } from '@data/repo-text';
 import { REPAIR_PATCH_BLOCKS, INTEGRITY_MAX, MAX_LINE_CHARS } from '@data/tuning';
-import { SKILL_IDS, SKILL_TREE } from '@data/skills';
 
 // The repository's catalogue v1 (02-map §3.8; slice-3b-plan §1.1 item 1, §4.1): what ARRIVAL CONTROL sends on request, as
 // data. A tool file is a fresh copy of the tool's own file (data/fs-tools.ts, so its size and words are the tool's); the
 // two new defs are Scan.bak (a spare SCAN) and the REPAIR v2 patch (an upgrade file, used up at its boot: systems/
 // delivery-boot.ts). Every file is offered from the first desk (02 has no depth gate). A file the unit already has
 // arrives as a spare copy. Pure and store-free; validateCatalogue runs at load. Track REPO owns this file after the
-// foundation; 04 and 05 may add rows (02 §3.8), slice 4 adds the tree's `.skl` to RESTRICTED_ROWS.
+// foundation; 04 and 05 may add rows (02 §3.8).
 
 // 3c's save carries this in its content check (02 §3.11): a save whose catalogue changed under it is refused, not misread.
 // Bump it whenever a row's id, size or effect changes.
@@ -54,11 +52,11 @@ export const REPO_FILES: Readonly<Record<RepoFileId, RepoFileDef>> = Object.from
   blocks: copiedToolDef(id)?.size ?? REPAIR_PATCH_BLOCKS,
 }])) as Record<RepoFileId, RepoFileDef>;
 
-// The locked rows (02 §3.8: shown locked, never sent; no trace changes this list). Slice 4 (03 §3.11): every skill of the
-// tree is restricted permanently, as a `skl:<id>` row in the tree's order, whether its branch is built yet or not (the
-// repository never sends skills: they are what make a caretaker independent).
+// The locked rows (02 §3.8: shown locked, never sent; no trace changes this list). The repository never sends skills (03
+// §3.11: they are what make a caretaker independent). Slice 4 showed each as a locked `skl:<id>` row (`Train it yourself
+// :)`); playtest 1 (B-DESK, §3.6, note 15) merged training into the REPOSITORY, whose COMPILE HERE half is where skills
+// come from, so the rows went: only CONTROL's system files are locked here.
 export const RESTRICTED_ROWS: readonly RestrictedRowDef[] = [
-  ...SKILL_IDS.map((id): RestrictedRowDef => ({ id: `skl:${id}`, name: SKILL_TREE[id].fileName, why: RESTRICTED_WHY.skill })),
   { id: 'thread-plus', name: 'THREAD+', why: RESTRICTED_WHY.system },
   { id: 'firewall-sys', name: 'FIREWALL.sys', why: RESTRICTED_WHY.system },
 ];

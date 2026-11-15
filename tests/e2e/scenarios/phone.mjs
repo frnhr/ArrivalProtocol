@@ -381,7 +381,7 @@ check('CONTINUE (tapped) brings up the DESK', await waitFor(() => window.__ap.st
 await page.waitForTimeout(800);
 await overflow('DESK');
 await shot('10a-desk');
-// Slice 4: the first desk's sheet is up on TRAINING for the required first pick: a tap on the card, a tap on the bar (it
+// Slice 4: the first desk's sheet is up on COMPILE HERE (playtest 1: the REPOSITORY's lower half) for the required first pick: a tap on the card, a tap on the bar (it
 // reads TRAIN while the card is armed), then the CARD tab (map-desk.mjs checks it in full).
 // Slices 4c–4e: two cards, AUTOBURN v1 and AUTODROP v1, both inside the width; the kid keeps card 1, AUTOBURN.
 const firstCards = await st(() => [...document.querySelectorAll('#deskScreen .tr-card')].map((card) => {
@@ -390,6 +390,18 @@ const firstCards = await st(() => [...document.querySelectorAll('#deskScreen .tr
 }));
 check('4c: the first pick\'s two cards, AUTOBURN v1 and AUTODROP v1, fit the width', firstCards.map((card) => card.name).join(' | ') === 'AUTOBURN v1 | AUTODROP v1'
   && firstCards.every((card) => card.left >= 0 && card.right <= vw + 1), JSON.stringify(firstCards));
+// Playtest 1 (B-DESK, §3.6): the sheet holds the REPOSITORY on its COMPILE HERE half: the head with the bank and the cycles
+// ledger on screen, inside the width.
+const compileHead = await st(() => {
+  const head = document.querySelector('#deskScreen .desk-training .rp-half-head')?.getBoundingClientRect();
+  const ledger = [...document.querySelectorAll('#deskScreen .tr-ledger-row')].map((row) => row.getBoundingClientRect());
+  return { head: head ? { top: Math.round(head.top), left: Math.round(head.left), right: Math.round(head.right) } : null,
+    rows: ledger.length, inside: ledger.every((box) => box.left >= 0 && box.right <= innerWidth + 1 && box.top >= 0 && box.bottom <= innerHeight),
+    lit: document.querySelector('#deskScreen .desk-tab.on')?.dataset.tab ?? null };
+});
+check('playtest 1: the sheet shows the REPOSITORY lit on COMPILE HERE, its head and the cycles ledger on screen inside the width',
+  compileHead.lit === 'repository' && compileHead.head !== null && compileHead.head.top >= 0 && compileHead.head.left >= 0 && compileHead.head.right <= vw + 1
+  && compileHead.rows >= 1 && compileHead.inside, JSON.stringify(compileHead));
 await page.tap('#deskScreen .tr-card[data-card="1"]');
 await page.waitForTimeout(400);
 await page.tap('#deskGo');

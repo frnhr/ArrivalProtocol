@@ -1,4 +1,4 @@
-/* Slice 4: Track UI owns this file (docs/phase3/impl/slice-4-plan.md §5.2): the TRAINING tab. */
+/* Playtest 1: Track B-DESK owns this file (docs/phase3/impl/playtest-1-plan.md §4 Batch B): the desk screen. */
 /* The DESK (phase 3 slice 3a, docs/phase3/02-map.md §4; components/desk/*): the STAR CHART, the SHIP CARD, the guidance
    strip, SET COURSE, the phone bottom sheet; the chart's look where it is shared (the title card's faint chart, the RUN
    TALLY's mini route). Amber whichever screen the kid was on: every colour is a --desk-* token (tokens.css). */
@@ -515,8 +515,25 @@ body.reduced-motion .title-save-btn.primary { animation: none; }
 .desk-tab.on .desk-tab-badge { background: var(--desk-bg); color: var(--desk-bright); box-shadow: none; }
 .desk-card[hidden] { display: none; }
 
-/* ── The REPOSITORY (RepositoryWindow): AVAILABLE rows with their ETA and tag, IN TRANSIT, RESTRICTED (locked) ── */
-.desk-repo { display: flex; flex-direction: column; gap: 4px; padding-top: 10px; }
+/* ── The REPOSITORY (playtest 1, B-DESK, §3.6): one scroll, FROM EARTH (RepositoryWindow: the rows with their ETA and tag,
+      IN TRANSIT, RESTRICTED) over COMPILE HERE (TrainingWindow). The half with the keys has its head lit; the other half's
+      number keys dim, since [1]–[7] belong to one half at a time. ── */
+.desk-repo { position: relative; }
+.rp-earth { display: flex; flex-direction: column; gap: 4px; }
+.desk-repo .desk-training { margin-top: 22px; padding-top: 0; }
+.rp-half-head {
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding-bottom: 5px;
+  border-bottom: 1px solid var(--desk-edge-bright);
+}
+.rp-half-name { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; letter-spacing: 0.26em; color: var(--desk-dim); white-space: nowrap; }
+.rp-half-key { font-size: 9px; letter-spacing: 0; }
+.desk-screen[data-half='earth'] .rp-earth .rp-half-name,
+.desk-screen[data-half='compile'] .desk-training .rp-half-name { color: var(--desk-accent); }
+.desk-screen[data-half='earth'] .rp-earth .rp-half-head,
+.desk-screen[data-half='compile'] .desk-training .rp-half-head { border-bottom-color: var(--desk-accent-dim); }
+.desk-screen[data-half='compile'] .rp-key,
+.desk-screen[data-half='earth'] .tr-card-top .keycap { opacity: 0.35; }
+.rp-rule { font-size: 9px; letter-spacing: 0.16em; color: var(--desk-dim); white-space: nowrap; }
 .rp-warn {
   padding: 6px 8px; border: 1px solid var(--desk-warn); color: var(--desk-warn);
   font-size: 11px; letter-spacing: 0.1em; font-weight: 700;
@@ -556,14 +573,12 @@ body.reduced-motion .title-save-btn.primary { animation: none; }
 .rp-row.focus { box-shadow: inset 0 0 0 1px var(--desk-warn); animation: rp-focus 1.2s ease-in-out infinite; }
 @keyframes rp-focus { 50% { box-shadow: inset 0 0 0 1px transparent; } }
 body.reduced-motion .rp-row.focus { animation: none; }
-.rp-none { padding: 5px 4px; font-size: 10px; letter-spacing: 0.14em; color: var(--desk-dim); }
 .rp-transit-row { padding: 5px 4px; border-bottom: 1px dotted var(--desk-edge); font-size: 11px; letter-spacing: 0.06em; color: var(--desk-accent); }
 .rp-transit-row.catches-up { color: var(--desk-good); }
 .rp-locked { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 8px; align-items: baseline; padding: 4px; opacity: 0.6; }
 .rp-lock { padding: 0 5px; border: 1px solid var(--desk-far); font-size: 8px; letter-spacing: 0.2em; color: var(--desk-dim); }
 .rp-locked .rp-text { font-size: 11px; color: var(--desk-dim); text-decoration: line-through; }
 .rp-why { font-size: 10px; color: var(--desk-dim); text-align: right; }
-.rp-foot { margin-top: 10px; font-size: 9px; letter-spacing: 0.16em; color: var(--desk-dim); text-align: center; }
 
 /* ── The SHIP CARD's 3b marks: the deliveries on the TIMELINE, green before ▲ and red after ── */
 .dc-tl-file {
@@ -628,37 +643,48 @@ body.reduced-motion .ib-row.tone-hollow, body.reduced-motion .ib-reader.tone-hol
   .desk-tab { padding: 0 6px; font-size: 9px; letter-spacing: 0.08em; }
   /* The sheet always shows its tab bar on the arm, so the REPOSITORY and the INBOX are one tap away before a ship is picked. */
   .desk-screen.has-tabs:not(.has-card) .desk-card-win { transform: translateY(calc(100% - 32px)); }
-  .desk-screen[data-tab='repository'] .desk-card-win, .desk-screen[data-tab='inbox'] .desk-card-win { height: 70vh; }
+  .desk-screen[data-tab='inbox'] .desk-card-win { height: 70vh; }
+  /* The REPOSITORY's two halves take most of the screen (slice 4 gave TRAINING 78vh). */
+  .desk-screen[data-half] .desk-card-win { height: 78vh; max-height: 78vh; }
   .ib-head, .ib-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) 56px; }
 }
 
-/* ── Slice 4: TRAINING [T] (TrainingWindow; 03-skills §4) ── */
-/* The tab's key is its own span (DeskTabs), so a narrow card drops the four keys before the names; its badge pulses while
-   cycles are unspent and the tab is closed. */
+/* ── Slice 4's TRAINING, now COMPILE HERE (TrainingWindow; 03-skills §4; playtest 1 B-DESK) ── */
+/* The tab's key is its own span (DeskTabs), so a narrow card drops the keys before the names; the REPOSITORY's cycles badge
+   pulses while cycles are unspent and the tab is closed. */
 .desk-tab-key { margin-left: 0.45em; }
-.desk-tab.pulse .desk-tab-badge { animation: tr-badge 1.6s ease-in-out infinite; }
+.desk-tab-cycles { margin-left: -2px; }
+.desk-tab.pulse .desk-tab-cycles { animation: tr-badge 1.6s ease-in-out infinite; }
 @keyframes tr-badge { 50% { box-shadow: 0 0 12px var(--desk-bright); filter: brightness(1.25); } }
-body.reduced-motion .desk-tab.pulse .desk-tab-badge { animation: none; }
+body.reduced-motion .desk-tab.pulse .desk-tab-cycles { animation: none; }
 @media (max-width: 1439px) { .desk-tab-key { display: none; } }
 .desk-go.blocked { color: var(--desk-accent); border-color: var(--desk-accent-dim); letter-spacing: 0.24em; }
 
-/* The right window widens while TRAINING is open: the grid and its detail need the room the card does not. */
-.desk-screen[data-tab='training'] .desk-body { grid-template-columns: minmax(0, 1fr) 620px; }
-@media (max-width: 1439px) { .desk-screen[data-tab='training'] .desk-body { grid-template-columns: minmax(0, 1fr) 540px; } }
+/* The right window widens while the REPOSITORY is open: COMPILE HERE's grid and its detail need the room the card does not. */
+.desk-screen[data-half] .desk-body { grid-template-columns: minmax(0, 1fr) 620px; }
+@media (max-width: 1439px) { .desk-screen[data-half] .desk-body { grid-template-columns: minmax(0, 1fr) 540px; } }
 .desk-training { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; }
 
-.tr-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding-bottom: 6px; border-bottom: 1px solid var(--desk-edge); }
-.tr-titles { min-width: 0; }
-.tr-title { font-size: 12px; letter-spacing: 0.24em; color: var(--desk-accent); }
-.tr-demos { margin-top: 2px; font-size: 9.5px; letter-spacing: 0.16em; color: var(--desk-dim); }
+.tr-head { cursor: help; }
 .tr-bank {
   flex: 0 0 auto; font-family: 'VT323', monospace; font-size: 30px; line-height: 0.9; letter-spacing: 0.08em;
   color: var(--desk-bright); text-shadow: 0 0 12px color-mix(in srgb, var(--desk-accent) 45%, transparent);
 }
+/* The ledger (systems/cycles-ledger.ts): a signed amount per row, in VT323 like the bank it adds up to. In green what came
+   in, in amber what went out, dim what earlier desks left. */
+.tr-ledger { display: flex; flex-direction: column; }
+.tr-ledger-row {
+  display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 10px; align-items: center; min-height: 22px;
+  padding: 1px 4px; border-bottom: 1px dotted var(--desk-edge); font-size: 11px; letter-spacing: 0.06em; color: var(--desk-text);
+}
+.tr-ledger-amount { font-family: 'VT323', monospace; font-size: 18px; line-height: 1; text-align: right; color: var(--desk-good); }
+.tr-ledger-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tr-ledger-row.kind-carried { color: var(--desk-dim); }
+.tr-ledger-row.kind-carried .tr-ledger-amount { color: var(--desk-dim); }
+.tr-ledger-row.kind-spent { color: var(--desk-bright); }
+.tr-ledger-row.kind-spent .tr-ledger-amount { color: var(--desk-accent); }
 .tr-control { font-size: 11px; letter-spacing: 0.04em; color: var(--desk-text); }
 .tr-control-tag { margin-right: 8px; font-size: 9px; letter-spacing: 0.2em; color: var(--layer-mind); }
-.tr-topup { font-size: 11px; letter-spacing: 0.1em; color: var(--desk-good); }
-.tr-section { padding-bottom: 3px; border-bottom: 1px solid var(--desk-edge); font-size: 9px; letter-spacing: 0.28em; color: var(--desk-dim); }
 
 /* Visit 1: the big cards under CHOOSE YOUR FIRST SKILL. */
 .tr-choose {
@@ -684,7 +710,6 @@ body.reduced-motion .desk-tab.pulse .desk-tab-badge { animation: none; }
 }
 @keyframes tr-stamp { from { transform: translate(-50%, -50%) rotate(-8deg) scale(1.8); opacity: 0; } }
 .desk-training.reduced .tr-card-stamp { animation: none; }
-.tr-saved { text-align: center; font-size: 12px; letter-spacing: 0.16em; color: var(--desk-bright); }
 
 /* The mini-demo (03 §4: a 4-second loop): a planet, the ring, and what the cell does to the path. */
 .tr-demo-box { display: flex; justify-content: center; }
@@ -817,9 +842,7 @@ body.reduced-motion .desk-tab.pulse .desk-tab-badge { animation: none; }
 }
 .tr-why { font-size: 10px; letter-spacing: 0.1em; color: var(--desk-dim); }
 
-/* This desk's purchases with UNDO; the AHEAD row and the packet preview; the last unit's line. */
-.tr-pending { display: flex; flex-direction: column; gap: 2px; }
-.tr-pending-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 3px 4px; border-bottom: 1px dotted var(--desk-edge); font-size: 11px; color: var(--desk-bright); }
+/* UNDO on a ledger row of this desk's purchases; the AHEAD row and the packet preview; the last unit's line. */
 .tr-undo {
   padding: 1px 8px; cursor: pointer; background: transparent; border: 1px solid var(--desk-edge-bright);
   font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.2em; color: var(--desk-dim);

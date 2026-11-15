@@ -4,7 +4,8 @@
 // • ARRIVAL CONTROL's tag on run 1's worked route (Mv, Rm, Swap at KESTREL; a request in flight counts as owned, risk 4),
 //   rules 4 and 5 (Repair.bak, REPAIR v2), and none at CORMORANT (`No further software is required.`);
 // • the REPOSITORY's model: the ETAs at the worked route's desks (IN TIME, `4 YRS LATE → … SHIP 5`, NEVER), no ETA toward a
-//   ship out of reach, IN TRANSIT from the one outlook rule, RESTRICTED;
+//   ship out of reach, IN TRANSIT from the one outlook rule, RESTRICTED (playtest 1, B-DESK: the system files only, no
+//   skill rows: skills are compiled in the REPOSITORY's COMPILE HERE half);
 // • the last-rm prompt (the desk opens on the REPOSITORY with Rm lit);
 // • REPAIR v2 is out of the arm's salvage deals and still in the classic world's;
 // • the no-Swap condition for the strip's ghost line (risk 1);
@@ -21,7 +22,7 @@ import { inboxMessages } from '@systems/inbox';
 import { createRunMap } from '@systems/map-run';
 import { REPO_SWAP_LOOKAHEAD_LAYERS } from '@data/tuning';
 import { REPO_FILES, REPO_FILE_IDS, RESTRICTED_ROWS, validateCatalogue, REPO_CATALOGUE_VERSION } from '@data/repository';
-import { REPO_TEXT } from '@data/repo-text';
+import { REPO_TEXT, RESTRICTED_WHY } from '@data/repo-text';
 import { backToChart, openDesk } from '@systems/run';
 import { setCourseFromDesk } from '../support/desk';
 import { draftContext } from '@systems/draft';
@@ -45,8 +46,11 @@ const toolCount = (store: Store<GameState>, kind: string): number => state(store
 check('catalogue v1: Mv 2, Rm 1, Cp 3, Swap 1, Repair.bak 4, Scan.bak 3, REPAIR v2 patch 2, in that order, sound',
   REPO_FILE_IDS.map((id) => `${REPO_FILES[id].name}:${REPO_FILES[id].blocks}`).join() === 'Mv:2,Rm:1,Cp:3,Swap:1,Repair.bak:4,Scan.bak:3,REPAIR v2 patch:2'
   && validateCatalogue().length === 0 && REPO_CATALOGUE_VERSION === 1, validateCatalogue().join('; '));
-check('…the restricted rows: the four .skl files (Caretakers train their own), THREAD+, FIREWALL.sys',
-  RESTRICTED_ROWS.map((entry) => entry.name).join() === 'AUTOBURN.skl,AUTODROP.skl,SURVEY.skl,SENTRY.skl,THREAD+,FIREWALL.sys' && RESTRICTED_ROWS[0]!.why === 'Caretakers train their own');
+// Playtest 1 (B-DESK, §3.6): the skills' `Train it yourself :)` rows went with the merge (COMPILE HERE is where skills come
+// from); the system files CONTROL keeps stay locked.
+check('…the restricted rows: THREAD+ and FIREWALL.sys (Not available to caretakers), no .skl rows',
+  RESTRICTED_ROWS.map((entry) => entry.name).join() === 'THREAD+,FIREWALL.sys' && RESTRICTED_ROWS.every((entry) => entry.why === RESTRICTED_WHY.system && !entry.id.startsWith('skl:')),
+  RESTRICTED_ROWS.map((entry) => entry.name).join());
 
 // --- Run 1's worked route, desk by desk ------------------------------------------------------------------------------------
 const run = armRun();
@@ -58,8 +62,8 @@ check('…Mv toward HALCYON: `ARRIVES 2337 · HALCYON APPROACH 2352 · IN TIME` 
   eta(run, 2) ?? 'null');
 const outOfReach = state(run).run.map.arm.map((ship) => ship.slot).find((slot) => slot !== 0 && !reachableFrom(state(run).run.map, 0).includes(slot))!;
 check(`…a ship out of reach (slot ${outOfReach}) gets no ETA (forecast null)`, forecast(run, outOfReach) === null && eta(run, outOfReach) === null);
-check('…no ship selected: no ETA; RESTRICTED lists the six locked rows (slice 4: all four .skl)',
-  eta(run, null) === null && repoModel(state(run), null).restricted.length === 6);
+check('…no ship selected: no ETA; RESTRICTED lists the two locked system rows',
+  eta(run, null) === null && repoModel(state(run), null).restricted.map((entry) => entry.id).join() === 'thread-plus,firewall-sys');
 check('…a restricted or unknown file is refused (throws), the pick unchanged', throws(() => setRequest(run, 'thread-plus' as never))
   && throws(() => setRequest(run, 'skl:autoburn' as never)) && state(run).run.repo.pick === null);
 setRequest(run, 'mv');

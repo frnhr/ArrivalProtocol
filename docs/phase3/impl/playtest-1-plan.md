@@ -1090,3 +1090,80 @@ Built on `b-voice` from b01cf61, for note 3 and §3.2. These are the departures 
     - `residents` failed different timing checks on each of two runs (the receiver bypass's frames, HERON's SCAN, MEND);
       every voice check in it passed.
     - `ending` fails `[ENTER] skips THE LAST LANDING` the same way on b01cf61, before this track.
+
+## Deviations (B-DESK)
+
+Built on `b-desk` from b01cf61 (Batch A merged). §3.6's merge is built: one REPOSITORY, FROM EARTH over COMPILE HERE, with
+the cycles explained in the world. Each item says what differs from §3.6 or §4, and why.
+
+1. **Where the cycles come from and go: a ledger, not more prose.** COMPILE HERE's head is the bank (`9 CYCLES`, VT323),
+   with §3.6's hover word for word (`CYCLES: time your Core spends learning from your own flights. You earn them by flying
+   and landing.`). Under it one signed row per source and spend, adding up to the bank:
+   `+3 CARRIED OVER` · `+6 HALCYON · ARRIVED +1 · LANDED 83% +4` · `+2 CORE RESERVE` / `+4 taught by BARNABY` /
+   `+2 SALVAGE` · `−4 AUTOBURN v2` with UNDO. The rows are derived from `RunSkillState` (earned, grants, bought, pending) by a
+   new pure file, `systems/cycles-ledger.ts` (B-DESK's; not in §4's list). It throws when the rows do not add up to
+   `bankOf`. The purchases' rows **replace** the TRAINED AT THIS DESK section and its UNDO, the first desk's `+2 CYCLES`
+   top-up line and `2 CYCLES · SAVED FOR NEXT TIME` (the bank says it). The head's `FROM YOUR FLIGHTS · 1 CAPTURE` line goes
+   too: the TRAIN bar still says `from your 1 capture`.
+2. **The report's line.** §3.6 wrote `+3 CYCLES · from 2 pods landed and the orbit`. Cycles are not counted in pods (03
+   §3.1: ARRIVED +1, then +1 per full 20% of the landing's points), so the line keeps the rule and says what cycles are for:
+   `+5 CYCLES TO COMPILE · ARRIVED +1 · LANDED 83% +4`, `+6 CYCLES TO COMPILE · PERFECT LANDING`, `+5 CYCLES · NO DESK
+   AHEAD`. Its breakdown is the ledger's row for that ship, word for word (`TRAINING_TEXT.report.earned`, shared), and its
+   hover is the bank's. The LOST card (`BurnResult.ts`) reads the same `cyclesReport`, so it says it too. The first-pick
+   top-up reads `+2 CYCLES · CORE RESERVE`, the ledger's word for it (OPEN-DECISIONS 145).
+3. **Which grants are "this visit's".** A grant is shown as its own row when it carries this visit's number
+   (`CycleGrant.visit === visitNow`), else it is CARRIED OVER. Today the +2 CYCLES salvage card is granted at the TRANSMIT ▸
+   *before* the desk, with the previous visit's number, so it reads as CARRIED OVER. **At B-ORDER's merge** it is granted
+   at LEAVE ORBIT's pick (§3.3.2), this visit, and gets its own `+2 SALVAGE` row with no change here. The sum is right
+   either way; `skills/cycles` checks both forms.
+4. **The halves and the keys.** `ui.deskWindow` says which half has the keys: `'repository'` is FROM EARTH ([1]–[7]
+   request a row), `'training'` is COMPILE HERE ([1] [2] pick a card, ↑ ↓ step the grid, ENTER trains an armed cell). So the
+   alias is not only kept, it is the half: the codec, `deskUiOnOpen` and every TRAINING key work unchanged.
+   - [R] and [T] open their half scrolled to it, or go back to the card when it already has the keys. [R] from COMPILE
+     HERE moves the keys up (and disarms a picked cell, `openDeskWindow`'s rule), and [T] from FROM EARTH moves them down.
+   - A click inside a half gives it the keys without scrolling, before the half's own handler, so a clicked cell is armed
+     for ENTER as before.
+   - Each half's head shows its key (`FROM EARTH [R]`, `COMPILE HERE [T]`), lit while it has the keys, and the other
+     half's number keys dim to 35%, since [1]–[7] belong to one half at a time.
+   - `#deskScreen`'s `data-tab` stays the store's id (`'training'` on COMPILE HERE), because the `playthrough`,
+     `resume` and `run-flow` drivers branch on it. A new `data-half` (`earth` / `compile`) drives the styling.
+5. **The tabs.** CARD / REPOSITORY [R] / INBOX [I]. The REPOSITORY carries two badges: the request (`Mv`, or `:)`), then
+   the unspent cycles (`6 CYCLES`), which pulse while the tab is closed (03 §4). The first badge is still
+   `.desk-tab-badge`, so the e2e readers of the request badge did not change. `DeskTabs.ts shownTab` maps the alias.
+6. **Less text in FROM EARTH.** The AVAILABLE heading goes (the half's head is FROM EARTH), as does
+   `PICK A SHIP TO SEE WHEN A FILE GETS THERE` (A-WORDS flagged it). `ONE REQUEST PER BEAM` moves from the foot into the
+   head. IN TRANSIT shows only when something is in transit (`NOTHING ON THE WAY` goes). RESTRICTED keeps the two system
+   files. `REPO_TEXT.window.available`, `noShip` and `nothingInTransit` are deleted, and `fromEarth` and `key` are added
+   (the `window` block was A-WORDS's in Batch A and has no Batch B owner; B-VOICE's `recommended` lines are untouched).
+7. **The order and the width.** FROM EARTH sits above COMPILE HERE, as §3.6 has it. The run's first desk opens on COMPILE
+   HERE (`deskUiOnOpen`'s `'training'`), scrolled to it. The right window widens to 620 px (540 under 1440) whenever the
+   REPOSITORY is open, not only on TRAINING, so the chart is narrower while requesting. On a phone the sheet is 78vh for
+   the REPOSITORY (TRAINING's height), and the halves scroll inside it.
+8. **Words.** `TRAINING_TEXT.tab` and `pendingTitle` are gone. `title` is the string `COMPILE HERE` (the unit's name is in
+   the desk's head already). New: `key`, `bankWhy`, `ledger.*`, `report.earned`, `report.perfectWord`. `onTheHouse` adds
+   `· CORE RESERVE`.
+9. **Files outside §4's list.**
+   - `systems/training-model.ts`: the `title` line, its `unitName` import, and the `CyclesReport.line` comment. B-ORDER
+     owns its link uses, which are elsewhere in the file.
+   - `styles/responsive.css`: the phone TRAINING rule's `[data-tab='training']` sheet height moved to `desk.css`, and its
+     padding is now the merged host's.
+   - `data/repository.ts`: only RESTRICTED_ROWS, as §4 says, and the unused `SKILL_IDS`/`SKILL_TREE` import.
+   - The e2e scenarios `map-desk` and `phone`.
+10. **Left for their owners.**
+    - `RESTRICTED_WHY.skill` (`Train it yourself :)`) has no reader now. It is B-VOICE's line, so it is left for B-VOICE
+      to delete. `RestrictedId` keeps `skl:${string}` (types/repo.ts); nothing makes one now.
+    - `TrainingModel.demos`, `topUp`, `saved` and `pending` are no longer drawn. `pending` still feeds the ledger's UNDO
+      flags through `trainingPending`. They are kept because the model is the lead's and the suites read them; drop them
+      when training-model is next touched.
+    - `TRAINING CYCLES` is still said twice outside this track. `resident-ui-text.ts`'s report gift reads
+      `+4 TRAINING CYCLES · taught by BARNABY` (the `residents` e2e pins it), and `PACKET_SKILL_TEXT.cyclesEffect` reads
+      `2 more TRAINING CYCLES to spend at the next desk` (the card moves to LEAVE ORBIT, B-ORDER's). Both would read
+      better as `+4 CYCLES · taught by BARNABY` and `2 more CYCLES to compile at this desk`.
+11. **Tests.** Unit suites: `skills/ui-models` (the head word, the ledger at desk 1 and 2, the report's new line, the word
+    list), `skills/cycles` (the CORE RESERVE ledger and the salvage desk), `skills/training-flow` (desk 2's ledger with
+    UNDO only on the last of a skill, a reload's ledger), `map/repository` (RESTRICTED: two rows), and `map/desk-models`
+    (`shownTab` and the disarm on moving to FROM EARTH). The plan's `desk` e2e scenario needed no change. `map-desk` checks
+    the merged screen: the half, the head and key, the scroll, the ledger in and out, [R] and the click. `phone` checks
+    the head and ledger on screen in the sheet. `map-desk`'s wait for the first pick's 1.5 s bar is 10 s, not 4 s. The bar
+    runs on wall frames, and headless Chromium here draws the desk at 2–4 frames a second. At b01cf61, before this track,
+    the bar took 4.6 s, so the 4 s wait was already flaky.

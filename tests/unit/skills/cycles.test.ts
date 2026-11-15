@@ -5,6 +5,8 @@
 //   is not asked to pick. Only on the arm, only at visit 1.
 // • The +2 CYCLES salvage card: dealt only with a tree (never on the classic world: its deals byte-identical), never into a
 //   final ship; picked, it becomes a 'salvage' grant at TRANSMIT ▸, never a carried card.
+// • Playtest 1 (B-DESK, §3.6): the desk's cycles ledger (cycles-ledger.ts) on a crashed ship 1 (`+1 ARES-VII · …`, `+2
+//   CORE RESERVE`) and at the desk after a salvage card (its +2 among the rows, which add up to the bank).
 // • RUN END: `UNSPENT n` and the RUN TALLY's `TRAINED n of 50 · UNSPENT n` (lost levels still count as trained); none on
 //   the classic world.
 // • The archive (03 §3.11): LastUnit.skills at RUN END, each skill's file level and AUTOBURN's accuracy, through the real
@@ -25,6 +27,7 @@ import { parseLastUnit } from '@systems/meta-parse';
 import { FIRST_RUN_LINEAGE } from '@systems/meta';
 import { TRAINING_TEXT } from '@data/training-text';
 import { RUN_SAVE_KEY } from '@data/tuning';
+import { cyclesLedger } from '@systems/cycles-ledger';
 import { armRun, toDesk } from '../map/repo-fixture';
 import { stubStorage, pageOpen, receiveToReport, storedMeta } from '../save/save-fixture';
 import { CYCLES_CARD_CYCLES, FIRST_PICK_FLOOR_CYCLES } from '@data/tuning';
@@ -43,8 +46,12 @@ const throws = (run: () => unknown): boolean => { try { run(); return false; } c
   const grants = store.getState().run.skills.grants;
   check('…the run\'s first desk tops the bank up to the floor: +2 (`+2 CYCLES`), 3 to spend',
     grants.length === 1 && grants[0]!.source === 'first-pick' && grants[0]!.cycles === FIRST_PICK_FLOOR_CYCLES - 1 && grants[0]!.visit === 1
-      && bankOf(store.getState().run.skills) === FIRST_PICK_FLOOR_CYCLES && TRAINING_TEXT.onTheHouse(grants[0]!.cycles) === '+2 CYCLES',
+      && bankOf(store.getState().run.skills) === FIRST_PICK_FLOOR_CYCLES && TRAINING_TEXT.onTheHouse(grants[0]!.cycles) === '+2 CYCLES · CORE RESERVE',
     JSON.stringify(grants));
+  const ledger = cyclesLedger(store.getState());
+  check('…the ledger says both: `+1 ARES-VII · ARRIVED +1 · LANDED 0% +0`, then `+2 CORE RESERVE`; 3 in all',
+    ledger.rows.map((row) => `${row.amountText} ${row.text}`).join(' | ') === '+1 ARES-VII · ARRIVED +1 · LANDED 0% +0 | +2 CORE RESERVE' && ledger.bank === 3,
+    JSON.stringify(ledger.rows));
   check('…and SET COURSE waits for the first pick (setCourse throws), the desk opened on TRAINING', deskBlocker(store.getState()) === 'first-pick'
     && store.getState().ui.deskWindow === 'training' && throws(() => setCourse(store, 2)) && store.getState().run.phase === 'desk');
 }
@@ -99,6 +106,16 @@ const throws = (run: () => unknown): boolean => { try { run(); return false; } c
   check('…TRANSMIT ▸ turns it into a salvage grant (+2 at this visit), not a carried card; the first pick is bought',
     grant?.cycles === CYCLES_CARD_CYCLES && grant.visit === 1 && bankOf(after.skills) === before + CYCLES_CARD_CYCLES && !after.upgrades.includes('cycles')
       && after.skills.pending.length === 0 && after.skills.bought.length === 1, JSON.stringify(after.skills.grants));
+  // The next desk's ledger: the card's +2 is in it (CARRIED OVER while the card is granted at TRANSMIT ▸; its own SALVAGE row
+  // once B-ORDER's LEAVE ORBIT grants it at the pick, this visit), and the rows add up to the bank.
+  toDesk(store);
+  const ledger = cyclesLedger(store.getState());
+  const carried = ledger.rows.find((row) => row.kind === 'carried')?.amount ?? 0;
+  check('the desk after it: the rows add up to the bank, the card\'s +2 among them (carried over, or `+2 SALVAGE`)',
+    ledger.bank === bankOf(store.getState().run.skills) && ledger.rows.reduce((sum, row) => sum + row.amount, 0) === ledger.bank
+      && (ledger.rows.some((row) => row.text === 'SALVAGE' && row.amount === CYCLES_CARD_CYCLES) || carried >= CYCLES_CARD_CYCLES)
+      && ledger.rows.some((row) => row.kind === 'ship' && row.text.startsWith(`${shipSummaryAt(store.getState().run.map, 2).name} · `)),
+    JSON.stringify(ledger.rows));
 }
 
 // --- RUN END: UNSPENT and the tally ---------------------------------------------------------------------------------------
