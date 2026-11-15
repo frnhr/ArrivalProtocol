@@ -54,7 +54,10 @@ check(`…and every ship's built world past ARES-VII (its ship slices from a bea
 // (OPEN-DECISIONS 108) changes HOLLOW's `> keep 16 charge for me, 047.` line, said one hop from the final ship. The first
 // moment that moves is CORMORANT's desk, every ship's outcome and the run's end (won-purge) are as before, and an A/B copy
 // of src/ at 20 (tests/unit/balance/ab.mjs) still gives de4d1e6da04d568e.
-const PINNED_RUN = '8ceb50b18060dcb5';
+// Playtest 1 B-VOICE re-recorded it again (it was 8ceb50b18060dcb5): the log holds the moved and cut lines (CONTROL's
+// official words, PAL's quips, the capture and orbit cheers once a run, so the director's done list too). Words and the
+// done list only; the arm, the ship slices and every outcome are as before (the two digests above did not move).
+const PINNED_RUN = '533b85a68ae903d8';
 const REQUESTS: readonly (RepoFileId | null)[] = ['mv', 'rm', 'swap', 'cp', null];
 const h = createHarness11(1, { soulsFound: false });
 const state = (): Readonly<GameState> => h.store.getState();
