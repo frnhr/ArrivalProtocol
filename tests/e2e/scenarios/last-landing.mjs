@@ -5,8 +5,9 @@
 //   header strip (`THE LAST LANDING`, `3 OF 3 PODS TO LAND`, who flies them, `[ENTER] SKIP TO THE END`), the SHIP view held
 //   (TAB does nothing), the POD BAY's `RESTORED 3` row with its pips and `DRIVERS BY RADIO · 80%`, a steady amber
 //   `.np-beacon.restored` per pod on the NAV PLOT; the kid's launch refused ([L] shut by the layer, __ap.launch MERGE FLYING).
-// • [ENTER]: skipped to the end over frames (slice 8 POLISH, OD 66): the hint reads `SKIPPING… n LEFT`, no long task over
-//   100 ms (a PerformanceObserver on 'longtask'; the one-call skip was one task of about 2 s), a click on the header's
+// • [ENTER]: skipped to the end over frames (slice 8 POLISH, OD 66): the hint reads `SKIPPING… n LEFT`, no task over
+//   100 ms of main-thread time (a Chrome trace's RunTask tdur, which a loaded machine does not stretch; the 'longtask'
+//   observer's wall times are logged beside it; the one-call skip was one task of about 2 s), a click on the header's
 //   pause, TAB and a second [ENTER] change nothing while it runs, then the machine cleared, 'done', the strip gone, the
 //   restored pods down, and the report's RESTORED row counts as many LANDED as the pods' own fates.
 // • The final LANDING REPORT: `.lr-row.kind-restored` (`RESTORED BY MERGE · 3 RESTORED · …`), `(restored)` on the credits.
@@ -164,6 +165,11 @@ await st(() => {
   };
   requestAnimationFrame(sample);
 });
+// Each task's length is also read from a Chrome trace as the main thread's own time (RunTask's tdur): on a loaded machine
+// the scheduler stretches a 12 ms slice to hundreds of wall ms (a 12 ms busy loop measured 2–12 ms of thread time against
+// up to 320 ms of wall time at a load of 30 on 4 cores, before Batch A as after), which says nothing about the page. On an
+// idle machine the two agree; the check holds the thread time to the same 100 ms.
+await browser.startTracing(page, { categories: ['toplevel', 'disabled-by-default-devtools.timeline'] });
 const t0 = Date.now();
 await page.keyboard.press('Enter');
 // While it runs: the header's pause button and TAB are swallowed (the world the skip flies must be the one-call skip's).
@@ -173,13 +179,33 @@ await page.locator('#speedPause').click({ force: true, timeout: 2000 }).catch(()
 await page.keyboard.press('Tab');
 await page.keyboard.press('Enter');
 const midAfter = await st(() => ({ paused: window.__ap.store.getState().clock.paused, mode: window.__ap.store.getState().ui.mode }));
-const skipped = await waitFor(() => window.__ap.store.getState().landing.lastLanding === null, 30000, 50);
+// The skip flies a fixed budget of steps per slice (LAST_LANDING_SKIP_FRAME_MS), so its wall time is the machine's: a few
+// seconds idle, over half a minute on a loaded one. It is waited for while the world it flies moves on (the clock's tSec),
+// up to 5 minutes; 20 s with no step is a skip that stalled.
+const skipped = await (async () => {
+  const end = Date.now() + 300000;
+  let lastT = -1;
+  let movedAt = Date.now();
+  while (Date.now() < end && Date.now() - movedAt < 20000) {
+    const now = await st(() => ({ over: window.__ap.store.getState().landing.lastLanding === null, t: window.__ap.store.getState().clock.tSec }));
+    if (now.over) return true;
+    if (now.t !== lastT) { lastT = now.t; movedAt = Date.now(); }
+    await page.waitForTimeout(50);
+  }
+  return false;
+})();
 const skipMs = Date.now() - t0;
 await page.waitForTimeout(300);
 const frames = await st(() => ({ tasks: window.__llTasks, hints: [...window.__llHints] }));
 const longest = Math.max(0, ...frames.tasks);
-check(`[ENTER] skips over frames: \`SKIPPING… n LEFT\` while it runs, its longest task ${longest} ms (≤ 100), done in ${skipMs} ms`,
-  skipped && longest <= 100 && frames.hints.some((hint) => /^SKIPPING… \d+ LEFT$/.test(hint)), JSON.stringify(frames));
+const trace = JSON.parse((await browser.stopTracing()).toString());
+const traceEvents = trace.traceEvents ?? trace;
+const mainThreads = new Set(traceEvents.filter((e) => e.ph === 'M' && e.name === 'thread_name' && e.args?.name === 'CrRendererMain').map((e) => `${e.pid}:${e.tid}`));
+const runTasks = traceEvents.filter((e) => e.ph === 'X' && /RunTask$/.test(e.name) && mainThreads.has(`${e.pid}:${e.tid}`));
+// Thread time where the trace has it (Linux, macOS), else wall time.
+const cpuLongest = Math.round(Math.max(0, ...runTasks.map((e) => e.tdur ?? e.dur)) / 1000);
+check(`[ENTER] skips over frames: \`SKIPPING… n LEFT\` while it runs, its longest task ${cpuLongest} ms of main-thread time (≤ 100; ${longest} ms of wall time), done in ${skipMs} ms`,
+  skipped && runTasks.length > 0 && cpuLongest <= 100 && frames.hints.some((hint) => /^SKIPPING… \d+ LEFT$/.test(hint)), JSON.stringify({ ...frames, traced: runTasks.length }));
 check('…while it runs a click on PAUSE, TAB and a second [ENTER] change nothing', !midway.running || (midway.skipping && !midAfter.paused && midAfter.mode === 'tools'),
   JSON.stringify({ midway, midAfter }));
 const after = await st((pods) => {
