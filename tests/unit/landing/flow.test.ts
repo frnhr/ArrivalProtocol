@@ -250,7 +250,7 @@ function eat(pod: number): void {
       racks.segs.map((seg) => `${seg.type}:${seg.size}`).join(' '));
   }
   const ship = fixtureShip(4);
-  const packet = packUnit(freshFiles, 200, []);
+  const packet = packUnit(freshFiles, []);
   const receiver = MEMORY_LAYOUTS.FULL.totalBlocks - MEMORY_LAYOUTS.FULL.unitStart;
   const tail = Math.min(UNIT_TAIL_BLOCKS, lastPodRackTrailingFree(ship));
   const files = packet.filesBlocks;

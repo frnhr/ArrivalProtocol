@@ -24,8 +24,8 @@ const SLACK = 199;   // years: the arm's slack is at most 162 on run 1; a fresh 
 const LY = 58;
 const C = 3200;      // colonists: 16 pods
 const FIT: RoomFit = {
-  files: 199, link: 123, room: 152, floor: 12, carried: 99, bonus: 99, wanted: 199, floorAdded: 0, seedsMin: 0, seedsMax: 3,
-  chargeArrives: 199, chargeArrivesMin: 199, linkLost: 199, roomLost: 0, over: 0, overLink: 0, word: 'fits',
+  files: 199, room: 152, floor: 12, carried: 99, bonus: 99, wanted: 199, floorAdded: 0, seedsMin: 0, seedsMax: 3,
+  chargeArrives: 199, chargeArrivesMin: 199, roomLost: 0, over: 0, word: 'fits',
 };
 
 const lines: [string, string][] = [
@@ -53,15 +53,14 @@ const lines: [string, string][] = [
   ['card.cost', MAP_TEXT.card.cost(19, 19)],
   ['card.problems', MAP_TEXT.card.problems([MODIFIER_LABEL['too-wide'], MODIFIER_LABEL['sensor-damage'], MODIFIER_LABEL.debris])],
   ['card.memory', MAP_TEXT.card.memory(384, 'COMPACT', 152)],
-  ['card.fit fits seeds link', MAP_TEXT.card.fit({ ...FIT, chargeArrivesMin: 185 })],
+  ['card.fit fits seeds', MAP_TEXT.card.fit({ ...FIT, chargeArrivesMin: 185 })],
   ['card.fit squeezed', MAP_TEXT.card.fit({ ...FIT, chargeArrives: 199, chargeArrivesMin: 185, roomLost: 99, word: 'squeezed' })],
   ['card.fit leave', MAP_TEXT.card.fit({ ...FIT, over: 199, word: 'leave' })],
-  ['card.fit leave link', MAP_TEXT.card.fit({ ...FIT, overLink: 199, word: 'leave' })],
   ['card.fit no-charge', MAP_TEXT.card.fit({ ...FIT, chargeArrives: 0, chargeArrivesMin: 0, word: 'no-charge' })],
   ['card.planet', MAP_TEXT.card.planet('GRASSLAND', 'off-site pods score a quarter')],
   ['card.noGo', MAP_TEXT.card.noGo(['LAVA', 'CLIFFS'])],
   ['card.lzs', MAP_TEXT.card.lzs(4, 'good')],
-  ['card.beam', MAP_TEXT.card.beam(LY, 123)],
+  ['card.beam', MAP_TEXT.card.beam(LY)],
   ['card.noise', MAP_TEXT.card.noise(3, MAP_TEXT.card.seeds({ min: 0, max: 3 }))],
   ['card.noise none', MAP_TEXT.card.noise(3, MAP_TEXT.card.seeds(null))],
   ['card.shipOfRun', MAP_TEXT.card.shipOfRun(7, 1, 6)],
@@ -76,8 +75,7 @@ const lines: [string, string][] = [
   ['packet.zeroConfirm', MAP_TEXT.packet.zeroConfirm],
   ['packet.zeroIfSeedsConfirm', MAP_TEXT.packet.zeroIfSeedsConfirm],
   ['packet.overRoom', MAP_TEXT.packet.overRoom(199)],
-  ['packet.overLink', MAP_TEXT.packet.overLink(199)],
-  // The sum at its longest: 3 stars, the card, the most a link carries (123 − the fewest files).
+  // The sum at its longest: 3 stars, the card, the most charge a unit carries.
   ['packet.roomFor', MAP_TEXT.packet.roomFor('199 CARRIED + 18 (★★★) + 12 (CARD)', 229, 140)],
   ['packet.arrivalLeave', MAP_TEXT.packet.arrivalLeave],
   ['packet.onTheWay', MAP_TEXT.packet.onTheWay(11, 9, SLACK, 11)],
@@ -196,7 +194,6 @@ check('the sleep line\'s years read back for the roll (the approach year where i
 lines.push(
   ['title.launched', MAP_TEXT.title.launched(UNIT, YEAR, 46, UNIT)],
   ['title.launched same year', MAP_TEXT.title.launched(UNIT, YEAR, 0, UNIT)],
-  ['title.savesBetweenShips', MAP_TEXT.title.savesBetweenShips],
   ['chart.taken', MAP_TEXT.chart.taken(SHIP, UNIT)],
   ['chart.noColony', MAP_TEXT.chart.noColony(UNIT)],
   ['chart.colony 3c', MAP_TEXT.chart.colony(COLONY, 999, UNIT)],
@@ -249,7 +246,7 @@ check('3c\'s sample lines: the launch line, the beacon, the bridge, the history 
 const long = lines.filter(([, text]) => text.length > MAX_LINE_CHARS);
 check(`every map line fits ${MAX_LINE_CHARS} characters with the longest names (${SHIP}, ${WORLD})`, long.length === 0,
   long.map(([key, text]) => `${key} (${text.length}): ${text}`).join(' | '));
-check('the spec\'s sample lines', `${MAP_TEXT.card.beam(55, 86)} · ${MAP_TEXT.card.noise(1, MAP_TEXT.card.seeds({ min: 0, max: 2 }))}` === '55 LY · LINK 86 · NOISE LOW · 1 · SEEDS 0–2'
+check('the spec\'s sample lines', `${MAP_TEXT.card.beam(55)} · ${MAP_TEXT.card.noise(1, MAP_TEXT.card.seeds({ min: 0, max: 2 }))}` === '55 LY · NOISE LOW · 1 · SEEDS 0–2'
   && MAP_TEXT.card.cost(4, 1) === '4 HITS ON THE WAY → 1 LANDS'
   && MAP_TEXT.card.sleep(89, 3) === 'YOU SLEEP 89 YRS IN ITS RECEIVER · ECC FIXES 3' && MAP_TEXT.chart.sleep(89) === 'SLEEP 89 YRS'
   && MAP_TEXT.card.shipOfRun(3, 2, 2) === 'YOUR 3RD SHIP · 2 MORE TO THE FINAL SHIP' && MAP_TEXT.card.lastOfRun(5) === 'YOUR 5TH SHIP · THE LAST'
@@ -258,6 +255,6 @@ check('the spec\'s sample lines', `${MAP_TEXT.card.beam(55, 86)} · ${MAP_TEXT.c
   && MAP_TEXT.desk.greyed(2) === '2 SHIPS NOW OUT OF YOUR REACH' && MAP_TEXT.crumb('UNIT-047', 'KESTREL', 2467, 'FLYBY') === 'UNIT-047 / KESTREL · 2467 / FLYBY'
   && MAP_TEXT.boot.sleep('KESTREL', 2378, 2467) === "> ASLEEP IN KESTREL'S RECEIVER · 2378 → 2467 · 89 YEARS"
   && MAP_TEXT.card.memory(320, 'COMPACT', 152) === 'MEMORY 320 · COMPACT · ROOM FOR YOU 152',
-  MAP_TEXT.card.beam(55, 86));
+  MAP_TEXT.card.beam(55));
 check('noise words: CLEAN, LOW, NOISY, SEVERE', [0, 1, 2, 3].map((n) => NOISE_WORD[n as 0 | 1 | 2 | 3]).join() === 'CLEAN,LOW,NOISY,SEVERE');
 finish();

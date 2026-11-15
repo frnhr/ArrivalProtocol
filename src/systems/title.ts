@@ -16,7 +16,6 @@ import { traceNextLines } from '@systems/trace-hud';
 //   [NEW RUN] (an inline confirm first), or `RUN SAVE CAN'T RESUME · <reason>` with [ABANDON RUN] only (the words are
 //   MAP_TEXT.save.reason[refusal.kind]; refusal.detail is the console's, never the screen's), or RUN SAVE OFFLINE; RECEIVE
 //   TRANSMISSION is hidden while a save is there;
-// • `runs save between ships` under it (said only while the page can save);
 // • the archive's one-off notes (an older archive not carried over, the arm redrawn), said once: the view clears them with
 //   systems/meta.ts archiveNotesSaid when the kid leaves the title;
 // • (playtest 1 note 1) ERASE ALL RECORDS at the title's foot, in every archive state, with its confirm's keys
@@ -42,7 +41,6 @@ export interface TitleModel {
   launch: TitleLaunch | null;
   save: TitleSaveBlock | null;
   receive: boolean;         // RECEIVE TRANSMISSION is offered
-  saveNote: string | null;  // `runs save between ships`
   notes: string[];          // the archive's one-off notes
   // Slice 7c (02 §3.12: the traces are "shown on the title and the final card"): the NEXT RUN: lines the last unit's ending
   // left this run (systems/trace-hud.ts traceNextLines, the final card's own), none on run 1 or after a run with no ending.
@@ -58,14 +56,18 @@ export interface TitleNotes {
   armReset: boolean;
 }
 
-// The RESUME line for a save written at `resume.point` (02 §3.11): a boot point names the ship it is bound for, the desk the
-// ship just done, ENDING CHOSEN the final ship's LANDING REPORT.
+// The RESUME line for a save written at `resume.point` (02 §3.11): a boot point names the ship it is bound for, SHIP DONE
+// the ship just done and the screen it waits on (playtest 1, plan §3.3.3: `RESUME · UNIT-047 · SHIP 2 DONE · LEAVING ORBIT
+// · 2378`, `… LEAVING HALCYON …` after a lost ship, `… AT THE DESK …`), ENDING CHOSEN the final ship's LANDING REPORT.
 export function resumeLineText(resume: Readonly<ResumeLine>): string {
   const unit = unitName(resume.unit);
   switch (resume.point) {
     case 'run-start':
     case 'beam': return MAP_TEXT.save.resumeBoot(unit, resume.depth, resume.ship, resume.year);
-    case 'ship-done': return MAP_TEXT.save.resumeDesk(unit, resume.depth, resume.year);
+    case 'ship-done':
+      if (resume.stage === 'leave-orbit') return MAP_TEXT.save.resumeLeave(unit, resume.depth, MAP_TEXT.save.leavingOrbit, resume.year);
+      if (resume.stage === 'leaving') return MAP_TEXT.save.resumeLeave(unit, resume.depth, MAP_TEXT.save.leavingShip(resume.ship), resume.year);
+      return MAP_TEXT.save.resumeDesk(unit, resume.depth, resume.year);
     case 'ending-chosen': return MAP_TEXT.save.resumeReport(unit, resume.ship, resume.year);
   }
 }
@@ -83,8 +85,8 @@ export function titleLaunch(state: Readonly<Pick<GameState, 'run'>>): TitleLaunc
   return { fromYear: launch.startYear - years, toYear: launch.startYear, years, valveYears: launch.valveYears, last: unitName(last), stamp };
 }
 
-// `runs save between ships` is said only while a save would be written: the save works and the archive can vouch for it
-// (review fix M1: never beside ARCHIVE CORRUPT, OFFLINE or PLAYING WITHOUT; save-write.ts goes OFFLINE at RUN START then).
+// Playtest 1 (§3.7, B-ORDER): the meta line `runs save between ships` is cut (A-WORDS left it for this track): the RESUME
+// block is what says a run was kept.
 export function titleModel(state: Readonly<Pick<GameState, 'run' | 'save' | 'archive'>>, notes: Readonly<TitleNotes> | null): TitleModel {
   const unit = unitName(state.run.unitNumber);
   const launch = titleLaunch(state);
@@ -107,7 +109,6 @@ export function titleModel(state: Readonly<Pick<GameState, 'run' | 'save' | 'arc
     unit, unitLine, launch, save: block, receive,
     traces: ending === null ? [] : traceNextLines(ending),
     erase: state.run.phase === 'title',
-    saveNote: save.status === 'ok' && save.resume === null && state.archive.status === 'ok' ? MAP_TEXT.title.savesBetweenShips : null,
     notes: notes === null ? [] : [
       ...(notes.olderArchive ? [MAP_TEXT.save.olderArchive] : []),
       ...(notes.armReset ? [MAP_TEXT.save.armReset] : []),

@@ -1776,11 +1776,8 @@ export const RUN_START_YEAR = 2300;
 // The beam's reach (02 §3.3): every one-layer hop (the longest is 45 LY) and most two-layer hops (31 of 42), never three
 // layers (the shortest is 70 LY), so every route has 5–8 ships.
 export const BEAM_RANGE_LY = 58;
-// The link in blocks is round(146 − 1.1·d) (02 §3.3), in tenths so it stays integer: round((1460 − 11·d) / 10). 22 LY
-// gives 122 (phase 2: 120); a 55-LY hop carries 27 blocks fewer than a 30-LY hop, about half a mid-run unit's charge; the
-// arm's links run 82–123, never below the locked floor (46) nor above 01-landing's 131.
-export const LINK_BASE_TENTHS = 1460;
-export const LINK_PER_LY_TENTHS = 11;
+// Playtest 1 (Fran's note 20, OPEN-DECISIONS 131): the beam has no link limit any more (it was round(146 − 1.1·d) blocks).
+// The destination's room is the one limit: the charge crosses whole, and what the room cannot hold is its WON'T FIT.
 // Transit hits are round(d / 7) (02 §3.3): phase 2's 3–6 hits on 22–36 LY, and a route's total hardly depends on how it
 // is split.
 export const TRANSIT_LY_PER_HIT = 7;
@@ -2043,7 +2040,10 @@ export const RUN_SAVE_KEY = 'arrival-protocol/run/v1';
 // (RUN_SAVE_MIGRATIONS[7]).
 // 9 (slice 7d, one bump: slice-7-plan R2, §2.2 7d): SignalRecord.source and .n (signals beyond the notes), the `▓▓░▓`
 // signal file (SegmentType 'signal') (RUN_SAVE_MIGRATIONS[8]).
-export const RUN_SAVE_VERSION = 9;
+// 10 (playtest 1, Batch B's one bump, B-ORDER's: plan §3.3.3): the link fields gone (Hop.linkBlocks; note 20), run.leave
+// and phase 'leave' at SHIP DONE (LEAVE ORBIT before the desk; note 5), the resume line's stage, AUTODROP's `held` and its
+// end 'released' gone (B-DROP's v1 arm; note 9) (RUN_SAVE_MIGRATIONS[9]).
+export const RUN_SAVE_VERSION = 10;
 // The archive (§4.5; 02 §3.12: v2 holds the arm, the trail, colonies, routes, events and traces). From slice 3c the key
 // stays `meta/v2` and versions migrate in place (systems/meta.ts migrateMeta, META_VERSION the record's); a new key is
 // only ever a deliberate reset. v1's key (phase 2's archive) was the one such reset: never written, read only to detect it
@@ -2667,3 +2667,12 @@ export const BYPASS_ROLL_HZ = 24;
 export const BYPASS_ROLL_GLYPHS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#%&@$';
 
 // --- end of 8 POLISH -------------------------------------------------------------------------------------------------
+
+// --- Playtest 1, Batch B: B-ORDER (LEAVE ORBIT before the chart; docs/phase3/impl/playtest-1-plan.md §3.3) ---------------
+
+// LEAVE ORBIT's ENTER: the picked card lifts away this long before the STAR CHART opens. WHY 0.45: the card's own send
+// animation (game.css tx-chip-send, 0.7 s with a 0.2 s delay) is read by then; any longer and ENTER feels slow (reduced
+// motion: none).
+export const LEAVE_TAKE_SEC = 0.45;
+
+// --- end of B-ORDER -------------------------------------------------------------------------------------------------------

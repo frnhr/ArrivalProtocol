@@ -172,6 +172,7 @@ export function createRunState(
     simulationRetryUsed: false,
     ghostSpoken: false,
     beamOut: null,
+    leave: { offer: [], pick: null },
     transit: null,
     arrival: null,
     endCause: null,
@@ -378,11 +379,11 @@ export function createSurveyState(site: SiteData, sites: readonly SurveySite[]):
   };
 }
 
-// AUTODROP at rest (slice 4c, slice-4cde-plan §2.2): nothing held or armed, no pass set. Every landing starts here, and
+// AUTODROP at rest (slice 4c, slice-4cde-plan §2.2): nothing armed or claimed, no pass set. Every landing starts here, and
 // the migration to save v4 writes it into a saved world.
 export function createAutodropState(): AutodropState {
   return {
-    held: false, armed: null, pass: {}, sent: {}, armedAtTSec: null, claimed: false, waitingSinceTSec: null, flownAs: 0,
+    armed: null, pass: {}, sent: {}, armedAtTSec: null, claimed: false, waitingSinceTSec: null, flownAs: 0,
     end: null, endAtAi: null,
   };
 }
@@ -438,7 +439,7 @@ export function createInitialState(opts: InitialStateOpts): GameState {
     threat = opts.threat ?? stop.verdict;
     const hop = stop.map.route.at(-1)!.hop;
     carried = opts.carried === 'fresh'
-      ? (hop === null ? null : freshUnitRacks(shipDefAt(stop.map, stop.slots.at(-1)!), hop.linkBlocks, threat))
+      ? (hop === null ? null : freshUnitRacks(shipDefAt(stop.map, stop.slots.at(-1)!), threat))
       : opts.carried ?? null;
   }
   return {

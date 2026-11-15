@@ -376,7 +376,48 @@ for (let i = 0; i < 4 && (await st(() => window.__ap.store.getState().run.phase 
   if (await st(() => !document.getElementById('lrContinue').hidden)) await page.tap('#lrContinue');
   await waitFor(() => window.__ap.store.getState().run.phase !== 'report', 3000);
 }
-check('CONTINUE (tapped) brings up the DESK', await waitFor(() => window.__ap.store.getState().run.phase === 'desk' && !document.getElementById('deskScreen').hidden, 4000));
+// Playtest 1 (note 5): CONTINUE brings up LEAVE ORBIT first, the salvage before the chart.
+check('CONTINUE (tapped) brings up LEAVE ORBIT', await waitFor(() => window.__ap.store.getState().run.phase === 'leave' && !document.getElementById('leaveScreen').hidden, 4000));
+
+// --- Slice 2: the LOG READER (run 1, entry 01 after ship 1's report) as a full-screen sheet; CLOSE takes the tap ---------
+const readerUp = await waitFor(() => !document.getElementById('logReader').hidden, 4000, 50);
+await page.waitForTimeout(1200);
+const sheet = await st(() => {
+  const box = (el) => { const r = el.getBoundingClientRect(); return { left: Math.round(r.left), right: Math.round(r.right), top: Math.round(r.top), bottom: Math.round(r.bottom) }; };
+  const card = document.getElementById('lgCard');
+  const rows = [...document.querySelectorAll('#lgRows .lg-row')];
+  return {
+    card: box(card), cardOverflow: card.scrollWidth > card.clientWidth + 1,
+    rowsOut: rows.filter((row) => { const r = row.getBoundingClientRect(); return r.width > 0 && (r.left < -1 || r.right > innerWidth + 1 || row.scrollWidth > row.clientWidth + 1); }).length,
+    rows: rows.length, open: document.querySelector('#lgRows .lg-row.open')?.dataset.entry ?? null, title: document.getElementById('lgTitle').innerText,
+  };
+});
+check('the LOG READER opens over LEAVE ORBIT as a full-screen sheet (the card fills the screen, nothing spills sideways)', readerUp && sheet.title === '046.log'
+  && sheet.open === '1' && sheet.rows === 12 && sheet.card.left <= 0 && sheet.card.top <= 0 && Math.abs(sheet.card.right - vw) <= 1 && Math.abs(sheet.card.bottom - vh) <= 1
+  && !sheet.cardOverflow && sheet.rowsOut === 0, JSON.stringify(sheet));
+await overflow('LOG READER');
+await page.locator('#lgClose').scrollIntoViewIfNeeded({ timeout: 5000 });
+await onScreen('LOG READER', '#lgClose');
+const closeText = await visibleText('#lgClose');
+check('…its CLOSE button reads as a word', /^CLOSE/.test(closeText ?? ''), closeText);
+await shot('10b-log-reader');
+await page.tap('#lgClose');
+check('…a tap on CLOSE shuts it, LEAVE ORBIT under it', await waitFor(() => document.getElementById('logReader').hidden, 3000)
+  && await st(() => !document.getElementById('leaveScreen').hidden && window.__ap.store.getState().run.phase === 'leave'));
+await page.waitForTimeout(1200);
+await shot('10c-leave-orbit');
+await overflow('LEAVE ORBIT');
+check('LEAVE ORBIT: the cards\' key hint gives way', await st(() => getComputedStyle(document.getElementById('loKeys')).display === 'none'));
+const cardsFit = await st(() => [...document.querySelectorAll('#loCards .tx-card')].every((card) => { const r = card.getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth; }));
+check('LEAVE ORBIT: the cards fit the width', cardsFit && (await st(() => document.querySelectorAll('#loCards .tx-card').length)) === 3);
+await page.tap('#loCards .tx-card');
+await page.waitForTimeout(400);
+check('…a tap takes a card', await st(() => window.__ap.store.getState().run.leave.pick !== null));
+await page.locator('#loGo').scrollIntoViewIfNeeded({ timeout: 5000 });
+await onScreen('LEAVE ORBIT (scrolled to it)', '#loGo');
+check('…its button reads without a key cap', !/ENTER/.test((await visibleText('#loGo')) ?? ''), await visibleText('#loGo'));
+await page.tap('#loGo');
+check('…a tap on it brings up the DESK', await waitFor(() => window.__ap.store.getState().run.phase === 'desk' && !document.getElementById('deskScreen').hidden, 4000));
 // Slice 3a: the DESK on a phone (map-desk.mjs checks its sheet in full): a tap on HALCYON's node, a tap on SET COURSE.
 await page.waitForTimeout(800);
 await overflow('DESK');
@@ -418,45 +459,18 @@ try { await page.locator('#deskScreen [data-slot="2"] .cn-box').first().tap({ ti
 await page.waitForTimeout(500);
 check('…a tap on HALCYON\'s node picks it', deskTap === 'ok' && await st(() => window.__ap.store.getState().ui.deskSelected === 2), deskTap);
 await onScreen('DESK', '#deskGo');
+// Mv requested by __ap (map-desk.mjs taps the REPOSITORY): its delivery rides the hop, so the PACKET asks (SEND ON) and
+// waits for TRANSMIT ▸ (playtest 1: a PACKET with nothing to ask beams at once).
+await st(() => window.__ap.request('mv'));
 await page.tap('#deskGo');
-check('…a tap on SET COURSE brings up the PACKET', await waitFor(() => !document.getElementById('transmitScreen').hidden && window.__ap.store.getState().run.phase === 'transmit', 4000));
-
-// --- Slice 2: the LOG READER (run 1, entry 01 after ship 1's report) as a full-screen sheet; CLOSE takes the tap ---------
-const readerUp = await waitFor(() => !document.getElementById('logReader').hidden, 4000, 50);
-await page.waitForTimeout(1200);
-const sheet = await st(() => {
-  const box = (el) => { const r = el.getBoundingClientRect(); return { left: Math.round(r.left), right: Math.round(r.right), top: Math.round(r.top), bottom: Math.round(r.bottom) }; };
-  const card = document.getElementById('lgCard');
-  const rows = [...document.querySelectorAll('#lgRows .lg-row')];
-  return {
-    card: box(card), cardOverflow: card.scrollWidth > card.clientWidth + 1,
-    rowsOut: rows.filter((row) => { const r = row.getBoundingClientRect(); return r.width > 0 && (r.left < -1 || r.right > innerWidth + 1 || row.scrollWidth > row.clientWidth + 1); }).length,
-    rows: rows.length, open: document.querySelector('#lgRows .lg-row.open')?.dataset.entry ?? null, title: document.getElementById('lgTitle').innerText,
-  };
-});
-check('the LOG READER opens over the PACKET as a full-screen sheet (the card fills the screen, nothing spills sideways)', readerUp && sheet.title === '046.log'
-  && sheet.open === '1' && sheet.rows === 12 && sheet.card.left <= 0 && sheet.card.top <= 0 && Math.abs(sheet.card.right - vw) <= 1 && Math.abs(sheet.card.bottom - vh) <= 1
-  && !sheet.cardOverflow && sheet.rowsOut === 0, JSON.stringify(sheet));
-await overflow('LOG READER');
-await page.locator('#lgClose').scrollIntoViewIfNeeded({ timeout: 5000 });
-await onScreen('LOG READER', '#lgClose');
-const closeText = await visibleText('#lgClose');
-check('…its CLOSE button reads as a word', /^CLOSE/.test(closeText ?? ''), closeText);
-await shot('10b-log-reader');
-await page.tap('#lgClose');
-check('…a tap on CLOSE shuts it, TRANSMIT under it', await waitFor(() => document.getElementById('logReader').hidden, 3000)
-  && await st(() => !document.getElementById('transmitScreen').hidden && window.__ap.store.getState().run.phase === 'transmit'));
+check('…a tap on SET COURSE brings up the PACKET, waiting (a delivery to SEND ON)', await waitFor(() => !document.getElementById('transmitScreen').hidden
+  && window.__ap.store.getState().run.phase === 'transmit', 4000) && await st(() => !document.getElementById('transmitScreen').classList.contains('direct')));
 await page.waitForTimeout(1500);
 await shot('11-transmit');
 await overflow('TRANSMIT');
-check('TRANSMIT: the draft\'s key hint gives way', await st(() => getComputedStyle(document.getElementById('txDraftKeys')).display === 'none'));
-const cardsFit = await st(() => [...document.querySelectorAll('#txCards .tx-card')].every((card) => { const r = card.getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth; }));
-check('TRANSMIT: the cards fit the width', cardsFit);
-const firstCard = await rect('#txCards .tx-card');
-if (firstCard) {
-  await page.tap('#txCards .tx-card');
-  await page.waitForTimeout(400);
-}
+const chipsFit = await st(() => [...document.querySelectorAll('#transmitScreen .tx-chip')].every((chip) => { const r = chip.getBoundingClientRect(); return r.width === 0 || (r.left >= 0 && r.right <= innerWidth + 1); }));
+check('TRANSMIT: the chips fit the width (the salvage taken named under the headline)', chipsFit
+  && /^SALVAGE · /.test((await visibleText('#transmitScreen .tx-salvage')) ?? ''), await visibleText('#transmitScreen .tx-salvage'));
 await page.locator('#txGo').scrollIntoViewIfNeeded({ timeout: 5000 });
 await onScreen('TRANSMIT (scrolled to it)', '#txGo');
 await shot('12-transmit-picked');

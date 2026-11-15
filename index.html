@@ -476,25 +476,15 @@
     </div>
   </div>
 
-  <!-- TRANSMIT (§4.1 step 5, TransmitScreen): where the unit goes next, the packet against the link, what
-       the crossing costs, the files as chips; TRANSMIT ▸ streams them out across the light-years -->
+  <!-- TRANSMIT (§4.1 step 5, TransmitScreen): where the unit goes next, the packet against the destination's room (the
+       room bar is built by the screen; playtest 1 note 20: no link bar), what the crossing costs, the files as chips;
+       TRANSMIT ▸ streams them out across the light-years -->
   <div class="transmit-screen" id="transmitScreen" hidden>
     <div class="tx-inner">
       <div class="tx-head">
         <div class="tx-title" id="txTitle"></div>
         <div class="tx-next" id="txNext"></div>
         <div class="tx-why" id="txWhy" hidden></div>
-      </div>
-      <!-- PICK ONE TO CARRY (WP8): three cards shaped by how the kid played, each with what it does and why
-           it was offered; TRANSMIT ▸ waits for a pick (TransmitScreen) -->
-      <div class="tx-draft" id="txDraft" hidden>
-        <div class="tx-draft-head"><span class="tx-draft-title" id="txDraftTitle"></span><span class="tx-draft-keys" id="txDraftKeys"></span></div>
-        <div class="tx-cards" id="txCards"></div>
-      </div>
-      <div class="tx-packet">
-        <div class="tx-bar" id="txBar"><span class="tx-bar-files" id="txBarFiles"></span><span class="tx-bar-charge" id="txBarCharge"></span></div>
-        <div class="tx-bar-over" id="txBarOver" hidden></div>
-        <div class="tx-packet-line" id="txPacketLine"></div>
       </div>
       <div class="tx-drop-line" id="txDropLine"></div>
       <div class="tx-chips" id="txChips"></div>
@@ -512,6 +502,25 @@
         <div class="tx-send-ly" id="txSendLy"></div>
       </div>
       <div class="tx-foot"><button class="tx-go" id="txGo" tabindex="-1"></button></div>
+    </div>
+  </div>
+
+  <!-- LEAVE ORBIT (playtest 1 note 5, components/run/LeaveOrbitScreen.ts): between a ship's end and the STAR CHART, the
+       salvage, three cards shaped by how the kid played, each with what it does and why it was offered; [1] [2] [3] or a
+       click picks, ENTER takes it and opens the chart. `LEAVING <SHIP>` after a lost ship. -->
+  <div class="transmit-screen leave-screen" id="leaveScreen" hidden>
+    <div class="tx-inner">
+      <div class="tx-head">
+        <div class="tx-title" id="loTitle"></div>
+        <div class="tx-next" id="loSub"></div>
+        <div class="tx-why" id="loWhy" hidden></div>
+      </div>
+      <div class="tx-draft" id="loDraft">
+        <div class="tx-draft-head"><span class="tx-draft-title" id="loHeading"></span><span class="tx-draft-keys" id="loKeys"></span></div>
+        <div class="tx-cards" id="loCards"></div>
+        <div class="lo-nothing" id="loNothing" hidden></div>
+      </div>
+      <div class="tx-foot"><button class="tx-go" id="loGo" tabindex="-1"></button></div>
     </div>
   </div>
 
@@ -650,7 +659,6 @@
       <!-- Slice 3c: the archive's one-off notes (an older archive not carried over, the arm redrawn), said once -->
       <div class="title-notes" id="titleNotes" hidden></div>
       <button class="title-receive" id="titleReceive" tabindex="-1">[ RECEIVE TRANSMISSION ]</button>
-      <div class="title-note" id="titleNote"></div>
       <!-- Playtest 1 (note 1): ERASE ALL RECORDS at the title's foot, in every archive state (TitleCard). A click asks first
            (ERASE [DEL] / KEEP [ENTER], ESC keeps); the erase removes every key of the game's and reloads to a first visit. -->
       <div class="title-erase" id="titleErase" hidden>

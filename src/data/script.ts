@@ -716,13 +716,8 @@ export function arrivalParts(carried: number, starCredit: number, stars: number,
 
 export const TRANSMIT_TEXT = {
   title: 'TRANSMIT',
-  // The link's own line. `roomBinds`: the next ship's room will squeeze the charge (slice 3a): it all crosses, but it does
-  // not all fit there, so the line says CROSSES, not FITS (the review's M1). Files over the link (B1) say so.
-  packet: (link: number, files: number, held: number, carried: number, roomBinds = false): string => {
-    if (files > link) return `LINK ${link} · FILES ${files} · ${files - link} TOO MANY FOR THE LINK`;
-    if (carried >= held) return `LINK ${link} · FILES ${files} · CHARGE ${held} → ${roomBinds ? 'CROSSES' : 'FITS'}`;
-    return `LINK ${link} · FILES ${files} · CHARGE ${carried} OF ${held} → ${held - carried} LEFT BEHIND`;
-  },
+  // Playtest 1 (note 20): the link's own line (`LINK 120 · FILES 63 · CHARGE 14 → FITS`) went with the link; the room bar
+  // and its line say how the packet meets the destination.
   // How the ship just left was left (null for a ship that landed: the LANDING REPORT already said it).
   why: {
     // The Core's real toll (never below its reset, so a Core at 30 loses 5 and one at 25 nothing).
@@ -752,7 +747,7 @@ export const TRANSMIT_TEXT = {
   chipInfected: '⚠ WILL ARRIVE INFECTED',
   // The files: when every block of REPAIR CHARGE already fits there is nothing to leave behind for.
   fits: 'EVERYTHING FITS — nothing needs to stay behind',
-  tight: 'CLICK A FILE TO LEAVE IT BEHIND AND CARRY MORE CHARGE',
+  tight: 'CLICK A FILE TO LEAVE IT BEHIND AND MAKE ROOM FOR CHARGE',
   locked: {
     core: 'LOCKED · THIS IS YOU',
     engine: 'LOCKED · THE ENGINE NEEDS IT',
@@ -783,13 +778,6 @@ export const TRANSMIT_TEXT = {
   },
   gain: (blocks: number): string => `+${blocks} CHARGE`,
   dropped: 'LEFT BEHIND',
-  // The box at the end of the link bar: REPAIR CHARGE held that has no room on the link once the files are in
-  // (the packet line's `→ n LEFT BEHIND`). Post-handover: it was a red `−19`, which Fran read as damage; it is the
-  // link being full, so it says so in words and explains itself on hover.
-  over: (blocks: number): string => `${blocks} LEFT BEHIND`,
-  overTitle: (blocks: number): string => `No room on the link for ${blocks} blocks of REPAIR CHARGE: your files fill the rest, `
-    + 'so this charge stays behind with this ship. Nothing is damaged. Leave a file behind to carry more; '
-    + 'ON ARRIVAL (below) is the charge you will have on the next ship.',
   go: 'TRANSMIT ▸ [SPACE]',
   sending: (unit: string, ship: string): string => `TRANSMITTING ${unit} → ${ship}`,
   distance: (ly: string, total: number): string => `${ly} / ${total} LY`,

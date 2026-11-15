@@ -80,12 +80,12 @@ function unit(files: number, charge: number): Segment[] {
   return segs;
 }
 const calm = fixtureVerdict(1);
-function arrive(ship: ShipDef, files: number, charge: number, link = 131): { packet: Packet; laid: number; fit: ReturnType<typeof roomFit>; floorAdded: number } {
-  const packet = packUnit(unit(files, charge), link, []);
+function arrive(ship: ShipDef, files: number, charge: number): { packet: Packet; laid: number; fit: ReturnType<typeof roomFit>; floorAdded: number } {
+  const packet = packUnit(unit(files, charge), []);
   const layout = layoutFor(ship.memoryClass);
-  const hop = { linkBlocks: link, room: layout.roomForUnit, chargeFloor: layout.chargeFloor };
+  const hop = { room: layout.roomForUnit, chargeFloor: layout.chargeFloor };
   const fit = roomFit({ files: [...packet.rackE, ...packet.rackF], charge: packet.chargeHeld }, hop);
-  const arrival = arrivalCharge(packet.chargeCarried, 0, 0, layout.chargeFloor);
+  const arrival = arrivalCharge(packet.chargeHeld, 0, 0, layout.chargeFloor);
   const laid = fit.over > 0 ? -1 : layoutCarried(packet, arrival.blocks, ship, calm).chargeBlocks;
   return { packet, laid, fit, floorAdded: arrival.floorAdded };
 }
@@ -105,10 +105,10 @@ check('…while a COMPACT ship tops an empty unit up to its floor of 12', arrive
 check('arrivalCharge: the floor is the destination\'s (12 by default, 0 on TIGHT)', arrivalCharge(3, 0).blocks === 12 && arrivalCharge(3, 0, 0, 0).blocks === 3);
 
 // The no-room seed rule on TIGHT (04 §3.4): a seed with no room behind its target lands among the pods.
-const seedy = packUnit(unit(85, 10), 131, []);
+const seedy = packUnit(unit(85, 10), []);
 const target = seedy.rackE.find((seg) => seg.role === 'telemetry')!;
 seedy.seeds = [{ targetId: target.id, targetName: target.name, words: 'hello', disguise: null }];
-const seeded = layoutCarried(seedy, arrivalCharge(seedy.chargeCarried, 0, 0, 0).blocks, petrel, calm, '???');
+const seeded = layoutCarried(seedy, arrivalCharge(seedy.chargeHeld, 0, 0, 0).blocks, petrel, calm, '???');
 const seededMemory = buildShipMemory(petrel, seeded.racks as CarriedRacks, createRng(1), false, '???', null);
 const strayAt = segmentStarts(seededMemory)[seededMemory.findIndex((seg) => seg.type === 'hollow')]!;
 check('the no-room seed rule on TIGHT: 85 files leave 3 blocks, the seed is a stray, it lands among the pods',
@@ -116,7 +116,7 @@ check('the no-room seed rule on TIGHT: 85 files leave 3 blocks, the seed is a st
 
 // The licence spot: the receiver's free run next to REPAIR CHARGE (a TIGHT ship has no rack F).
 const tightAt = (files: number, charge: number): Segment[] =>
-  buildShipMemory(petrel, layoutCarried(packUnit(unit(files, charge), 131, []), charge, petrel, calm).racks, createRng(1), false, '???', null);
+  buildShipMemory(petrel, layoutCarried(packUnit(unit(files, charge), []), charge, petrel, calm).racks, createRng(1), false, '???', null);
 const roomy = tightAt(57, 3);
 const starts = segmentStarts(roomy);
 const chargeIndex = roomy.findIndex((seg) => seg.type === 'redundancy');

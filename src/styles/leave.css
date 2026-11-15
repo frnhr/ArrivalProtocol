@@ -1,0 +1,13 @@
+/* Playtest 1 (note 5): LEAVE ORBIT (components/run/LeaveOrbitScreen.ts) wears the PACKET's look (game.css .transmit-screen,
+   .tx-*): only what is its own is here. B-ORDER's. */
+.lo-nothing { text-align: center; font-size: 12px; letter-spacing: 0.16em; color: var(--report-dim); }
+.lo-nothing[hidden] { display: none; }
+.leave-screen .tx-draft-keys[hidden] { display: none; }
+
+/* The PACKET's salvage line under its headline (the card taken at LEAVE ORBIT) and its room note (Q19). */
+.tx-salvage { margin-top: 6px; font-size: 12px; letter-spacing: 0.14em; color: var(--report-dim); }
+.tx-salvage-fit { margin-top: 2px; font-size: 11px; letter-spacing: 0.12em; color: var(--warn); }
+.tx-salvage[hidden], .tx-salvage-fit[hidden] { display: none; }
+
+/* A PACKET with nothing to ask beams at once (systems/transmit.ts packetAsks): no ◀ CHART and no TRANSMIT ▸ to press. */
+.transmit-screen.direct .tx-back, .transmit-screen.direct .tx-go { visibility: hidden; }

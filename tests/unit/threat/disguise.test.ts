@@ -54,7 +54,6 @@ const KESTREL = 2;
 // HALCYON; the classic one was FULL (the unit at 256) on a link of 112.
 const KESTREL_WORLD = fixtureState({ seed: 1, shipIndex: KESTREL, carried: 'fresh' });
 const kestrel = currentShip(KESTREL_WORLD);
-const KESTREL_LINK = KESTREL_WORLD.run.map.route.at(-1)!.hop!.linkBlocks;
 
 function plan(index: number): BeamSeedPlan {
   return { targetId: `t${index}`, targetName: `File ${index}`, words: `words ${index}`, disguise: null };
@@ -110,7 +109,7 @@ function counting(seed: number): { rng: Rng; draws: () => number } {
   // The beam's own roll (KESTREL's later-run noise) is the same with and without a disguise roll after it.
   const files = [...FRESH_UNIT_RACK_E, ...FRESH_UNIT_RACK_F]
     .filter((item): item is Exclude<typeof item, { free: number }> => !('free' in item)).map((item) => structuredClone(item) as Segment);
-  const packet = packUnit(files, KESTREL_LINK, []);
+  const packet = packUnit(files, []);
   const source = { kind: 'noise', noise: 3 } as const;
   const alone = rollBeamSeeds(packet, source, false, createRng(41));
   const withRoll = rollBeamSeeds(packet, source, false, createRng(41));
@@ -121,7 +120,7 @@ function counting(seed: number): { rng: Rng; draws: () => number } {
   // The layout: the decoy rides onto the segment, and the arrival names it.
   packet.seeds = rollDisguises(rollBeamSeeds(packet, source, false, createRng(3)), 7, createRng(1));
   for (let s = 4; s < 60 && !packet.seeds.some((p) => p.disguise !== null); s++) packet.seeds = rollDisguises(rollBeamSeeds(packet, source, false, createRng(3)), 7, createRng(s));
-  const layout = layoutCarried(packet, packet.chargeCarried, kestrel, fixtureVerdict(KESTREL), '???');
+  const layout = layoutCarried(packet, packet.chargeHeld, kestrel, fixtureVerdict(KESTREL), '???');
   const decoyPlan = packet.seeds.find((p) => p.disguise !== null)!;
   const arrived = layout.seeds.find((seed) => seed.disguise !== null);
   const segment = [...layout.racks.segs, ...(layout.racks.strays ?? [])].find((seg) => seg.id === arrived?.segId) as HollowSegment | undefined;

@@ -581,7 +581,7 @@ const watchedV2 = new Map<number, string>();
     && pods.every((pod) => { const fate = fateOf(pod); return fate.kind === 'down' && fate.touchdown.place === 'lz'; }));
   const rest = state().landing.autodrop;
   check('…and AUTODROP\'s machine at rest when it ends (the codec\'s rule at ENDING CHOSEN)', rest.armed === null && rest.armedAtTSec === null
-    && !rest.held && !rest.claimed && rest.waitingSinceTSec === null, JSON.stringify(rest));
+    && !rest.claimed && rest.waitingSinceTSec === null, JSON.stringify(rest));
 }
 
 // --- [ENTER] skips to the result by the same rules (R28): v2's landing again, in one keypress ----------------------------------

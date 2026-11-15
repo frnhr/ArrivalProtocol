@@ -16,7 +16,7 @@ import type { TraceKind, TracePlace } from '@/types/trace';
 import type { ResidentRecord, SignalRecord } from '@/types/resident';
 import { createStore } from '@state/store';
 import { createInitialState } from '@state/initial';
-import { decodeRunSave, migrateRunSave } from '@systems/save-codec';
+import { decodeRunSave, migrateRunSave, RUN_SAVE_MIGRATIONS } from '@systems/save-codec';
 import { resumeRun } from '@systems/run-save';
 import { pendingRunSave } from '@systems/save-write';
 import { createRunMap } from '@systems/map-run';
@@ -39,7 +39,7 @@ const fixture = (): { save: Raw; meta: Raw } => JSON.parse(readFileSync(join(FIX
 // (7d's gate lines:)
 check('built: the `?` ships and their events (UNKNOWN_EVENTS_BUILT)', UNKNOWN_EVENTS_BUILT);
 check('built: CONTACT, its row and its trace (ENDINGS_BUILT.contact, TRACES_BUILT.contact)', ENDINGS_BUILT.contact && TRACES_BUILT.contact);
-check('RUN_SAVE_VERSION 9', RUN_SAVE_VERSION === 9);
+check('RUN_SAVE_VERSION 9 or later (playtest 1 Batch B\'s v10 keeps v9\'s signal records)', RUN_SAVE_VERSION >= 9);
 check('the numbers: the signal ship 2, a stop 1 fragment and +8 (two stops +16, against a gift\'s +15), CONTACT\'s price 2 (slice 8)',
   SIGNAL_EVENT_FRAGMENTS === 2 && CONTACT_STOP_FRAGMENTS === 1 && CONTACT_GIFT_CHARGE * 2 - TRACE_GIFT_CHARGE === 1 && SIGNALS_FOR_CONTACT === 2
   && TRACE_LAYERS.contact.join() === '5,7');
@@ -75,11 +75,15 @@ function resumeFixture(raw: { save: Raw; meta: Raw }): ReturnType<typeof createS
 }
 const v8 = fixture();
 {
+  // The v8 → v9 step itself (RUN_SAVE_MIGRATIONS[8]), then the whole chain to this build's version (playtest 1 Batch B's
+  // v10 steps on from v9 and keeps the signal records as they are).
+  const toV9 = RUN_SAVE_MIGRATIONS[8]!(structuredClone(v8.save)) as Raw;
   const migrated = migrateRunSave(v8.save) as Raw;
   const decoded = decodeRunSave(JSON.stringify(v8.save));
-  check('the v8 desk (HERON\'s note read) migrates to v9: its one record a note\'s, 1 fragment; it decodes',
-    v8.save.saveVersion === 8 && migrated.saveVersion === 9 && decoded.ok
-    && JSON.stringify(migrated.payload.run.residents.signals) === JSON.stringify([{ slot: 4, depth: 3, source: 'note', n: 1 }]),
+  const note = JSON.stringify([{ slot: 4, depth: 3, source: 'note', n: 1 }]);
+  check('the v8 desk (HERON\'s note read) migrates to v9: its one record a note\'s, 1 fragment; on to this build\'s version, the same; it decodes',
+    v8.save.saveVersion === 8 && toV9.saveVersion === 9 && JSON.stringify(toV9.payload.run.residents.signals) === note
+    && migrated.saveVersion === RUN_SAVE_VERSION && decoded.ok && JSON.stringify(migrated.payload.run.residents.signals) === note,
     decoded.ok ? JSON.stringify(migrated.payload.run.residents.signals) : `${decoded.refusal.kind}: ${decoded.refusal.detail}`);
   const store = resumeFixture(v8);
   const run = store.getState().run;

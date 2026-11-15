@@ -17,7 +17,8 @@ import { createHarness7 } from '../wp7/harness7';
 import { followLanding, lockOn } from '../landing/harness-landing';
 import { setLandingMode } from '../support/landing-instant';
 import { receiveTransmission } from '@systems/boot';
-import { continueAfterReport } from '../support/desk';
+import { leaveOrbit } from '../support/desk';
+import { continueAfterReport as runContinueAfterReport } from '@systems/run';
 import { mountStoryLog } from '@systems/story-log';
 import { logEntriesAtBoot, logKnown, logDisplayName } from '@state/log-selectors';
 import { setMode } from '@systems/mode';
@@ -244,14 +245,25 @@ stepUntil(() => state().run.phase === 'flight', 30);
     state().run.phase === 'report' && !storyPending && lastDownWall > 0 && h.wall() - lastDownWall <= 5,
     `${state().run.phase} ${(h.wall() - lastDownWall).toFixed(1)} s`);
   check('no key opens before the report closes', state().run.log.found.length === 0 && state().ui.logReader === null);
-  continueAfterReport(h.store);
+  runContinueAfterReport(h.store);
   h.step();
-  check('the report closed: entry 01 is found and the LOG READER opens on it by itself over the TRANSMIT screen',
-    state().run.phase === 'transmit' && JSON.stringify(state().run.log.found) === '[1]' && state().ui.logReader?.entry === 1
+  // Playtest 1 (note 5): LEAVE ORBIT is the first screen after the report.
+  check('the report closed: entry 01 is found and the LOG READER opens on it by itself over LEAVE ORBIT',
+    state().run.phase === 'leave' && JSON.stringify(state().run.log.found) === '[1]' && state().ui.logReader?.entry === 1
       && state().run.log.autoOpened, `${state().run.phase} ${JSON.stringify(state().run.log)} ${JSON.stringify(state().ui.logReader)}`);
   h.store.update((draft) => { draft.ui.logReader = null; });
   h.step();
   check('…once: closed, it stays closed', state().ui.logReader === null);
+  // B-ORDER's merge: a run past LEAVE ORBIT without entry 01 (a v9 save resumed at the desk: v9 keyed it to the PACKET, after
+  // that desk; or LEAVE ORBIT taken within one tick) finds it at the desk, the landing still the ship's until the beam.
+  h.store.update((draft) => { draft.run.log.found = []; draft.run.log.autoOpened = false; });
+  leaveOrbit(h.store);
+  h.step();
+  check('…a run at the desk without entry 01 (a migrated v9 desk) finds it there, and the reader opens on it',
+    state().run.phase === 'desk' && JSON.stringify(state().run.log.found) === '[1]' && state().ui.logReader?.entry === 1
+      && state().run.log.autoOpened, `${state().run.phase} ${JSON.stringify(state().run.log)} ${JSON.stringify(state().ui.logReader)}`);
+  h.store.update((draft) => { draft.ui.logReader = null; });
+  h.step();
 }
 
 // --- HALCYON after a real TRANSMIT ------------------------------------------------------------------------------------------

@@ -12,7 +12,8 @@ import { unitTrailOf, olderColonies } from '@systems/lineage';
 import { unitName } from '@data/hollow-text';
 import { hollowLabel } from '@systems/say';
 import { palLines } from '@systems/companion';
-import { hopBetween, reachable, reachableFrom, hitsLanding } from '@systems/map-hop';
+import { hopBetween, reachable, reachableFrom, hitsLanding, cardArrives } from '@systems/map-hop';
+import { pickCharge } from '@systems/draft';
 import { layerOf, solLy } from '@systems/map-geometry';
 import { seedAllowance } from '@systems/map-noise';
 import { traceSeedAllowance } from '@systems/trace-gifts';
@@ -30,7 +31,7 @@ import { layoutFor } from '@data/memory';
 import { WORLDS, RING_LY, FIRST_SLOT } from '@data/arm';
 import { FORGIVENESS_TEXT } from '@data/landing-text';
 import { THREAT_TEXT } from '@data/threat-text';
-import { SHIP_OUTCOME_WORD } from '@data/script';
+import { SHIP_OUTCOME_WORD, TRANSMIT_TEXT } from '@data/script';
 import { MAP_TEXT, MODIFIER_LABEL } from '@data/map-text';
 import { REPO_FILES } from '@data/repository';
 import { REPO_TEXT, REPO_FILE_TEXT } from '@data/repo-text';
@@ -176,7 +177,7 @@ export interface ChartModel {
 // this ship's world: what the hover says on a desktop, readable on a phone, whose chart has no hover).
 export interface CardRow {
   key: 'problems' | 'resident' | 'memory' | 'fit' | 'planet' | 'site' | 'lzs' | 'nogo' | 'beam' | 'noise' | 'range'
-    | 'noswap' | 'deliveries' | 'threat' | 'norm' | 'only' | 'run' | 'history' | 'trail' | 'trace';
+    | 'noswap' | 'deliveries' | 'threat' | 'norm' | 'only' | 'run' | 'history' | 'trail' | 'trace' | 'salvage';
   label: string;
   value: string;
   tone: 'plain' | 'good' | 'warn';
@@ -476,8 +477,7 @@ export function problemLabels(ship: Readonly<ShipSummary>): string[] {
 }
 
 function fitTone(fit: Readonly<RoomFit>): CardRow['tone'] {
-  if (fit.word !== 'fits' || fit.chargeArrivesMin < fit.chargeArrives) return 'warn';
-  return fit.linkLost > 0 ? 'plain' : 'good';
+  return fit.word !== 'fits' || fit.chargeArrivesMin < fit.chargeArrives ? 'warn' : 'good';
 }
 
 export function cardModel(state: Readonly<GameState>, slot: number): CardModel {
@@ -506,10 +506,16 @@ export function cardModel(state: Readonly<GameState>, slot: number): CardModel {
   // The fit line only for a ship SET COURSE can go to (an out-of-range or TOO LATE hop has no packet to fit).
   let fit: RoomFit | null = null;
   if (hop !== null && verdict !== null && isReachable) {
-    // The fit line counts the deliveries that would ride that hop (phase 3 slice 3b, plan §1.1 item 13).
-    const preview = unitArrival(state, { hop, threat: verdict, dropped: [], pick: null, deliveries: deliveriesForHop(state, from, slot, verdict) });
+    // The fit line counts the deliveries that would ride that hop (phase 3 slice 3b, plan §1.1 item 13) and the salvage
+    // taken at LEAVE ORBIT (playtest 1, note 5: its file and its charge, as the PACKET will; the PACKET may not open at all).
+    const pick = state.run.leave.pick;
+    const preview = unitArrival(state, { hop, threat: verdict, dropped: [], pick, deliveries: deliveriesForHop(state, from, slot, verdict) });
     fit = preview.fit;
     row('fit', MAP_TEXT.card.fitLabel, preview.card, fitTone(fit));
+    // Playtest 1 (Q19): the +12 card taken says when this ship's room cannot take its charge whole (`+12 · ONLY 4 FIT`).
+    const card = pickCharge(pick);
+    const arrives = card > 0 && fit.word !== 'leave' ? cardArrives(fit, card) : card;
+    if (arrives < card) row('salvage', '', TRANSMIT_TEXT.cardFits(card, arrives, ship.name), 'warn');
   }
   row('problems', MAP_TEXT.card.problemsLabel, MAP_TEXT.card.problems(problemLabels(ship)), ship.modifiers.length > 0 ? 'warn' : 'plain');
   // Slice 5 (02 §8 slice 5): what the ship's own AI is reported as, and after the ship what it was (systems/resident-hud.ts).
@@ -538,7 +544,7 @@ export function cardModel(state: Readonly<GameState>, slot: number): CardModel {
     const allowance = verdict === null ? null : seedAllowance(verdict, playsTutorial(state.run));
     // Slice 7c: the traces' seed rules into this ship (Track TRACE's, neutral until built), as the PACKET counts them.
     const seeds = allowance === null ? null : traceSeedAllowance(state, slot, allowance);
-    row('beam', MAP_TEXT.card.beamLabel, MAP_TEXT.card.beam(hop.distanceLy, hop.linkBlocks));
+    row('beam', MAP_TEXT.card.beamLabel, MAP_TEXT.card.beam(hop.distanceLy));
     row('noise', '', MAP_TEXT.card.noise(hop.noise, MAP_TEXT.card.seeds(seeds)), hop.noise > 0 ? 'warn' : 'plain');
   } else if (hop !== null) {
     row('range', MAP_TEXT.card.beamLabel, MAP_TEXT.chart.outOfRange(hop.distanceLy), 'warn');
@@ -745,8 +751,10 @@ export function departuresBlock(departures: readonly Departure[]): DeskDeparture
 }
 
 // How a desk opens (the review's m3, m4): the first open of a desk visit (one per ship left: the run and how many ships it
-// has ended) plays the opening, the greying chimes and CONTROL's typed line, and after a BEAM OUT waits for the old ship's
-// blackout first; an open back from the PACKET (◀ CHART) shows the same desk at once and in silence.
+// has ended) plays the opening, the greying chimes and CONTROL's typed line; an open back from the PACKET (◀ CHART) shows
+// the same desk at once and in silence. Playtest 1 (note 5): BEAM OUT's blackout (the old ship's windows going black) is
+// LEAVE ORBIT's now, the first screen after the ship (components/run/LeaveOrbitScreen.ts, leaveBlackoutSec), so the desk
+// never waits for it.
 export interface DeskOpening {
   visit: string;            // the visit's key: the view keeps the last one it opened
   replay: boolean;          // the opening plays (the first open of this visit)
@@ -756,7 +764,13 @@ export interface DeskOpening {
 export function deskOpening(state: Readonly<GameState>, lastVisit: string | null): DeskOpening {
   const visit = `${state.run.seed}|${state.run.unitNumber}|${state.run.ships.length}`;
   const replay = visit !== lastVisit;
-  return { visit, replay, blackoutSec: replay && state.burn.status === 'abandoned' ? BEAM_OUT_BLACKOUT_SEC : 0 };
+  return { visit, replay, blackoutSec: 0 };
+}
+
+// LEAVE ORBIT's wait after a BEAM OUT (the review's m4, moved from the desk by playtest 1): the old ship's windows go black
+// first, once per ship left.
+export function leaveBlackoutSec(state: Readonly<GameState>): number {
+  return state.burn.status === 'abandoned' ? BEAM_OUT_BLACKOUT_SEC : 0;
 }
 
 // PAL's line as the desk opens (02 §2): the first desk of a run only. From run 2, when the unit ahead has taken a ship

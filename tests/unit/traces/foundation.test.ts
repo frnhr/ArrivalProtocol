@@ -338,7 +338,7 @@ for (const [what, file, raw] of [['run 2\'s first desk', 'run-save-v7-ship-done-
 // is still the neutral one, and a line no boot planned throws.
 {
   const state = createInitialState({ seed: 7 });
-  const packet = { linkBlocks: 0, rackE: [], rackF: [], charge: null, filesBlocks: 0, overLink: 0, chargeHeld: 0, chargeCarried: 0, seeds: [], deliveries: [], skills: [] };
+  const packet = { rackE: [], rackF: [], charge: null, filesBlocks: 0, chargeHeld: 0, seeds: [], deliveries: [], skills: [] };
   const seed = { targetId: 'a', targetName: 'A', words: 'w', disguise: null };
   const mods = traceSeedMods(state, 1, { beam: [seed], delivery: [] }, packet as never, createRng(1));
   check('TRACE\'s seams with no trace held: the seeds as rolled, the allowance as given, no gift charge, no trace line, no message, no hunt',

@@ -52,7 +52,7 @@
 //   the pods landed, so the leave-one-out's worth needs it (Step 0's finding).
 import { createHarness11, type Harness11, type DefendOpts } from '../wp11/harness11';
 import { receiveTransmission } from '@systems/boot';
-import { shipLost, startBeamOut, startRun, setCourse, continueAfterReport, continueAfterLoss } from '@systems/run';
+import { shipLost, startBeamOut, startRun, setCourse, continueAfterReport, continueAfterLoss, leaveOrbit } from '@systems/run';
 import { FIRST_RUN_LINEAGE } from '@systems/meta';
 import { currentShip, currentSlot } from '@systems/map-run';
 import { deskCandidates } from '@systems/desk';
@@ -855,14 +855,16 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
     }
   };
 
+  // LEAVE ORBIT (playtest 1, note 5): the salvage before the desk, then ENTER.
   const pick = (): void => {
-    const plan = state().run.transit;
-    if (!plan || plan.offer.length === 0) return;
-    const ids = plan.offer.map((card) => card.id);
+    const offer = state().run.leave.offer;
+    if (offer.length === 0) { leaveOrbit(harness.store); return; }
+    const ids = offer.map((card) => card.id);
     const wanted: UpgradeId[] = player.competentMind ? ['repair-v2', 'firewall'] : [];
     const choice = wanted.find((id) => ids.includes(id)) ?? ids[0]!;
     const refusal = pickCard(harness.store, choice);
     if (refusal !== null) throw new Error(`playthrough: could not pick ${choice} (${refusal})`);
+    leaveOrbit(harness.store);
   };
 
   // The DESK: the first pick when it is owed, then the kid's list (Player.buys), the request ARRIVAL CONTROL tags, then SET
@@ -946,10 +948,11 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
     } else if (phase === 'report') {
       stepFor(player.reportSec);
       continueAfterReport(harness.store);
+    } else if (phase === 'leave') {
+      pick();
     } else if (phase === 'desk') {
       desk();
     } else if (phase === 'transmit') {
-      pick();
       fitPacket(harness.store);
       filesLeft[state().run.ships.length] = state().run.transit?.dropped.length ?? 0;
       transmitNext(harness.store);

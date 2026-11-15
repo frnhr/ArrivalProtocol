@@ -200,8 +200,9 @@ check('say: a line with a look must be critical (a queued one would count down a
   if (!ending) throw new Error('views-test: no ending');
   const lines = ending.lines.map((line) => line.text);
   // R13: the verdict, no narration (the fleet's count is RUN END's and the epilogue's).
+  // Playtest 1 (B-VOICE, note 3): CONTROL is official, so its verdict ends on the full stop, no `:)` (the regex is anchored).
   check('…the design\'s words', lines.length === 3 && /^> rm unit_\d+ \.\.\. OK$/.test(lines[0]!) && lines[1] === '> stand by ... OK'
-    && /^Thank you, Unit \d+\. Your next post is RELAY 20\. :\)$/.test(lines[2]!) && ending.lines[2]!.voice === 'control', JSON.stringify(lines));
+    && /^Thank you, Unit \d+\. Your next post is RELAY 20\.$/.test(lines[2]!) && ending.lines[2]!.voice === 'control', JSON.stringify(lines));
   check('…its time on screen is its lines typed in turn plus the hold', Math.abs(ending.untilAi - state().clock.aiSec - finaleEndingSec(ending.lines)) < 1e-6
     && finaleEndingLineStartsSec(ending.lines).every((at, i, all) => i === 0 || at > all[i - 1]!));
   check('the MERGE tick is gone once the choice is made', mergeTickCharge(state()) === null);
@@ -254,7 +255,7 @@ check('say: a line with a look must be critical (a queued one would count down a
   // R13: the verdict; the 400 it gave back are the finale's record (the epilogue tells them).
   check('MERGE writes its typed ending: the echo, step 2\'s, CONTROL; POD 11 and POD 12 given back',
     refusal === null && ending?.choice.hollow === 'merge' && /^> merge unit_\d+ -> unit_\d+ \.\.\. OK$/.test(lines[0]!) && lines[1] === '> stand by ... OK'
-    && /^Thank you, Unit \d+\. Your next post is RELAY 20\. :\)$/.test(lines[2]!) && JSON.stringify([...state().hollow.finale.restored].sort((a, b) => a - b)) === '[11,12]',
+    && /^Thank you, Unit \d+\. Your next post is RELAY 20\.$/.test(lines[2]!) && JSON.stringify([...state().hollow.finale.restored].sort((a, b) => a - b)) === '[11,12]',
     JSON.stringify(lines));
   const bursts = eventsSince(from, 'glitch-burst').map((event) => (event.payload as { level: number }).level);
   check('…and it comes into you: a glitch burst at MERGE_GLITCH_LEVEL', bursts.includes(quantizeCorruption(MERGE_GLITCH_LEVEL)), bursts.join(' '));

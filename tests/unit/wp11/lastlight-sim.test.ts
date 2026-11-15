@@ -36,10 +36,10 @@ const fixture = createInitialState({ seed: 7, shipIndex: LAST_LIGHT, carried: 'f
 const ship = currentShip(fixture);
 const authored = [0, 1, 2, 3, 4].map((index) => currentShip(createInitialState({ seed: 7, shipIndex: index, carried: index === 0 ? null : 'fresh' })));
 const lastHop = fixture.run.map.route.at(-1)!.hop!;
-check('LAST LIGHT is the flagship, the worked route\'s last ship (slot 19, depth 6); 3,200 colonists in 16 pods; from CORMORANT 54 LY, link 87, 8 hits (5 fixed by ECC, 3 land), no arrival damage',
+check('LAST LIGHT is the flagship, the worked route\'s last ship (slot 19, depth 6); 3,200 colonists in 16 pods; from CORMORANT 54 LY, 8 hits (5 fixed by ECC, 3 land), no arrival damage',
   ship.name === 'LAST LIGHT' && ship.final && ship.slot === WORKED_ROUTE.at(-1) && fixture.run.map.route.length === 6
   && authored.filter((candidate) => candidate.final).length === 1 && shipColonists(ship) === 3200
-  && lastHop.from === 15 && lastHop.distanceLy === 54 && lastHop.linkBlocks === 87 && lastHop.transitHits === 8 && hitsLanding(lastHop, 0) === 3
+  && lastHop.from === 15 && lastHop.distanceLy === 54 && lastHop.transitHits === 8 && hitsLanding(lastHop, 0) === 3
   && ship.arrivalDamage.length === 0, JSON.stringify(lastHop));
 const { start, ring, tacticalWarp, cruiseWarp, dvBudgetKmS } = ship.flight;
 check('…§9 WP11 item 1\'s flight: r0 18,000, rp0 3,200, v∞ 1.5, ring 5,000–7,000, FUEL 2.5, ×30 / ×60, OUT engaged',

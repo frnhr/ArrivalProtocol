@@ -80,8 +80,8 @@ check('…MEMORY 320 · COMPACT · ROOM FOR YOU 152, and the fit line from roomF
 check('…the planet with its off-site words and the LZ count (Tessaly: GRASSLAND, GENTLE), SET BY ARRIVAL CONTROL',
   row(halcyon, 'planet') === 'GRASSLAND · off-site pods score half'
   && row(halcyon, 'lzs') === MAP_TEXT.card.lzs(shipSummaryAt(state.run.map, 2).lzCount, 'good'), `${row(halcyon, 'planet')} ${row(halcyon, 'lzs')}`);
-check('…BEAM `21 LY · LINK 123`, `NOISE CLEAN · SEEDS: none` (depth 2)',
-  row(halcyon, 'beam') === '21 LY · LINK 123' && row(halcyon, 'noise') === 'NOISE CLEAN · SEEDS: none');
+check('…BEAM `21 LY`, `NOISE CLEAN · SEEDS: none` (depth 2)',
+  row(halcyon, 'beam') === '21 LY' && row(halcyon, 'noise') === 'NOISE CLEAN · SEEDS: none');
 // 3–6: HALCYON → a layer-4 ship → a layer-6 ship → LAST LIGHT is a route of 5 (plan §3's sample says 4–6).
 check('…`YOUR 2ND SHIP · 3–6 MORE TO THE FINAL SHIP` (shipsLeft), no HOLLOW line, no NO RM',
   row(halcyon, 'run') === 'YOUR 2ND SHIP · 3–6 MORE TO THE FINAL SHIP' && shipsLeft(state.run.map, 2).join() === '3,6'
@@ -90,9 +90,9 @@ check('…the TIMELINE `2300 you leave · 2321 you get there · 2352 ▲ approac
   halcyon.timeline?.text === '2300 you leave · 2321 you get there · 2352 ▲ approach' && !halcyon.timeline.late);
 
 const albatross = cardModel(state, 6);
-check('ALBATROSS: ARK, 3,000 COLONISTS, SLEEP 14 YRS, 51 LY · LINK 90 · 7 HITS, ONLY FROM HERE in red',
+check('ALBATROSS: ARK, 3,000 COLONISTS, SLEEP 14 YRS, 51 LY · 7 HITS, ONLY FROM HERE in red',
   albatross.tags.includes('ARK') && albatross.colonists === '3,000 COLONISTS' && albatross.schedule === 'YOU SLEEP 14 YRS IN ITS RECEIVER · ECC FIXES 0'
-  && row(albatross, 'beam') === '51 LY · LINK 90' && (albatross.cost ?? '').startsWith('7 HITS') && albatross.rows.find((r) => r.key === 'only')?.tone === 'warn',
+  && row(albatross, 'beam') === '51 LY' && (albatross.cost ?? '').startsWith('7 HITS') && albatross.rows.find((r) => r.key === 'only')?.tone === 'warn',
   JSON.stringify(albatross.rows));
 const far = cardModel(state, 8);
 check('an OUT OF RANGE ship\'s card has no BEAM row, only the range (Hop.inRange), and no fit line or cost (the nit)',
@@ -161,9 +161,9 @@ check('…OSPREY (2352) and HERON (layer 3, 2512: behind the beam) are not in re
   && knode(4).reason === MAP_TEXT.chart.behind);
 check('…the next ring out from Brine (55 LY) is ring 3 at 68 LY', kchart.rings.find((r) => r.next)?.n === 3);
 const vesper = cardModel(state, 11);
-check('VESPER from KESTREL: ARK, ENGINE FAULT, MEMORY 384 · FULL, 55 LY · LINK 86, 8 HITS · 4 FIXED, SEEDS from depth 4',
+check('VESPER from KESTREL: ARK, ENGINE FAULT, MEMORY 384 · FULL, 55 LY, 8 HITS · 4 FIXED, SEEDS from depth 4',
   vesper.tags.includes('ARK') && row(vesper, 'problems') === 'ENGINE FAULT' && row(vesper, 'memory') === 'MEMORY 384 · FULL · ROOM FOR YOU 152'
-  && row(vesper, 'beam') === '55 LY · LINK 86' && vesper.cost === '8 HITS ON THE WAY → 4 LAND'
+  && row(vesper, 'beam') === '55 LY' && vesper.cost === '8 HITS ON THE WAY → 4 LAND'
   && /^NOISE CLEAN · SEEDS 0$/.test(row(vesper, 'noise') ?? '')
   && vesper.schedule === 'YOU SLEEP 103 YRS IN ITS RECEIVER · ECC FIXES 4' && vesper.timeline?.text === '2467 you leave · 2522 you get there · 2625 ▲ approach', JSON.stringify(vesper.rows));
 check('VESPER is ONLY FROM HERE at KESTREL (the layer-4 ships would be too late for the ark)', row(vesper, 'only') !== undefined);
@@ -222,7 +222,7 @@ const last = cardModel(state, 19);
 check('LAST LIGHT from CORMORANT: FINAL SHIP, `NO RM · YOU CAN\'T DELETE THE ROOT` in red (no DELETE aboard), THE LAST',
   last.tags.includes('FINAL SHIP') && last.rows.find((r) => r.key === 'norm')?.value === THREAT_TEXT.noRmPacket
   && last.rows.find((r) => r.key === 'norm')?.tone === 'warn' && row(last, 'run') === MAP_TEXT.card.lastOfRun(6), JSON.stringify(last.rows));
-check('…54 LY · LINK 87, 8 HITS → 3 LAND, SLEEP 149 YRS · ECC FIXES 5', row(last, 'beam') === '54 LY · LINK 87'
+check('…54 LY, 8 HITS → 3 LAND, SLEEP 149 YRS · ECC FIXES 5', row(last, 'beam') === '54 LY'
   && last.cost === '8 HITS ON THE WAY → 3 LAND' && last.schedule === 'YOU SLEEP 149 YRS IN ITS RECEIVER · ECC FIXES 5');
 const goodHope = cardModel(state, 17);
 check('…GOOD HOPE is TOO LATE BY 15 YRS from CORMORANT (card and chart), with no fit line (the nit)', goodHope.schedule === 'TOO LATE BY 15 YRS'

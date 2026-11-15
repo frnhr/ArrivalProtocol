@@ -56,12 +56,17 @@ function podDown(state: Readonly<GameState>): boolean {
   return state.landing.pods.some((record) => record.fate.kind === 'down');
 }
 
-// Entry 01 opens when the first LANDING REPORT with a pod down closes (05 §3.5: "Ship 1's report closes"): the TRANSMIT
-// screen is up and the ship's landing, still in the store until the beam, landed someone. On the fixed five that is
+// Entry 01 opens when the first LANDING REPORT with a pod down closes (05 §3.5: "Ship 1's report closes"): LEAVE ORBIT is up
+// (playtest 1, note 5: the first screen after the report; the TRANSMIT screen before it) and the ship's landing, still in
+// the store until the beam, landed someone. On the fixed five that is
 // ship 1's, unless ship 1 landed nobody (a later ship's first landing is the key then: 05 keys it to "your first
 // landing", not to a ship).
+// The desk and the PACKET after it, before the beam, catch the run that is past LEAVE ORBIT without it (B-ORDER's merge):
+// a v9 save resumed at the desk (v9 found entry 01 at the PACKET, after that desk; the migration resumes it at the desk),
+// or a LEAVE ORBIT taken within one tick. The landing is still the ship's until the beam, so `podDown` reads the same.
+const FIRST_LANDING_KEY_PHASES: ReadonlySet<GameState['run']['phase']> = new Set(['leave', 'desk', 'transmit']);
 function firstLandingKeyDue(state: Readonly<GameState>): boolean {
-  return state.run.phase === 'transmit' && !state.run.log.found.includes(1) && podDown(state);
+  return FIRST_LANDING_KEY_PHASES.has(state.run.phase) && !state.run.log.found.includes(1) && podDown(state);
 }
 
 // Entry 12 types from the root at its last block (05 §3.5: `> 047. wait.`, then entry 12): finale.ts rootGone moves the

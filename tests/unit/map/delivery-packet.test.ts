@@ -1,6 +1,6 @@
 // Track REPO (slice-3b-plan §6.1 map/delivery-packet): deliveries on the PACKET and across the beam, store-level, no flights.
-// • chips for new, caught-up and sent-on requests; the link and room bars count them; the gate (TRANSMIT ▸ waits, the send
-//   throws) and SEND ON freeing link for charge; SEND ON on a hop into a final ship loses the file (the view, the request,
+// • chips for new, caught-up and sent-on requests; the room bar counts them; the gate (TRANSMIT ▸ waits, the send
+//   throws) and SEND ON freeing room for charge (playtest 1, note 20: the room is the one limit); SEND ON on a hop into a final ship loses the file (the view, the request,
 //   the tally);
 // • the send: the PACKET's preview equals the layout with the delivery seeds over 200 random mixes on fresh arms (the
 //   send's own assert), and across them seeds never on a first of kind, into a calm ship or on the patch, beam seeds never
@@ -16,9 +16,8 @@ import type { Store } from '@state/store';
 import type { GameState, ArrivalReport } from '@state/schema';
 import type { DeliveryChip, RepoFileId } from '@/types/repo';
 import { goTransmit, transmitNext, arrivalDeliveries } from '@systems/run';
-import { setCourseFromDesk } from '../support/desk';
+import { setCourseFromDesk, leaveOrbit } from '../support/desk';
 import { transmitModel, toggleSendOn } from '@systems/transmit';
-import { pickCard } from '@systems/draft';
 import { undeliveredFiles } from '@systems/repository';
 import { receiveDeliveryAtBoot } from '@systems/delivery-boot';
 import { deliveryBootLines, deliveryBootLineText } from '@systems/map-boot';
@@ -33,7 +32,7 @@ import { REPO_TEXT, REPO_FILE_TEXT } from '@data/repo-text';
 import { DELIVERY_SEED_CHANCE, REPAIR_V2_VERSION } from '@data/tuning';
 import { createRng } from '@systems/rng';
 import { byDepth } from '../depth';
-import { armRun, toDesk, send, fitPacket, flyRoute, giveTools, dropTools, addRequest, throws } from './repo-fixture';
+import { armRun, toDesk, toLeave, send, fitPacket, flyRoute, giveTools, dropTools, addRequest, throws } from './repo-fixture';
 
 const at = (store: Store<GameState>): Readonly<GameState> => store.getState();
 const chipsOf = (store: Store<GameState>): DeliveryChip[] => at(store).run.transit!.deliveries;
@@ -66,8 +65,6 @@ const repairs = (store: Store<GameState>) => at(store).memory.filter((seg) => se
     && at(store).run.transit!.filesBlocks === files - 3);
   const cpKey = chipsOf(store)[0]!.key;
   fitPacket(store);
-  const offer = at(store).run.transit!.offer;
-  if (offer.length > 0) pickCard(store, offer.some((card) => card.id === 'charge') ? 'charge' : offer[0]!.id);
   transmitNext(store);
   const cp = at(store).run.repo.requests.find((request) => request.id === cpKey)!;
   check('…after the send it waits in VESPER\'s receiver; nothing of it was laid out', cp.status === 'waiting' && cp.at === 11
@@ -77,31 +74,32 @@ const repairs = (store: Store<GameState>) => at(store).memory.filter((seg) => se
   check('…and rides the next hop as a sent-on chip (into CORMORANT)', chipsOf(store).map((chip) => `${chip.key}:${chip.source}`).includes(`${cpKey}:sent-on`), JSON.stringify(chipsOf(store)));
 }
 
-// --- The gate, and SEND ON freeing link for charge ---------------------------------------------------------------------
+// --- The gate, and SEND ON freeing room for charge ---------------------------------------------------------------------
+// Playtest 1 (note 20): the link that KESTREL → VESPER's deliveries used to overflow is gone; LAPWING's TIGHT room (88, no
+// floor) is the limit they push over now.
 {
   const store = armRun();
   flyRoute(store, [0, 2, 5], ['mv', 'rm']);
   toDesk(store);
-  const slack = hopBetween(at(store).run.map, 5, 11).slackYears;
+  const slack = hopBetween(at(store).run.map, 5, 8).slackYears;
   for (const file of ['repair-bak', 'repair-bak', 'repair-bak', 'repair-bak', 'cp', 'cp', 'cp', 'cp', 'scan-bak', 'scan-bak'] as RepoFileId[]) addRequest(store, { file, status: 'in-transit', lateness: slack - 1 });
-  setCourseFromDesk(store, 11);
+  setCourseFromDesk(store, 8);
   const model = transmitModel(at(store));
-  check(`the deliveries push the packet over KESTREL → VESPER's link (${model.link}): TRANSMIT ▸ waits, the send throws`,
-    model.room.tooMany !== null && model.room.fit.overLink > 0 && throws(() => transmitNext(at(store).run.transit!.offer.length > 0
-      ? (pickCard(store, at(store).run.transit!.offer[0]!.id), store) : store)), `${model.files} files, link ${model.link}`);
+  check(`the deliveries push the packet over KESTREL → LAPWING's room (${model.room.fit.room}): TRANSMIT ▸ waits, the send throws`,
+    model.room.tooMany !== null && model.room.fit.over > 0 && throws(() => transmitNext(store)), `${model.files} files, room ${model.room.fit.room}`);
   check('…the gate and arrival lines say SEND ON helps too: `n BLOCKS TOO MANY · LEAVE FILES OR SEND ON` (review m3)',
-    model.room.tooMany === REPO_TEXT.packet.overWithDeliveries(Math.max(model.room.fit.overLink, model.room.fit.over))
+    model.room.tooMany === REPO_TEXT.packet.overWithDeliveries(model.room.fit.over)
     && model.dropLine === model.room.tooMany && model.arrivalLine === REPO_TEXT.packet.arrivalOverWithDeliveries,
     `${model.room.tooMany} | ${model.arrivalLine}`);
   const before = transmitModel(at(store));
   for (const chip of [...chipsOf(store)].reverse()) {
-    if (transmitModel(at(store)).room.fit.overLink === 0 && transmitModel(at(store)).chargeCarried > before.chargeCarried) break;
+    if (transmitModel(at(store)).room.fit.over === 0 && transmitModel(at(store)).arrivalCharge > before.arrivalCharge) break;
     toggleSendOn(store, chip.key);
   }
   const after = transmitModel(at(store));
-  check('…SEND ON clears the gate and frees link for charge (the charge that crosses rises)', after.room.fit.overLink === 0
-    && after.chargeCarried > before.chargeCarried && after.chargeCarried === Math.min(after.chargeHeld, after.link - after.files),
-    `${before.chargeCarried} → ${after.chargeCarried}`);
+  check('…SEND ON clears the gate and frees room for charge (the charge that arrives rises)', after.room.fit.over === 0
+    && after.arrivalCharge > before.arrivalCharge && after.arrivalCharge === after.room.fit.chargeArrives,
+    `${before.arrivalCharge} → ${after.arrivalCharge}`);
 }
 
 // --- SEND ON into a final ship: lost ----------------------------------------------------------------------------------------
@@ -116,8 +114,6 @@ const repairs = (store: Store<GameState>) => at(store).memory.filter((seg) => se
   const view = transmitModel(at(store)).deliveries.find((chip) => chip.key === cp.key)!;
   check('…SEND ON into the final ship says `NO SHIP AFTER LAST LIGHT · IT IS LOST`', view.lost && view.sendOnLabel === REPO_TEXT.packet.lostAfter('LAST LIGHT'));
   fitPacket(store);
-  const offer = at(store).run.transit!.offer;
-  if (offer.length > 0) pickCard(store, offer[0]!.id);
   transmitNext(store);
   const request = at(store).run.repo.requests.find((entry) => entry.id === cp.key)!;
   check('…the send writes it lost at LAST LIGHT, and the tally lists it (NEVER ARRIVED: Cp)', request.status === 'lost' && request.at === 19
@@ -142,8 +138,6 @@ const repairs = (store: Store<GameState>) => at(store).memory.filter((seg) => se
   toggleSendOn(store, first!.key);
   check('…and back', chipsOf(store)[0]!.firstOfKind && !chipsOf(store)[1]!.firstOfKind);
   fitPacket(store);
-  const offer = at(store).run.transit!.offer;
-  if (offer.length > 0) pickCard(store, offer[0]!.id);
   transmitNext(store);
   const state = at(store);
   check('…after the send: MOVE licensed once, untried once, two Mv files laid out', state.run.licences.filter((kind) => kind === 'move').length === 1
@@ -157,7 +151,6 @@ const repairs = (store: Store<GameState>) => at(store).memory.filter((seg) => se
   setCourseFromDesk(store, 15);
   check('a delivery of a kind already here is a spare: not first of kind, not untried', !chipsOf(store)[0]!.firstOfKind);
   fitPacket(store);
-  if (at(store).run.transit!.offer.length > 0) pickCard(store, at(store).run.transit!.offer[0]!.id);
   transmitNext(store);
   check('…and the boot leaves untriedTools without it', !at(store).hollow.untriedTools.includes('move') && at(store).run.licences.filter((kind) => kind === 'move').length === 1);
 }
@@ -255,7 +248,9 @@ const repairs = (store: Store<GameState>) => at(store).memory.filter((seg) => se
       const options = reachableFrom(at(store).run.map, currentSlot(at(store).run));
       send(store, options[Math.floor(rng() * options.length)]!);
     }
-    toDesk(store);
+    // Playtest 1 (note 5): the random card is taken at LEAVE ORBIT, before the chart.
+    toLeave(store);
+    leaveOrbit(store, (offer) => offer[Math.floor(rng() * offer.length)]!.id);
     const here = currentSlot(at(store).run);
     const options = reachableFrom(at(store).run.map, here);
     const to = options[Math.floor(rng() * options.length)]!;
@@ -265,8 +260,6 @@ const repairs = (store: Store<GameState>) => at(store).memory.filter((seg) => se
     setCourseFromDesk(store, to);
     for (const entry of chipsOf(store)) if (rng() < 0.2) toggleSendOn(store, entry.key);
     fitPacket(store);
-    const offer = at(store).run.transit!.offer;
-    if (offer.length > 0) pickCard(store, offer[Math.floor(rng() * offer.length)]!.id);
     const plan = structuredClone(at(store).run.transit!);
     try {
       transmitNext(store);

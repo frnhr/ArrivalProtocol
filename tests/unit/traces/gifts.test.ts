@@ -19,9 +19,8 @@ import { traceGiftCharge, traceSeedMods, traceSeedAllowance, traceMessages } fro
 import { traceAt } from '@systems/traces';
 import { newMessagesAtBoot } from '@systems/inbox';
 import { unitArrival } from '@systems/arrival-preview';
-import { setCourseFromDesk } from '../support/desk';
-import { toDesk, fitPacket, dropTools } from '../map/repo-fixture';
-import { pickCard } from '@systems/draft';
+import { setCourseFromDesk, leaveOrbit } from '../support/desk';
+import { toLeave, fitPacket, dropTools } from '../map/repo-fixture';
 import { transmitNext } from '@systems/run';
 import { freeSegment, mergeAdjacentFree } from '@systems/memory-ops';
 import { createRng } from '@systems/rng';
@@ -65,7 +64,9 @@ function seedFor(kind: 'spare' | 'sunset' | 'stay', make: (seed: number) => Retu
   const before = route.indexOf(slot) - 1;
   if (before > 0) beamTo(h.store, step, route, route[before]!);
   h.store.update((draft) => { draft.run.phase = 'report'; });
-  toDesk(h.store);
+  // LEAVE ORBIT's salvage (playtest 1): the +12 card when dealt, else anything but THREAD+ (the gift's own is counted).
+  toLeave(h.store);
+  leaveOrbit(h.store, (offer) => (offer.find((card) => card.id === 'charge') ?? offer.find((card) => card.id !== 'thread-plus') ?? offer[0]!).id);
   const fakeSeeds: BeamSeedPlan[] = [{ targetId: 'x', targetName: 'X', words: 'w', disguise: null }, { targetId: 'y', targetName: 'Y', words: 'w', disguise: null }];
   const mods = traceSeedMods(state(), slot, { beam: fakeSeeds, delivery: fakeSeeds.slice(0, 1) }, { deliveries: [] } as never, createRng(1));
   check(`SPARE on seed ${seed}: its ship (slot ${slot}) gives ${TRACE_GIFT_CHARGE} charge, its beam carries no seed (the beam's and the deliveries'), the preview counts none`,
@@ -83,7 +84,6 @@ function seedFor(kind: 'spare' | 'sunset' | 'stay', make: (seed: number) => Retu
     && preview.sum.includes(TRACE_TEXT.arrivalPart(TRACE_GIFT_CHARGE)) && !without.sum.includes('(GIFT)'), preview.sum);
   const threads = core().capacity;
   const from = h.events.length;
-  if (transit.offer.length > 0) pickCard(h.store, transit.offer.some((card) => card.id === 'charge') ? 'charge' : transit.offer.find((card) => card.id !== 'thread-plus')?.id ?? transit.offer[0]!.id);
   fitPacket(h.store);
   transmitNext(h.store);
   bootOut(h.store, step);

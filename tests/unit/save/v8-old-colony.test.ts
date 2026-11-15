@@ -18,7 +18,7 @@ import { resumeRun } from '@systems/run-save';
 import { pendingRunSave } from '@systems/save-write';
 import { inboxMessages, inboxUnread } from '@systems/inbox';
 import { stubStorage, pageOpen } from './save-fixture';
-import { RUN_SAVE_KEY, META_STORAGE_KEY } from '@data/tuning';
+import { RUN_SAVE_KEY, META_STORAGE_KEY, RUN_SAVE_VERSION } from '@data/tuning';
 
 type Raw = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const FILE = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'run-save-v8-ship-done-heron.json');
@@ -36,8 +36,8 @@ const asOldColony = (save: Raw, slot: number): void => { save.payload.run.map.ar
   asOldColony(raw.save, 2);
   const migrated = migrateRunSave(raw.save) as Raw;
   const decoded = decodeRunSave(JSON.stringify(raw.save));
-  check('the v8 HERON desk past an old colony (HALCYON): its letter `old-colony:2` marked read by the 8 → 9 step, and it decodes',
-    migrated.saveVersion === 9 && migrated.payload.run.inbox.read.includes('old-colony:2') && decoded.ok,
+  check('the v8 HERON desk past an old colony (HALCYON): its letter `old-colony:2` marked read by the 8 → 9 step (and on up), and it decodes',
+    migrated.saveVersion === RUN_SAVE_VERSION && migrated.payload.run.inbox.read.includes('old-colony:2') && decoded.ok,
     decoded.ok ? JSON.stringify(migrated.payload.run.inbox.read) : `${decoded.refusal.kind}: ${decoded.refusal.detail}`);
   const storage = stubStorage({ [RUN_SAVE_KEY]: JSON.stringify(raw.save), [META_STORAGE_KEY]: JSON.stringify(raw.meta) });
   const store = createStore<GameState>(createInitialState({ seed: 1 }));

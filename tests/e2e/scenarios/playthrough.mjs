@@ -733,7 +733,7 @@ for (const [index, name] of SHIPS.entries()) {
       landView = await look();
       note(landView);
       if (landView.phase === 'landing' && landView.deal.length > 0) deal.standingAfterLock++;
-      if (['report', 'transmit', 'end'].includes(landView.phase)) break;
+      if (['report', 'leave', 'transmit', 'end'].includes(landView.phase)) break;
       if (landView.lostCard) await tap(page.locator('#burnResultRetry'));
       else if (landView.choice) {
         // Slice 7a (R7): the card's two steps, tapped by phase (look().choice is false between the steps and on the verdict).
@@ -791,8 +791,9 @@ for (const [index, name] of SHIPS.entries()) {
     run.landed.push({ name, byStrip, sec: landSec, launches: landed.launches, presses: tally.lPresses });
   } else {
     // A ship that did not end in orbit (a LOST card) never lands: on to whatever comes next.
-    // Since slice 3a a lost ship's card leads to the DESK (an EMERGENCY TRANSMIT or a normal one), with no LANDING REPORT.
-    while (Date.now() - landStart < SCREEN_MAX_MS && !['report', 'transmit', 'end', 'desk'].includes(landView.phase)) {
+    // Since slice 3a a lost ship's card leads on (an EMERGENCY TRANSMIT or a normal one), with no LANDING REPORT: playtest 1,
+    // to LEAVE ORBIT (`LEAVING <SHIP>`), then the DESK.
+    while (Date.now() - landStart < SCREEN_MAX_MS && !['report', 'leave', 'transmit', 'end', 'desk'].includes(landView.phase)) {
       if (landView.lostCard) await tap(page.locator('#burnResultRetry'));
       await page.waitForTimeout(250);
       landView = await look();
@@ -804,9 +805,9 @@ for (const [index, name] of SHIPS.entries()) {
     break;
   }
 
-  // A ship lost before orbit (its LOST card answered) has no LANDING REPORT: the run goes on to the DESK.
-  const lostToDesk = landView.phase === 'desk';
-  if (lostToDesk) log(`${tag}: lost (${await st(() => window.__ap.store.getState().run.ships.at(-1)?.outcome ?? '?')}): no LANDING REPORT, on to the DESK`);
+  // A ship lost before orbit (its LOST card answered) has no LANDING REPORT: the run goes on to LEAVE ORBIT, then the DESK.
+  const lostToDesk = landView.phase === 'leave';
+  if (lostToDesk) log(`${tag}: lost (${await st(() => window.__ap.store.getState().run.ships.at(-1)?.outcome ?? '?')}): no LANDING REPORT, on to LEAVE ORBIT`);
   if (!lostToDesk) {
     // The LANDING REPORT: the rows count up, SPACE moves it on (the rows → the credits → the stars → CONTINUE).
     const reportOpen = await waitFor(() => !document.getElementById('landingReport').hidden, 5000);
@@ -908,6 +909,53 @@ for (const [index, name] of SHIPS.entries()) {
   }
   const afterReport = await st(() => window.__ap.store.getState().run.phase);
   if (index < SHIPS.length - 1) {
+    // Playtest 1 (note 5): LEAVE ORBIT first. On run 1 the LOG READER opens by itself on entry 01 over the first one (it
+    // takes ESC and SPACE first); the kid reads it and closes it with SPACE (the first SPACE finishes the typing, the next
+    // closes), and LEAVE ORBIT under it takes nothing. Then the salvage: three cards (no REPAIR v2: the repository's now),
+    // [1], ENTER.
+    const leaveUp = await waitFor(() => window.__ap.store.getState().run.phase === 'leave' && !document.getElementById('leaveScreen').hidden, 8000);
+    const readerUp = await waitFor(() => !document.getElementById('logReader').hidden, index === 0 ? 4000 : 800, 50);
+    if (index === 0) {
+      const reader = await st(() => ({ title: document.getElementById('lgTitle').innerText, open: document.querySelector('#lgRows .lg-row.open')?.dataset.entry ?? null,
+        count: document.getElementById('lgCount').innerText, leave: !document.getElementById('leaveScreen').hidden }));
+      check(`${tag}: the LOG READER opens by itself on entry 01 over the first LEAVE ORBIT (${reader.title}, ${reader.count})`, readerUp && reader.title === '046.log'
+        && reader.open === '1' && /^1 \/ 12 found$/.test(reader.count) && reader.leave, JSON.stringify(reader));
+      await page.waitForTimeout(1500);
+      await shot(`${index + 1}e0-log-reader`);
+      let presses = 0;
+      for (; presses < 4 && (await st(() => !document.getElementById('logReader').hidden)); presses++) {
+        await page.keyboard.press('Space');
+        await page.waitForTimeout(500);
+      }
+      const after = await st(() => ({ hidden: document.getElementById('logReader').hidden, read: window.__ap.store.getState().run.log.read,
+        phase: window.__ap.store.getState().run.phase, pick: window.__ap.store.getState().run.leave.pick }));
+      check(`${tag}: …SPACE closes it (${presses}×), entry 01 read, and the run waits on LEAVE ORBIT (nothing taken)`, after.hidden && after.read.includes(1)
+        && after.phase === 'leave' && after.pick === null, JSON.stringify(after));
+    } else {
+      check(`${tag}: the LOG READER stays shut on LEAVE ORBIT (it opened by itself once, on the first)`, !readerUp);
+    }
+    const salvage = await st(() => ({
+      title: document.getElementById('loTitle').textContent, heading: document.getElementById('loHeading').textContent,
+      cards: window.__ap.draft()?.offer.map((card) => ({ id: card.id, leftover: card.leftover?.segId ?? null })) ?? [],
+      shown: document.querySelectorAll('#loCards .tx-card').length,
+    }));
+    if (name === 'CORMORANT') {
+      // Slice 5 (04 §3.13, plan §7.4): CORMORANT's departed resident left its deck: headed LEFT BEHIND BY LOOKOUT, three cards
+      // (two pool cards, then a skill card or a stand-in), so the kid's [1] still picks a pool card.
+      check(`${tag}: LEAVE ORBIT deals LOOKOUT's deck: headed LEFT BEHIND BY LOOKOUT, three cards, the first two its pool cards, no REPAIR v2`,
+        leaveUp && salvage.heading === 'LEFT BEHIND BY LOOKOUT' && salvage.cards.length === 3 && salvage.cards[0].leftover === 'leftover1'
+        && salvage.cards[1].leftover === 'leftover2' && salvage.cards[0].id !== 'skill' && !salvage.cards.some((card) => card.id === 'repair-v2'), JSON.stringify(salvage));
+    } else {
+      check(`${tag}: LEAVE ORBIT: \`LEAVE ORBIT\`, \`SALVAGE · TAKE ONE WITH YOU\`, cards dealt (${salvage.cards.map((card) => card.id).join(', ')}), no REPAIR v2`,
+        leaveUp && salvage.title === (lostToDesk ? `LEAVING ${name}` : 'LEAVE ORBIT') && salvage.heading === 'SALVAGE · TAKE ONE WITH YOU' && salvage.cards.length >= 1 && salvage.shown === salvage.cards.length
+        && !salvage.cards.some((card) => card.id === 'repair-v2'), JSON.stringify(salvage));
+    }
+    await shot(`${index + 1}e0-leave-orbit`);
+    check(`${tag}: …[1] picks the first card`, (await runScreens.pickCard(0)) !== null);
+    for (let i = 0; i < 6 && (await st(() => window.__ap.store.getState().run.phase)) === 'leave'; i++) {
+      await page.keyboard.press('Enter');
+      await page.waitForTimeout(500);
+    }
     // Slice 3a: the DESK. The kid reads the strip (PICK YOUR NEXT SHIP), clicks the next ship's node on the STAR CHART and
     // presses ENTER (SET COURSE ▸ NAME). A click that misses is a FAIL, and the course is set by __ap.course instead.
     const next = ROUTE[index + 1];
@@ -963,7 +1011,7 @@ for (const [index, name] of SHIPS.entries()) {
     }
     const deskBefore = await runScreens.desk();
     const nextNode = deskBefore.nodes.find((node) => node.slot === next.slot);
-    check(`${tag}: CONTINUE leads to the DESK: STAR CHART, PICK YOUR NEXT SHIP, ${next.name} in reach`, afterReport === 'desk' && deskUp
+    check(`${tag}: CONTINUE leads to LEAVE ORBIT, ENTER to the DESK: STAR CHART, PICK YOUR NEXT SHIP, ${next.name} in reach`, afterReport === 'leave' && deskUp
       && deskBefore.title === 'STAR CHART' && deskBefore.step === 'PICK YOUR NEXT SHIP — click a ship or ← →' && deskBefore.selected === null
       && ['reachable', 'urgent'].includes(nextNode?.state ?? ''), JSON.stringify({ afterReport, step: deskBefore.step, selected: deskBefore.selected, next: nextNode }));
     await shot(`${index + 1}e1-desk`);
@@ -1022,12 +1070,24 @@ for (const [index, name] of SHIPS.entries()) {
       check(`${tag}: …ESC: ${next.name}'s card shows the request in time (a green TIMELINE mark)`, cardAfter.card?.name === next.name && outlookRow !== null
         && marks.length === 1 && !marks[0].late, JSON.stringify({ outlookRow, marks }));
     }
+    // The white-out is about a second long: watched in the page (every 30 ms), not by polls that load can space out. Set up
+    // before SET COURSE: a PACKET with nothing to ask beams at once (playtest 1).
+    await st(() => {
+      window.__e2eNextLogFrom = Math.max(-1, ...window.__ap.log().map((entry) => entry.id));
+      window.__e2eWhite = 0;
+      clearInterval(window.__e2eWhiteTimer);
+      window.__e2eWhiteTimer = setInterval(() => {
+        const el = document.getElementById('whiteOut');
+        if (!el.hidden) window.__e2eWhite = Math.max(window.__e2eWhite, Number(getComputedStyle(el).opacity));
+      }, 30);
+    });
     if (pickedOk) await page.keyboard.press('Enter');
     else {
       log(`${tag}: the click on ${next.name}'s node missed (${clicked}); __ap.course(${next.slot})`);
       await st((slot) => window.__ap.course(slot), next.slot);
     }
     const packetUp = await waitFor(() => window.__ap.store.getState().run.phase === 'transmit' && !document.getElementById('transmitScreen').hidden, 5000);
+    const direct = await st(() => document.getElementById('transmitScreen').classList.contains('direct'));
     check(`${tag}: …the kid clicks ${next.name}'s node (its card, \`SET COURSE ▸ ${next.name} [ENTER]\`) and ENTER opens its PACKET`, pickedOk && packetUp,
       JSON.stringify({ clicked, selected: deskPicked.selected, card: deskPicked.card?.name ?? null, go: deskPicked.go, packetUp }));
     if (next.name === 'CORMORANT') {
@@ -1038,60 +1098,25 @@ for (const [index, name] of SHIPS.entries()) {
         deskPicked.card?.rows.includes('site=POOR · ARRIVAL CONTROL GUESSED') === true && deskPicked.card.rows.includes('lzs=LZ: 2 · SURVEY NEEDED'),
         JSON.stringify(deskPicked.card?.rows));
     }
-    // Slice 2: on run 1, the first PACKET opens the LOG READER on entry 01 on top (it takes ESC and SPACE first); the kid
-    // reads it and closes it with SPACE (the first SPACE finishes the typing, the next closes), and the PACKET under it
-    // sends nothing.
-    const readerUp = await waitFor(() => !document.getElementById('logReader').hidden, index === 0 ? 4000 : 800, 50);
-    if (index === 0) {
-      const reader = await st(() => ({ title: document.getElementById('lgTitle').innerText, open: document.querySelector('#lgRows .lg-row.open')?.dataset.entry ?? null,
-        count: document.getElementById('lgCount').innerText, transmit: !document.getElementById('transmitScreen').hidden }));
-      check(`${tag}: the LOG READER opens by itself on entry 01 over the first PACKET (${reader.title}, ${reader.count})`, readerUp && reader.title === '046.log'
-        && reader.open === '1' && /^1 \/ 12 found$/.test(reader.count) && reader.transmit, JSON.stringify(reader));
-      await page.waitForTimeout(1500);
-      await shot(`${index + 1}e2-log-reader`);
-      let presses = 0;
-      for (; presses < 4 && (await st(() => !document.getElementById('logReader').hidden)); presses++) {
-        await page.keyboard.press('Space');
-        await page.waitForTimeout(500);
-      }
-      const after = await st(() => ({ hidden: document.getElementById('logReader').hidden, read: window.__ap.store.getState().run.log.read,
-        phase: window.__ap.store.getState().run.phase, sent: document.querySelectorAll('#txChips .tx-chip.sent').length, paused: window.__ap.store.getState().clock.paused }));
-      check(`${tag}: …SPACE closes it (${presses}×), entry 01 read, and the run goes on at TRANSMIT (nothing sent)`, after.hidden && after.read.includes(1)
-        && after.phase === 'transmit' && after.sent === 0, JSON.stringify(after));
-    } else {
-      check(`${tag}: the LOG READER stays shut on the PACKET (it opened by itself once, on the first)`, !readerUp);
-    }
-    await page.waitForTimeout(1000);
+    // Playtest 1: the PACKET asks only with a question (here a delivery to SEND ON); with none it beams at once, its rows
+    // read as the files stream out (so no wait before reading them).
+    if (!direct) await page.waitForTimeout(1000);
     const tx = await st(() => ({
-      next: document.getElementById('txNext').innerText, packet: document.getElementById('txPacketLine').innerText,
-      chips: document.querySelectorAll('#txChips .tx-chip').length, cards: document.querySelectorAll('#txCards > *').length,
+      next: document.getElementById('txNext').innerText, packet: document.querySelector('#transmitScreen .tx-room-line')?.innerText ?? '',
+      chips: document.querySelectorAll('#txChips .tx-chip').length, salvage: document.querySelector('#transmitScreen .tx-salvage')?.innerText ?? '',
       go: document.getElementById('txGo').innerText,
     }));
-    check(`${tag}: TRANSMIT names the next ship (${SHIPS[index + 1]}), the packet and the files as chips`,
-      tx.next.startsWith(`NEXT: ${SHIPS[index + 1]}`) && /^LINK \d+ · FILES \d+/.test(tx.packet) && tx.chips >= 5, JSON.stringify(tx));
-    check(`${tag}: …and deals cards to carry`, tx.cards >= 1, `${tx.cards} cards`);
-    // Slice 3b: the DELIVERIES chips riding this hop, the IN TRANSIT line, the draft headed SALVAGE (REPAIR v2 is the
-    // repository's now, never salvage on the arm).
+    check(`${tag}: TRANSMIT names the next ship (${SHIPS[index + 1]}), the room, the salvage taken and the files as chips${direct ? ' (beaming at once)' : ''}`,
+      tx.next.startsWith(`NEXT: ${SHIPS[index + 1]}`) && /^ROOM \d+ · FILES \d+/.test(tx.packet) && tx.salvage.startsWith('SALVAGE · ') && tx.chips >= 5, JSON.stringify(tx));
+    // Slice 3b: the DELIVERIES chips riding this hop and the IN TRANSIT line.
     const deliveries = await st(() => ({
       chips: [...document.querySelectorAll('#transmitScreen .tx-delivery')].map((chip) => chip.getAttribute('aria-label')),
       inTransit: document.querySelector('#transmitScreen .tx-intransit')?.hidden === false ? document.querySelector('#transmitScreen .tx-intransit').textContent : null,
-      salvage: document.querySelector('#transmitScreen .tx-draft-title')?.textContent ?? null, offer: window.__ap.draft()?.offer.map((card) => card.id) ?? [],
+      sendOn: [...document.querySelectorAll('#transmitScreen .tx-delivery .tx-chip-sendon')].map((label) => label.textContent),
     }));
     const wantChips = CHIPS_INTO[next.name].map((text) => `${text} · [SEND ON]`);
-    check(`${tag}: …DELIVERIES on the PACKET into ${next.name}: ${wantChips.length === 0 ? 'none' : wantChips.join(', ')}`, JSON.stringify(deliveries.chips) === JSON.stringify(wantChips),
-      JSON.stringify(deliveries));
-    if (name === 'CORMORANT') {
-      // Slice 5 (04 §3.13, plan §7.4): CORMORANT's departed resident left its deck: headed LEFT BEHIND BY LOOKOUT, three cards
-      // (two pool cards, then a skill card or a stand-in), so the kid's [1] still picks a pool card.
-      const deck = await st(() => ({ cards: window.__ap.draft()?.offer.map((card) => ({ id: card.id, leftover: card.leftover?.segId ?? null })) ?? [],
-        skl: [...document.querySelectorAll('#txCards .tx-card')].map((card) => card.querySelector('.tx-card-title')?.textContent ?? '') }));
-      check(`${tag}: …the draft is LOOKOUT's deck: headed LEFT BEHIND BY LOOKOUT, three cards, the first two its pool cards, no REPAIR v2 (${deliveries.offer.join(', ')})`,
-        deliveries.salvage === 'LEFT BEHIND BY LOOKOUT' && deck.cards.length === 3 && deck.cards[0].leftover === 'leftover1' && deck.cards[1].leftover === 'leftover2'
-        && deck.cards[0].id !== 'skill' && !deliveries.offer.includes('repair-v2'), JSON.stringify({ ...deliveries, deck }));
-    } else {
-      check(`${tag}: …the draft is headed SALVAGE · PICK ONE TO CARRY, no REPAIR v2 card (${deliveries.offer.join(', ')})`, deliveries.salvage === 'SALVAGE · PICK ONE TO CARRY'
-        && !deliveries.offer.includes('repair-v2'), JSON.stringify(deliveries));
-    }
+    check(`${tag}: …DELIVERIES on the PACKET into ${next.name}: ${wantChips.length === 0 ? 'none (so it beams at once)' : `${wantChips.join(', ')} (so it waits)`}`,
+      JSON.stringify(deliveries.chips) === JSON.stringify(wantChips) && direct === (wantChips.length === 0), JSON.stringify({ ...deliveries, direct }));
     if (deliveries.inTransit !== null) log(`${tag}: PACKET ${deliveries.inTransit}`);
     // Slice 2: 046.log's chip (`046.log · n/12`, glowing while an entry is unread), and HOLLOW riding the beam to VESPER
     // (boarding) and on to LAST LIGHT: the uninvited chip after the unit's own; NO RM only with no working rm aboard.
@@ -1128,21 +1153,10 @@ for (const [index, name] of SHIPS.entries()) {
       check(`${tag}: …nothing uninvited rides the beam to ${SHIPS[index + 1]}`, packet.uninvited === null && packet.noRm === null, JSON.stringify(packet));
     }
     await shot(`${index + 1}f-transmit`);
-    check(`${tag}: …[1] picks the first card`, (await runScreens.pickCard(0)) !== null);
-    // The white-out is about a second long: watched in the page (every 30 ms), not by polls that load can space out.
-    await st(() => {
-      window.__e2eNextLogFrom = Math.max(-1, ...window.__ap.log().map((entry) => entry.id));
-      window.__e2eWhite = 0;
-      clearInterval(window.__e2eWhiteTimer);
-      window.__e2eWhiteTimer = setInterval(() => {
-        const el = document.getElementById('whiteOut');
-        if (!el.hidden) window.__e2eWhite = Math.max(window.__e2eWhite, Number(getComputedStyle(el).opacity));
-      }, 30);
-    });
-    await page.locator('#txGo').click({ timeout: 10000 });
+    if (!direct) await page.locator('#txGo').click({ timeout: 10000 });
     const white = await waitFor(() => window.__e2eWhite > 0.5, 15000, 100);
     await st(() => clearInterval(window.__e2eWhiteTimer));
-    check(`${tag}: TRANSMIT ▸ sends, the screen floods white`, white);
+    check(`${tag}: ${direct ? 'the beam' : 'TRANSMIT ▸'} sends, the screen floods white`, white);
   } else {
     check(`${tag}: CONTINUE on the last ship ends the run`, afterReport === 'end', afterReport);
   }

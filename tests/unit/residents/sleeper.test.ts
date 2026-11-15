@@ -24,7 +24,7 @@ import { send, giveTools } from '../map/repo-fixture';
 import { lockOn } from '../landing/harness-landing';
 import { setLandingMode } from '../support/landing-instant';
 import { giveSkillFile } from '../support/skills';
-import { startRun, endShip, openDesk } from '@systems/run';
+import { startRun, endShip, openLeaveOrbit } from '@systems/run';
 import { receiveTransmission } from '@systems/boot';
 import { FIRST_RUN_LINEAGE } from '@systems/meta';
 import { on } from '@systems/events';
@@ -209,7 +209,7 @@ until(() => sleeper().phase === 'offering', 10);
   check('…then on to the next (60% → 100)', driversInMemory(st()).find((driver) => driver.id === b.id)!.integrity === 100, JSON.stringify(sleeper()));
   const grantsBefore = st().run.skills.grants.length;
   endShip(h.store, 'locked');
-  openDesk(h.store, null);
+  openLeaveOrbit(h.store, null);
   const grant = st().run.skills.grants[grantsBefore];
   const met = st().run.residents.met.at(-1);
   check(`the gift at the ship's end: +${SLEEPER_GIFT_CYCLES} cycles, \`taught by BARNABY\`; the record says woken, MEND DRIVERS`,

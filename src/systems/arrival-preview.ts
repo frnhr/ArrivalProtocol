@@ -9,11 +9,10 @@ import type { SkillLevel } from '@/types/skill';
 import { skillPacketPlan } from '@systems/skill-files';
 import { packedFiles, BEAM_SEED_LAYOUT_BLOCKS } from '@systems/carry';
 import { planPacket, pickCharge } from '@systems/draft';
-import { roomFit, linkBlocksFor } from '@systems/map-hop';
+import { roomFit } from '@systems/map-hop';
 import { FRESH_UNIT_RACK_E, layoutFor } from '@data/memory';
 import { FS_TOOL_KINDS, createToolFiles } from '@data/fs-tools';
 import { LOG_FILE } from '@data/log-text';
-import { BEAM_RANGE_LY } from '@data/tuning';
 import { seedAllowance } from '@systems/map-noise';
 import { traceSeedAllowance, traceGiftCharge } from '@systems/trace-gifts';
 import { playsTutorial } from '@systems/meta';
@@ -44,7 +43,7 @@ export interface ArrivalPreview {
   sum: string;                  // ON ARRIVAL: 36 CARRIED + 18 (★★★) = 54 REPAIR CHARGE, or … = 54 · ROOM FOR 20
   card: string;                 // the SHIP CARD's fit line: YOU FIT, CHARGE SQUEEZED: 20 ARRIVES (6 IF SEEDS RIDE) …
   charge: string | null;        // the PACKET's line under the room bar (null: everything fits, seeds or not)
-  tooMany: string | null;       // n TOO MANY FOR THE LINK / ROOM · LEAVE FILES BEHIND: TRANSMIT ▸ waits
+  tooMany: string | null;       // n TOO MANY FOR THE ROOM · LEAVE FILES BEHIND: TRANSMIT ▸ waits
   tone: 'quiet' | 'squeezed' | 'zero' | 'over';
   confirm: string | null;       // the inline confirm's question: the charge may arrive at 0 (M2: seeds included)
 }
@@ -52,8 +51,7 @@ export interface ArrivalPreview {
 export function arrivalPreview(fit: Readonly<RoomFit>, credit: Readonly<ArrivalCredit>): ArrivalPreview {
   const card = MAP_TEXT.card.fit(fit);
   if (fit.word === 'leave') {
-    const tooMany = fit.overLink >= fit.over ? MAP_TEXT.packet.overLink(fit.overLink) : MAP_TEXT.packet.overRoom(fit.over);
-    return { fit: { ...fit }, sum: MAP_TEXT.packet.arrivalLeave, card, charge: null, tooMany, tone: 'over', confirm: null };
+    return { fit: { ...fit }, sum: MAP_TEXT.packet.arrivalLeave, card, charge: null, tooMany: MAP_TEXT.packet.overRoom(fit.over), tone: 'over', confirm: null };
   }
   const gift = credit.gift ?? 0;
   const parts = arrivalParts(fit.carried, credit.starCredit, credit.stars, fit.floorAdded, credit.card, gift);
@@ -89,7 +87,7 @@ export function arrivalPreview(fit: Readonly<RoomFit>, credit: Readonly<ArrivalC
 // agree on the skills' blocks.
 // Slice 7c: the hop names its destination (`to`), whose trace gift and seed rules (systems/trace-gifts.ts) count here.
 export interface ArrivalPlan {
-  hop: Readonly<Pick<Hop, 'to' | 'linkBlocks' | 'room' | 'chargeFloor'>>;
+  hop: Readonly<Pick<Hop, 'to' | 'room' | 'chargeFloor'>>;
   threat: Readonly<Pick<ShipThreat, 'act' | 'beamSeeds'>>;
   dropped: readonly string[];
   pick: DraftCardId | null;
@@ -102,7 +100,7 @@ export interface ArrivalPlan {
 // delivery packed with a chance of one (phase 3 slice 3b, 04 §3.4: none on a first of kind, the patch, into a calm ship).
 export function unitArrival(state: Readonly<GameState>, plan: Readonly<ArrivalPlan>, seedsExact?: number): ArrivalPreview {
   const packet = planPacket(state.memory, {
-    linkBlocks: plan.hop.linkBlocks, dropped: plan.dropped, pick: plan.pick, deliveries: plan.deliveries,
+    dropped: plan.dropped, pick: plan.pick, deliveries: plan.deliveries,
     skills: skillPacketPlan(state, plan.packAs ?? {}),
   });
   const deliverySeedsMax = plan.deliveries.filter((chip) => !chip.sendOn && chip.seedChance > 0).length;
@@ -126,16 +124,13 @@ export function unitArrival(state: Readonly<GameState>, plan: Readonly<ArrivalPl
 }
 
 // At load (the review's B1): the files the PACKET can never leave behind (systems/carry.ts dropLock: the Core, Engine
-// I/O, Nav Plotter, 046.log and one copy of every filesystem tool, at their biggest) fit the shortest beam's link
-// (BEAM_RANGE_LY) and a TIGHT ship's room, so `LEAVE FILES BEHIND` always has an answer: there is always enough to drop.
+// I/O, Nav Plotter, 046.log and one copy of every filesystem tool, at their biggest) fit a TIGHT ship's room, the smallest,
+// so `LEAVE FILES BEHIND` always has an answer: there is always enough to drop (playtest 1 note 20: no link to fit).
 (function checkLockedFilesFit(): void {
   const locked = FRESH_UNIT_RACK_E.filter((item): item is Exclude<typeof item, { free: number }> => !('free' in item))
     .filter((item) => item.role === 'core' || item.role === 'engine-io' || item.role === 'navplot')
     .reduce((sum, item) => sum + item.size, LOG_FILE.size)
     + FS_TOOL_KINDS.reduce((sum, kind) => sum + Math.max(...createToolFiles(kind).map((file) => file.size)), 0);
-  const shortest = linkBlocksFor(BEAM_RANGE_LY);
   const tight = layoutFor('TIGHT').roomForUnit;
-  if (locked > shortest || locked > tight) {
-    throw new Error(`arrival-preview: ${locked} blocks of locked files, over the shortest link (${shortest}) or TIGHT's room (${tight})`);
-  }
+  if (locked > tight) throw new Error(`arrival-preview: ${locked} blocks of locked files, over TIGHT's room (${tight})`);
 })();

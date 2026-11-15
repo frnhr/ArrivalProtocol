@@ -40,25 +40,24 @@ async function bootDone() {
   return waitFor(() => window.__ap.store.getState().run.phase === 'flight', 15000);
 }
 
-// The ship ends locked at once and landed at once, its report closed: the DESK.
+// The ship ends locked at once and landed at once, its report closed: LEAVE ORBIT (the +12 charge when dealt, else the
+// first card; playtest 1, note 5), then the DESK.
 async function toDesk() {
   await screens.lockInRing({ sleep: true });
   await screens.landToReport();
   await screens.finishReport();
+  await waitFor(() => window.__ap.store.getState().run.phase === 'leave', 10000);
+  const index = await st(() => Math.max(0, window.__ap.draft().offer.findIndex((card) => card.id === 'charge')));
+  await screens.leaveOrbit(index);
   return waitFor(() => window.__ap.store.getState().run.phase === 'desk' && !document.getElementById('deskScreen').hidden, 10000);
 }
 
-// From the DESK, the real TRANSMIT to `slot`: SET COURSE, a card (the +12 charge when dealt), TRANSMIT ▸ (systems/run.ts
-// transmitNext through __ap.transmit), into its boot.
+// From the DESK, the real TRANSMIT to `slot`: SET COURSE, then the PACKET's beam (TRANSMIT ▸ when it asks, at once when it
+// has nothing to ask; the card was taken at LEAVE ORBIT), into its boot.
 async function beamTo(slot) {
   await st((to) => window.__ap.course(to), slot);
-  await waitFor(() => window.__ap.draft() !== null, 5000);
-  await st(() => {
-    const offer = window.__ap.draft().offer;
-    if (offer.length > 0) window.__ap.pick(offer.some((card) => card.id === 'charge') ? 'charge' : offer[0].id);
-    window.__ap.transmit();
-  });
-  return waitFor(() => window.__ap.store.getState().run.phase === 'boot', 10000);
+  await screens.beam();
+  return waitFor(() => window.__ap.store.getState().run.phase === 'boot', 15000);
 }
 
 // A ship's SHIP CARD on the DESK (its node clicked): the rows by key, and whether its node wears the `◆`.

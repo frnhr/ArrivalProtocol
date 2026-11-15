@@ -12,7 +12,7 @@
 //   and END LANDING refusals (N7), RUN END's NOBODY WOKE judged on pods down (N2);
 // • issue 5: on a fresh unit VESPER's tool-hunting seed borders a tool (the pooled receiver's hunting ground).
 import { check, finish } from './checks';
-import { fixtureShip, fixtureVerdict, fixtureHop } from '../support/arm-ship';
+import { fixtureShip, fixtureVerdict } from '../support/arm-ship';
 import { phase2HollowOf } from '../support/hollow-world';
 import type { ShipThreat } from '@/types/threat';
 import { lockOn } from './harness-landing';
@@ -351,8 +351,8 @@ function forceLandAllButFirst(): void {
   const hunt: ShipThreat = { ...fixtureVerdict(VESPER), stage: 'hunt', folded: [], hollow: phase2HollowOf(VESPER), rootBlocks: 14 };
   const freshFiles = [...FRESH_UNIT_RACK_E, ...FRESH_UNIT_RACK_F]
     .filter((item): item is Exclude<typeof item, { free: number }> => !('free' in item)).map((item) => structuredClone(item) as Segment);
-  const huntPacket = packUnit(freshFiles, fixtureHop(VESPER).linkBlocks, []);
-  const carried = layoutCarried(huntPacket, huntPacket.chargeCarried, fixtureShip(VESPER), hunt).racks;
+  const huntPacket = packUnit(freshFiles, []);
+  const carried = layoutCarried(huntPacket, huntPacket.chargeHeld, fixtureShip(VESPER), hunt).racks;
   const world = createInitialState({ seed: 4, shipIndex: VESPER, carried, threat: hunt });
   const memory = world.memory;
   const starts = segmentStarts(memory);
@@ -369,8 +369,8 @@ function forceLandAllButFirst(): void {
   // Only the tool-hunting ship gets it: HALCYON's receiver stays back to back (01-landing §3.16).
   const files = [...FRESH_UNIT_RACK_E, ...FRESH_UNIT_RACK_F]
     .filter((item): item is Exclude<typeof item, { free: number }> => !('free' in item)).map((item) => structuredClone(item) as Segment);
-  const packet = packUnit(files, 120, []);
-  const halcyon = layoutCarried(packet, packet.chargeCarried, fixtureShip(1), fixtureVerdict(1)).racks.segs;
+  const packet = packUnit(files, []);
+  const halcyon = layoutCarried(packet, packet.chargeHeld, fixtureShip(1), fixtureVerdict(1)).racks.segs;
   check('…and HALCYON\'s unit is still laid out back to back (no free run before the charge)',
     halcyon.findIndex((seg) => seg.type === 'free') > halcyon.findIndex((seg) => seg.type === 'redundancy'));
 }

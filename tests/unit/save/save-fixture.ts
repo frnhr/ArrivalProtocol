@@ -15,7 +15,7 @@ import { decodeRunSave } from '@systems/save-codec';
 import { receiveTransmission } from '@systems/boot';
 import { sayOwedVerdict } from '@systems/finale';
 import { resetWorld } from '@systems/reset';
-import { send, toDesk } from '../map/repo-fixture';
+import { send, toDesk, toLeave } from '../map/repo-fixture';
 import { WORKED_ROUTE } from '../map/run1-fixture';
 import { META_STORAGE_KEY, RUN_SAVE_KEY } from '@data/tuning';
 
@@ -98,7 +98,7 @@ export function beamTo(store: Store<GameState>, slot: number): void {
   send(store, slot);
 }
 
-export { toDesk };
+export { toDesk, toLeave };
 
 // The final ship's LANDING REPORT with a decided finale, as systems/landing.ts finishLanding opens it (ENDING CHOSEN).
 // Slice 7a: decided by its step 1 and REASSIGNMENT (support/finale.ts decideFinale).

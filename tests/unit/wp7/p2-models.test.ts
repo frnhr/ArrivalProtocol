@@ -1,7 +1,8 @@
 // WP7 part 2, headless: the models behind the run's screens and HUD, on the real systems.
-// • TRANSMIT (§6.9, item 4): the headline, the packet line, the chips safest-to-drop first with their
-//   notes, the locks, drops offered only while charge is left behind (a tight link: +4 CHARGE for
-//   Repair.bak, then Repair is the last copy), the arrival line's sum; the dropped file stays behind;
+// • TRANSMIT (§6.9, item 4): the headline, the room line, the chips safest-to-drop first with their
+//   notes, the locks, drops offered only while charge is left behind (a tight room: +4 CHARGE for
+//   Repair.bak, then Repair is the last copy; playtest 1 note 20: no link), the arrival line's sum; the dropped file stays
+//   behind;
 // • the arrival (item 3): the boot's ECC line emits 'arrival-hits', each naming a file now in memory;
 // • BEAM OUT (item 6): what the Engine button, COMMS and the strip show (offered, offered-paused, beaming,
 //   hidden on the tutorial ship), and the strip's two BEAM OUT lines (the hopeless offer, the race);
@@ -12,7 +13,7 @@
 // TODO(phase2): RUN END's words are Track UI's (RUN_END_TEXT below landing-text's UI banner); the lines are checked
 // through its functions, so a rewording needs no change here, a new layout may.
 // • every new line fits the strip (≤ 70) with worst-case values.
-// Track RETIRE (phase 3): on run 1's arm. The hop to HALCYON is the worked route's (21 LY, 31 years early, link 123, its
+// Track RETIRE (phase 3): on run 1's arm. The hop to HALCYON is the worked route's (21 LY, 31 years early, its
 // three hits all corrected by ECC); the first desk's pick (AUTOBURN v1) rides in the packet, locked as TRAINED HERE; RUN
 // END's fleet is the route's (the worked route's six ships: 11,000), its ranks absolute (RANK_FLEET_COLONISTS).
 import { check, finish } from '../wp1/harness';
@@ -78,7 +79,8 @@ check('CONTINUE → TRANSMIT', state().run.phase === 'transmit');
   const model = transmitModel(state());
   check('TRANSMIT: NEXT: HALCYON · 1,000 COLONISTS · 21 LY · SLEEP 31 YRS', model.headline === 'NEXT: HALCYON · 1,000 COLONISTS · 21 LY · SLEEP 31 YRS', model.headline);
   check('…no why line after a ship that landed', model.why === null);
-  check('…the packet line: LINK 123 · FILES n · CHARGE n → FITS', /^LINK 123 · FILES \d+ · CHARGE \d+ → FITS$/.test(model.packetLine), model.packetLine);
+  // Playtest 1 (note 20): the link's packet line went with the link; the room's line says how the packet meets HALCYON.
+  check('…the room line: ROOM 152 · FILES n + FLOOR 12', model.room.line === MAP_TEXT.packet.room(152, model.files, 12), model.room.line);
   const names = model.chips.map((chip) => chip.name);
   // Phase 3 slice 2: 046.log (still `???` until scanned) rides in every packet, locked.
   check('…the chips, safest to drop first: the spare REPAIRs, Telemetry, Autopilot, Sensor Interp, AI Comms, then the locked (the skill trained here last)',
@@ -95,8 +97,8 @@ check('CONTINUE → TRANSMIT', state().run.phase === 'transmit');
   check('…a click on a chip refuses: nothing to gain, or locked', toggleDrop(h.store, telemetry.segId) === 'nothing-to-gain'
     && toggleDrop(h.store, core.segId) === 'locked' && state().run.transit?.dropped.length === 0);
   const credit = state().run.pendingStarCredit;
-  const total = Math.max(12, model.chargeCarried + credit);
-  check('…the arrival line adds the stars\' charge', model.arrivalLine === TRANSMIT_TEXT.arrival(model.chargeCarried, credit, state().run.pendingStars, total - (model.chargeCarried + credit), total)
+  const total = Math.max(12, model.chargeHeld + credit);
+  check('…the arrival line adds the stars\' charge', model.arrivalLine === TRANSMIT_TEXT.arrival(model.chargeHeld, credit, state().run.pendingStars, total - (model.chargeHeld + credit), total)
     && model.arrivalCharge === total, model.arrivalLine);
   check('…the hits line: 3 on the way to HALCYON', model.hitsLine === TRANSMIT_TEXT.hits(3), model.hitsLine);
   // An infected file travels infected (§6.9): its chip and the screen warn.
@@ -113,29 +115,33 @@ check('CONTINUE → TRANSMIT', state().run.phase === 'transmit');
   });
 }
 
-// --- A tight link: dropping a spare carries more charge --------------------------------------------
+// --- A tight room: dropping a spare lands more charge (playtest 1, note 20: the room is the one limit) ----------------
 {
   const files = transmitModel(state()).files;
-  const held = transmitModel(state()).chargeHeld;
-  // The plan's link and its hop's link are one number in the game (goTransmit copies the hop's): squeeze both.
-  h.store.update((d) => { d.run.transit!.linkBlocks = files + held - 10; d.run.transit!.hop.linkBlocks = files + held - 10; });
+  const wanted = transmitModel(state()).room.fit.wanted;
+  // The plan's hop is the destination's room (goTransmit's): squeeze it 10 blocks short of the charge that would arrive.
+  const room = state().run.transit!.hop.room;
+  h.store.update((d) => { d.run.transit!.hop.room = files + wanted - 10; });
   let model = transmitModel(state());
-  check('a tight link leaves charge behind: the line says how much', model.packetLine.endsWith('→ 10 LEFT BEHIND') && model.dropLine === TRANSMIT_TEXT.tight, model.packetLine);
+  check('a tight room leaves charge behind: the line says how much', model.room.fit.roomLost === 10
+    && model.room.charge === MAP_TEXT.packet.squeeze(wanted, wanted - 10, 10) && model.dropLine === TRANSMIT_TEXT.tight, model.room.charge ?? '');
   const bak = model.chips.find((chip) => chip.name === 'Repair.bak')!;
-  check('…Repair.bak can be left behind for +4 CHARGE', bak.toggleable && bak.chargeGain === 4, JSON.stringify(bak));
-  const carriedBefore = model.chargeCarried;
+  check('…Repair.bak can be left behind for +4 CHARGE', bak.toggleable && bak.arriveGain === 4, JSON.stringify(bak));
+  const carriedBefore = model.arrivalCharge;
   check('…a click leaves it behind', toggleDrop(h.store, bak.segId) === null && state().run.transit!.dropped.includes(bak.segId));
   model = transmitModel(state());
-  check('…the charge carried grows by 4, and the plan\'s numbers follow', model.chargeCarried === carriedBefore + 4
-    && state().run.transit!.chargeCarried === model.chargeCarried && state().run.transit!.filesBlocks === model.files);
+  check('…the charge that arrives grows by 4, and the plan\'s numbers follow', model.arrivalCharge === carriedBefore + 4
+    && state().run.transit!.filesBlocks === model.files);
   const repair = model.chips.find((chip) => chip.name === 'Repair')!;
   check('…now Repair is the only REPAIR: locked, and says so', repair.lock === 'last-copy' && repair.note === TRANSMIT_TEXT.locked.lastCopy('REPAIR')
     && toggleDrop(h.store, repair.segId) === 'locked');
   check('…the dropped chip is listed first, as LEFT BEHIND, and can be taken back',
     model.chips[0]?.segId === bak.segId && model.chips[0]?.dropped === true && model.chips[0]?.toggleable === true);
   toggleDrop(h.store, bak.segId);
-  check('…taking it back restores the packet', transmitModel(state()).chargeCarried === carriedBefore && state().run.transit!.dropped.length === 0);
+  check('…taking it back restores the packet', transmitModel(state()).arrivalCharge === carriedBefore && state().run.transit!.dropped.length === 0);
   toggleDrop(h.store, bak.segId);
+  // The send lays the unit out in the ship's real room, so the preview's room is put back (the drop stays).
+  h.store.update((d) => { d.run.transit!.hop.room = room; });
 }
 
 // --- TRANSMIT ▸: the dropped file stays behind; the ECC line flashes the hit files --------------------
@@ -318,7 +324,7 @@ check('CONTINUE → TRANSMIT', state().run.phase === 'transmit');
 {
   const ship = 'W'.repeat(NAME_MAX_CHARS);
   const lines = [
-    MAP_TEXT.packet.headline(ship, 99_999, 999, 999), TRANSMIT_TEXT.packet(999, 999, 999, 99), TRANSMIT_TEXT.why.crashed(99), TRANSMIT_TEXT.why.crashed(0), TRANSMIT_TEXT.why.emergency,
+    MAP_TEXT.packet.headline(ship, 99_999, 999, 999), TRANSMIT_TEXT.why.crashed(99), TRANSMIT_TEXT.why.crashed(0), TRANSMIT_TEXT.why.emergency,
     TRANSMIT_TEXT.why.abandoned(ship), TRANSMIT_TEXT.why.escaped(ship), TRANSMIT_TEXT.why.stranded(ship), TRANSMIT_TEXT.hits(99),
     TRANSMIT_TEXT.arrival(999, 99, 3, 99, 999), TRANSMIT_TEXT.infected(99), TRANSMIT_TEXT.fits, TRANSMIT_TEXT.tight,
     TRANSMIT_TEXT.sending('UNIT-999', ship), TRANSMIT_TEXT.go, ...Object.values(TRANSMIT_TEXT.without), ...Object.values(TRANSMIT_TEXT.locked).map((value) => (typeof value === 'string' ? value : value('DELETE'))),

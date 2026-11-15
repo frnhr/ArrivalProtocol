@@ -1,9 +1,9 @@
 // Slice 3a F2: the beam's numbers (02-map §3.1, §3.3, §3.4, §3.14; slice-3a-plan §2.3, §4.3), pure. The worked route's
-// LY, years, slack, links, hits, ECC and what lands; integer half-up rounding (links 119 and 97, WAYFARER 2970, LAST LIGHT
+// LY, years, slack, hits, ECC and what lands (playtest 1: no links any more); integer half-up rounding (WAYFARER 2970, LAST LIGHT
 // 3020); run 1's table (bases, timing, pods, classes); reachability (ALBATROSS only from ARES-VII, GOOD HOPE too late from
 // CORMORANT, M3); 907 routes and the best by length; the card's seed ranges.
 import { check, finish } from '../landing/checks';
-import { hopBetween, hitsLanding, reachable, reachableFrom, linkBlocksFor, transitHitsFor, eccFixesFor } from '@systems/map-hop';
+import { hopBetween, hitsLanding, reachable, reachableFrom, transitHitsFor, eccFixesFor } from '@systems/map-hop';
 import { bases, timingYear, finalYear, podsFor, memoryClassOf } from '@systems/map-generator';
 import { routes, bestRoute, routePods, shipsLeft } from '@systems/map-route';
 import { mapFacts, oneHopFromFinal } from '@systems/map-facts';
@@ -20,7 +20,6 @@ const col = (pick: (hop: (typeof hops)[number]) => number): string => hops.map(p
 check('worked route LY 21, 26, 55, 30, 54', col((h) => h.distanceLy) === '21,26,55,30,54', col((h) => h.distanceLy));
 check('…you get there 2321, 2378, 2522, 2655, 2871', col((h) => h.arriveYear) === '2321,2378,2522,2655,2871', col((h) => h.arriveYear));
 check('…slack 31, 89, 103, 162, 149', col((h) => h.slackYears) === '31,89,103,162,149', col((h) => h.slackYears));
-check('…link 123, 117, 86, 113, 87', col((h) => h.linkBlocks) === '123,117,86,113,87', col((h) => h.linkBlocks));
 check('…hits 3, 4, 8, 4, 8', col((h) => h.transitHits) === '3,4,8,4,8', col((h) => h.transitHits));
 check('…ECC 1, 3, 4, 6, 5', col((h) => h.eccFixes) === '1,3,4,6,5', col((h) => h.eccFixes));
 check('…lands 2, 1, 4, 0, 3', hops.map((h) => hitsLanding(h, 0)).join() === '2,1,4,0,3');
@@ -30,8 +29,6 @@ check('…each hop carries the destination\'s room and floor (COMPACT 152/12, FU
 check('…every worked hop is reachable', hops.every((h) => reachable(map, h.from, h.to)));
 
 // Half-up rounding, in integers.
-check('link: 22 LY 122, 25 LY 119, 45 LY 97 (half up, not the sim\'s half-even 118 / 96)',
-  linkBlocksFor(22) === 122 && linkBlocksFor(25) === 119 && linkBlocksFor(45) === 97);
 check('hits round(d / 7): 21 → 3, 26 → 4, 55 → 8; ECC floor(slack / 25): 24 → 0, 25 → 1, late → 0',
   transitHitsFor(21) === 3 && transitHitsFor(26) === 4 && transitHitsFor(55) === 8 && eccFixesFor(24) === 0 && eccFixesFor(25) === 1 && eccFixesFor(-5) === 0);
 const base = bases(2300);

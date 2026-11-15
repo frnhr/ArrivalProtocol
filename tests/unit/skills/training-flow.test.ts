@@ -11,7 +11,7 @@
 // • The boot's skill lines (03 §4): `> SKILL TRAINED: AUTOBURN.skl v1 · from your 1 capture · ACCURACY 92%`, the UNTRAINED
 //   variant, `> SKILL RETRAINED` after new demos, none without; saying one records `announced` and fires 'skill-trained'
 //   (the ONLINE stamp); bootLinePlan places it; a BEAM save resumed plans the same line.
-// • The 'after-seeds' latch: a branch due by the map at openDesk is latched into RunSkillState.opened (SENTRY built for
+// • The 'after-seeds' latch: a branch due by the map at LEAVE ORBIT (playtest 1) is latched into RunSkillState.opened (SENTRY built for
 //   this check only; 4a builds AUTOBURN alone).
 // • Graded damage's watcher (03 §3.5): 'skill-version' on a step down and back up while flying, silent on a ship's first
 //   tick and at the desk, and a file under REPAIR (offline) reads OFF.
@@ -22,8 +22,7 @@ import type { SkillId } from '@/types/skill';
 import { createStore } from '@state/store';
 import { createInitialState } from '@state/initial';
 import { createRunMap } from '@systems/map-run';
-import { setCourse, backToChart, transmitNext, openDesk, endShip } from '@systems/run';
-import { pickCard } from '@systems/draft';
+import { setCourse, backToChart, transmitNext, openLeaveOrbit, endShip } from '@systems/run';
 import { trainCell, undoPurchase, restoreSkill } from '@systems/training';
 import { bankOf, deskBlocker, visitNow, grantCycles, openBranchesAt } from '@systems/skill-tree';
 import { skillBootLines, applySkillBootLine, mountSkillWatch } from '@systems/skill-files';
@@ -45,8 +44,6 @@ const v = (version: 1 | 2 | 3) => ({ kind: 'version' as const, version });
 const lock = (level: 1 | 2) => ({ kind: 'lock' as const, level });
 
 function sendNow(store: Store<GameState>): void {
-  const offer = store.getState().run.transit!.offer;
-  if (offer.length > 0) pickCard(store, offer.some((card) => card.id === 'charge') ? 'charge' : offer[0]!.id);
   transmitNext(store);
 }
 
@@ -176,9 +173,9 @@ offTrained();
     }
     run.update((draft) => { draft.run.threat.trace = 1; draft.run.phase = 'report'; });
     endShip(run, 'locked');
-    openDesk(run, null);
+    openLeaveOrbit(run, null);
     const opened = run.getState().run.skills.opened;
-    check('visit 3 after seeds (SENTRY built for this check): openDesk latches DEFENCE open, once',
+    check('visit 3 after seeds (SENTRY built for this check): LEAVE ORBIT (the ship\'s end) latches DEFENCE open, once',
       opened.length === 1 && opened[0]!.skill === 'sentry' && opened[0]!.visit === 3 && openBranchesAt(run.getState(), 3).includes('sentry')
         && trainCell(run, 'sentry', v(1)) !== 'closed', JSON.stringify(opened));
   } finally {

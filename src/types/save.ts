@@ -26,7 +26,12 @@ export interface ResumeLine {
   ship: string;                 // the ship being booted into (boot points) or the ship just done (world points)
   year: number;                 // the galaxy year there
   point: SavePoint;
+  // Playtest 1 (RUN_SAVE_VERSION 10): the screen it resumes on. SHIP DONE is written twice (plan §3.3.3), at LEAVE ORBIT
+  // ('leave-orbit' after a landing, 'leaving' after a lost ship: `LEAVING HALCYON`) and at the desk.
+  stage: ResumeStage;
 }
+
+export type ResumeStage = 'boot' | 'leave-orbit' | 'leaving' | 'desk' | 'report';
 
 // The parts of a boot that the store no longer holds once the ship is built (the BEAM point: startShip's racks and verdict).
 export interface BootParts {
@@ -41,11 +46,11 @@ export interface BootPayload extends BootParts {
   run: RunState;
 }
 
-// A save that resumes on a screen between flights (SHIP DONE: the desk; ENDING CHOSEN: the final LANDING REPORT): the run
-// and the ship's slices as they stood.
+// A save that resumes on a screen between flights (SHIP DONE: LEAVE ORBIT or the desk, playtest 1; ENDING CHOSEN: the final
+// LANDING REPORT): the run and the ship's slices as they stood.
 export interface WorldPayload {
   kind: 'world';
-  phase: 'desk' | 'report';
+  phase: 'leave' | 'desk' | 'report';
   run: RunState;
   slices: ShipSlices;
 }

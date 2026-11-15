@@ -32,7 +32,6 @@ import { bestRoute } from '@systems/map-route';
 import { transmitModel } from '@systems/transmit';
 import { bootLinePlan, bootLine, WORST_CASE_VARS } from '@data/script';
 import { fitPacket, toDesk } from '../map/repo-fixture';
-import { pickCard } from '@systems/draft';
 import { transmitNext } from '@systems/run';
 import { setCourseFromDesk } from '../support/desk';
 
@@ -232,8 +231,6 @@ const BOOKS: readonly LogBook[] = [
     setCourseFromDesk(store, slot);
     const chip = transmitModel(store.getState()).chips.find((candidate) => candidate.segId === LOG_SEG_ID);
     if (chip !== undefined) locks.push(chip.note);
-    const offer = store.getState().run.transit!.offer;
-    if (offer.length > 0) pickCard(store, offer.some((card) => card.id === 'charge') ? 'charge' : offer[0]!.id);
     fitPacket(store);
     transmitNext(store);
     const state = store.getState();

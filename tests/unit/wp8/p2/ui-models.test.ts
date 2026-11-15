@@ -1,9 +1,9 @@
 // WP8 part 2, headless: the models behind this pass's screens (the DOM itself is checked in the browser,
 // tests/unit/wp8/p2/two-runs.mjs and archive-banners.mjs).
-// • TRANSMIT's cards (systems/transmit.ts): three cards with their form tag ([FILE · 2 BLOCKS] …), key 1–3,
-//   effect and `because …`, boosted when they answer how the kid played; nothing picked at first; a file card
-//   picked adds its new file as a chip (and its blocks to the packet line), a non-file card adds none; the
-//   pick can change; the send stays refused without one.
+// • LEAVE ORBIT's cards (playtest 1, note 5: the old TRANSMIT's draft; systems/leave-orbit.ts): three cards with their form
+//   tag ([FILE · 2 BLOCKS] …), key 1–3, effect and `because …`, boosted when they answer how the kid played; nothing picked
+//   at first; a file card taken adds its new file as a chip on the PACKET (and its blocks to the packet), a non-file card adds
+//   none; the pick can change; ENTER stays refused without one.
 // • The Skills window (systems/skills.ts): empty on a fresh unit; FIREWALL.sys IDLE in rack F, HOLDING once
 //   MOVEd against the root, a GONE pip once deleted; FUEL TRIM `THIS SHIP: +15% FUEL` after it widened the
 //   arrival, `FROM THE NEXT SHIP` for one that did not (yet), NO EFFECT below 50; REPAIR v2 per Repair copy;
@@ -16,8 +16,10 @@ import { check, finish } from '../../wp1/harness';
 import { createHarness7 } from '../../wp7/harness7';
 import { transmitModel } from '@systems/transmit';
 import { pickCard } from '@systems/draft';
-import { transmitNext } from '@systems/run';
-import { continueAfterLoss } from '../../support/desk';
+import { leaveModel } from '@systems/leave-orbit';
+import { leaveOrbit, continueAfterLoss } from '@systems/run';
+import { throughDesk } from '../../support/desk';
+import { LEAVE_TEXT } from '@data/leave-text';
 import { installTool } from '@systems/licences';
 import { skillsModel, arrivalFuelTrimPct, type SkillRow } from '@systems/skills';
 import { receiveTransmission } from '@systems/boot';
@@ -48,8 +50,9 @@ const setHealth = (segId: string, integrity: number): void => {
   });
 };
 
-// Ship 1, run 1, the simulation already used: a crash goes to EMERGENCY TRANSMIT (TRANSMIT in a few ticks).
-function toTransmit(seed: number, prepare: () => void = () => {}): void {
+// Ship 1, run 1, the simulation already used: a crash goes to EMERGENCY TRANSMIT (LEAVE ORBIT in a few ticks: LEAVING
+// ARES-VII).
+function toLeave(seed: number, prepare: () => void = () => {}): void {
   h.newRun(seed);
   h.store.update((d) => { d.run.phase = 'flight'; d.run.simulationRetryUsed = true; d.ui.mode = 'tools'; });
   prepare();
@@ -57,23 +60,23 @@ function toTransmit(seed: number, prepare: () => void = () => {}): void {
   h.store.mutate((d) => { d.orbit.x = radius; d.orbit.y = 0; d.orbit.vx = -3; d.orbit.vy = 0.05; });
   h.stepUntil(() => h.status() !== 'approaching', 10);
   continueAfterLoss(h.store);
-  if (state().run.phase !== 'transmit') throw new Error(`toTransmit: phase ${state().run.phase}`);
+  if (state().run.phase !== 'leave') throw new Error(`toLeave: phase ${state().run.phase}`);
 }
 
-// Deals exactly `ids` on this TRANSMIT (the offer is data) and picks `pick` when given.
+// Deals exactly `ids` on this LEAVE ORBIT (the offer is data) and picks `pick` when given.
 function deal(ids: UpgradeId[], pick?: UpgradeId): void {
-  h.store.update((d) => { d.run.transit!.offer = ids.map((id) => ({ id, title: id, effect: '', why: BASE_WHY, boosted: false })); });
+  h.store.update((d) => { d.run.leave.offer = ids.map((id) => ({ id, title: id, effect: '', why: BASE_WHY, boosted: false })); });
   if (pick !== undefined) {
     const refusal = pickCard(h.store, pick);
     if (refusal !== null) throw new Error(`pick ${pick}: ${refusal}`);
   }
 }
 
-// --- TRANSMIT's cards ------------------------------------------------------------------------------------
+// --- LEAVE ORBIT's cards ------------------------------------------------------------------------------------
 {
-  toTransmit(5, () => { h.store.update((d) => { d.run.stats.driversLost = 1; }); });
-  const model = transmitModel(state());
-  check('TRANSMIT shows the 3 cards dealt, keyed 1, 2, 3, none picked yet', model.cards.length === 3
+  toLeave(5, () => { h.store.update((d) => { d.run.stats.driversLost = 1; }); });
+  const model = leaveModel(state());
+  check('LEAVE ORBIT shows the 3 cards dealt, keyed 1, 2, 3, none picked yet', model.cards.length === 3
     && model.cards.map((card) => card.key).join() === '1,2,3' && model.pick === null && model.cards.every((card) => !card.picked));
   const tags: Record<UpgradeId, string> = {
     firewall: `FILE · ${FIREWALL_BLOCKS} BLOCKS`, 'fuel-trim': `FILE · ${FUEL_TRIM_BLOCKS} BLOCKS`, 'repair-v2': 'UPGRADE', 'thread-plus': 'AI CORE', charge: 'ON ARRIVAL', cycles: 'TRAINING',
@@ -85,22 +88,34 @@ function deal(ids: UpgradeId[], pick?: UpgradeId): void {
     firewall !== undefined && firewall.boosted && DRAFT_TEXT.why(firewall.why) === 'because you lost a driver to ???',
     model.cards.map((card) => `${card.id}: ${card.why}`).join(' | '));
   check('every card line on the screen is ≤ 70 characters', model.cards.every((card) => [card.title, card.effect, DRAFT_TEXT.why(card.why), card.tag].every(lineOk)));
-  check('…and no file card is shown in the packet before a pick', model.cardFile === null);
+  check('…a lost ship: `LEAVING ARES-VII`, with the emergency\'s toll', model.title === 'LEAVING ARES-VII' && model.lost && model.emergency && model.why !== null, model.title);
+  let threw = '';
+  try { leaveOrbit(h.store); } catch (error) { threw = (error as Error).message; }
+  check('without a pick ENTER is refused (the screen says TAKE ONE FIRST)', /no salvage taken/.test(threw) && state().run.phase === 'leave'
+    && model.waiting && model.go === LEAVE_TEXT.goWaiting, threw);
 
   deal(['firewall', 'repair-v2', 'charge'], 'firewall');
-  const picked = transmitModel(state());
-  check('picking FIREWALL.sys: it is the picked card, and its new file joins the packet as a chip (Firewall.sys, 2 blocks)',
-    picked.pick === 'firewall' && picked.cards.find((card) => card.picked)?.id === 'firewall' && picked.cardFile?.name === 'Firewall.sys'
-      && picked.cardFile.blocks === FIREWALL_BLOCKS, JSON.stringify(picked.cardFile));
-  check('…the packet line counts it (FILES +2)', picked.files === model.files + FIREWALL_BLOCKS, `${model.files} → ${picked.files}`);
+  check('picking FIREWALL.sys: it is the picked card', leaveModel(state()).pick === 'firewall'
+    && leaveModel(state()).cards.find((card) => card.picked)?.id === 'firewall');
   const switched = pickCard(h.store, 'charge');
+  check('the pick can change before ENTER: +12 REPAIR CHARGE now', switched === null && leaveModel(state()).pick === 'charge');
+  pickCard(h.store, 'firewall');
+  const withoutCard = structuredClone(state().run.leave);
+  leaveOrbit(h.store);
+  throughDesk(h.store);
+  const picked = transmitModel(state());
+  check('…taken, its new file joins the PACKET as a chip (Firewall.sys, 2 blocks), and SALVAGE names it',
+    picked.pick === 'firewall' && picked.cardFile?.name === 'Firewall.sys' && picked.cardFile.blocks === FIREWALL_BLOCKS && picked.salvage === 'firewall',
+    JSON.stringify(picked.cardFile));
+  // The same desk with +12 REPAIR CHARGE taken instead (LEAVE ORBIT's offer as dealt above): no file chip, the arrival line
+  // counts the card, and the files are FIREWALL's 2 fewer.
+  h.store.update((d) => {
+    d.run.leave = { ...withoutCard, pick: 'charge' };
+    d.run.transit!.pick = 'charge';
+  });
   const charge = transmitModel(state());
-  check('the pick can change before the send: +12 REPAIR CHARGE now, no file chip, the arrival line counts the card',
-    switched === null && charge.pick === 'charge' && charge.cardFile === null && charge.files === model.files && /\+ 12 \(CARD\)/.test(charge.arrivalLine), charge.arrivalLine);
-  h.store.update((d) => { d.run.transit!.pick = null; });
-  let threw = '';
-  try { transmitNext(h.store); } catch (error) { threw = (error as Error).message; }
-  check('without a pick the send is still refused (the screen says PICK A CARD FIRST)', /no card picked/.test(threw) && state().run.phase === 'transmit');
+  check('…a non-file card adds none: +12 REPAIR CHARGE, no file chip, the arrival line counts the card',
+    charge.pick === 'charge' && charge.cardFile === null && charge.files === picked.files - FIREWALL_BLOCKS && /\+ 12 \(CARD\)/.test(charge.arrivalLine), charge.arrivalLine);
 }
 
 // --- The Skills window -----------------------------------------------------------------------------------------
@@ -110,7 +125,7 @@ function deal(ids: UpgradeId[], pick?: UpgradeId): void {
 }
 // FIREWALL.sys: IDLE in rack F, HOLDING against the root, GONE once deleted.
 {
-  toTransmit(5);
+  toLeave(5);
   deal(['firewall'], 'firewall');
   h.transmit();
   h.stepUntil(() => state().run.phase === 'flight', 15);
@@ -154,7 +169,7 @@ function deal(ids: UpgradeId[], pick?: UpgradeId): void {
 }
 // FUEL TRIM: this ship's +15%, then a file that did not widen this arrival (yet), then below 50.
 {
-  toTransmit(5);
+  toLeave(5);
   deal(['fuel-trim'], 'fuel-trim');
   h.transmit();
   const trim = upgradeFiles(state().memory, 'fuel-trim')[0];
@@ -193,7 +208,7 @@ function deal(ids: UpgradeId[], pick?: UpgradeId): void {
 }
 // REPAIR v2, THREAD+, +12 CHARGE.
 {
-  toTransmit(5, () => { installTool(h.store, 'repair'); });
+  toLeave(5, () => { installTool(h.store, 'repair'); });
   deal(['repair-v2'], 'repair-v2');
   h.transmit();
   const row = rowOf('repair-v2');
@@ -201,7 +216,7 @@ function deal(ids: UpgradeId[], pick?: UpgradeId): void {
     && row.pips.every((pip) => pip.reading.startsWith('v2 ')) && row.status === SKILLS_TEXT.status.repairV2, JSON.stringify(row));
 }
 {
-  toTransmit(5);
+  toLeave(5);
   deal(['thread-plus'], 'thread-plus');
   h.transmit();
   // The crash's emergency transmission took the Core down (−25 and transit hits): a healthy Core first.
@@ -215,7 +230,7 @@ function deal(ids: UpgradeId[], pick?: UpgradeId): void {
     && row.tone === 'warn', JSON.stringify(row));
 }
 {
-  toTransmit(5);
+  toLeave(5);
   deal(['charge'], 'charge');
   h.transmit();
   const row = rowOf('charge');

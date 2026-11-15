@@ -6,7 +6,7 @@
 // • From visit 2 (a migrated desk carrying phase 2's AUTOBURN): the grid (FLIGHT open, the other three one NOT YET row
 //   each), the cells' looks and words, the trace parents, the default selection and its detail; the file eaten: LOST ·
 //   RESTORE 2 and RESTORE in the detail.
-// • The packet preview's words on crafted fits (the binding limit: LINK, ROOM · TIGHT; ROOM FOR n CHARGE, NO CHARGE ARRIVES,
+// • The packet preview's words on crafted fits (the limit: ROOM, ROOM · TIGHT; ROOM FOR n CHARGE, NO CHARGE ARRIVES,
 //   n BLOCKS OVER) and the AHEAD row.
 // • The LANDING REPORT's cycles line (the roll, PERFECT LANDING, NO DESK AHEAD, the first pick's top-up on a crash).
 // • Playtest 1 (B-DESK, §3.6): the cycles ledger at desk 1 and desk 2 (cycles-ledger.ts): the ship's row as its report said
@@ -31,7 +31,6 @@ import {
   openDeskWindow, selectShip, deskCandidates, deskEnter, disarmTraining, stepTrainingCell,
 } from '@systems/desk';
 import { setCourse, transmitNext, backToChart } from '@systems/run';
-import { pickCard } from '@systems/draft';
 import { trainCell } from '@systems/training';
 import { createRunMap } from '@systems/map-run';
 import { FIRST_RUN_LINEAGE } from '@systems/meta';
@@ -113,7 +112,7 @@ const look = (model: Readonly<TrainingModel>, key: string): string | undefined =
   model = trainingModel(store.getState());
   check('a ship picked on the chart: the AHEAD row names it, the preview counts the trained file (SKILLS 6) and names a limit',
     model.ahead?.startsWith('NEXT: ') === true && !model.ahead.includes('PICK A SHIP') && model.preview !== null
-      && model.preview.text.includes('SKILLS 6') && /LINK|ROOM/.test(model.preview.text) && heldSkillBlocks(store.getState()) === 6, JSON.stringify([model.ahead, model.preview]));
+      && model.preview.text.includes('SKILLS 6') && /ROOM/.test(model.preview.text) && heldSkillBlocks(store.getState()) === 6, JSON.stringify([model.ahead, model.preview]));
   const none = trainingModel({ ...store.getState(), ui: { ...store.getState().ui, deskSelected: null } });
   check('…and with no ship picked, no AHEAD row and no preview (playtest 1: `NEXT: PICK A SHIP …` is cut)',
     none.ahead === null && none.preview === null, JSON.stringify([none.ahead, none.preview]));
@@ -215,8 +214,6 @@ const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), '..', 'save', 'fi
   toDesk(store);
   trainCell(store, 'autoburn', { kind: 'version', version: 1 });
   setCourse(store, deskCandidates(store.getState())[0]!);
-  const offer = store.getState().run.transit!.offer;
-  if (offer.length > 0) pickCard(store, offer.some((card) => card.id === 'charge') ? 'charge' : offer[0]!.id);
   transmitNext(store);
   toDesk(store);
   const slot = deskCandidates(store.getState())[0]!;
@@ -267,24 +264,24 @@ const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), '..', 'save', 'fi
 // --- The packet preview and the AHEAD row (03 §4) ---------------------------------------------------------------------------
 {
   const fit = (over: Partial<RoomFit>): RoomFit => ({
-    files: 75, link: 117, room: 152, floor: 12, carried: 42, bonus: 0, wanted: 42, floorAdded: 0, seedsMin: 0, seedsMax: 0,
-    chargeArrives: 42, chargeArrivesMin: 42, linkLost: 0, roomLost: 0, over: 0, overLink: 0, word: 'fits', ...over,
+    files: 75, room: 152, floor: 12, carried: 42, bonus: 0, wanted: 42, floorAdded: 0, seedsMin: 0, seedsMax: 0,
+    chargeArrives: 42, chargeArrivesMin: 42, roomLost: 0, over: 0, word: 'fits', ...over,
   });
   const fits = packetPreview(fit({}), 9, false, null);
-  check('the walk\'s desk 2: `FILES 66 + SKILLS 9 · LINK 117 · ROOM FOR 42 CHARGE` (the link binds), quiet',
-    fits.text === 'FILES 66 + SKILLS 9 · LINK 117 · ROOM FOR 42 CHARGE' && fits.binding === 'link' && fits.tone === 'quiet', fits.text);
-  const overLink = packetPreview(fit({ files: 89, link: 86, word: 'leave', overLink: 3, over: 0 }), 17, false, 'HINT');
-  check('over the link: `FILES 72 + SKILLS 17 · LINK 86 · 3 BLOCKS OVER`, red, with the hint',
-    overLink.text === 'FILES 72 + SKILLS 17 · LINK 86 · 3 BLOCKS OVER' && overLink.tone === 'over' && overLink.hint === 'HINT', overLink.text);
-  const tight = packetPreview(fit({ files: 88, link: 120, room: 88, floor: 0, chargeArrives: 0, word: 'no-charge' }), 20, true, null);
+  check('the walk\'s desk 2: `FILES 66 + SKILLS 9 · ROOM 152 · ROOM FOR 42 CHARGE` (the room, the one limit), quiet',
+    fits.text === 'FILES 66 + SKILLS 9 · ROOM 152 · ROOM FOR 42 CHARGE' && fits.binding === 'room' && fits.tone === 'quiet', fits.text);
+  const overFull = packetPreview(fit({ files: 155, word: 'leave', over: 15 }), 17, false, 'HINT');
+  check('over a FULL room: `FILES 138 + SKILLS 17 · ROOM 152 · 15 BLOCKS OVER`, red, with the hint',
+    overFull.text === 'FILES 138 + SKILLS 17 · ROOM 152 · 15 BLOCKS OVER' && overFull.tone === 'over' && overFull.hint === 'HINT', overFull.text);
+  const tight = packetPreview(fit({ files: 88, room: 88, floor: 0, chargeArrives: 0, word: 'no-charge' }), 20, true, null);
   check('into a TIGHT ship: `FILES 68 + SKILLS 20 · ROOM 88 · TIGHT · NO CHARGE ARRIVES`, in the warning colour',
     tight.text === 'FILES 68 + SKILLS 20 · ROOM 88 · TIGHT · NO CHARGE ARRIVES' && tight.binding === 'room' && tight.tone === 'warn', tight.text);
-  const overRoom = packetPreview(fit({ files: 96, link: 120, room: 88, floor: 0, word: 'leave', over: 8, overLink: 0 }), 20, true, null);
+  const overRoom = packetPreview(fit({ files: 96, room: 88, floor: 0, word: 'leave', over: 8 }), 20, true, null);
   check('over a TIGHT room: `… · ROOM 88 · TIGHT · 8 BLOCKS OVER`', overRoom.text === 'FILES 76 + SKILLS 20 · ROOM 88 · TIGHT · 8 BLOCKS OVER'
     && overRoom.binding === 'room', overRoom.text);
   check('below the floor it warns (`ROOM FOR 9 CHARGE`); one block is `1 BLOCK OVER`',
     packetPreview(fit({ chargeArrives: 9 }), 9, false, null).tone === 'warn'
-      && packetPreview(fit({ word: 'leave', overLink: 1 }), 9, false, null).text.endsWith('1 BLOCK OVER'));
+      && packetPreview(fit({ word: 'leave', over: 1 }), 9, false, null).text.endsWith('1 BLOCK OVER'));
 }
 
 // --- The LANDING REPORT's cycles line ----------------------------------------------------------------------------------------
@@ -362,7 +359,7 @@ const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), '..', 'save', 'fi
     T.pendingRow('AUTOBURN LOCK 810', 8), T.pendingRestore('AUTOBURN v3', 27),
     T.ahead('GOOD HOPE', true, 16, 384, 'COMPACT', 'SEVERE 3'),
     [T.preview.head(999, 34), T.preview.room(152, true), T.preview.over(999)].join(' · '),
-    [T.preview.head(999, 34), T.preview.link(999), T.preview.roomFor(999)].join(' · '),
+    [T.preview.head(999, 34), T.preview.room(999, false), T.preview.roomFor(999)].join(' · '),
     T.preview.hintPack('AUTOBURN', 2, 12), T.preview.hintUndo, T.preview.hintLeave,
     T.lastUnit(['AUTOBURN v3', 'AUTODROP v3', 'SENTRY v3']),
     T.report.cycles(6, 100, 5), T.report.perfect(6), T.report.noDesk(6), T.runEnd.tally(54, 54, 999),

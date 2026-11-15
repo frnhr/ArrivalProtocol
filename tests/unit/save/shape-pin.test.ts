@@ -3,7 +3,7 @@
 // save in flight RUN SAVE CAN'T RESUME unless RUN_SAVE_VERSION is bumped and RUN_SAVE_MIGRATIONS steps the old saves up
 // (save-codec migrateRunSave; slice 4's run.skills was the first such step, 1 → 2, its review's burn.auto the second,
 // slices 4c–4e's AUTODROP, SENTRY and AUTOBURN v3 fields the third, slice 5's residents the fourth, slice 6's survey the
-// fifth, slice 7a's FINALE the sixth, slice 7c's traces and book the seventh, slice 7d's signal sources the eighth). This suite fails until both are done and the new shape is pinned here under the new version. Catalogue and content changes should go through RUN_SAVE_MIGRATIONS where
+// fifth, slice 7a's FINALE the sixth, slice 7c's traces and book the seventh, slice 7d's signal sources the eighth, playtest 1's LEAVE ORBIT and the link's removal the ninth). This suite fails until both are done and the new shape is pinned here under the new version. Catalogue and content changes should go through RUN_SAVE_MIGRATIONS where
 // they can (a save keeps its run; a content refusal ends it as 'signal-lost').
 // The shape is every key path of a SHIP DONE save on run 1's worked route (store-level, no flights), down to three levels
 // (an array's first element stands for its items), and contentVersions(). `AP_PIN_PRINT=1` prints the shape to pin.
@@ -588,7 +588,16 @@ const PINNED_TO_8: Readonly<Record<number, typeof shape>> = {
 
 // 9 (slice 7d): SignalRecord's `source` and `n`, and the `▓▓░▓` segment type, sit below the pinned depth (a signal's fields
 // are an array item's, memory is opaque): the keys are version 8's, and RUN_SAVE_MIGRATIONS[8] steps a v8 save up.
-const PINNED: Readonly<Record<number, typeof shape>> = { ...PINNED_TO_8, 9: PINNED_TO_8[8]! };
+// 10 (playtest 1 Batch B, B-ORDER): run.leave (LEAVE ORBIT's salvage: offer, pick; note 5); Hop.linkBlocks gone (note 20)
+// and the resume line's stage sit below the pinned depth (a hop is a route item's field; the envelope is not pinned here:
+// the codec reads it key by key). RUN_SAVE_MIGRATIONS[9] steps a v9 save up.
+// Also (B-DROP's v1 arm, at B-ORDER's merge): landing.autodrop.held is gone.
+const V10: typeof shape = {
+  ...PINNED_TO_8[8]!,
+  run: [...PINNED_TO_8[8]!.run, 'leave', 'leave.offer', 'leave.pick'],
+  slices: PINNED_TO_8[8]!.slices.filter((path) => path !== 'landing.autodrop.held'),
+};
+const PINNED: Readonly<Record<number, typeof shape>> = { ...PINNED_TO_8, 9: PINNED_TO_8[8]!, 10: V10 };
 
 const pinned = PINNED[RUN_SAVE_VERSION];
 check(`RUN_SAVE_VERSION ${RUN_SAVE_VERSION} has a pinned shape (pin it with AP_PIN_PRINT=1)`, pinned !== undefined);

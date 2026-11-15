@@ -13,7 +13,7 @@ import { MAP_TEXT } from '@data/map-text';
 import { run1Map } from './run1-fixture';
 import { hopBetween } from '@systems/map-hop';
 import { shipSummaryAt } from '@systems/map-run';
-import { deskOpening } from '@systems/desk';
+import { deskOpening, leaveBlackoutSec } from '@systems/desk';
 import { BEAM_OUT_BLACKOUT_SEC } from '@data/tuning';
 
 // The title and the desk read no flight prediction (headerCrumbs returns before it; the title's vars are the run's).
@@ -54,6 +54,11 @@ store.update((draft) => {
 });
 const beamOut = deskOpening(store.getState(), back.visit);
 const beamOutBack = deskOpening(store.getState(), beamOut.visit);
-check('…a new ship ended is a new visit; after a BEAM OUT its first open waits the blackout, the return from the PACKET does not',
-  beamOut.replay && beamOut.blackoutSec === BEAM_OUT_BLACKOUT_SEC && !beamOutBack.replay && beamOutBack.blackoutSec === 0);
+// Playtest 1 (B-ORDER, OPEN-DECISIONS 172): LEAVE ORBIT is now the first screen after the ship, so the blackout plays there
+// (desk.ts leaveBlackoutSec, once per ship left) and the desk never waits for it.
+check('…a new ship ended is a new visit; after a BEAM OUT the desk waits no blackout (LEAVE ORBIT, before it, waits it), nor does the return from the PACKET',
+  beamOut.replay && beamOut.blackoutSec === 0 && !beamOutBack.replay && beamOutBack.blackoutSec === 0
+    && leaveBlackoutSec(store.getState()) === BEAM_OUT_BLACKOUT_SEC);
+store.update((draft) => { draft.burn.status = 'locked'; });
+check('…and after a ship left in orbit, LEAVE ORBIT waits none', leaveBlackoutSec(store.getState()) === 0);
 finish();

@@ -1337,3 +1337,125 @@ NOW carry ` · or [G] AUTO`. Item 120's two fixes are in. Where the build differ
       now and harmless: its kid presses [G] at GET READY's tail and the waits' ` · [G] AUTODROP`, and [L] at LAUNCH NOW.
       `AGENTS.md`'s "What's built" still says `v1 CENTRE (hold [L] …)` and lists item 120 as a next step. The playtest
       checklist has no B-DROP items yet.
+
+## Deviations (B-ORDER)
+
+Built on `b-order` from b01cf61 (Batch A merged): §3.3 whole (notes 5 and 20), save v10, the title's resume line. Where the
+build differs from §3.3, §4 and §5, and what it touched outside its §4 list:
+
+1. **The new flow.** `continueAfterReport` / `continueAfterLoss` → `run.ts openLeaveOrbit(extra)` (phase `'leave'`, both
+   clocks stopped, the tool put down, the salvage dealt into `run.leave`, `archiveShipDone`, SHIP DONE) → `leaveOrbit`
+   (ENTER: the pick required while cards wait, its grants, then `openDesk()`) → `openDesk` (phase `'desk'`,
+   `deskUiOnOpen`, SHIP DONE again) → `setCourse` / `goTransmit` (now refused off the desk) → the PACKET, or the beam at
+   once → `transmitNext` → `startShip` (clears `run.leave`). `openDesk` lost its `extra` argument: `openLeaveOrbit` stores
+   the extras. The final ship still ends the run at its report; `openLeaveOrbit` throws there.
+2. **`run.leave` holds the deal as well as the pick** (`{ offer: DraftCard[]; pick }`; the plan had `{ pick }`). The deal
+   is made once, from the ship's end state, and kept: a deal made again at the desk would read the desk's pending purchases
+   (`leftoverSkill`) and could differ. The codec reads each card field by field. `TransitPlan.offer` is gone;
+   `goTransmit` copies `run.leave.pick` into `TransitPlan.pick`, and `transmitNext` checks that the two agree.
+3. **The deal without a hop** (`draft.ts dealDraft(state)`, `leaveRoom`): a file card must fit the largest room in reach,
+   less its floor and the unit's files. Deliveries no longer count, because no hop is chosen yet, and `toFinal` went
+   (OD 166, 167). The seed is unchanged (`visitRng(run, 'draft')`), so a reload at LEAVE ORBIT deals the same three; the
+   save keeps them anyway.
+4. **The grants land at ENTER, not at the pick.** The plan said the +2 CYCLES grant applies at the pick, but the pick can
+   change until ENTER. +2 CYCLES becomes a `'salvage'` grant at this visit. A departed resident's skill card is granted at
+   ENTER too (`applyLeftoverPick` moved from TRANSMIT ▸; OD 168). `commitTraining` no longer grants the salvage. The
+   branch latch and the first-pick top-up moved from `openDesk` to `openLeaveOrbit`, before the deal and the salvage
+   (OD 167).
+5. **LEAVE ORBIT's screen** (`components/run/LeaveOrbitScreen.ts`, model `systems/leave-orbit.ts`, words
+   `data/leave-text.ts`, input layer `'leave'` after `'report'`):
+   - the title `LEAVE ORBIT`, or `LEAVING <SHIP>` after a lost ship (OD 129; `landing-rules.ts leftWithoutOrbit`: any
+     outcome but `locked` and `partial`), then `<SHIP> · WHAT IS LEFT ON BOARD`, and a lost ship's way out (the PACKET's
+     `whyLine`);
+   - `SALVAGE · TAKE ONE WITH YOU` (a departed resident's `LEFT BEHIND BY …`), the old draft's cards and keys, and
+     `TAKE IT ▸ [ENTER]` / `TAKE ONE FIRST`;
+   - it wears the PACKET's `.tx-*` look; its few own rules are in a new `styles/leave.css`. The picked card lifts away for
+     `LEAVE_TAKE_SEC` (0.45 s, a new tuning block) before the chart opens;
+   - the strip reads `TAKE ONE WITH YOU — click one or press [1] [2] [3], then [ENTER]` (`director.ts`), and the header
+     crumb reads `LEAVE ORBIT` (`flight-hud.ts`);
+   - the LOG READER's entry 01 now opens over LEAVE ORBIT, the first screen after the report (`story-log.ts
+     firstLandingKeyDue`). BEAM OUT's blackout plays there too, not at the desk (`desk.ts leaveBlackoutSec`; the blackout
+     in `deskOpening` is now 0; OD 172).
+6. **The PACKET only when it asks** (`transmit.ts packetAsks`, `TransmitModel.asks`; OD 169). The four questions are the
+   plan's; `'pack-as'` is read as a squeezed room with a skill chip that has a lower level. With none, the PACKET opens
+   already beaming (`TransmitScreen` `direct`): no ◀ CHART, no TRANSMIT ▸, and the chips stream out under the light-years.
+   The PACKET's draft is gone (`#txDraft` out of `index.html`). A SALVAGE line under the headline names the card taken.
+   A-LAND's +12 room note moved there (for the taken card only) and onto the SHIP CARD as a `salvage` row (OD 170). The
+   SHIP CARD's fit line and TRAINING's preview count the taken card.
+7. **No link** (note 20, plan §3.3.4). Every reader is gone or moved:
+   - `linkBlocksFor`, `Hop.linkBlocks`, `LINK_BASE_TENTHS`, `LINK_PER_LY_TENTHS`;
+   - `roomFit`'s `link`, `linkLost` and `overLink` (`carried` is the charge held);
+   - `packUnit`'s link argument, and `Packet.linkBlocks`, `overLink` and `chargeCarried` (all the charge crosses: it is
+     `chargeHeld`); `layoutCarried`'s link throw; `freshUnitRacks`' link;
+   - `TransitPlan.linkBlocks` and `chargeCarried`; `DraftContext.linkRoom` (now `fileRoom`);
+   - the PACKET's link bar (`#txBar`, its packet line, `n LEFT BEHIND` and its hover), `PacketChip.chargeGain`, and
+     `TransmitModel.link`, `chargeCarried` and `packetLine`;
+   - `TRANSMIT_TEXT.packet`, `over` and `overTitle` (`script.ts`; no Batch B owner);
+   - `MAP_TEXT.card.beam`'s `LINK n`, `card.fit`'s `LINK LEAVES n` and `TOO BIG FOR THE LINK`, `packet.overLink` and
+     `packet.linkLabel`;
+   - TRAINING's `preview.link` (`training-text.ts`) and its link binding. `TrainingPreview.binding` stays, always
+     `'room'`, so the data attribute in B-DESK's `TrainingWindow` is unchanged;
+   - `desk.ts`'s fit tone and beam row, `debug.ts`' three uses, and `checkLockedFilesFit`, which checks TIGHT's room only.
+
+   The room bar takes the link bar's place; its CSS variable is now `--bar-blocks`. `ArrivalReport.chargeCarried` stays,
+   because it is saved: it is the charge held. OD 108's "link slope" lever is gone (OD 174). The uninvited chip's "rides
+   free" was already A-WORDS' `NOT IN YOUR PACKET`.
+8. **Save v10** (`RUN_SAVE_MIGRATIONS[9]`):
+   - the migration: the hops on the route drop `linkBlocks`; `run.leave` is `{ offer: [], pick: null }` (a v9 desk resumes
+     with no pick: OD 171); the resume line gains `stage` (`boot`, `leave-orbit`, `leaving`, `desk` or `report`), worked
+     out from the run;
+   - SHIP DONE's payload phase is `'leave'` or `'desk'` (`POINT_PHASES`);
+   - the codec checks: the cards' fields, and no card dealt twice; no pick at `'leave'`; at `'desk'`, a pick among the
+     cards dealt (or none when none were dealt); no salvage at any other point; the payload's phase is the run's; the
+     stage is the run's;
+   - the shape pin holds v10 (`+leave`, `+leave.offer`, `+leave.pick`; the hop and the stage sit below its depth);
+   - the fixtures `run-save-v9-ship-done-halcyon.json`, `run-save-v9-beam-kestrel.json` and
+     `run-save-v9-ship-done-lost.json` were dumped through the game's own save path before any change (977fdce);
+   - B-VOICE asked for no persona field, so v10 holds none.
+9. **The title** (`systems/title.ts`). The resume line reads `RESUME · UNIT-047 · SHIP 2 DONE · LEAVING ORBIT · 2378`
+   (`LEAVING HALCYON` after a lost ship; `… AT THE DESK …` once the pick is taken), from `MAP_TEXT.save.resumeLeave`.
+   `runs save between ships` is cut (OD 173): `MAP_TEXT.title.savesBetweenShips`, `TitleModel.saveNote`, `#titleNote`, its
+   lines in `TitleCard.ts` and its `game.css` rule. `desk.css`'s `.title-note[hidden]` rule is left for B-DESK (its file);
+   it now matches nothing.
+10. **Files outside the §4 list**, each a reader of the order or the link:
+    - `director.ts`, `flight-hud.ts` (`headerCrumbs`), `BurnResult.ts`, `story-log.ts`;
+    - `landing-rules.ts` (`leftWithoutOrbit`), `resident-left.ts` (its `draftContext` call), `upgrades.ts`
+      (`DraftContext`), `training.ts` (`commitTraining`);
+    - `main.ts` (the mount and the stylesheet), `TitleCard.ts`, `game.css` (two rules);
+    - `desk.ts` beyond its rows (`deskOpening`, `leaveBlackoutSec`, the `salvage` row);
+    - `debug.ts` (`__ap.draft()` reads `run.leave`; new `__ap.leave()` and `__ap.leaveModel()`);
+    - `tests/e2e/lib.mjs` (B-TIME's): two new helpers, `leaveOrbit` and `beam`, and `pickCard`'s comment. No F driver is
+      touched.
+11. **Tests.**
+    - New: `map/leave-orbit` (40 checks): the order, the deal with no hop, the pick held through the desk and ◀ CHART, the
+      PACKET's four questions and the case with none, SHIP DONE at LEAVE ORBIT and at the desk, RESUME at both, the codec's
+      refusals, and the three v9 fixtures migrating, decoding and resuming. `save/resume` adds RESUME at LEAVE ORBIT, and
+      `residents/saves` resumes at both points.
+    - Deleted with the link: the suite `map/link-over`, and these checks: `hop-math`'s `link 123, 117, 86, 113, 87` and
+      `link: 22 LY 122, 25 LY 119, 45 LY 97`; `arm`'s `links run 82–123`; `route-threat`'s `the final hop's link stays
+      within 82–123` (and its INFO line); the link values in `run1-roll`, `lastlight-sim` and `desk-flow` (`link 117`);
+      `wp7/carry`'s `a narrow link carries charge only up to link − files`; `map/text`'s `packet.overLink` and `card.fit
+      leave link` lines. `room-fit`'s `a link-limited unit is not squeezed by the room` and `files over the link: leave`,
+      and `skills/ui-models`' `over the link: … LINK 86 · 3 BLOCKS OVER`, are replaced by the room's own case.
+    - Deleted with the `toFinal` rule: `skills/cycles`' `never into a final ship` and `residents/left`'s `into a final ship
+      both deal plain cards`. Deleted with the meta line: `ui/title-resume`'s six `saveNote` checks.
+    - Moved, not weakened: the tight-link checks of `wp7/p2-models`, `skills/packet` and `map/delivery-packet` now squeeze
+      the room (the charge the link left behind is now the charge that won't fit); the card checks of `wp8/draft`,
+      `wp8/p2/ui-models`, `residents/left`, `skills/cycles` and `packet-room` moved from the PACKET to LEAVE ORBIT.
+    - Support: `support/desk leaveOrbit(store, pick?)` and `preferCharge`; `throughDesk` and `setCourseFromDesk` pass LEAVE
+      ORBIT with its first card; `repo-fixture`'s `toLeave` and `toDesk` (the +12 card when dealt); `harness7.transmit`
+      sails on from LEAVE ORBIT.
+    - `map/arm-parity`'s two digests were re-recorded twice, each with what moved it (the link field, then `run.leave`). The
+      run's end moved from won-purge to won-merge with the link, and every outcome held with LEAVE ORBIT.
+    - e2e: `map-desk`, `run-flow`, `resume`, `playthrough` and `phone` walk LEAVE ORBIT (its look, the LOG READER over it,
+      RESUME there in `resume`), and read the PACKET's direct beam where a hop has nothing to ask.
+      `residents`, `run2`, `signals`, `survey` and `traces` waited for the DESK after a report, so they pass LEAVE ORBIT
+      now (mechanically; `residents`' HERON deck check reads `#loHeading` and `#loCards` instead of the PACKET's draft, and
+      `traces`' `beamTo` beams through `beam()` instead of `__ap.transmit()`, which would race the direct beam). They were
+      not run: they are outside this track's e2e list. `run2` and `resume` read the title's `#titleNote`, which is gone:
+      both now expect no note (`run2`'s `runs save between ships` check now checks that the note is absent).
+    - Results: `typecheck` (src and tests) clean. The quick tier ran on a machine shared with four other tracks (load about
+      25): 216 passed, and 15 failed on its time budget only (1500 s against 300 s). Each of the 14 suites, and `tsc-tests`,
+      then passed when run alone. The e2e runs, one at a time: `map-desk` 88/88, `run-flow` 100/100, `resume` 72/72,
+      `playthrough` 274/274, `phone` 134/134.
+12. **Not done.** `npm run balance:report -- --quick` was not run; it is the lead's, after the merge (§3.3.4).

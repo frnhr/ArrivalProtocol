@@ -1,12 +1,14 @@
 // Slice 4 Track TREE (plan §6): training cycles, store level, under a second.
 // • endShip pays every ship its cycles (run-score.ts shipCycles), on the arm and the classic world, one earning per ship.
-// • The first-pick floor (03 §3.1): a crashed ship 1 (1 earned) gets `+2 CYCLES` at the run's
-//   first desk, written before SHIP DONE's save; a good ship 1 gets none; a run that already paid for a skill gets none and
-//   is not asked to pick. Only on the arm, only at visit 1.
-// • The +2 CYCLES salvage card: dealt only with a tree (never on the classic world: its deals byte-identical), never into a
-//   final ship; picked, it becomes a 'salvage' grant at TRANSMIT ▸, never a carried card.
+// • The first-pick floor (03 §3.1): a crashed ship 1 (1 earned) gets `+2 CYCLES` as the run's first desk's LEAVE ORBIT opens
+//   (playtest 1, note 5), written before SHIP DONE's save; a good ship 1 gets none; a run that already paid for a skill gets
+//   none and is not asked to pick. Only on the arm, only at visit 1.
+// • The +2 CYCLES salvage card: dealt only with a tree (never on the classic world: its deals byte-identical); taken at LEAVE
+//   ORBIT, it becomes a 'salvage' grant when ENTER takes it, so the desk right after can spend it (playtest 1: the old `never
+//   into a final ship` rule went with the deal's move before the desk), never a carried card.
 // • Playtest 1 (B-DESK, §3.6): the desk's cycles ledger (cycles-ledger.ts) on a crashed ship 1 (`+1 ARES-VII · …`, `+2
-//   CORE RESERVE`) and at the desk after a salvage card (its +2 among the rows, which add up to the bank).
+//   CORE RESERVE`); at the desk LEAVE ORBIT opens after a +2 CYCLES salvage card, its own `+2 SALVAGE` row (B-DESK's
+//   OPEN-DECISIONS 154, built at B-ORDER's merge); at the desk after that, the card's +2 is CARRIED OVER.
 // • RUN END: `UNSPENT n` and the RUN TALLY's `TRAINED n of 50 · UNSPENT n` (lost levels still count as trained); none on
 //   the classic world.
 // • The archive (03 §3.11): LastUnit.skills at RUN END, each skill's file level and AUTOBURN's accuracy, through the real
@@ -16,23 +18,25 @@ import { createStore, type Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import { createInitialState } from '@state/initial';
 import { createRunMap, shipSummaryAt } from '@systems/map-run';
-import { endShip, openDesk, endRun, transmitNext, setCourse } from '@systems/run';
-import { setCourseFromDesk } from '../support/desk';
+import { endShip, openLeaveOrbit, leaveOrbit, endRun, transmitNext, setCourse } from '@systems/run';
+import { setCourseFromDesk, leaveOrbit as takeSalvage } from '../support/desk';
 import { giveSkillFile, pickFirstSkill } from '../support/skills';
 import { bankOf, deskBlocker, trainedCycles, skillRecords, grantCycles } from '@systems/skill-tree';
 import { draftContext, pickCard } from '@systems/draft';
-import { draftEntries, getUpgrade } from '@data/upgrades';
+import { draftEntries, getUpgrade, type DraftCardId } from '@data/upgrades';
 import { runEndModel } from '@systems/run-end';
 import { parseLastUnit } from '@systems/meta-parse';
 import { FIRST_RUN_LINEAGE } from '@systems/meta';
 import { TRAINING_TEXT } from '@data/training-text';
 import { RUN_SAVE_KEY } from '@data/tuning';
 import { cyclesLedger } from '@systems/cycles-ledger';
-import { armRun, toDesk } from '../map/repo-fixture';
+import { armRun, toDesk, toLeave } from '../map/repo-fixture';
 import { stubStorage, pageOpen, receiveToReport, storedMeta } from '../save/save-fixture';
 import { CYCLES_CARD_CYCLES, FIRST_PICK_FLOOR_CYCLES } from '@data/tuning';
 
 const throws = (run: () => unknown): boolean => { try { run(); return false; } catch { return true; } };
+// Any card but +2 CYCLES, so the bank is the floor's alone.
+const notCycles = (offer: readonly { id: DraftCardId }[]): DraftCardId => (offer.find((card) => card.id !== 'cycles') ?? offer[0]!).id;
 
 // --- Earnings -----------------------------------------------------------------------------------------------------------
 {
@@ -42,12 +46,13 @@ const throws = (run: () => unknown): boolean => { try { run(); return false; } c
   check('endShip pays the ship its cycles: a crash with nobody landed earns ARRIVED alone (1)',
     earned.length === 1 && earned[0]!.slot === 0 && earned[0]!.arrived === 1 && earned[0]!.landed === 0 && bankOf(store.getState().run.skills) === 1,
     JSON.stringify(earned));
-  openDesk(store, null);
+  openLeaveOrbit(store, null);
   const grants = store.getState().run.skills.grants;
-  check('…the run\'s first desk tops the bank up to the floor: +2 (`+2 CYCLES`), 3 to spend',
+  check('…the run\'s first LEAVE ORBIT tops the bank up to the floor: +2 (`+2 CYCLES`), 3 to spend',
     grants.length === 1 && grants[0]!.source === 'first-pick' && grants[0]!.cycles === FIRST_PICK_FLOOR_CYCLES - 1 && grants[0]!.visit === 1
       && bankOf(store.getState().run.skills) === FIRST_PICK_FLOOR_CYCLES && TRAINING_TEXT.onTheHouse(grants[0]!.cycles) === '+2 CYCLES · CORE RESERVE',
     JSON.stringify(grants));
+  takeSalvage(store, notCycles);
   const ledger = cyclesLedger(store.getState());
   check('…the ledger says both: `+1 ARES-VII · ARRIVED +1 · LANDED 0% +0`, then `+2 CORE RESERVE`; 3 in all',
     ledger.rows.map((row) => `${row.amountText} ${row.text}`).join(' | ') === '+1 ARES-VII · ARRIVED +1 · LANDED 0% +0 | +2 CORE RESERVE' && ledger.bank === 3,
@@ -60,7 +65,7 @@ const throws = (run: () => unknown): boolean => { try { run(); return false; } c
   const store = armRun();
   endShip(store, 'locked');
   store.update((draft) => { draft.run.skills.earned[0]!.landed = 4; });
-  openDesk(store, null);
+  openLeaveOrbit(store, null);
   check('a good ship 1 (5 earned) gets no first-pick grant', store.getState().run.skills.grants.length === 0 && bankOf(store.getState().run.skills) === 5);
 }
 {
@@ -69,7 +74,8 @@ const throws = (run: () => unknown): boolean => { try { run(); return false; } c
   const store = armRun();
   giveSkillFile(store, 'autoburn', 1);
   endShip(store, 'crashed');
-  openDesk(store, null);
+  openLeaveOrbit(store, null);
+  takeSalvage(store, notCycles);
   check('a run already holding a paid skill: no top-up, no first pick asked, the desk opens on the card',
     store.getState().run.skills.grants.length === 0 && deskBlocker(store.getState()) === null && store.getState().ui.deskWindow === null);
 }
@@ -84,36 +90,45 @@ const throws = (run: () => unknown): boolean => { try { run(); return false; } c
   check('+2 CYCLES is a salvage card that stacks, adds no file, and reads `+2 CYCLES`',
     card.salvage && card.maxOwned === Infinity && card.blocks === 0 && card.form === 'cycles' && card.title === `+${CYCLES_CARD_CYCLES} CYCLES`);
   const store = armRun();
-  toDesk(store);
-  pickFirstSkill(store);
-  const state = store.getState();
-  const final = state.run.map.arm.findIndex((ship, slot) => ship !== undefined && shipSummaryAt(state.run.map, slot).final);
+  toLeave(store);
   const ids = (ctx: ReturnType<typeof draftContext>): string => draftEntries(ctx).map((entry) => entry.def.id).join();
-  const toTwo = draftContext(state, 200, { room: 152, chargeFloor: 12, to: 2 });
-  const toFinal = draftContext(state, 200, { room: 152, chargeFloor: 12, to: final });
-  check('…on the arm it can be dealt into a ship with a desk after it, never into a final ship (no desk follows)',
-    toTwo.tree === true && !toTwo.toFinal && ids(toTwo).includes('cycles') && toFinal.toFinal === true && !ids(toFinal).includes('cycles'),
-    `${ids(toTwo)} | ${ids(toFinal)}`);
+  const ctx = draftContext(store.getState(), { room: 152, chargeFloor: 12 });
+  check('…on the arm it can be dealt (a tree)', ctx.tree === true && ids(ctx).includes('cycles'), ids(ctx));
 
-  // Picked: a grant at TRANSMIT ▸ (the next desk's bank), never a card the unit carries.
-  setCourseFromDesk(store, 2);
-  store.update((draft) => { draft.run.transit!.offer = [{ id: 'cycles', title: card.title, effect: card.effect, why: 'test', boosted: false }]; });
-  check('…picked on the PACKET', pickCard(store, 'cycles') === null && store.getState().run.transit!.pick === 'cycles');
+  // Taken at LEAVE ORBIT: a grant when ENTER takes it (this desk's bank), never a card the unit carries.
+  store.update((draft) => { draft.run.leave.offer = [{ id: 'cycles', title: card.title, effect: card.effect, why: 'test', boosted: false }]; });
+  check('…picked on LEAVE ORBIT', pickCard(store, 'cycles') === null && store.getState().run.leave.pick === 'cycles');
   const before = bankOf(store.getState().run.skills);
+  check('…nothing granted before ENTER', !store.getState().run.skills.grants.some((entry) => entry.source === 'salvage'));
+  leaveOrbit(store);
+  const atDesk = store.getState().run;
+  const grant = atDesk.skills.grants.find((entry) => entry.source === 'salvage');
+  check('…ENTER turns it into a salvage grant (+2 at this visit), in the bank of the desk it opens',
+    atDesk.phase === 'desk' && grant?.cycles === CYCLES_CARD_CYCLES && grant.visit === 1 && bankOf(atDesk.skills) === before + CYCLES_CARD_CYCLES,
+    JSON.stringify(atDesk.skills.grants));
+  // B-DESK's OPEN-DECISIONS 154: granted this visit, the card has its own row in the desk's ledger, not CARRIED OVER.
+  const here = cyclesLedger(store.getState());
+  const salvageRows = here.rows.filter((row) => row.kind === 'grant' && row.text === TRAINING_TEXT.ledger.salvage);
+  check('…and the desk\'s ledger gives it its own `+2 SALVAGE` row (this visit\'s grant, not CARRIED OVER), the rows adding up to the bank',
+    salvageRows.length === 1 && salvageRows[0]!.amount === CYCLES_CARD_CYCLES && `${salvageRows[0]!.amountText} ${salvageRows[0]!.text}` === `+${CYCLES_CARD_CYCLES} SALVAGE`
+      && here.bank === bankOf(atDesk.skills) && here.rows.reduce((sum, row) => sum + row.amount, 0) === here.bank
+      && (here.rows.find((row) => row.kind === 'carried')?.amount ?? 0) === 0,
+    JSON.stringify(here.rows));
+  pickFirstSkill(store);
+  setCourseFromDesk(store, 2);
   transmitNext(store);
   const after = store.getState().run;
-  const grant = after.skills.grants.find((entry) => entry.source === 'salvage');
-  check('…TRANSMIT ▸ turns it into a salvage grant (+2 at this visit), not a carried card; the first pick is bought',
-    grant?.cycles === CYCLES_CARD_CYCLES && grant.visit === 1 && bankOf(after.skills) === before + CYCLES_CARD_CYCLES && !after.upgrades.includes('cycles')
+  check('…the beam carries no card for it, grants nothing twice, and buys the first pick',
+    !after.upgrades.includes('cycles') && after.skills.grants.filter((entry) => entry.source === 'salvage').length === 1
       && after.skills.pending.length === 0 && after.skills.bought.length === 1, JSON.stringify(after.skills.grants));
-  // The next desk's ledger: the card's +2 is in it (CARRIED OVER while the card is granted at TRANSMIT ▸; its own SALVAGE row
-  // once B-ORDER's LEAVE ORBIT grants it at the pick, this visit), and the rows add up to the bank.
+  // The next desk's ledger: the card was granted a visit ago, so its +2 is in CARRIED OVER (unspent: the first pick was paid
+  // from the floor), no SALVAGE row of its own, and the rows add up to the bank.
   toDesk(store);
   const ledger = cyclesLedger(store.getState());
   const carried = ledger.rows.find((row) => row.kind === 'carried')?.amount ?? 0;
-  check('the desk after it: the rows add up to the bank, the card\'s +2 among them (carried over, or `+2 SALVAGE`)',
+  check('the desk after it: the rows add up to the bank, the card\'s +2 carried over (no SALVAGE row of this visit)',
     ledger.bank === bankOf(store.getState().run.skills) && ledger.rows.reduce((sum, row) => sum + row.amount, 0) === ledger.bank
-      && (ledger.rows.some((row) => row.text === 'SALVAGE' && row.amount === CYCLES_CARD_CYCLES) || carried >= CYCLES_CARD_CYCLES)
+      && !ledger.rows.some((row) => row.text === TRAINING_TEXT.ledger.salvage) && carried >= CYCLES_CARD_CYCLES
       && ledger.rows.some((row) => row.kind === 'ship' && row.text.startsWith(`${shipSummaryAt(store.getState().run.map, 2).name} · `)),
     JSON.stringify(ledger.rows));
 }

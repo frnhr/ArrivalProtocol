@@ -8,10 +8,10 @@
 // • the ship just left, as its LANDING REPORT line said it (`HALCYON · ARRIVED +1 · LANDED 83% +4`);
 // • this visit's grants: the first desk's CORE RESERVE, a resident's lesson (`taught by MOTH`), a SALVAGE card, a story;
 // • this desk's purchases, negative, each with UNDO while it is the last of its skill (training-model.ts trainingPending).
-// A grant is "this visit's" when it carries this visit's number (CycleGrant.visit, skill-levels.ts visitNow). B-ORDER's
-// LEAVE ORBIT grants the +2 CYCLES salvage at the pick, before the desk, so it is this visit's; until then the card is a
-// grant of the visit before (training.ts commitTraining, at TRANSMIT ▸) and reads as CARRIED OVER. The sum is right either
-// way. A v1 → v2 save migration's grant is always carried.
+// A grant is "this visit's" when it carries this visit's number (CycleGrant.visit, skill-levels.ts visitNow). LEAVE ORBIT
+// (playtest 1, B-ORDER) grants the +2 CYCLES salvage when ENTER takes it, before the desk and with this visit's number, so
+// the desk it opens shows it as its own `+2 SALVAGE` row (B-DESK's OPEN-DECISIONS 154); at the next desk it is CARRIED
+// OVER. A v1 → v2 save migration's grant is always carried.
 import type { GameState } from '@state/schema';
 import type { CycleGrant, SkillPurchase } from '@/types/skill';
 import { bankOf, earnedCycles, visitNow } from '@systems/skill-tree';

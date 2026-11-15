@@ -3,7 +3,6 @@
 import { check, finish } from '../landing/checks';
 import { WORLDS, RING_LY, END_SLOTS, FIRST_SLOT, armProblems, validateArm, type WorldDef } from '@data/arm';
 import { distLy, solLy, layerOf, ringsWithin, ringsCrossed } from '@systems/map-geometry';
-import { linkBlocksFor } from '@systems/map-hop';
 import { nameClashes, shipNameLists, validateNames, aresName, finalShipName, ARES_SERIES_RUNS } from '@data/ship-names';
 import { BEAM_RANGE_LY, NAME_MAX_CHARS } from '@data/tuning';
 
@@ -26,8 +25,6 @@ check('two-layer pairs: 45–70 LY, 31 of 42 in range',
 check('three-layer pairs: at least 70 LY', Math.min(...three.map((p) => p.d)) >= 70, String(Math.min(...three.map((p) => p.d))));
 const clearance = Math.min(...WORLDS.flatMap((w) => RING_LY.map((ring) => Math.abs(Math.hypot(w.x, w.y) - ring))));
 check('ring clearance ≥ 9.0 LY', clearance >= 9, clearance.toFixed(1));
-const links = [...one, ...two].filter((p) => p.d <= BEAM_RANGE_LY).map((p) => linkBlocksFor(p.d));
-check('links run 82–123 blocks under half-up rounding', Math.min(...links) === 82 && Math.max(...links) === 123, `${Math.min(...links)}–${Math.max(...links)}`);
 check('SOL distances along the worked route: 8, 29, 55, 107, 129, 180', [0, 2, 5, 11, 15, 19].map(solLy).join() === '8,29,55,107,129,180');
 check('layers by slot', layerOf(0) === 1 && layerOf(1) === 2 && layerOf(18) === 7 && layerOf(19) === 8);
 check('rings: KESTREL (55 LY) is past rings 1–2, VESPER (107) past 1–4; a two-layer hop crosses two',

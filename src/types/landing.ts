@@ -449,12 +449,11 @@ export interface OnTargetTally {
 // v3's whole plan. `armed` is null at every save point (the codec's rule), so 'centre' needs no save bump.
 export type AutodropArm = 'centre' | 'pass' | 'plan';
 // Why the last window, pass or plan ended (the strip's words). 'centre-done': v1's armed volley was flown (playtest 1).
-// 'released' is no longer written (v1's hold on [L] went in playtest 1); the codec still reads it from older saves.
-export type AutodropEnd = 'centre-done' | 'pass-done' | 'plan-done' | 'cancel' | 'downgraded' | 'off' | 'offline' | 'landing-over'
-  | 'released';
+// v1's old 'released' (its hold on [L] let go, gone in playtest 1) is mapped to null by the v10 migration (save-codec
+// migrateRunSave9).
+export type AutodropEnd = 'centre-done' | 'pass-done' | 'plan-done' | 'cancel' | 'downgraded' | 'off' | 'offline' | 'landing-over';
 
 export interface AutodropState {
-  held: boolean;                    // always false since playtest 1 (v1 is armed by [G]); the v10 save bump drops it
   armed: AutodropArm | null;        // v1's [G] (this window), v2's [G] (this pass), v3's [G] (the plan)
   pass: Record<string, number>;     // v2: pods per LZ for this pass (the POD BAY's [−] n [+]), kept between passes
   sent: Record<string, number>;     // launched since [G] (`PASS DONE · A +2 · B +1`)

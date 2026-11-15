@@ -1,14 +1,14 @@
-// Slice 3a F2: the DESK in the run's flow (systems/run.ts openDesk, setCourse, backToChart, goTransmit(store, toSlot);
-// systems/desk.ts), headless on run 1's arm (Track RETIRE: on the classic world until its retirement, whose desk offered the
-// single next ship), at HALCYON's desk on the worked route: a ship's end opens the desk with both clocks stopped and the
-// ships in reach offered, SET COURSE builds the PACKET against the hop, ◀ CHART goes back and keeps a lost ship's extras,
+// Slice 3a F2: the DESK in the run's flow (systems/run.ts openLeaveOrbit, openDesk, setCourse, backToChart,
+// goTransmit(store, toSlot); systems/desk.ts), headless on run 1's arm (Track RETIRE: on the classic world until its
+// retirement, whose desk offered the single next ship), at HALCYON's desk on the worked route: a ship's end opens LEAVE ORBIT
+// (playtest 1, note 5) with both clocks stopped, its ENTER the desk with the ships in reach offered, SET COURSE builds the PACKET against the hop, ◀ CHART goes back and keeps a lost ship's extras,
 // an unreachable slot throws, and the debug hooks' shapes are there.
 import { check, finish } from '../landing/checks';
 import { createStore, type Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import { createInitialState } from '@state/initial';
-import { endShip, openDesk, backToChart, goTransmit } from '@systems/run';
-import { setCourseFromDesk } from '../support/desk';
+import { endShip, openLeaveOrbit, openDesk, backToChart, goTransmit } from '@systems/run';
+import { setCourseFromDesk, leaveOrbit } from '../support/desk';
 import { deskCandidates, deskSteps, selectShip, cycleShip, cardModel } from '@systems/desk';
 import { hopBetween, reachableFrom } from '@systems/map-hop';
 import { MAP_TEXT } from '@data/map-text';
@@ -27,10 +27,15 @@ function halcyonOver(): Store<GameState> {
 const throws = (fn: () => void): boolean => { try { fn(); return false; } catch { return true; } };
 
 const store = halcyonOver();
-openDesk(store, null);
+openLeaveOrbit(store, null);
 let state = store.getState();
+check('a ship\'s end opens LEAVE ORBIT first: both clocks stopped, three cards dealt, none taken, no desk opened yet',
+  state.run.phase === 'leave' && state.clock.paused && state.run.leave.offer.length === 3 && state.run.leave.pick === null
+  && throws(() => goTransmit(store, KESTREL)), state.run.phase);
+leaveOrbit(store);
+state = store.getState();
 const inReach = reachableFrom(state.run.map, HALCYON);
-check('a ship\'s end opens the DESK: both clocks stopped, the desk offers the ships in reach (KESTREL among them), none picked yet',
+check('…its ENTER opens the DESK: the desk offers the ships in reach (KESTREL among them), none picked yet',
   state.run.phase === 'desk' && state.clock.paused && deskCandidates(state).join() === inReach.join() && inReach.includes(KESTREL)
   && !inReach.includes(FAR) && state.ui.deskSelected === null && state.run.map.pendingExtra === null && !deskSteps(state)[0]!.done,
   deskCandidates(state).join());
@@ -46,8 +51,8 @@ setCourseFromDesk(store, KESTREL);
 state = store.getState();
 const plan = state.run.transit!;
 const hop = hopBetween(state.run.map, HALCYON, KESTREL);
-check('SET COURSE ▸ KESTREL: the PACKET against the hop (link 117, 4 hits, 26 LY, 3 fixed by ECC while asleep)',
-  state.run.phase === 'transmit' && plan.toSlot === KESTREL && plan.toShipIndex === 2 && plan.linkBlocks === hop.linkBlocks && hop.linkBlocks === 117
+check('SET COURSE ▸ KESTREL: the PACKET against the hop (4 hits, 26 LY, 3 fixed by ECC while asleep)',
+  state.run.phase === 'transmit' && plan.toSlot === KESTREL && plan.toShipIndex === 2
   && plan.hop.transitHits === 4 && plan.hop.distanceLy === 26 && plan.hop.eccFixes === 3 && plan.extraHits === 0, JSON.stringify(plan.hop));
 check('…the hop is the one hopBetween gives', JSON.stringify(plan.hop) === JSON.stringify(hop));
 backToChart(store);
@@ -56,7 +61,8 @@ check('◀ CHART: back on the desk, the packet forgotten, KESTREL still selected
 check('…◀ CHART off the PACKET throws', throws(() => backToChart(store)));
 
 const lost = halcyonOver();
-openDesk(lost, { extraHits: 3, coreHit: 25, coreReset: false });
+openLeaveOrbit(lost, { extraHits: 3, coreHit: 25, coreReset: false });
+leaveOrbit(lost);
 check('a lost ship\'s extras wait on the map for the hop the kid picks', lost.getState().run.map.pendingExtra?.extraHits === 3);
 setCourseFromDesk(lost, KESTREL);
 backToChart(lost);
@@ -66,7 +72,8 @@ check('…and survive ◀ CHART: the PACKET carries +3 hits and the Core\'s −2
 const final = createStore<GameState>(createInitialState({ seed: 4, shipIndex: 4, carried: 'fresh' }));
 final.update((draft) => { draft.run.phase = 'report'; });
 endShip(final, 'locked');
-check('the final ship has no desk and no next ship', throws(() => openDesk(final, null)) && throws(() => goTransmit(final, 18)));
+check('the final ship has no LEAVE ORBIT, no desk and no next ship', throws(() => openLeaveOrbit(final, null)) && throws(() => openDesk(final))
+  && throws(() => goTransmit(final, 18)));
 const early = createStore<GameState>(createInitialState({ seed: 4, shipIndex: 1, carried: 'fresh' }));
-check('a ship that has not ended has no desk', throws(() => openDesk(early, null)));
+check('a ship that has not ended has no LEAVE ORBIT and no desk', throws(() => openLeaveOrbit(early, null)) && throws(() => openDesk(early)));
 finish();

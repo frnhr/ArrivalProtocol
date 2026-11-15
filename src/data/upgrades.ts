@@ -43,7 +43,7 @@ export interface DraftContext {
   lastShip: { name: string; fuelLeftPct: number } | null;  // the ship just left
   owned: Readonly<Record<UpgradeId, number>>;
   hasRepair: boolean;                                  // a Repair copy is packed (what REPAIR v2 upgrades)
-  linkRoom: number;                                    // link blocks the unit's files leave free
+  fileRoom: number;                                    // room blocks the unit's files and the floor leave free
   hollowLabel: string;                                 // what the strip calls HOLLOW now (say.ts hollowLabel)
   // Phase 3 slice 3b: deal only the salvage pool's cards (UpgradeDef.salvage), on the arm. Left out (phase 2's pure
   // draft suites): every card.
@@ -68,13 +68,13 @@ export interface UpgradeDef {
   title: string;      // the card's name, as the Skills window lists it too
   effect: string;     // what it does, in one line
   form: UpgradeForm;
-  blocks: number;     // the file a 'file' card adds to the packet (link room), else 0
+  blocks: number;     // the file a 'file' card adds to the packet (it takes room), else 0
   maxOwned: number;   // Infinity: stackable without limit
   // In the arm's salvage pool (02 §3.10): REPAIR v2 moved to the repository (its patch, data/repository.ts), so the arm
   // never deals it; a context with no salvage flag (phase 2's pure draft suites) deals every card but the tree's `+2 CYCLES`.
   salvage: boolean;
   // Whether the card can do anything for this unit now (REPAIR v2 needs a Repair to upgrade); a card that
-  // could not is never offered. Every card also needs link room for its file (draftEntries).
+  // could not is never offered. Every card also needs room for its file (draftEntries).
   usable?(ctx: DraftContext): boolean;
   boost(ctx: DraftContext): DraftBoost | null;
 }
@@ -254,7 +254,7 @@ export interface DraftEntry {
 }
 
 export function draftEntries(ctx: DraftContext): DraftEntry[] {
-  const offerable = (def: UpgradeDef): boolean => ctx.owned[def.id] < def.maxOwned && def.blocks <= ctx.linkRoom
+  const offerable = (def: UpgradeDef): boolean => ctx.owned[def.id] < def.maxOwned && def.blocks <= ctx.fileRoom
     && (def.usable?.(ctx) ?? true) && (def.salvage || ctx.salvageOnly !== true);
   return UPGRADES.filter(offerable).map((def) => {
     const boost = def.boost(ctx);
@@ -265,7 +265,7 @@ export function draftEntries(ctx: DraftContext): DraftEntry[] {
 // The draft (§6.9): DRAFT_CARDS distinct cards, each drawn by weight from the cards not yet dealt. The
 // charge card stacks without limit, so the pool never runs dry; by stacks alone, within a five-ship run
 // (four drafts, at most three picks before the last) at least three cards are always eligible. Fewer is
-// possible only when cards can't be used (REPAIR v2 with no Repair, a file with no link room) on top of
+// possible only when cards can't be used (REPAIR v2 with no Repair, a file with no room) on top of
 // owned ones, or in a hand-built state (?debug): the draft then deals every card it can, never a duplicate.
 export function draftCards(ctx: DraftContext, rng: Rng): PoolCard[] {
   const left = draftEntries(ctx);

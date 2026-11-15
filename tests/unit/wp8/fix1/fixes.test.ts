@@ -17,8 +17,8 @@ import { phase2Halcyon } from '../../support/hollow-world';
 import { check, finish } from '../../wp1/harness';
 import { createHarness7 } from '../../wp7/harness7';
 import { receiveTransmission, skipBoot, bootSkipWaits } from '@systems/boot';
-import { startRun, lossPlan, continueAfterLoss as runContinueAfterLoss, type LossPlan } from '@systems/run';
-import { setCourseFromDesk, climbingRoutes } from '../../support/desk';
+import { startRun, lossPlan, transmitNext, continueAfterLoss as runContinueAfterLoss, type LossPlan } from '@systems/run';
+import { setCourseFromDesk, climbingRoutes, leaveOrbit } from '../../support/desk';
 import { endFlight } from '@systems/orbit-sim';
 import { infectNow } from '@systems/hollow';
 import { pickCard } from '@systems/draft';
@@ -68,11 +68,16 @@ function loadPage(seed: number): void {
   route = routes[0];
 }
 
-// CONTINUE after a lost ship; when it opens the desk, course is set to the route's next stop.
+// CONTINUE after a lost ship (playtest 1: it opens LEAVE ORBIT, where a suite may still pick).
 function continueAfterLoss(store: typeof h.store): LossPlan {
-  const plan = runContinueAfterLoss(store);
-  if (store.getState().run.phase === 'desk') setCourseFromDesk(store, route[store.getState().run.map.route.length]!);
-  return plan;
+  return runContinueAfterLoss(store);
+}
+
+// The salvage taken (the card picked, else the first), course set to the route's next stop, then TRANSMIT ▸.
+function transmit(): void {
+  leaveOrbit(h.store);
+  if (state().run.phase === 'desk') setCourseFromDesk(h.store, route[state().run.map.route.length]!);
+  transmitNext(h.store);
 }
 
 function boot(): void {
@@ -137,7 +142,7 @@ h.store.update((d) => { d.run.simulationRetryUsed = true; });
 h.store.mutate((d) => { d.orbit.x = d.level.planet.R + 20; d.orbit.y = 0; d.orbit.vx = -3; d.orbit.vy = 0.05; });
 h.stepUntil(() => h.status() !== 'approaching', 10);
 continueAfterLoss(h.store);
-h.transmit();
+transmit();
 h.stepFor(0.3);
 check('ship 2: while the ghost types, a skip waits, and the strip says so (no [SPACE] skip offered)', state().run.shipIndex === 1
   && bootSkipWaits(state()) && state().director.shown?.text === LINES.bootingGhost() && state().director.shown?.keys.length === 0,
@@ -158,7 +163,7 @@ while (state().run.map.route.length < route.length) {
   h.store.mutate((d) => { d.orbit.x = d.level.planet.R + 20; d.orbit.y = 0; d.orbit.vx = -3; d.orbit.vy = 0.05; });
   h.stepUntil(() => h.status() !== 'approaching', 10);
   continueAfterLoss(h.store);
-  h.transmit();
+  transmit();
   h.stepUntil(() => state().run.phase === 'flight', 20);
 }
 failWrites = true;
@@ -181,7 +186,7 @@ h.store.mutate((d) => { d.orbit.x = d.level.planet.R + 20; d.orbit.y = 0; d.orbi
 h.stepUntil(() => h.status() !== 'approaching', 10);
 continueAfterLoss(h.store);
 failWrites = true;
-h.transmit();
+transmit();
 h.stepFor(0.3);
 const offline = log().filter((entry) => entry.text === ARCHIVE_TEXT.offline);
 check('a ship start whose write fails: OFFLINE, and the TERMINAL says `ARCHIVE OFFLINE — this unit\'s memory will not be kept` once',
@@ -196,9 +201,9 @@ h.store.update((d) => { d.run.simulationRetryUsed = true; });
 h.store.mutate((d) => { d.orbit.x = d.level.planet.R + 20; d.orbit.y = 0; d.orbit.vx = -3; d.orbit.vy = 0.05; });
 h.stepUntil(() => h.status() !== 'approaching', 10);
 continueAfterLoss(h.store);
-h.store.update((d) => { d.run.transit!.offer = [{ id: 'firewall', title: 'FIREWALL.sys', effect: '', why: '', boosted: false }]; });
+h.store.update((d) => { d.run.leave.offer = [{ id: 'firewall', title: 'FIREWALL.sys', effect: '', why: '', boosted: false }]; });
 pickCard(h.store, 'firewall');
-h.transmit();
+transmit();
 // The arm's later boots say more (the receiver's sleep, the ghost's beat, the INBOX): up to 40 s.
 h.stepUntil(() => state().run.phase === 'flight', 40);
 // Phase 3 slice 2: HALCYON is calm now; the lesson is checked on its phase-2 racks and HOLLOW (support/hollow-world.ts), laid

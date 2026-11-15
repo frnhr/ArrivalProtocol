@@ -17,16 +17,18 @@ import { emit, NO_PAYLOAD } from '@systems/events';
 // never up together (one per run phase); each has its own layer so a card's keys are never heard by
 // another card's handler. 'reader' (phase 3 slice 2) is the LOG READER, which opens over TRANSMIT (entry 01 after ship
 // 1's report) or over the game (INSPECT's READ): it owns the keys above both while it is up. 'desk' (phase 3 slice 3a) is
-// the DESK between a ship's end and its PACKET: ← → cycle the ships in reach, ENTER sets course.
+// the DESK between a ship's end and its PACKET: ← → cycle the ships in reach, ENTER sets course. 'leave' (playtest 1, note
+// 5) is LEAVE ORBIT between the LANDING REPORT (or a lost ship's card) and the DESK: [1]–[3] pick the salvage, ENTER takes it;
+// it sits after 'report', where 'transmit' sat, since it now follows the report directly.
 // 'last-landing' (phase 3 slice 7b, slice-7-plan R26) is THE LAST LANDING after MERGE: every game key is off but [ENTER]
 // (skip to the result), P and M, which systems/last-landing.ts binds on it while landing.lastLanding is set. It sits just
 // above the game: nothing else asks a question then (the FINALE's card has closed, no inline confirm comes).
-export type InputLayer = 'title' | 'reader' | 'report' | 'desk' | 'transmit' | 'end' | 'confirm' | 'choice' | 'last-landing' | 'game';
+export type InputLayer = 'title' | 'reader' | 'report' | 'leave' | 'desk' | 'transmit' | 'end' | 'confirm' | 'choice' | 'last-landing' | 'game';
 export type ModalLayer = Exclude<InputLayer, 'game'>;
 
 // Highest priority first.
 const LAYER_PRIORITY: readonly InputLayer[] = [
-  'title', 'reader', 'report', 'desk', 'transmit', 'end', 'confirm', 'choice', 'last-landing', 'game',
+  'title', 'reader', 'report', 'leave', 'desk', 'transmit', 'end', 'confirm', 'choice', 'last-landing', 'game',
 ];
 
 export interface KeyBinding {

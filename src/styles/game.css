@@ -594,13 +594,6 @@ kbd.keycap[hidden] { display: none; }
 @keyframes receive-glow {
   50% { box-shadow: 0 0 22px color-mix(in srgb, var(--accent) 60%, transparent); }
 }
-.title-note {
-  margin-top: 6px;
-  font-size: 9px;
-  letter-spacing: 0.25em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-}
 /* A returning unit (WP8): the one before it, in HOLLOW's pink (that unit is what waits in the memory), and
    the endings found. A unit that stayed with its colonists became no HOLLOW: its line is the colonists' green. */
 .title-lineage {
@@ -2512,9 +2505,10 @@ body.reduced-motion.beamed-out .desktop > .tools-view .window-body { animation: 
 .tx-bar {
   position: relative; display: flex; height: 18px;
   border: 1px solid var(--transmit-line); background: var(--bg);
-  /* One tick a block of the link (§6.9: the link is counted in blocks; TransmitScreen sets --link-blocks). */
+  /* One tick a block of the room (counted in blocks; TransmitScreen sets --bar-blocks). Playtest 1 (note 20): the room
+     bar is the PACKET's one bar, the link bar went with the link. */
   background-image: linear-gradient(90deg, transparent calc(100% - 1px), color-mix(in srgb, var(--transmit-line) 18%, transparent) calc(100% - 1px));
-  background-size: calc(100% / var(--link-blocks)) 100%;
+  background-size: calc(100% / var(--bar-blocks)) 100%;
 }
 .tx-bar-files { height: 100%; background: color-mix(in srgb, var(--transmit-line) 55%, transparent); transition: width 0.25s ease-out; }
 .tx-bar-charge { height: 100%; background: color-mix(in srgb, var(--transmit-charge) 50%, transparent); transition: width 0.25s ease-out; }
@@ -2532,8 +2526,8 @@ body.reduced-motion.beamed-out .desktop > .tools-view .window-body { animation: 
   100% { background: color-mix(in srgb, var(--transmit-charge) 85%, transparent); box-shadow: none; }
 }
 body.reduced-motion .tx-bar-card.flash { animation: none; }
-/* Charge with no room on the link: still charge (the bar's green, faded and dashed: outside the link), in muted
-   words, not the warning red (post-handover: red read as damage; it is only the link being full). Its title says why. */
+/* Charge with no room in the destination's receiver: still charge (the bar's green, faded and dashed: outside the room),
+   in muted words, not the warning red (post-handover: red read as damage; it is only the room being full). */
 .tx-bar-over {
   padding: 0 6px; height: 18px; line-height: 18px; font-size: 10px; letter-spacing: 0.1em; white-space: nowrap;
   color: var(--report-dim); cursor: help;

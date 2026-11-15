@@ -349,25 +349,24 @@ async function arrive(route, name, bypass = null) {
     && !/LEFT BEHIND|scan me/i.test(left.name), JSON.stringify(left));
   await drop();
   await shot('08-heron-read');
-  // Its PACKET: the leftover deck.
+  // Its LEAVE ORBIT (playtest 1, note 5: the salvage moved off the PACKET): the leftover deck.
   await run.lockInRing({ sleep: true });
   await run.landToReport();
   await run.finishReport();
-  await waitFor(() => window.__ap.store.getState().run.phase === 'desk', 15000);
-  const next = await st(() => window.__ap.arm().arm.find((ship) => ship.slot === 7) ? 7 : null);
-  await st((slot) => window.__ap.course(slot), next);
-  await waitFor(() => window.__ap.store.getState().run.phase === 'transmit' && !document.getElementById('transmitScreen').hidden, 8000);
-  await waitFor(() => document.getElementById('logReader').hidden, 4000);
+  await waitFor(() => window.__ap.store.getState().run.phase === 'leave' && !document.getElementById('leaveScreen').hidden, 15000);
+  await page.waitForTimeout(600);
   for (let i = 0; i < 4 && (await st(() => !document.getElementById('logReader').hidden)); i++) { await page.keyboard.press('Space'); await page.waitForTimeout(500); }
   await page.waitForTimeout(800);
   const deck = await st(() => ({
-    title: document.getElementById('txDraftTitle').textContent,
-    cards: [...document.querySelectorAll('#txCards .tx-card')].map((card) => ({ title: card.querySelector('.tx-card-title')?.textContent ?? '',
+    title: document.getElementById('loHeading').textContent,
+    cards: [...document.querySelectorAll('#loCards .tx-card')].map((card) => ({ title: card.querySelector('.tx-card-title')?.textContent ?? '',
       skl: card.querySelector('.tx-card-skl')?.textContent ?? null, left: card.querySelector('.tx-card-left')?.textContent ?? null })),
   }));
-  check('…its PACKET is headed `LEFT BEHIND BY HELM` and deals three cards, the third a `.skl`', deck.title === 'LEFT BEHIND BY HELM' && deck.cards.length === 3
+  check('…its LEAVE ORBIT is headed `LEFT BEHIND BY HELM` and deals three cards, the third a `.skl`', deck.title === 'LEFT BEHIND BY HELM' && deck.cards.length === 3
     && /\.skl v1$/.test(deck.cards[2].title) && deck.cards[2].skl !== null, JSON.stringify(deck));
   await shot('09-heron-deck');
+  const out = await run.leaveOrbit(2);
+  check('…[3] takes the `.skl`, ENTER brings up the DESK', out.desk && out.pick !== null, JSON.stringify(out));
 }
 
 check('no page errors', errors.length === 0, errors.slice(0, 4).join(' | '));

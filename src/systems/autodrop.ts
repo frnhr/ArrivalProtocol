@@ -153,7 +153,7 @@ function volleyNext(next: Readonly<NextVolley>): NextLaunch {
 // with its own queue, 01 §3.17). Review m6: `source` is the wrapping resolver's (registerLandingController checks a resolver
 // answers for its own source), and every intent the controller makes carries it. Slice 5: `armed` arms the machine for the
 // wrapper (the kid's [G] is not needed), read wherever the controller reads the arm (armedNext and the decision), threaded
-// as a parameter (no module variable); held and claimed are still state.landing.autodrop's, and `queue` is not read (MERGE's
+// as a parameter (no module variable); claimed is still state.landing.autodrop's, and `queue` is not read (MERGE's
 // own machine state is slice 7's).
 // Slice 5 review fix pass (architecture 2): `skipBetween` asks for the SKIP between passes itself (the [F] the kid would
 // press under an armed v3: no window open, nothing to decide, a later launch planned; pace stops that SKIP before it), so
@@ -225,7 +225,7 @@ function launchDue(state: Readonly<GameState>, win: Readonly<WindowAt>, atTSec: 
 // AUTODROP's controller now, or null: null unless phase 'landing', the landing goes on and AUTODROP works (skillLive), and:
 //   v1: armed 'centre' && ui.mode === 'tools' → { source: 'autodrop', holdsTactical: true, launchesFromMind: false }
 //   v2/v3: armed 'pass' or 'plan'            → { source: 'autodrop', holdsTactical: true, launchesFromMind: true }
-// (Playtest 1: v1 was `autodrop.held`, [L] held down.) A 'centre' arm flies as v1 whatever the file works as later (a REPAIR
+// (Playtest 1: v1 was `autodrop.held`, [L] held down; the field went with save v10.) A 'centre' arm flies as v1 whatever the file works as later (a REPAIR
 // that lifts it to v2 mid-window does not turn the window into a pass).
 // Every version holds TACTICAL in 4c (plan R7: no SKIP chaining yet, so no drop inside a SKIP). `override` is slice 7's seam
 // (MERGE's restored pods at the effective version); its queue is not read in 4c.
@@ -314,7 +314,6 @@ export function restAutodrop(draft: AutodropState, end: AutodropEnd | null, atAi
     draft.end = end;
     draft.endAtAi = atAi;
   }
-  draft.held = false;
   draft.armed = null;
   draft.armedAtTSec = null;
   draft.claimed = false;
@@ -342,7 +341,7 @@ function disarm(store: Store<GameState>, end: AutodropEnd): void {
 export function autodropLandingOver(store: Store<GameState>): void {
   const ad = store.getState().landing.autodrop;
   releaseThread(OWNER);
-  if (!ad.held && ad.armed === null && !ad.claimed && ad.waitingSinceTSec === null && ad.armedAtTSec === null) return;
+  if (ad.armed === null && !ad.claimed && ad.waitingSinceTSec === null && ad.armedAtTSec === null) return;
   const from = ad.armed;
   store.update((draft) => { restAutodrop(draft.landing.autodrop, 'landing-over', draft.clock.aiSec); });
   if (from !== null) emit('autodrop', { from, to: null, end: 'landing-over' });
@@ -445,7 +444,6 @@ export function pressAutodrop(store: Store<GameState>): AutodropRefusal | null {
     machine.armed = to;
     machine.armedAtTSec = now;
     machine.sent = {};
-    machine.held = false;
     machine.end = null;
     machine.endAtAi = null;
     if (pass !== null) machine.pass = { ...pass };
@@ -498,7 +496,7 @@ function versionChanged(store: Store<GameState>, live: Readonly<SkillLive>): voi
   const state = store.getState();
   const ad = state.landing.autodrop;
   const to = live.version;
-  const busy = ad.armed !== null || ad.held;
+  const busy = ad.armed !== null;
   if (to < ad.flownAs && busy) {
     if (to >= 2 && ad.armed === 'plan') {
       // v3 → v2: this pass's remaining rows become the pass's numbers.
@@ -604,7 +602,7 @@ export function autodropTick(store: Store<GameState>): void {
   const ad = state.landing.autodrop;
   if (ad.endAtAi !== null && state.clock.aiSec - ad.endAtAi >= AUTODROP_DAMAGED_ALERT_SEC) clearAlert(store, DAMAGED_ALERT_ID);
   if (!landingOn(state)) {
-    if (state.run.phase === 'landing' || ad.armed !== null || ad.held || ad.claimed) autodropLandingOver(store);
+    if (state.run.phase === 'landing' || ad.armed !== null || ad.claimed) autodropLandingOver(store);
     return;
   }
   const live = skillLive(state.memory, 'autodrop');

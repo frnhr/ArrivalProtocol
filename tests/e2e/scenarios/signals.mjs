@@ -48,11 +48,13 @@ async function arrive(route) {
     return s.run.phase === 'flight' && s.run.map.route.at(-1)?.slot === slot;
   }, 30000, 100, route.at(-1));
 }
-// The ship ends locked and landed at once, its report closed: the DESK.
+// The ship ends locked at once and landed at once, its report closed: LEAVE ORBIT (its first card; playtest 1, note 5),
+// then the DESK.
 async function toDesk() {
   await screens.lockInRing({ sleep: true });
   await screens.landToReport();
   await screens.finishReport();
+  await screens.leaveOrbit(0);
   return waitFor(() => window.__ap.store.getState().run.phase === 'desk' && !document.getElementById('deskScreen').hidden, 15000);
 }
 const toMind = async () => {

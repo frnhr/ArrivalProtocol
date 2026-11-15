@@ -7,9 +7,9 @@
 import { check, finish } from '../landing/checks';
 import type { GameState } from '@state/schema';
 import { createHarness7 } from '../wp7/harness7';
-import { stubStorage, pageOpen, receiveToReport, beamTo, toDesk, storedSave, type StubStorage } from '../save/save-fixture';
+import { stubStorage, pageOpen, receiveToReport, beamTo, toDesk, toLeave, storedSave, type StubStorage } from '../save/save-fixture';
 import { giveTools } from '../map/repo-fixture';
-import { setCourseFromDesk } from '../support/desk';
+import { setCourseFromDesk, leaveOrbit } from '../support/desk';
 import { lockOn } from '../landing/harness-landing';
 import { setLandingMode } from '../support/landing-instant';
 import { resumeRun } from '@systems/run-save';
@@ -17,7 +17,6 @@ import { resetReport } from '@systems/reset';
 import { reachableFrom } from '@systems/map-hop';
 import { wakeSleeperNow, pickSleeperJob } from '@systems/resident-sleeper';
 import { activeLandingController } from '@systems/landing-controller';
-import { pickCard } from '@systems/draft';
 import { transmitNext } from '@systems/run';
 import { actionScan } from '@state/actions';
 import { RESIDENT_SEG_IDS } from '@data/residents';
@@ -92,19 +91,23 @@ for (const c of cases) {
   h.step();
   const acted = c.act();
   check(`${c.label}: set up`, acted === 'ok', acted);
-  toDesk(h.store);
+  toLeave(h.store);
   const done = point();
   const record = s().run.residents.met.at(-1);
   const afterDone = resumes();
-  check(`${c.label}: SHIP DONE decodes and RESUMEs at the desk, nothing left running, its record kept (${record?.kind} · ${record?.fate})`,
-    done === 'ship-done' && afterDone !== null && afterDone.length === 0 && s().run.phase === 'desk'
+  // Playtest 1 (note 5): SHIP DONE is written at LEAVE ORBIT first.
+  check(`${c.label}: SHIP DONE decodes and RESUMEs at LEAVE ORBIT, nothing left running, its record kept (${record?.kind} · ${record?.fate})`,
+    done === 'ship-done' && afterDone !== null && afterDone.length === 0 && s().run.phase === 'leave'
     && JSON.stringify(s().run.residents.met.at(-1)) === JSON.stringify(record), `${done} ${JSON.stringify(afterDone)}`);
-  // On to the next ship: a departed resident's skill card is picked and installs at its boot.
+  // On to the next ship: a departed resident's skill card is taken and installs at its boot.
+  const skill = s().run.leave.offer.find((card) => card.id === 'skill')?.leftover?.skill ?? null;
+  leaveOrbit(h.store, skill !== null ? 'skill' : null);
+  const atDesk = resumes();
+  check(`${c.label}: …and again at the desk, its pick held (${String(s().run.leave.pick)})`, atDesk !== null && atDesk.length === 0
+    && s().run.phase === 'desk' && (skill === null || s().run.leave.pick === 'skill'), JSON.stringify(atDesk));
   const from = s().run.map.route.at(-1)!.slot;
   const next = reachableFrom(s().run.map, from).find((slot) => !END_SLOTS.includes(slot)) ?? reachableFrom(s().run.map, from)[0]!;
   setCourseFromDesk(h.store, next);
-  const skill = s().run.transit!.offer.find((card) => card.id === 'skill')?.leftover?.skill ?? null;
-  pickCard(h.store, skill !== null ? 'skill' : s().run.transit!.offer[0]!.id);
   const logFrom = s().log.entries.length;
   transmitNext(h.store);
   stepUntil(() => s().run.phase === 'flight', 60);
@@ -112,7 +115,7 @@ for (const c of cases) {
     && entry.text === `> SKILL TRAINED: ${SKILL_TREE[skill].fileName} v1 · from the resident that left ${ship}`);
   check(`${c.label}: the run goes on to ${s().level.shipName}${skill !== null ? `, the skill card's ${skill} installed at its boot` : ''}`,
     s().run.phase === 'flight' && (skill === null || trained), skill ?? '');
-  if (c.route.at(-1) === 4) check('HERON\'s PACKET deals the skill card', skill !== null);
+  if (c.route.at(-1) === 4) check('HERON\'s LEAVE ORBIT deals the skill card', skill !== null);
 }
 
 finish();

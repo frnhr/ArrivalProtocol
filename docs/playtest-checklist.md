@@ -65,7 +65,7 @@ One ordered walk through a full run, consolidated from every work package's manu
 46. **The archive.** `?debug`: `__ap.archiveCorrupt()` and reload: the red box with WIPE / PLAY WITHOUT, RECEIVE plays without saving (`NOT SAVING`); a private window: `ARCHIVE OFFLINE`; a reload mid-run makes the next unit's ghost say `i blinked and the run was gone.` at the boot of the ship it was left on (HALCYON at the earliest).
 47. **(final fix) The MIND's numbers.** With one backup in memory the dock reads `1 Backup` (`2 Backups` with two); with nothing selected, INSPECT's `damage` row shows the same number as the stats bar's DAMAGE. INSPECT on Repair: `Heals your AI files and the colonists, point by point, …`.
 48. **The harness** (optional): `AP_DEPTH=full node_modules/.bin/tsx --tsconfig tsconfig.json tests/unit/wp12/playthrough.test.ts` plays 200 seeds × 3 kids in about 10 minutes and prints the table (records in `tests/.out/playthrough`); `npm test` runs the unit tier in under 5 minutes, `npm run test:e2e` plays a whole run in the browser (about 15 minutes), `npm run balance` runs every sweep at full resolution and the 200 seeds (about two hours).
-49. **(post-handover) The softer sounds** (`?debug`, click the title first so audio unlocks): the boot's and the TERMINAL's typing is a soft tap with a faint tone, while HOLLOW's lines still blip low and wrong (one key: `__ap.audio.play('typeTick', { voice: 'sys' })`). In LAST LIGHT's belt (`__ap.ship(4)`, fly into it) you hear **(playtest 1)** one steady bed of white noise with radio static in it, louder toward the belt's middle, with no bursts, breathing or ripples; the geiger ticks only when a hit lands (its level: `await __ap.audio.measure('beltBed', undefined, 3, 1)`). M silences all of it. On a TRANSMIT whose charge does not fit, the end of the link bar reads `n LEFT BEHIND` in grey, with a hover explanation.
+49. **(post-handover) The softer sounds** (`?debug`, click the title first so audio unlocks): the boot's and the TERMINAL's typing is a soft tap with a faint tone, while HOLLOW's lines still blip low and wrong (one key: `__ap.audio.play('typeTick', { voice: 'sys' })`). In LAST LIGHT's belt (`__ap.ship(4)`, fly into it) you hear **(playtest 1)** one steady bed of white noise with radio static in it, louder toward the belt's middle, with no bursts, breathing or ripples; the geiger ticks only when a hit lands (its level: `await __ap.audio.measure('beltBed', undefined, 3, 1)`). M silences all of it.
 
 ### Playtest 1, Batch A (A-UI)
 
@@ -87,3 +87,20 @@ One ordered walk through a full run, consolidated from every work package's manu
     hold stops at the belt (`BELT AHEAD`); hold again and the pass takes about 3 s (`FAST`), the hits landing as they
     would; the next crossing slows for a moment, then the same. Window to window across both crossings in about 15 s.
     With AUTODROP v3 armed, one hold carries the whole plan: it waits at each window AUTODROP flies and goes on by itself.
+
+### Playtest 1, Batch B (B-ORDER)
+
+57. **LEAVE ORBIT first.** After a LANDING REPORT's CONTINUE: `LEAVE ORBIT`, the ship's name, `SALVAGE · TAKE ONE WITH YOU`
+    and three cards (on run 1's first one the LOG READER opens over it). ENTER before a pick buzzes (`TAKE ONE FIRST`);
+    [1]–[3] or a click picks (it can change), ENTER (`TAKE IT ▸`) takes it and the STAR CHART opens. After a lost ship (a
+    crash, BEAM OUT) the screen reads `LEAVING <SHIP>` with the way out under it (`EMERGENCY TRANSMIT · …`); after BEAM OUT
+    the old ship's windows go black first. Taking `+2 CYCLES` shows in the REPOSITORY's COMPILE HERE bank at once, as its own `+2 SALVAGE` row in the ledger.
+58. **The PACKET only when it asks.** SET COURSE on a hop where everything fits and no delivery rides: the beam goes at once
+    (the light-years count, no ◀ CHART, no TRANSMIT ▸). With a delivery, files over the room, a TIGHT ship that takes no
+    charge, or a squeezed room with a skill that can PACK AS, the PACKET waits as before. It names the salvage taken
+    (`SALVAGE · …`), and a +12 card the room cannot take whole says so there and on the SHIP CARD (`+12 · ONLY 4 FIT ON …`).
+59. **No link.** The SHIP CARD's BEAM row reads `21 LY` (no `LINK n`), the PACKET has the room bar only, and nothing is
+    `LEFT BEHIND` by a link: all your charge crosses, and only the destination's room can squeeze it (`n WON'T FIT`).
+60. **RESUME.** Reload on LEAVE ORBIT: `RESUME · UNIT-047 · SHIP 1 DONE · LEAVING ORBIT · 2300`, and RESUME brings back the
+    same three cards; reload at the desk after taking one: `… AT THE DESK …`, the pick kept. The title no longer says
+    `runs save between ships`.

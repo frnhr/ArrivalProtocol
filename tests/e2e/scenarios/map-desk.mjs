@@ -93,7 +93,8 @@ const firstCards = (st) => st(() => [...document.querySelectorAll('#deskScreen .
 }));
 
 // RECEIVE, the boot skipped, ARES-VII locked at once and landed (__ap.landAll), its report through to the DESK.
-async function toFirstDesk({ page, kit, run }, tap = false) {
+async function toFirstDesk(tab, tap = false) {
+  const { page, kit, run } = tab;
   if (tap) await page.tap('#titleReceive');
   else await page.locator('#titleReceive').click();
   await kit.waitFor(() => ['boot', 'flight'].includes(window.__ap.store.getState().run.phase), 8000);
@@ -108,6 +109,8 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
       await page.waitForTimeout(1300);
     }
   } else await run.finishReport();
+  // Playtest 1 (note 5): LEAVE ORBIT before the DESK, its first card taken.
+  tab.leave = await run.leaveOrbit(0);
   const desk = await kit.waitFor(() => window.__ap.store.getState().run.phase === 'desk' && !document.getElementById('deskScreen').hidden, 5000);
   return report && desk;
 }
@@ -134,10 +137,14 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
 
   // --- The first DESK ---------------------------------------------------------------------------------------------------
   const reached = await toFirstDesk(tab);
+  const leave = tab.leave;
+  check('playtest 1: ARES-VII\'s report → LEAVE ORBIT first: `SALVAGE · TAKE ONE WITH YOU`, three cards, the LOG READER over it on entry 01; [1], ENTER',
+    leave.up && leave.title === 'LEAVE ORBIT' && leave.sub === 'ARES-VII · WHAT IS LEFT ON BOARD' && leave.heading === 'SALVAGE · TAKE ONE WITH YOU'
+    && leave.cards.length === 3 && leave.reader === '1' && leave.pick === leave.cards[0] && leave.desk, JSON.stringify(leave));
   await page.waitForTimeout(1500);
   let view = await run.desk();
   const clocks = await st(() => ({ paused: window.__ap.store.getState().clock.paused, reader: !document.getElementById('logReader').hidden }));
-  check('ARES-VII\'s report → the DESK: STAR CHART, UNIT-047 · YEAR 2300 · ARES-VII, both clocks stopped, no LOG READER yet', reached && view.shown
+  check('…then the DESK: STAR CHART, UNIT-047 · YEAR 2300 · ARES-VII, both clocks stopped, the LOG READER shut', reached && view.shown
     && view.phase === 'desk' && view.title === 'STAR CHART' && view.where === 'UNIT-047 · YEAR 2300 · ARES-VII' && clocks.paused && !clocks.reader,
     JSON.stringify({ reached, ...view, nodes: undefined, names: undefined, clocks }));
   // --- Slice 4: the required first pick, by the desk's keys ([1], then ENTER) -----------------------------------------------
@@ -297,9 +304,9 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   check('…HALCYON\'s card leads: Tessaly · 5 PODS, 1,000 COLONISTS, YOU SLEEP 31 YRS · ECC FIXES 1, 3 HITS ON THE WAY → 2 LAND',
     card?.slot === HALCYON && card.name === 'HALCYON' && card.sub === 'Tessaly · 5 PODS' && card.colonists === '1,000 COLONISTS'
     && card.sched === 'YOU SLEEP 31 YRS IN ITS RECEIVER · ECC FIXES 1' && card.cost === '3 HITS ON THE WAY → 2 LAND', JSON.stringify(card));
-  check('…its rows: YOU FIT first, then FLYBY, TOO WIDE · MEMORY 320 · COMPACT · ROOM FOR YOU 152 · LZ: 2 · 21 LY · LINK 123 · NOISE CLEAN · RESIDENT none · SITE DATA GOOD',
+  check('…its rows: YOU FIT first, then FLYBY, TOO WIDE · MEMORY 320 · COMPACT · ROOM FOR YOU 152 · LZ: 2 · 21 LY · NOISE CLEAN · RESIDENT none · SITE DATA GOOD',
     card?.rows[0] === 'fit=YOU FIT' && ['problems=FLYBY, TOO WIDE', 'memory=MEMORY 320 · COMPACT · ROOM FOR YOU 152', 'lzs=LZ: 2 · SET BY ARRIVAL CONTROL',
-      'beam=21 LY · LINK 123', 'noise=NOISE CLEAN · SEEDS: none', 'resident=none', 'site=GOOD'].every((row) => card?.rows.includes(row))
+      'beam=21 LY', 'noise=NOISE CLEAN · SEEDS: none', 'resident=none', 'site=GOOD'].every((row) => card?.rows.includes(row))
     && card?.rows.some((row) => /^run=YOUR 2ND SHIP · \d(–\d)? MORE TO THE FINAL SHIP$/.test(row)), JSON.stringify(card?.rows));
   check('…and the TIMELINE `2300 you leave · 2321 you get there · 2352 ▲ approach`', card?.timeline === '2300 you leave · 2321 you get there · 2352 ▲ approach', card?.timeline);
   check('3b: …the guidance moves to the file: `REQUEST mv · RECOMMENDED [R]` (the ship\'s step done)', view.step === 'REQUEST mv · RECOMMENDED [R]'
@@ -308,8 +315,8 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   await run.clickNode(ALBATROSS);
   await page.waitForTimeout(300);
   const albatross = (await run.desk()).card;
-  check('…ALBATROSS\'s card: ARK, 51 LY · LINK 90 · 7 HITS, SLEEP 14 YRS and ONLY FROM HERE in red', albatross?.name === 'ALBATROSS' && albatross.tags.includes('ARK')
-    && albatross.rows.some((row) => /^beam=51 LY · LINK 90$/.test(row)) && /^7 HITS/.test(albatross.cost ?? '') && albatross.sched === 'YOU SLEEP 14 YRS IN ITS RECEIVER · ECC FIXES 0'
+  check('…ALBATROSS\'s card: ARK, 51 LY · 7 HITS, SLEEP 14 YRS and ONLY FROM HERE in red', albatross?.name === 'ALBATROSS' && albatross.tags.includes('ARK')
+    && albatross.rows.some((row) => /^beam=51 LY$/.test(row)) && /^7 HITS/.test(albatross.cost ?? '') && albatross.sched === 'YOU SLEEP 14 YRS IN ITS RECEIVER · ECC FIXES 0'
     && albatross.rows.some((row) => /^only=ONLY FROM HERE/.test(row)), JSON.stringify(albatross));
   // Slice 5: ALBATROSS's resident left (BOSUN), which its card never says before the ship: `unknown`, as for a sleeper or a surprise.
   check('…and its RESIDENT row reads `unknown` (a departed resident is not named before the ship)', albatross?.rows.includes('resident=unknown') === true,
@@ -380,17 +387,13 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   check('…a click back on HALCYON picks it again', (await run.desk()).selected === HALCYON);
   await shot('03-halcyon-card');
 
-  // ENTER: the PACKET for HALCYON. On run 1 the LOG READER opens over it first (entry 01) and takes SPACE.
+  // ENTER: the PACKET for HALCYON. It asks (the Mv delivery can be SENT ON: playtest 1, transmit.ts packetAsks), so it waits.
   await page.keyboard.press('Enter');
   const packetUp = await waitFor(() => window.__ap.store.getState().run.phase === 'transmit' && !document.getElementById('transmitScreen').hidden, 5000);
-  const readerUp = await waitFor(() => !document.getElementById('logReader').hidden, 4000, 50);
-  check('ENTER sets course: the PACKET for HALCYON, with the LOG READER over it on entry 01', packetUp && readerUp
-    && await st(() => window.__ap.store.getState().run.transit?.toSlot === 2 && document.querySelector('#lgRows .lg-row.open')?.dataset.entry === '1'));
-  for (let i = 0; i < 4 && (await st(() => !document.getElementById('logReader').hidden)); i++) {
-    await page.keyboard.press('Space');
-    await page.waitForTimeout(500);
-  }
-  await page.waitForTimeout(600);
+  check('ENTER sets course: the PACKET for HALCYON, asking (the delivery), not beaming by itself', packetUp
+    && await st(() => window.__ap.store.getState().run.transit?.toSlot === 2 && window.__ap.transmitModel().asks.includes('deliveries')
+      && !document.getElementById('transmitScreen').classList.contains('direct')));
+  await page.waitForTimeout(1200);
   const packet = await st(() => ({
     reader: !document.getElementById('logReader').hidden, phase: window.__ap.store.getState().run.phase,
     next: document.getElementById('txNext').innerText, back: document.querySelector('#transmitScreen .tx-back')?.textContent ?? null,
@@ -398,21 +401,22 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
     room: document.querySelector('#transmitScreen .tx-room-line')?.textContent ?? [...document.querySelectorAll('#transmitScreen [class*="room"]')].map((el) => el.textContent).join(' | '),
     sent: document.querySelectorAll('#txChips .tx-chip.sent').length,
   }));
-  check('…SPACE closes the reader and sends nothing; the PACKET: NEXT: HALCYON · 1,000 COLONISTS · 21 LY · SLEEP 31 YRS, ◀ CHART [ESC], the room bar',
+  check('…it sends nothing by itself; the PACKET: NEXT: HALCYON · 1,000 COLONISTS · 21 LY · SLEEP 31 YRS, ◀ CHART [ESC], the room bar',
     !packet.reader && packet.phase === 'transmit' && packet.sent === 0 && packet.next === 'NEXT: HALCYON · 1,000 COLONISTS · 21 LY · SLEEP 31 YRS'
     && packet.back === '◀ CHART [ESC]' && packet.backShown && /ROOM 152 · FILES \d+ \+ FLOOR 12/.test(packet.room), JSON.stringify(packet));
   const deliveryChips = () => st(() => ({
     label: document.querySelector('#transmitScreen .tx-deliveries')?.hidden === false ? document.querySelector('#transmitScreen .tx-deliveries-label')?.textContent ?? null : null,
     chips: [...document.querySelectorAll('#transmitScreen .tx-delivery')].map((chip) => ({ key: chip.dataset.key, label: chip.getAttribute('aria-label'),
       name: chip.querySelector('.tx-chip-name')?.textContent ?? '', sentOn: chip.classList.contains('sent-on'), lost: chip.classList.contains('lost') })),
-    files: Number(/FILES (\d+)/.exec(document.getElementById('txPacketLine').innerText)?.[1]), room: window.__ap.transmitModel().room.line,
+    files: window.__ap.transmitModel().files, room: window.__ap.transmitModel().room.line,
     tooMany: window.__ap.transmitModel().room.tooMany, go: document.getElementById('txGo').innerText.replace(/\s+/g, ' ').trim(),
-    salvage: document.querySelector('#transmitScreen .tx-draft-title')?.textContent ?? null,
+    salvage: document.querySelector('#transmitScreen .tx-salvage')?.hidden === false ? document.querySelector('#transmitScreen .tx-salvage').textContent : null,
+    salvageWant: window.__ap.transmitModel().salvage,
   }));
   const toHalcyon = await deliveryChips();
-  check('3b: …the PACKET\'s DELIVERIES row: `Mv · 2 BLOCKS · ARRIVED 2337 · [SEND ON]`; the draft is headed SALVAGE', toHalcyon.label === 'DELIVERIES'
+  check('3b: …the PACKET\'s DELIVERIES row: `Mv · 2 BLOCKS · ARRIVED 2337 · [SEND ON]`; playtest 1: the SALVAGE line names the card LEAVE ORBIT took', toHalcyon.label === 'DELIVERIES'
     && toHalcyon.chips.length === 1 && toHalcyon.chips[0].name === 'MV' && toHalcyon.chips[0].label === 'Mv · 2 BLOCKS · ARRIVED 2337 · [SEND ON]' && !toHalcyon.chips[0].sentOn
-    && toHalcyon.salvage === 'SALVAGE · PICK ONE TO CARRY', JSON.stringify(toHalcyon));
+    && toHalcyon.salvageWant !== null && toHalcyon.salvage === `SALVAGE · ${toHalcyon.salvageWant}`, JSON.stringify(toHalcyon));
   await shot('04-packet');
   await page.keyboard.press('Escape');
   await page.waitForTimeout(500);
@@ -429,7 +433,7 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   check('a click on ◀ CHART goes back too', await st(() => window.__ap.store.getState().run.phase === 'desk' && !document.getElementById('deskScreen').hidden));
   await page.keyboard.press('Enter');
   await waitFor(() => window.__ap.store.getState().run.phase === 'transmit', 4000);
-  check('…the first card picked ([1])', (await run.pickCard(0)) !== null);
+  await page.waitForTimeout(1100);
   await page.locator('#txGo').click();
   await page.waitForTimeout(600);
   const stamp = await st(() => {
@@ -487,6 +491,13 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   await run.lockInRing();
   await run.landToReport();
   await run.finishReport();
+  // Playtest 1: HALCYON's LEAVE ORBIT takes a card that brings no charge (the +12 would cross), for LAPWING's 0-charge confirm.
+  await waitFor(() => window.__ap.store.getState().run.phase === 'leave', 8000);
+  const pickOffer = await st(() => window.__ap.draft()?.offer.map((card) => card.id) ?? []);
+  const pickIndex = pickOffer.findIndex((id) => id !== 'charge');
+  const leftHalcyon = await run.leaveOrbit(pickIndex);
+  check(`HALCYON's LEAVE ORBIT: a card that brings no charge taken ([${pickIndex + 1}])`, pickIndex >= 0 && leftHalcyon.pick === pickOffer[pickIndex]
+    && leftHalcyon.desk, pickOffer.join(','));
   await waitFor(() => window.__ap.store.getState().run.phase === 'desk', 5000);
   await page.waitForTimeout(2500);
   view = await run.desk();
@@ -545,12 +556,7 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   const given = await st((files) => files.flatMap((file) => window.__ap.give(file)).map((seg) => seg.name), gifts);
   await page.keyboard.press('Enter');
   await waitFor(() => window.__ap.store.getState().run.phase === 'transmit', 4000);
-  await page.waitForTimeout(800);
-  const pickOffer = await st(() => window.__ap.draft()?.offer.map((card) => card.id) ?? []);
-  // A card that is not the +12 charge (it would bring charge across).
-  const pickIndex = pickOffer.findIndex((id) => id !== 'charge');
-  check(`…a card that brings no charge picked ([${pickIndex + 1}])`, pickIndex >= 0 && (await run.pickCard(pickIndex)) === pickOffer[pickIndex], pickOffer.join(','));
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(1100);
   const over = await deliveryChips();
   check(`3b: SEND ON forced: ${added} blocks of spare files given (${given.join(', ')}), files + the delivery are over the room: TRANSMIT ▸ waits`,
     over.files === ownFiles + added + 4 && over.files > room && ownFiles + added <= room && over.tooMany !== null && /TOO MANY/.test(over.tooMany)
@@ -626,6 +632,7 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   await run.lockInRing({ sleep: true });
   await run.landToReport();
   await run.finishReport();
+  await run.leaveOrbit(0);
   await waitFor(() => window.__ap.store.getState().run.phase === 'desk' && !document.getElementById('deskScreen').hidden, 6000);
   await page.waitForTimeout(1500);
   tabs = await run.deskTabs();
@@ -644,6 +651,7 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   await run.lockInRing({ sleep: true });
   await run.landToReport();
   await run.finishReport();
+  await run.leaveOrbit(0);
   await waitFor(() => window.__ap.store.getState().run.phase === 'desk' && !document.getElementById('deskScreen').hidden, 6000);
   await page.waitForTimeout(1500);
   await page.locator('#deskScreen .desk-tab[data-tab="card"]').click();

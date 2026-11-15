@@ -21,8 +21,8 @@ import type { HollowSegment, Segment } from '@/types/segment';
 import { createInitialState } from '@state/initial';
 import { traceMeter, reportTraceLine, biteClock, TRACE_UI_TEXT } from '@systems/hollow-hud';
 import { transmitModel } from '@systems/transmit';
-import { endShip, goTransmit, transmitNext } from '@systems/run';
-import { pickCard } from '@systems/draft';
+import { endShip, openLeaveOrbit, goTransmit, transmitNext } from '@systems/run';
+import { leaveOrbit } from '../support/desk';
 import { logChip, logReaderModel, logEntryToOpen, adjacentFoundEntry, LOG_UI_TEXT } from '@systems/log-view';
 import { openLogReader, closeLogReader, markLogEntryRead } from '@systems/story-log';
 import { noWorkingRm } from '@state/threat-selectors';
@@ -164,6 +164,9 @@ function removeBeamSeeds(store: Store<GameState>): void {
 function toTransmit(store: Store<GameState>): void {
   store.update((draft) => { draft.run.phase = 'report'; });
   endShip(store, 'locked');
+  // Playtest 1 (note 5): LEAVE ORBIT first (its first card taken), then the desk.
+  openLeaveOrbit(store, null);
+  leaveOrbit(store);
   // The worked route's next stop (Track RETIRE: run 1's arm; the classic five's next ship was shipIndex + 1).
   goTransmit(store, WORKED_ROUTE[store.getState().run.map.route.length]!);
   if (store.getState().run.phase !== 'transmit') throw new Error(`toTransmit: phase ${store.getState().run.phase}`);
@@ -201,8 +204,6 @@ function toTransmit(store: Store<GameState>): void {
   const store = world(VESPER, 7, true);
   store.update((draft) => { draft.run.hollowNamed = true; });
   toTransmit(store);
-  const plan = store.getState().run.transit!;
-  if (plan.pick === null && plan.offer.length > 0) pickCard(store, plan.offer[0]!.id);
   transmitNext(store);
   toTransmit(store);
   // Track THREAT's endShip writes the ship's own tally (none left here), so the fed blocks are set after it.

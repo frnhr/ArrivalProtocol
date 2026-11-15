@@ -1,8 +1,10 @@
 // The e2e run save (phase 3 slice 3c, docs/phase3/impl/slice-3c-plan.md §2.1–§2.2, §3 step 6, §6.3): one save slot written at
 // RUN START, SHIP DONE, BEAM and ENDING CHOSEN, and the title's RESUME block over it. On run 1's arm (seed 4, the worked
 // route), played like a kid between the reloads:
-// A. ARES-VII and HALCYON to the second DESK (slice 4: desk 1 opens on TRAINING, and its required first pick is made by [1],
-//    ENTER); a reload there: the RESUME block (`RESUME · UNIT-047 · SHIP 2 DONE · AT THE DESK · 2352`, RESUME ▸ [ENTER],
+// A. ARES-VII to its LEAVE ORBIT (playtest 1, note 5: SHIP DONE is written there first): a reload, the RESUME block `RESUME ·
+//    UNIT-047 · SHIP 1 DONE · LEAVING ORBIT · 2300`, RESUME ▸ gives the same three cards, nothing taken; [1], ENTER: SHIP DONE
+//    again at the desk with the pick held. ARES-VII and HALCYON to the second DESK (slice 4: desk 1 opens on TRAINING, and its
+//    required first pick is made by [1], ENTER); a reload there: the RESUME block (`RESUME · UNIT-047 · SHIP 2 DONE · AT THE DESK · 2352`, RESUME ▸ [ENTER],
 //    NEW RUN, no RECEIVE TRANSMISSION), and ENTER resumes the same desk (the route, the year, the nodes, the INBOX's read
 //    marks, the requests, amber, the bought AUTOBURN v1 and the cycles), with the run not counted again.
 // B. SET COURSE to KESTREL, TRANSMIT: its boot typed in full, then a reload mid-flight: `RESUME · UNIT-047 · SHIP 3 · bound
@@ -56,7 +58,7 @@ async function openPage(name) {
 }
 
 // The title as the kid reads it: the unit line and its stamp, the RESUME block (its line, the confirm, the four buttons as
-// their key caps read), RECEIVE TRANSMISSION, the `runs save between ships` note, the lineage line.
+// their key caps read), RECEIVE TRANSMISSION, the (cut) `runs save between ships` note, the lineage line.
 const titleLook = (kit) => kit.st(() => {
   const read = (node) => node.nodeType === Node.TEXT_NODE ? node.textContent
     : node.nodeType !== Node.ELEMENT_NODE ? '' : node.matches('kbd.keycap') ? `[${node.textContent}]` : [...node.childNodes].map(read).join('');
@@ -69,7 +71,8 @@ const titleLook = (kit) => kit.st(() => {
     save: shown('titleSave') ? { kind: document.getElementById('titleSave').dataset.kind, line: document.getElementById('titleSaveLine').textContent,
       ask: shown('titleSaveAsk') ? document.getElementById('titleSaveAsk').textContent : null } : null,
     resume: button('titleResume'), newRun: button('titleNewRun'), abandon: button('titleAbandon'), keep: button('titleKeep'),
-    receive: shown('titleReceive'), note: shown('titleNote') ? document.getElementById('titleNote').textContent : null,
+    // The `runs save between ships` note is cut (playtest 1, OD 173): its element is gone, so `note` reads null.
+    receive: shown('titleReceive'), note: document.getElementById('titleNote') !== null && shown('titleNote') ? document.getElementById('titleNote').textContent : null,
     lineage: shown('titleLineage') ? document.getElementById('titleLineage').textContent : null,
   };
 });
@@ -119,8 +122,9 @@ const deskState = async ({ kit, screens }) => {
   return { where: desk.where, title: desk.title, route: desk.route, nodes: desk.nodes.map((node) => `${node.slot}:${node.state}`).join(' '), ...more };
 };
 
-// The DESK → the next ship's PACKET (a click on its node, ENTER; __ap.course if the click missed) → [1] → TRANSMIT ▸. The
-// first PACKET's LOG READER opens by itself (slice 2): SPACE closes it first.
+// The DESK → the next ship's PACKET (a click on its node, ENTER; __ap.course if the click missed) → TRANSMIT ▸ when it asks
+// (playtest 1: a PACKET with nothing to ask beams by itself; the salvage was taken at LEAVE ORBIT, where the first LOG READER
+// opened too).
 async function sendTo({ page, kit, screens }, slot, name) {
   await kit.waitFor(() => window.__ap.store.getState().run.phase === 'desk' && !document.getElementById('deskScreen').hidden, 8000);
   await page.waitForTimeout(400);
@@ -129,26 +133,27 @@ async function sendTo({ page, kit, screens }, slot, name) {
   if (clicked === true && (await kit.st(() => window.__ap.store.getState().ui.deskSelected)) === slot) await page.keyboard.press('Enter');
   else { log(`the click on ${name}'s node missed (${clicked}): __ap.course(${slot})`); await kit.st((to) => window.__ap.course(to), slot); }
   const packet = await kit.waitFor(() => window.__ap.store.getState().run.phase === 'transmit' && !document.getElementById('transmitScreen').hidden, 6000);
-  await page.waitForTimeout(600);
-  for (let i = 0; i < 4 && (await kit.st(() => !document.getElementById('logReader').hidden)); i++) {
-    await page.keyboard.press('Space');
-    await page.waitForTimeout(500);
-  }
-  const picked = (await screens.pickCard(0)) !== null;
-  await page.locator('#txGo').click({ timeout: 10000 });
+  const beamed = (await screens.beam()) !== null;
   const boot = await kit.waitFor((ship) => window.__ap.store.getState().run.phase === 'boot' && window.__ap.store.getState().level.shipName === ship, 20000, 100, name);
-  return packet && picked && boot;
+  return packet && beamed && boot;
 }
 
-// A ship flown at once: the boot skipped, a circular orbit in the ring, every pod landed, the report through to the DESK.
-async function flyToDesk({ kit, screens }, { skip = true } = {}) {
+// A ship flown at once: the boot skipped, a circular orbit in the ring, every pod landed, the report through to LEAVE ORBIT.
+async function flyToLeave({ kit, screens }, { skip = true } = {}) {
   if (skip) await kit.st(() => window.__ap.skipBoot());
   await kit.waitFor(() => window.__ap.store.getState().run.phase === 'flight', 30000);
   await screens.lockInRing();
   const report = await screens.landToReport();
   await screens.finishReport();
-  const desk = await kit.waitFor(() => window.__ap.store.getState().run.phase === 'desk' && !document.getElementById('deskScreen').hidden, 8000);
-  return report && desk;
+  const leave = await kit.waitFor(() => window.__ap.store.getState().run.phase === 'leave' && !document.getElementById('leaveScreen').hidden, 8000);
+  return report && leave;
+}
+
+// …and on through LEAVE ORBIT ([1], ENTER) to the DESK.
+async function flyToDesk(tab, opts = {}) {
+  const left = await flyToLeave(tab, opts);
+  const took = await tab.screens.leaveOrbit(0);
+  return left && took.desk;
 }
 
 // The TERMINAL's boot lines from the log entry after `from` on (MIND channel, the `>` lines), once the boot is done.
@@ -195,19 +200,39 @@ const { page, kit, screens, shot } = tab;
 const { st, waitFor, errors } = kit;
 
 const fresh = await titleLook(kit);
-check('a fresh page: run 1\'s title, RECEIVE TRANSMISSION, `runs save between ships`, no RESUME block', fresh.card && fresh.phase === 'title'
+check('a fresh page: run 1\'s title, RECEIVE TRANSMISSION, no meta note (playtest 1 cut `runs save between ships`), no RESUME block', fresh.card && fresh.phase === 'title'
   && fresh.unit === 'UNIT-047 · YEAR 2300 · FINAL SHIP 180 LY OUT' && fresh.stamp === null && fresh.receive && fresh.save === null
-  && fresh.note === 'runs save between ships', JSON.stringify(fresh));
+  && fresh.note === null, JSON.stringify(fresh));
 await page.locator('#titleReceive').click();
 await waitFor(() => window.__ap.store.getState().run.phase === 'boot', 6000);
 const runStart = await stored(kit);
 check('RECEIVE TRANSMISSION: RUN START is written (`SHIP 1 · bound for ARES-VII · 2300`), the archive counts the run', runStart.point === 'run-start'
   && runStart.status === 'ok' && runStart.line?.ship === 'ARES-VII' && runStart.line?.depth === 1 && runStart.runs === 1 && runStart.activeRun === 47,
   JSON.stringify({ ...runStart, raw: undefined }));
-check('ARES-VII flown at once to its DESK', await flyToDesk(tab));
+check('ARES-VII flown at once to its LEAVE ORBIT', await flyToLeave(tab));
+const leave1 = await stored(kit);
+const dealt1 = await st(() => window.__ap.draft()?.offer.map((card) => card.id) ?? []);
+check('…SHIP DONE is written at LEAVE ORBIT (`SHIP 1 DONE · LEAVING ORBIT`, the stage leave-orbit, no pick)', leave1.point === 'ship-done'
+  && leave1.line?.depth === 1 && leave1.line?.ship === 'ARES-VII' && leave1.line?.stage === 'leave-orbit' && JSON.parse(leave1.raw).payload.run.leave.pick === null,
+  JSON.stringify(leave1.line));
+await page.reload({ waitUntil: 'networkidle' });
+await page.waitForTimeout(800);
+const resumeLeave = await titleLook(kit);
+check('reload at LEAVE ORBIT: the RESUME block reads `RESUME · UNIT-047 · SHIP 1 DONE · LEAVING ORBIT · 2300`', resumeLeave.phase === 'title'
+  && resumeLeave.save?.kind === 'resume' && resumeLeave.save.line === 'RESUME · UNIT-047 · SHIP 1 DONE · LEAVING ORBIT · 2300', JSON.stringify(resumeLeave.save));
+await enterOnTitle(tab, 'ENTER on RESUME ▸ resumes LEAVE ORBIT (the run not counted again)',
+  (after, before, now) => after.phase === 'leave' && after.shipIndex === 0 && now.runs === before.runs,
+  () => st(() => window.__ap.resume()), '__ap.resume()');
+await waitFor(() => window.__ap.store.getState().run.phase === 'leave' && !document.getElementById('leaveScreen').hidden, 8000);
+const resumedCards = await st(() => ({ offer: window.__ap.draft()?.offer.map((card) => card.id) ?? [], pick: window.__ap.draft()?.pick ?? null,
+  shown: [...document.querySelectorAll('#loCards .tx-card')].map((card) => card.dataset.card) }));
+check('…the same three cards on screen, nothing taken', JSON.stringify(resumedCards.offer) === JSON.stringify(dealt1) && resumedCards.pick === null
+  && JSON.stringify(resumedCards.shown) === JSON.stringify(dealt1), JSON.stringify({ dealt1, ...resumedCards }));
+const tookAres = await screens.leaveOrbit(0);
 const shipDone1 = await stored(kit);
-check('…SHIP DONE is written at the DESK (`SHIP 1 DONE · AT THE DESK`)', shipDone1.point === 'ship-done' && shipDone1.line?.depth === 1 && shipDone1.line?.ship === 'ARES-VII',
-  JSON.stringify(shipDone1.line));
+check('…[1], ENTER: the DESK, and SHIP DONE is written again there (`SHIP 1 DONE · AT THE DESK`, the pick held)', tookAres.desk && shipDone1.point === 'ship-done'
+  && shipDone1.line?.depth === 1 && shipDone1.line?.ship === 'ARES-VII' && shipDone1.line?.stage === 'desk'
+  && JSON.parse(shipDone1.raw).payload.run.leave.pick === dealt1[0], JSON.stringify(shipDone1.line));
 // Slice 4: the run's first desk opens on TRAINING, and SET COURSE waits for the required first pick: [1] arms AUTOBURN v1,
 // ENTER fills the 1.5 s bar and trains it (pending until TRANSMIT ▸), ESC goes back to the card.
 const firstTab = (await screens.deskTabs()).tab;
@@ -257,7 +282,7 @@ const resumeDesk = await titleLook(kit);
 check(`reload at the desk: the RESUME block reads \`RESUME · UNIT-047 · SHIP 2 DONE · AT THE DESK · ${desk2.year}\``, resumeDesk.card && resumeDesk.phase === 'title'
   && resumeDesk.save?.kind === 'resume' && resumeDesk.save.line === `RESUME · UNIT-047 · SHIP 2 DONE · AT THE DESK · ${desk2.year}` && resumeDesk.save.ask === null,
   JSON.stringify(resumeDesk));
-check('…RESUME ▸ [ENTER] and NEW RUN; no RECEIVE TRANSMISSION, no ABANDON RUN or KEEP IT, no `runs save between ships`',
+check('…RESUME ▸ [ENTER] and NEW RUN; no RECEIVE TRANSMISSION, no ABANDON RUN or KEEP IT, no meta note',
   resumeDesk.resume === 'RESUME ▸ [ENTER]' && resumeDesk.newRun === 'NEW RUN' && !resumeDesk.receive && resumeDesk.abandon === null && resumeDesk.keep === null
   && resumeDesk.note === null, JSON.stringify(resumeDesk));
 check('…the title names the saved run\'s unit (run 1\'s line)', resumeDesk.unit === 'UNIT-047 · YEAR 2300 · FINAL SHIP 180 LY OUT', resumeDesk.unit);
@@ -368,7 +393,8 @@ check('the DESK → CORMORANT (boarded), flown at once with HOLLOW asleep, to it
   await screens.lockInRing({ sleep: true });
   const landed = await screens.landToReport();
   await screens.finishReport();
-  return landed && await waitFor(() => window.__ap.store.getState().run.phase === 'desk' && !document.getElementById('deskScreen').hidden, 8000);
+  const took = await screens.leaveOrbit(0);
+  return landed && took.desk && await waitFor(() => window.__ap.store.getState().run.phase === 'desk' && !document.getElementById('deskScreen').hidden, 8000);
 })());
 const lastUp = await sendTo(tab, 19, 'LAST LIGHT');
 const beam6 = await stored(kit);
@@ -439,7 +465,7 @@ const gap = nextYear - 2300;
 const launched = gap === 0 ? `UNIT-048 · YEAR ${nextYear} · LAUNCHED IN THE SAME YEAR AS UNIT-047` : `UNIT-048 · YEAR ${nextYear} · LAUNCHED ${gap} ${gap === 1 ? 'YEAR' : 'YEARS'} AFTER UNIT-047`;
 check(`NEW RUN: UNIT-048's title, \`${launched}\` with its stamp, RECEIVE TRANSMISSION, no RESUME block`, run2Title.unit === launched
   && run2Title.stamp === (gap === 0 ? 'SAME YEAR' : `+${gap} ${gap === 1 ? 'YEAR' : 'YEARS'}`) && run2Title.receive && run2Title.save === null
-  && run2Title.note === 'runs save between ships' && /^last: UNIT-047 · /.test(run2Title.lineage ?? ''), JSON.stringify(run2Title));
+  && run2Title.note === null && /^last: UNIT-047 · /.test(run2Title.lineage ?? ''), JSON.stringify(run2Title));
 await shot('10-unit-048-title');
 
 // ======================================================================================================================
@@ -507,8 +533,8 @@ await enterOnTitle(tabF, 'ENTER on CAN\'T RESUME abandons the run (UNIT-047 reco
   () => tabF.page.locator('#titleAbandon').click(), 'a click on ABANDON RUN');
 const t48 = await settledTitle(tabF.kit);
 const s48 = await stored(tabF.kit);
-check('…UNIT-048\'s title, launched after UNIT-047, RECEIVE TRANSMISSION back, `runs save between ships`', abandonedCorrupt({ phase: t48.phase, unit: 48 }, s48, s48)
-  && /^UNIT-048 · YEAR \d{4} · LAUNCHED .* UNIT-047$/.test(t48.unit) && t48.receive && t48.save === null && t48.note === 'runs save between ships',
+check('…UNIT-048\'s title, launched after UNIT-047, RECEIVE TRANSMISSION back, no meta note', abandonedCorrupt({ phase: t48.phase, unit: 48 }, s48, s48)
+  && /^UNIT-048 · YEAR \d{4} · LAUNCHED .* UNIT-047$/.test(t48.unit) && t48.receive && t48.save === null && t48.note === null,
   JSON.stringify({ t48, s48: { ...s48, raw: undefined } }));
 await tabF.shot('2-abandoned');
 // The run save's writes throw from here on (a full disk): the archive's own key still writes.

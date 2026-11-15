@@ -69,7 +69,7 @@ const ending = written.at(-1)!;
 check('…the sticky burst\'s Infinity is tagged and comes back', ending.raw.includes('{"$num":"Infinity"}') && ending.save.payload.kind === 'world'
   && ending.save.payload.slices.burn.ghost?.endTSec === Infinity);
 check('…the resume lines: RUN START names ARES-VII 2300, BEAM 2 names HALCYON at depth 2, ENDING CHOSEN LAST LIGHT at depth 6',
-  JSON.stringify(written[0]!.save.resume) === JSON.stringify({ unit: 47, depth: 1, ship: 'ARES-VII', year: 2300, point: 'run-start' })
+  JSON.stringify(written[0]!.save.resume) === JSON.stringify({ unit: 47, depth: 1, ship: 'ARES-VII', year: 2300, point: 'run-start', stage: 'boot' })
   && written[2]!.save.resume.ship === 'HALCYON' && written[2]!.save.resume.depth === 2
   && ending.save.resume.ship === 'LAST LIGHT' && ending.save.resume.depth === 6, JSON.stringify(written.map((entry) => entry.save.resume.ship)));
 check('…every save is the archive\'s run: unit 47, archiveRuns 1 (counted at RUN START)', written.every((entry) => entry.save.unit === 47
@@ -114,8 +114,8 @@ const edit = (raw: string, change: (save: Raw) => void): string => {
 check('not JSON → not-json', kind('{ this is not a run save') === 'not-json');
 check('another save version → version', kind(edit(desk, (save) => { save.saveVersion = RUN_SAVE_VERSION + 1; })) === 'version');
 // Slice 4: the first step (1 → 2, the skill tree; its fixtures are migrated in tests/unit/skills/foundation.test.ts).
-check('migrateRunSave knows eight steps (1 → 2, slice 4; 2 → 3, its review; 3 → 4, slices 4c–4e; 4 → 5, slice 5; 5 → 6, slice 6; 6 → 7, slice 7a; 7 → 8, slice 7c; 8 → 9, slice 7d), and leaves an unknown version for check 2',
-  Object.keys(RUN_SAVE_MIGRATIONS).join() === '1,2,3,4,5,6,7,8' && isDeepStrictEqual(migrateRunSave({ saveVersion: 0 }), { saveVersion: 0 }));
+check('migrateRunSave knows nine steps (1 → 2, slice 4; 2 → 3, its review; 3 → 4, slices 4c–4e; 4 → 5, slice 5; 5 → 6, slice 6; 6 → 7, slice 7a; 7 → 8, slice 7c; 8 → 9, slice 7d; 9 → 10, playtest 1 Batch B), and leaves an unknown version for check 2',
+  Object.keys(RUN_SAVE_MIGRATIONS).join() === '1,2,3,4,5,6,7,8,9' && isDeepStrictEqual(migrateRunSave({ saveVersion: 0 }), { saveVersion: 0 }));
 // 2 → 3: a v2 save (burn.auto without flying / captured) steps up with both empty and decodes; a v3 save burning with its
 // burn in hand reads (4c's mid-flight saves).
 const v2 = edit(desk, (save) => { save.saveVersion = 2; delete save.payload.slices.burn.auto.flying; delete save.payload.slices.burn.auto.captured; });
@@ -172,7 +172,9 @@ const shapes: [string, string][] = [
   ['AUTOBURN without its capture flag (a v2 shape at v3)', edit(desk, (save) => { delete save.payload.slices.burn.auto.captured; })],
   // Slices 4c–4e (v4): the new machines at rest, the lasting record on the route.
   ['AUTODROP armed at a save point', edit(desk, (save) => { save.payload.slices.landing.autodrop.armed = 'pass'; })],
-  ['AUTODROP held at a save point', edit(desk, (save) => { save.payload.slices.landing.autodrop.held = true; })],
+  // Save v10 (playtest 1, B-DROP's v1 arm): `held` and the end 'released' are gone; RUN_SAVE_MIGRATIONS[9] steps a v9 save past them.
+  ['AUTODROP with v9\'s `held` at v10', edit(desk, (save) => { save.payload.slices.landing.autodrop.held = false; })],
+  ['AUTODROP with v9\'s end \'released\' at v10', edit(desk, (save) => { Object.assign(save.payload.slices.landing.autodrop, { end: 'released', endAtAi: 812.5 }); })],
   ['AUTODROP holding its thread', edit(desk, (save) => { save.payload.slices.landing.autodrop.claimed = true; })],
   ['AUTODROP waiting for a thread', edit(desk, (save) => { save.payload.slices.landing.autodrop.waitingSinceTSec = 12; })],
   ['AUTODROP with its [G] moment kept', edit(desk, (save) => { save.payload.slices.landing.autodrop.armedAtTSec = 300; })],
@@ -192,8 +194,8 @@ check('the shape, field by field → shape (the envelope, the run, the map, the 
   wrongShape.map(([what, text]) => `${what} → ${refusal(text)}`).join(' | '));
 check('…the refusal names the field (`payload.run.map.arm[3].late is not true or false`)',
   refusal(shapes[5]![1]).includes('payload.run.map.arm[3].late'), refusal(shapes[5]![1]));
-check('…AUTODROP at rest with what may stand (the review\'s M2 \'released\' end, its moment, the pass numbers, flownAs 2) decodes', decodeRunSave(edit(desk, (save) => {
-  Object.assign(save.payload.slices.landing.autodrop, { end: 'released', endAtAi: 812.5, pass: { 'LZ-A': 2, 'LZ-B': 1 }, sent: { 'LZ-A': 2 }, flownAs: 2 });
+check('…AUTODROP at rest with what may stand (v1\'s \'centre-done\' end, its moment, the pass numbers, flownAs 2) decodes', decodeRunSave(edit(desk, (save) => {
+  Object.assign(save.payload.slices.landing.autodrop, { end: 'centre-done', endAtAi: 812.5, pass: { 'LZ-A': 2, 'LZ-B': 1 }, sent: { 'LZ-A': 2 }, flownAs: 2 });
 })).ok);
 check('…AUTOBURN v3 holding its landing orbit passes the shape', kind(edit(desk, (save) => {
   Object.assign(save.payload.slices.burn.auto, { phase: 'armed', mode: 'landing-orbit', targetKm: 6100, holding: true });
@@ -212,7 +214,11 @@ check('…a disguised arrival seed and a recorded first seed on the route pass t
     && refused.startsWith('shape:') && refused.includes('world'), refused);
 }
 check('a route that does not match the point → route (the point, the depth, the ships ended)',
-  kind(edit(desk, (save) => { save.point = 'ending-chosen'; save.resume.point = 'ending-chosen'; save.payload.phase = 'report'; save.payload.run.phase = 'report'; })) === 'route'
+  kind(edit(desk, (save) => {
+    save.point = 'ending-chosen'; save.resume.point = 'ending-chosen'; save.payload.phase = 'report'; save.payload.run.phase = 'report';
+    // Playtest 1 (v10): the stage and the salvage as a report holds them, so the route is what is wrong.
+    save.resume.stage = 'report'; save.payload.run.leave = { offer: [], pick: null };
+  })) === 'route'
   && kind(edit(desk, (save) => { save.payload.run.shipIndex = 3; save.resume.depth = 4; })) === 'route'
   && kind(edit(desk, (save) => { save.payload.run.ships.pop(); save.payload.run.skills.earned.pop(); })) === 'route');
 check('ENDING CHOSEN with an undecided finale → route', kind(edit(ending.raw, (save) => { save.payload.slices.hollow.finale.phase = 'step1'; })) === 'route');

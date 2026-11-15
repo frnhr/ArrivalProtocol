@@ -4,7 +4,7 @@ import type { GameState, RunState } from '@state/schema';
 import type { ShipSlices } from '@state/initial';
 import type { ContentVersions } from '@/types/lineage';
 import type {
-  RunSave, SavePoint, SavePayload, ResumeLine, BootParts, DecodeResult, SaveRefusal, SaveRefusalKind,
+  RunSave, SavePoint, SavePayload, ResumeLine, ResumeStage, BootParts, DecodeResult, SaveRefusal, SaveRefusalKind,
 } from '@/types/save';
 import type { Meta, RunLineage } from '@systems/meta';
 import type { LzState } from '@/types/landing';
@@ -15,7 +15,7 @@ import { traceRefusal, noTraces } from '@systems/traces';
 import { signalRefusal, signalCount, SIGNAL_SOURCES } from '@systems/signals';
 import { hasUsableTool } from '@state/selectors';
 import { shipOnTarget } from '@systems/ending-rules';
-import { podsOnTarget } from '@systems/landing-rules';
+import { podsOnTarget, leftWithoutOrbit } from '@systems/landing-rules';
 import { FS_TOOL_KINDS } from '@data/fs-tools';
 import type { Segment } from '@/types/segment';
 import type { FinaleState } from '@state/schema';
@@ -66,10 +66,10 @@ export function contentVersions(): ContentVersions {
 
 // --- What a save holds -------------------------------------------------------------------------------------------------
 
-// The phase a point is written in (3c plan §2.1's table): the boot points right as the boot begins, SHIP DONE at the desk,
-// ENDING CHOSEN on the final ship's LANDING REPORT.
-const POINT_PHASE: Readonly<Record<SavePoint, RunState['phase']>> = {
-  'run-start': 'boot', 'beam': 'boot', 'ship-done': 'desk', 'ending-chosen': 'report',
+// The phases a point is written in (3c plan §2.1's table): the boot points right as the boot begins, SHIP DONE at LEAVE
+// ORBIT and again at the desk (playtest 1, plan §3.3.3: the pick held), ENDING CHOSEN on the final ship's LANDING REPORT.
+const POINT_PHASES: Readonly<Record<SavePoint, readonly RunState['phase'][]>> = {
+  'run-start': ['boot'], 'beam': ['boot'], 'ship-done': ['leave', 'desk'], 'ending-chosen': ['report'],
 };
 
 function shipSlicesOf(state: Readonly<GameState>): ShipSlices {
@@ -83,8 +83,8 @@ function shipSlicesOf(state: Readonly<GameState>): ShipSlices {
 // a world point the run and the ship's slices. Throws when the state is not at that point (a save point called from the
 // wrong moment is a bug) or a boot point comes without its parts.
 export function savePayloadAt(state: Readonly<GameState>, point: SavePoint, boot: Readonly<BootParts> | null): SavePayload {
-  const phase = POINT_PHASE[point];
-  if (state.run.phase !== phase) throw new Error(`savePayloadAt(${point}): the run is in '${state.run.phase}', not '${phase}'`);
+  const phases = POINT_PHASES[point];
+  if (!phases.includes(state.run.phase)) throw new Error(`savePayloadAt(${point}): the run is in '${state.run.phase}', not '${phases.join("' or '")}'`);
   const run = structuredClone(state.run) as RunState;
   if (point === 'run-start' || point === 'beam') {
     if (boot === null) throw new Error(`savePayloadAt(${point}): a boot point needs the boot's racks and verdict`);
@@ -93,7 +93,24 @@ export function savePayloadAt(state: Readonly<GameState>, point: SavePoint, boot
     return { kind: 'boot', run, carried: structuredClone(boot.carried), threat: structuredClone(boot.threat) };
   }
   if (boot !== null) throw new Error(`savePayloadAt(${point}): a world point takes no boot parts`);
-  return { kind: 'world', phase: point === 'ship-done' ? 'desk' : 'report', run, slices: shipSlicesOf(state) };
+  const phase = point === 'ending-chosen' ? 'report' : state.run.phase === 'leave' ? 'leave' : 'desk';
+  return { kind: 'world', phase, run, slices: shipSlicesOf(state) };
+}
+
+// The screen a save resumes on (ResumeLine.stage), from the run it holds: LEAVE ORBIT says whether the ship it leaves was
+// lost (playtest 1: `LEAVING HALCYON`, no orbit to leave).
+export function resumeStageOf(run: Readonly<Pick<RunState, 'phase' | 'ships'>>): ResumeStage {
+  switch (run.phase) {
+    case 'boot': return 'boot';
+    case 'desk': return 'desk';
+    case 'report': return 'report';
+    case 'leave': {
+      const last = run.ships.at(-1);
+      if (last === undefined) throw new Error('resumeStageOf: LEAVE ORBIT with no ship ended');
+      return leftWithoutOrbit(last.outcome) ? 'leaving' : 'leave-orbit';
+    }
+    default: throw new Error(`resumeStageOf: no save resumes in '${run.phase}'`);
+  }
 }
 
 // The title's RESUME line for a save written now at `point`.
@@ -101,7 +118,7 @@ export function resumeLineOf(state: Readonly<GameState>, point: SavePoint): Resu
   const map = state.run.map;
   return {
     unit: state.run.unitNumber, depth: state.run.shipIndex + 1, ship: shipSummaryAt(map, currentSlot(state.run)).name,
-    year: map.galaxyYear, point,
+    year: map.galaxyYear, point, stage: resumeStageOf(state.run),
   };
 }
 
@@ -157,17 +174,42 @@ function sameKeys(value: Record<string, unknown>, keys: readonly string[]): stri
 const isWhole = (value: unknown): value is number => typeof value === 'number' && Number.isInteger(value) && value >= 0;
 
 const ENVELOPE_KEYS = ['saveVersion', 'mode', 'content', 'writtenAt', 'unit', 'run', 'archiveRuns', 'point', 'resume', 'payload', 'log', 'done'];
-const RESUME_KEYS = ['unit', 'depth', 'ship', 'year', 'point'];
+const RESUME_KEYS = ['unit', 'depth', 'ship', 'year', 'point', 'stage'];
 const BOOT_KEYS = ['kind', 'run', 'carried', 'threat'];
 const WORLD_KEYS = ['kind', 'phase', 'run', 'slices'];
 const SLICE_KEYS = ['mission', 'memory', 'clock', 'burn', 'orbit', 'level', 'landing', 'hollow', 'hazards', 'resident'];
 
 // --- Check 4: the shape, field by field ------------------------------------------------------------------------------
 
-const RUN_PHASES: readonly RunState['phase'][] = ['title', 'boot', 'flight', 'landing', 'report', 'desk', 'transmit', 'end'];
+const RUN_PHASES: readonly RunState['phase'][] = ['title', 'boot', 'flight', 'landing', 'report', 'leave', 'desk', 'transmit', 'end'];
+const DRAFT_CARD_IDS = ['firewall', 'repair-v2', 'thread-plus', 'charge', 'fuel-trim', 'cycles', 'skill'] as const;
+
+// A salvage card as LEAVE ORBIT dealt it (playtest 1, RUN_SAVE_VERSION 10; data/upgrades.ts DraftCard): its words are kept
+// (the deal is not re-dealt on resume), and a departed resident's leftover names its file and skill.
+const checkDraftCard: Check = (value, at) => {
+  const card = value as Record<string, unknown>;
+  const base = { id: oneOf(...DRAFT_CARD_IDS), title: name, effect: str, why: str, boosted: bool };
+  const leftover = rec({ segId: name, skill: nullable(oneOf(...SKILL_IDS)) });
+  rec(typeof card === 'object' && card !== null && 'leftover' in card ? { ...base, leftover } : base)(value, at);
+};
+
+// run.leave against the run's phase (playtest 1, plan §3.3.3): at LEAVE ORBIT the deal stands and nothing is taken yet (ENTER
+// takes it, and the desk's SHIP DONE follows); at the desk the pick is one of the cards dealt, or none when none was; at any
+// other save point both are empty (startShip clears them, and the final ship has no LEAVE ORBIT).
+function checkLeave(run: Readonly<RunState>, at: string): void {
+  const { offer, pick } = run.leave;
+  if (new Set(offer.map((card) => card.id)).size !== offer.length) shapeFail(`${at}.leave.offer`, 'deals one card twice');
+  if (run.phase === 'leave') {
+    if (pick !== null) shapeFail(`${at}.leave.pick`, 'is taken at LEAVE ORBIT\'s save point (ENTER saves at the desk)');
+  } else if (run.phase === 'desk') {
+    if (offer.length > 0 ? !offer.some((card) => card.id === pick) : pick !== null) shapeFail(`${at}.leave.pick`, `'${String(pick)}' is not a card dealt`);
+  } else if (offer.length > 0 || pick !== null) {
+    shapeFail(`${at}.leave`, `holds salvage in '${run.phase}'`);
+  }
+}
 
 const checkHop = rec({
-  from: whole, to: whole, distanceLy: int, linkBlocks: whole, transitHits: whole, eccFixes: whole, leaveYear: int, arriveYear: int,
+  from: whole, to: whole, distanceLy: int, transitHits: whole, eccFixes: whole, leaveYear: int, arriveYear: int,
   approachYear: int, slackYears: int, noise: oneOf(0, 1, 2, 3), inRange: bool, memoryClass: oneOf('FULL', 'COMPACT', 'TIGHT'),
   room: whole, chargeFloor: whole,
 });
@@ -437,7 +479,9 @@ function checkSavedRun(value: unknown, at: string): void {
       deletes: whole, driversLost: whole,
       driversBitten: whole, capRefusals: whole, deal: nullable(anyRecord),
     }),
-    pendingStarCredit: num, pendingStars: whole, simulationRetryUsed: bool, beamOut: isNull, transit: isNull, arrival: nullable(checkArrival),
+    pendingStarCredit: num, pendingStars: whole, simulationRetryUsed: bool, beamOut: isNull,
+    leave: rec({ offer: list(checkDraftCard), pick: nullable(oneOf(...DRAFT_CARD_IDS)) }),
+    transit: isNull, arrival: nullable(checkArrival),
     endCause: isNull,
     threat: likeReference(createRunThreat() as unknown as Record<string, unknown>),
     log: likeReference(createRunLog() as unknown as Record<string, unknown>),
@@ -464,6 +508,7 @@ function checkSavedRun(value: unknown, at: string): void {
   const have = Object.keys(value as Record<string, unknown>);
   if (known.length !== have.length || known.some((key) => !have.includes(key))) shapeFail(at, 'does not have a fresh run\'s fields');
   checkSkillHistory(value as RunState, at);
+  checkLeave(value as RunState, at);
   checkSeedsMet(value as RunState, at);
   checkResidentHistory(value as RunState, at);
 }
@@ -513,15 +558,16 @@ function checkBurn(reference: Readonly<Record<string, unknown>>): Check {
 }
 
 // AUTODROP's machine (slice 4c, RUN_SAVE_VERSION 4), read whole and at rest: every save point is outside a landing (the
-// landing ended resets it, plan R2), so nothing is held, armed, claimed or waiting. Its pass numbers are kept between
-// passes, and with the last end's words, they may stand.
-const AUTODROP_ENDS = ['centre-done', 'pass-done', 'plan-done', 'cancel', 'downgraded', 'off', 'offline', 'landing-over', 'released'];
+// landing ended resets it, plan R2), so nothing is armed, claimed or waiting. Its pass numbers are kept between passes,
+// and with the last end's words, they may stand. Save v10 (playtest 1): `held` is gone (v1 is armed by [G]) and so is the
+// end 'released' (v1's hold let go); RUN_SAVE_MIGRATIONS[9] drops the one and maps the other to null.
+const AUTODROP_ENDS = ['centre-done', 'pass-done', 'plan-done', 'cancel', 'downgraded', 'off', 'offline', 'landing-over'];
 const wholeCounts: Check = (value, at) => {
   anyRecord(value, at);
   for (const [lz, count] of Object.entries(value as Record<string, unknown>)) whole(count, `${at}.${lz}`);
 };
 const checkAutodrop = rec({
-  held: oneOf(false), armed: isNull, pass: wholeCounts, sent: wholeCounts, armedAtTSec: isNull, claimed: oneOf(false),
+  armed: isNull, pass: wholeCounts, sent: wholeCounts, armedAtTSec: isNull, claimed: oneOf(false),
   waitingSinceTSec: isNull, flownAs: oneOf(0, 1, 2, 3), end: nullable(oneOf(...AUTODROP_ENDS)), endAtAi: nullable(num),
 });
 // SURVEY's slice (slice 6, RUN_SAVE_VERSION 6; plan §2.2's codec checks), read whole and at rest: no thread held, no angle
@@ -660,8 +706,9 @@ function checkShape(data: Record<string, unknown>): string | null {
   if (!isRecord(resume)) return 'resume is not a record';
   const resumeKeys = sameKeys(resume, RESUME_KEYS);
   if (resumeKeys !== null) return `resume: ${resumeKeys}`;
-  if (!isWhole(resume.unit) || !isWhole(resume.depth) || !isWhole(resume.year) || typeof resume.ship !== 'string' || resume.point !== data.point) {
-    return 'resume does not name a unit, a depth, a ship, a year and this point';
+  if (!isWhole(resume.unit) || !isWhole(resume.depth) || !isWhole(resume.year) || typeof resume.ship !== 'string' || resume.point !== data.point
+    || !['boot', 'leave-orbit', 'leaving', 'desk', 'report'].includes(resume.stage as string)) {
+    return 'resume does not name a unit, a depth, a ship, a year, this point and a stage';
   }
   const log = data.log;
   if (!isRecord(log) || !Array.isArray(log.entries) || !isWhole(log.rev) || sameKeys(log, ['entries', 'rev']) !== null) return 'log is not a log';
@@ -676,7 +723,7 @@ function checkShape(data: Record<string, unknown>): string | null {
   } else if (payload.kind === 'world') {
     const keys = sameKeys(payload, WORLD_KEYS);
     if (keys !== null) return `payload: ${keys}`;
-    if (payload.phase !== 'desk' && payload.phase !== 'report') return `payload.phase '${String(payload.phase)}' is unknown`;
+    if (payload.phase !== 'leave' && payload.phase !== 'desk' && payload.phase !== 'report') return `payload.phase '${String(payload.phase)}' is unknown`;
     if (!isRecord(payload.slices)) return 'payload.slices is not a record';
     const slices = sameKeys(payload.slices, SLICE_KEYS);
     if (slices !== null) return `payload.slices: ${slices}`;
@@ -712,6 +759,10 @@ function checkShape(data: Record<string, unknown>): string | null {
   if (resume.unit !== data.unit || resume.depth !== saved.shipIndex + 1 || resume.year !== saved.map.galaxyYear) {
     return `the resume line (unit ${String(resume.unit)}, depth ${String(resume.depth)}, ${String(resume.year)}) is not the run's`;
   }
+  if (payload.kind === 'world' && payload.phase !== saved.phase) return `payload.phase '${String(payload.phase)}' with the run in '${saved.phase}'`;
+  let stage: ResumeStage | null = null;
+  try { stage = resumeStageOf(saved); } catch { stage = null; }
+  if (stage !== null && resume.stage !== stage) return `the resume line's stage '${String(resume.stage)}' is not the run's (${stage})`;
   return null;
 }
 
@@ -1018,6 +1069,45 @@ function migrateRunSave8(save: Record<string, unknown>): Record<string, unknown>
   return next;
 }
 
+// 9 → 10 (playtest 1, Batch B's one bump: B-ORDER, plan §3.3.3–§3.3.4):
+// • the link limit is gone (note 20): every hop on the route drops `linkBlocks` (no other saved record holds the link: the
+//   transit plan is null at every save point);
+// • LEAVE ORBIT comes before the desk (note 5): run.leave is empty ({ offer: [], pick: null }). A v9 SHIP DONE save is at
+//   the desk, whose deal was not yet made in v9 (it came at the PACKET), so it resumes at the desk with no pick: that one
+//   beam crosses with no salvage. Every other point holds none either;
+// • the resume line's stage, from the run's phase (a v9 save is at a boot, the desk or the final report);
+// • AUTODROP's machine (B-DROP, note 9): `held` goes, and an end 'released' becomes null (with its endAtAi).
+function migrateRunSave9(save: Record<string, unknown>): Record<string, unknown> {
+  const next = structuredClone(save);
+  const payload = isRecord(next.payload) ? next.payload : null;
+  const run = payload !== null && isRecord(payload.run) ? payload.run : null;
+  const map = run !== null && isRecord(run.map) ? run.map : null;
+  if (map !== null && Array.isArray(map.route)) {
+    for (const stop of map.route.filter(isRecord)) if (isRecord(stop.hop)) delete stop.hop.linkBlocks;
+  }
+  // B-DROP (playtest 1, note 9): v1 is armed by [G], so AUTODROP's `held` (always false since) goes, and a stored end
+  // 'released' (v1's hold let go, no longer a word) becomes no end: it only kept the strip's line up for a moment.
+  const slices = payload !== null && isRecord(payload.slices) ? payload.slices : null;
+  const autodrop = slices !== null && isRecord(slices.landing) && isRecord(slices.landing.autodrop) ? slices.landing.autodrop : null;
+  if (autodrop !== null) {
+    delete autodrop.held;
+    if (autodrop.end === 'released') {
+      autodrop.end = null;
+      autodrop.endAtAi = null;
+    }
+  }
+  if (run !== null) {
+    run.leave = { offer: [], pick: null };
+    if (isRecord(next.resume)) {
+      const stages: Record<string, ResumeStage> = { boot: 'boot', desk: 'desk', report: 'report' };
+      const stage = typeof run.phase === 'string' ? stages[run.phase] : undefined;
+      if (stage !== undefined) next.resume.stage = stage;
+    }
+  }
+  next.saveVersion = 10;
+  return next;
+}
+
 export const RUN_SAVE_MIGRATIONS: Readonly<Record<number, (save: Record<string, unknown>) => Record<string, unknown>>> = {
   1: migrateRunSave1,
   2: migrateRunSave2,
@@ -1027,6 +1117,7 @@ export const RUN_SAVE_MIGRATIONS: Readonly<Record<number, (save: Record<string, 
   6: migrateRunSave6,
   7: migrateRunSave7,
   8: migrateRunSave8,
+  9: migrateRunSave9,
 };
 
 export function migrateRunSave(save: Record<string, unknown>): Record<string, unknown> {
@@ -1067,8 +1158,7 @@ export function decodeRunSave(raw: string): DecodeResult {
   const save = data as unknown as RunSave;
   const run = save.payload.run;
   if (run.map.route.length !== run.shipIndex + 1) return refuse('route', `${run.map.route.length} route stops for ship ${run.shipIndex + 1}`);
-  const phase = POINT_PHASE[save.point];
-  if (run.phase !== phase) return refuse('route', `point ${save.point} with the run in '${run.phase}'`);
+  if (!POINT_PHASES[save.point].includes(run.phase)) return refuse('route', `point ${save.point} with the run in '${run.phase}'`);
   const boot = save.point === 'run-start' || save.point === 'beam';
   if (boot !== (save.payload.kind === 'boot')) return refuse('route', `point ${save.point} with a '${save.payload.kind}' payload`);
   if (save.point === 'run-start' ? run.map.route.length !== 1 : save.point === 'beam' && run.map.route.length < 2) {

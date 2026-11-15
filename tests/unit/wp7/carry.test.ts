@@ -24,13 +24,12 @@ import { setLandingMode } from '../support/landing-instant';
 import { recordDriverLost } from '@state/actions';
 import { driversInMemory } from '@state/selectors';
 import { freeSegment, mergeAdjacentFree } from '@systems/memory-ops';
-import { fixtureVerdict, fixtureHop } from '../support/arm-ship';
+import { fixtureVerdict } from '../support/arm-ship';
 
 
-// Track RETIRE: HALCYON as phase 2 had it (FULL, its rack D the spill under test: support/hollow-world), on the worked
-// route's link into it (123; the classic five's was 120).
+// Track RETIRE: HALCYON as phase 2 had it (FULL, its rack D the spill under test: support/hollow-world). Playtest 1 (note
+// 20): the beam has no link, so the packet is the unit's files and all its charge.
 const halcyon = phase2HalcyonDef();
-const link = fixtureHop(1).linkBlocks;
 
 // A ship-1 unit with REPAIR licensed, as it leaves ARES-VII.
 const h = createHarness7(1, { soulsFound: true });
@@ -40,16 +39,14 @@ const memory = h.store.getState().memory;
 
 // --- Packing -------------------------------------------------------------------------------------------
 {
-  const packet = packUnit(memory, link, []);
+  const packet = packUnit(memory, []);
   check('packing: rack E is the Core, then the AI tools by job', packet.rackE.map((seg) => seg.name).join(',')
     === 'AI Core,Engine I/O,Autopilot,Sensor Interp,Nav Plotter,Telemetry,AI Comms', packet.rackE.map((seg) => seg.name).join(','));
-  // Phase 3 slice 2 (risk 7): 046.log packs after the fs-tools and FIREWALLs, and costs its 2 blocks of the link.
+  // Phase 3 slice 2 (risk 7): 046.log packs after the fs-tools and FIREWALLs, and costs its 2 blocks.
   check('…rack F the fs-tools by kind (Scan, then Repair and its .bak), then 046.log', packet.rackF.map((seg) => seg.name).join(',') === 'Scan,Repair,Repair.bak,???',
     packet.rackF.map((seg) => seg.name).join(','));
-  check('…files 65 blocks (§5.1\'s 63, plus 046.log\'s 2), the charge fits whole', packet.filesBlocks === 65 && packet.chargeCarried === 36, `${packet.filesBlocks} ${packet.chargeCarried}`);
+  check('…files 65 blocks (§5.1\'s 63, plus 046.log\'s 2), all 36 of the charge held', packet.filesBlocks === 65 && packet.chargeHeld === 36, `${packet.filesBlocks} ${packet.chargeHeld}`);
   check('…copies: memory itself is untouched', packedFiles(packet).every((seg) => !memory.includes(seg)));
-  const tight = packUnit(memory, 80, []);
-  check('…a narrow link carries charge only up to link − files', tight.chargeCarried === 80 - 65, `${tight.chargeCarried}`);
   const files = packedFiles(packet);
   const lock = (name: string): string | null => dropLock(files, files.find((seg) => seg.name === name)!);
   // WP7 part 2 (deliberate): "the last copy of each tool kind" is the filesystem tools' kinds. The other AI
@@ -61,14 +58,14 @@ const memory = h.store.getState().memory;
   // WP7 part 2: the locks are judged against what still goes, so both copies of REPAIR can't be dropped.
   let bothThrew = '';
   try {
-    packUnit(memory, link, memory.filter((seg) => seg.type === 'fs-tool' && seg.fsTool === 'repair').map((seg) => seg.id));
+    packUnit(memory, memory.filter((seg) => seg.type === 'fs-tool' && seg.fsTool === 'repair').map((seg) => seg.id));
   } catch (error) { bothThrew = (error as Error).message; }
   check('…dropping both copies of REPAIR throws (the second is the last copy)', /last-copy/.test(bothThrew), bothThrew);
   const bak = memory.find((seg) => seg.name === 'Repair.bak')!;
-  const lighter = packUnit(memory, link, [bak.id]);
-  check('…a dropped .bak stays behind and its blocks go to charge', lighter.filesBlocks === 61 && lighter.rackF.every((seg) => seg.name !== 'Repair.bak'));
+  const lighter = packUnit(memory, [bak.id]);
+  check('…a dropped .bak stays behind (its blocks free the room for charge)', lighter.filesBlocks === 61 && lighter.rackF.every((seg) => seg.name !== 'Repair.bak'));
   let threw = '';
-  try { packUnit(memory, link, [memory.find((seg) => seg.type === 'core')!.id]); } catch (error) { threw = (error as Error).message; }
+  try { packUnit(memory, [memory.find((seg) => seg.type === 'core')!.id]); } catch (error) { threw = (error as Error).message; }
   check('…dropping the Core throws loudly', /can't be left behind/.test(threw), threw);
 }
 
@@ -79,7 +76,7 @@ const memory = h.store.getState().memory;
     if (hasIntegrity(tele)) { tele.infected = { side: 'left' }; tele.recoilUntilAi = 99; tele.operating = true; }
     d.ui.memoryRev++;
   });
-  const packed = packedFiles(packUnit(memory, link, [])).find((seg) => seg.name === 'Telemetry')!;
+  const packed = packedFiles(packUnit(memory, [])).find((seg) => seg.name === 'Telemetry')!;
   check('an infected file arrives infected; its recoil and op flag do not travel',
     hasIntegrity(packed) && packed.infected?.side === 'left' && packed.recoilUntilAi === undefined && packed.operating === undefined);
   h.store.update((d) => { if (hasIntegrity(tele)) { delete tele.infected; delete tele.recoilUntilAi; delete tele.operating; } d.ui.memoryRev++; });
@@ -93,7 +90,7 @@ const memory = h.store.getState().memory;
   let hitsBad = 0;
   let total = 0;
   for (let seed = 1; seed <= 400; seed++) {
-    const files = packedFiles(packUnit(memory, link, []));
+    const files = packedFiles(packUnit(memory, []));
     const before = new Map(files.map((seg) => [seg, hasIntegrity(seg) ? seg.integrity : 0]));
     const hits = rollTransitHits(files, 6, createRng(seed));
     total += hits.length;
@@ -115,13 +112,13 @@ const memory = h.store.getState().memory;
   check('…the best copy of every tool kind stays at ≥ 60', worstLast >= TRANSIT_LAST_COPY_FLOOR, `${worstLast}`);
   check('…the Core takes at most 15 per hit and never drops below 25', worstCoreHit <= TRANSIT_CORE_MAX_HIT && worstCore >= CORE_RESET_INTEGRITY,
     `${worstCoreHit} / ${worstCore}`);
-  const a = rollTransitHits(packedFiles(packUnit(memory, link, [])), 3, createRng(42));
-  const b = rollTransitHits(packedFiles(packUnit(memory, link, [])), 3, createRng(42));
+  const a = rollTransitHits(packedFiles(packUnit(memory, [])), 3, createRng(42));
+  const b = rollTransitHits(packedFiles(packUnit(memory, [])), 3, createRng(42));
   check('…seeded: the same seed hits the same files for the same points', JSON.stringify(a) === JSON.stringify(b));
-  const files = packedFiles(packUnit(memory, link, []));
+  const files = packedFiles(packUnit(memory, []));
   const toll = emergencyCoreToll(files, 25, false);
   check('the emergency toll: the Core −25 (100 → 75), logged as a hit', toll?.from === 100 && toll.to === 75);
-  const low = packedFiles(packUnit(memory, link, []));
+  const low = packedFiles(packUnit(memory, []));
   const core = low.find((seg) => seg.type === 'core')!;
   if (core.type === 'core') core.integrity = 20;
   check('…a Core already under 25 is neither lowered nor raised', emergencyCoreToll(low, 25, false) === null && core.type === 'core' && core.integrity === 20);
@@ -146,7 +143,7 @@ const memory = h.store.getState().memory;
   let cardThrew = false;
   try { arrivalCharge(0, 0, -12); } catch { cardThrew = true; }
   check('…a negative card throws', cardThrew);
-  const packet = packUnit(memory, link, []);
+  const packet = packUnit(memory, []);
   const rackEBlocks = packet.rackE.reduce((sum, seg) => sum + seg.size, 0);
   const filesBlocks = rackEBlocks + packet.rackF.reduce((sum, seg) => sum + seg.size, 0);
   const receiver = MEMORY_LAYOUTS.FULL.totalBlocks - MEMORY_LAYOUTS.FULL.unitStart;

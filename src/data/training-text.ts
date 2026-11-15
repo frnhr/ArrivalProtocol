@@ -179,10 +179,10 @@ export const TRAINING_TEXT = {
   // None until a ship is picked (playtest 1, §3.7: `NEXT: PICK A SHIP ON THE CHART TO SEE WHAT IT ASKS` is cut).
   ahead: (ship: string, ark: boolean, pods: number, memory: number, cls: string, noise: string): string =>
     `NEXT: ${ship}${ark ? ' · ARK' : ''} · ${plural(pods, 'POD')} · MEMORY ${memory} ${cls} · NOISE ${noise}`,
-  // The packet preview (03 §4), by the limit that binds: `FILES 72 + SKILLS 17 · LINK 86 · 3 BLOCKS OVER`.
+  // The packet preview (03 §4) against the destination's room, its one limit (playtest 1, note 20: no link):
+  // `FILES 72 + SKILLS 17 · ROOM 88 · TIGHT · 3 BLOCKS OVER`.
   preview: {
     head: (files: number, skills: number): string => `FILES ${files} + SKILLS ${skills}`,
-    link: (link: number): string => `LINK ${link}`,
     room: (room: number, tight: boolean): string => `ROOM ${room}${tight ? ' · TIGHT' : ''}`,
     over: (blocks: number): string => `${plural(blocks, 'BLOCK')} OVER`,
     roomFor: (charge: number): string => `ROOM FOR ${charge} CHARGE`,
@@ -251,9 +251,10 @@ export const PACKET_SKILL_TEXT = {
   // DELETE's inline confirm on a skill file (systems/tool-targets.ts deleteQuestion): it is lost until a desk's RESTORE.
   deleteEffect: (skill: string, restore: number): string =>
     restore > 0 ? `No ${skill} until a desk's RESTORE (${restore} CYCLES).` : `No ${skill}.`,
-  // The +n CYCLES salvage card (data/upgrades.ts): its title and its line.
+  // The +n CYCLES salvage card (data/upgrades.ts): its title and its line. Taken at LEAVE ORBIT (playtest 1, B-ORDER), its
+  // cycles are compiled at the desk right after it, in the REPOSITORY's COMPILE HERE (B-DESK).
   cyclesCard: (cycles: number): string => `+${cycles} CYCLES`,
-  cyclesEffect: (cycles: number): string => `${cycles} more TRAINING CYCLES to spend at the next desk`,
+  cyclesEffect: (cycles: number): string => `${cycles} more CYCLES to compile at the desk ahead`,
 } as const;
 
 // =======================================================================================================================
