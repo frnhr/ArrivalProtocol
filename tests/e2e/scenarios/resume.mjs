@@ -215,7 +215,11 @@ await page.keyboard.press('Digit1');
 await page.waitForTimeout(300);
 const armed = (await screens.desk()).go;
 await page.keyboard.press('Enter');
-const firstPick = await waitFor(() => window.__ap.store.getState().run.skills.pending.length === 1, 4000);
+// The bar fills on wall time, but by at most WALL_FRAME_MAX_SEC (0.1 s) a frame: on a loaded machine at 2–3 frames a
+// second its 1.5 s take 6 s or more. ENTER must start it at once; the purchase is waited for while the bar still fills.
+const started = await waitFor(() => window.__ap.store.getState().ui.trainingHoldSec !== null || window.__ap.store.getState().run.skills.pending.length === 1, 2000, 20);
+const firstPick = started && await waitFor(() => window.__ap.store.getState().run.skills.pending.length === 1
+  || window.__ap.store.getState().ui.trainingHoldSec === null, 30000) && await st(() => window.__ap.store.getState().run.skills.pending.length === 1);
 const pendingPick = await st(() => window.__ap.store.getState().run.skills.pending.map((buy) => `${buy.skill}:${buy.kind}:v${buy.to.version}`).join());
 check('desk 1 opens on TRAINING: [1] arms AUTOBURN v1 (`TRAIN ▸ 3 CYCLES [ENTER]`), ENTER trains it (pending)', firstTab === 'training'
   && armed === 'TRAIN ▸ 3 CYCLES [ENTER]' && firstPick && pendingPick === 'autoburn:train:v1', JSON.stringify({ firstTab, armed, firstPick, pendingPick }));
