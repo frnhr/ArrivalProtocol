@@ -1,7 +1,8 @@
 // Slice 4c, Track DROP (plan §8.1): AUTODROP's pure parts (systems/autodrop-plan.ts), and its words at their worst.
 // • centredVolley on a crafted window (sure ±4 tac s at ×20, cadence 2.0): one pod at the centre; four at −3, −1, +1, +3 s;
 //   R5's untrained 1.5 s late sends 3 of 4; R6's degraded cadence (2.7) still straddles the centre (3 pods); a hold that
-//   starts late shrinks the volley to what is left; a short bay caps it, and an empty one waits for its reloads.
+//   starts late shrinks the volley to what is left; a short bay caps it, and an empty one waits for its reloads. Playtest 1
+//   (OPEN-DECISIONS 120): volleySlots from the cue (v2's anchor) fits what the centre cannot.
 // • bayBy: 01 §3.4's double window (four launches, then one reload by 20 tac s); passRows' `B ×3 — BAY HAS 1 BY THEN`.
 // • planLanding on run 1's arm (a real locked orbit, the real drop solution; only the plan is asked): CORMORANT's 9 pods into
 //   2 LZs in 2 passes; VESPER's 16-pod ark, complete; the healthiest drivers to the narrowest LZ; never-fits with the REPAIR
@@ -76,6 +77,22 @@ function slotsOf(volley: ReturnType<typeof centredVolley>, centre = 1000): numbe
     || cadence === null, JSON.stringify(cadence));
   check('no sure part: no volley', centredVolley(view, { ...W, sureOpenInSec: null, sureCloseInSec: null }, 0, 0, 2, WARP, 4, FULL_BAY) === null);
   check('volleySlots never puts the last slot on the sure part\'s edge (the margin)', volleySlots({ lo: 0, hi: 100 }, 50, 0, 0, 40, 4, 2)?.n === 3);
+  // Playtest 1 (OPEN-DECISIONS 120): v2 times a pass from the strip's cue (the sure part's opening, as AIM is measured), not
+  // the centre. The same window: the cue at −4 tac s.
+  const sure = { lo: 920, hi: 1080 };
+  const fromCue = volleySlots(sure, 1000, 0, 0, 40, 4, 2, 'cue');
+  check('OD 120: from the cue, four pods leave at −4, −2, 0, +2 tac s (the first at LAUNCH NOW)', fromCue?.n === 4 && near(fromCue.first, 920),
+    JSON.stringify(fromCue));
+  const lateCue = volleySlots(sure, 1000, 0, 1.5 * WARP, 40, 4, 2, 'cue');
+  check('…untrained (1.5 tac s late) still sends all 4 from the cue, where centred it sends 3', lateCue?.n === 4 && near(lateCue.first, 950)
+    && untrained?.n === 3, JSON.stringify(lateCue));
+  const cut = volleySlots({ lo: 920, hi: 1010 }, 1000, 0, 0, 40, 4, 2, 'cue');
+  const cutCentre = volleySlots({ lo: 920, hi: 1010 }, 1000, 0, 0, 40, 4, 2);
+  check('…a sure part cut short by the band (it closes just after the centre): 3 from the cue, 1 centred', cut?.n === 3 && cutCentre?.n === 1,
+    `${JSON.stringify(cut)} · ${JSON.stringify(cutCentre)}`);
+  const pressedLate = volleySlots(sure, 1000, 990, 0, 40, 4, 2, 'cue');
+  check('…armed after the cue it goes at once, shrunk to what is left (3 pods)', pressedLate?.n === 3 && near(pressedLate.first, 990),
+    JSON.stringify(pressedLate));
 }
 
 // --- bayBy and the pass rows: the double window (01 §3.4) -----------------------------------------------------------------
@@ -206,23 +223,27 @@ const checkLine = (): string => {
   const t = AUTODROP_TEXT;
   const lines: string[] = [
     t.tutorial.v1, t.tutorial.v2, t.tutorial.v3,
-    t.strip.hold('LZ-D'), t.strip.held('LZ-D', 4, '59:59'), t.strip.held('LZ-D', 4, null), t.strip.fly('LZ-D', 4, '59:59'),
+    t.strip.fly('LZ-D', 4, '59:59'),
     t.strip.fly('LZ-D', 4, null), t.strip.wait('59:59'), t.strip.wait(null), t.strip.passDone(four), t.strip.planDone(four),
-    t.strip.armedNext('LZ-D', 4, '59:59'), t.strip.armedIdle,
-    `WAIT — LZ-D in 59:59 ▸▸ · hold [F]${t.strip.tailPlan}`,
+    t.strip.armedNext('LZ-D', 4, '59:59'), t.strip.armedIdle, t.strip.centreMind,
+    `WAIT — LZ-D in 59:59 ▸▸ · hold [F]${t.strip.tailPlan}`, `WAIT — LZ-D in 59:59 ▸▸ · hold [F]${t.strip.tailCentre}`,
+    // Playtest 1: v1's tail on GET READY and LAUNCH NOW (landing-guidance withLaunchTail drops it when it would not fit).
+    `GET READY — LZ-D IN 0:08${t.strip.launchTail}`, `LAUNCH NOW — press [L] · LZ-D 15/16${t.strip.launchTail}`,
+    t.radio.armedCentre('LZ-D', 4), t.radio.centreDone(four),
     t.radio.armedPass(four), t.radio.armedPlan(AUTODROP_PLAN_MAX_PASSES), t.radio.cancel, t.radio.passDone(four), t.radio.planDone(four),
     t.radio.v3to2, t.radio.v2to1, t.radio.damaged, t.radio.offline,
     ...(Object.keys(t.refusal) as (keyof typeof t.refusal)[]).map((word) => t.radio.refused(word)),
     LANDING_ECHO.touchdown(16, 'lz', 'LZ-D', 'soft', true),
     t.bay.pipWorksAs(3, 2), t.bay.pipOk(3), t.bay.pipDamaged(3, 2, 80), t.bay.pipOffline(3), t.bay.pipMissing,
-    t.bay.keyHold, t.bay.launchHeld, t.bay.keyPass, t.bay.keyPlan, t.bay.keyArmedPass, t.bay.keyArmedPlan, t.bay.keyOff, t.bay.keyWaiting,
+    t.bay.keyCentre, t.bay.keyArmedCentre, t.bay.keyPass, t.bay.keyPlan, t.bay.keyArmedPass, t.bay.keyArmedPlan, t.bay.keyOff, t.bay.keyWaiting,
+    t.bay.goButton('CENTRE'), t.bay.goButtonArmed('LZ-D', 4), t.bay.goButtonArmedIdle,
     t.bay.shortBay('LZ-D', 4, 0), t.bay.shortFit('LZ-D', 4, 3), t.bay.noWindow('LZ-D'),
     t.bay.planRow(AUTODROP_PLAN_MAX_PASSES, 'LZ-D', 4, 'IN 59:59', 4), t.bay.planMore(40),
     t.bay.planCheck(AUTODROP_PLAN_MAX_PASSES, { 'LZ-A': 16, 'LZ-B': 16, 'LZ-C': 16, 'LZ-D': 16 }, ['LZ-A', 'LZ-B', 'LZ-C', 'LZ-D']),
     t.bay.planLater(9, AUTODROP_PLAN_MAX_PASSES), t.bay.neverFits('LZ-D', 'SENSOR INTERP', 'v3'), t.bay.neverFits('LZ-D', null, 'v3'),
     t.bay.neverFits('LZ-D', 'SENSOR INTERP', 'none'), t.bay.neverFits('LZ-D', null, 'none'), t.bay.planIn('59:59'),
     t.status.trained('CENTRE', 99, 999), t.status.untrained('CENTRE', 40), t.status.armed('LZ-D', 4, '59:59'), t.status.armedIdle,
-    t.status.holding, t.status.waiting, t.status.worksAs(2, 3),
+    t.status.waiting, t.status.worksAs(2, 3),
   ];
   const over = lines.filter((line) => line.length > MAX_LINE_CHARS);
   check(`every AUTODROP string at its worst case is ≤ ${MAX_LINE_CHARS} characters (${lines.length} lines)`, over.length === 0,

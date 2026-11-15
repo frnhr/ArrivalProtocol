@@ -2,8 +2,9 @@
 // page, on run 1's arm, each ship reached by ?debug's __ap.slot and locked at once (__ap.lockOn), HOLLOW asleep, the
 // beam's seeds freed and the drivers healed, so the strip shows the landing's own rows. A kid who obeys the strip: [F]
 // held whenever it offers `hold [F]` (playtest 1: a hold, not a tap).
-// • AUTODROP v1 on HALCYON: [L] held down from `WINDOW … — hold [L]`, AUTODROP launches around the centre, the echo says
-//   BULLSEYE, [L] up.
+// • AUTODROP v1 on HALCYON (playtest 1): GET READY's ` · or [G] AUTO`, the POD BAY's `AUTO · CENTRE [G]` clicked, `ARMED ·
+//   LZ-… · n PODS`, AUTODROP launches around the centre, the echo says BULLSEYE, it disarms; then [L] at LAUNCH NOW is a
+//   plain launch.
 // • AUTODROP v2 on KESTREL: the POD BAY's pass rows, a [+] click, [G], TAB into the MIND, the pass flies from there and ends.
 // • AUTOBURN v3 on VESPER (a low ellipse): `[B] MOVE TO LANDING ORBIT` on the strip, the AUTO head, the ghost's label, [B],
 //   then `LANDING ORBIT — it holds it`.
@@ -96,20 +97,32 @@ await waitFor(() => ['boot', 'flight'].includes(window.__ap.store.getState().run
 await st(() => window.__ap.skipBoot());
 await waitFor(() => window.__ap.store.getState().run.phase === 'flight', 20000);
 
-// --- AUTODROP v1 on HALCYON: [L] held ----------------------------------------------------------------------------------------
+// --- AUTODROP v1 on HALCYON: the arm button (playtest 1, plan §3.4.2: [G] arms one window; [L] is a plain press) ---------
 {
   await arrive(2, { autodrop: 1, heal: true });
-  const asked = await obeyUntil(() => /hold \[L\]/.test(window.__ap.director().shown?.text ?? ''), 120000);
-  check('v1 HALCYON: the strip asks for the hold (`WINDOW LZ-… — hold [L]: AUTODROP waits for the centre`)', asked, (await shown()).text);
-  await page.keyboard.down('KeyL');
+  const offered = await obeyUntil(() => / · or \[G\] AUTO$/.test(window.__ap.director().shown?.text ?? ''), 120000);
+  check('v1 HALCYON: GET READY offers AUTODROP as a tail (`GET READY — LZ-… IN 0:0n · or [G] AUTO`)', offered, (await shown()).text);
+  const button = await st(() => { const b = document.getElementById('pbGoBtn'); return { hidden: b?.hidden ?? true, text: b?.textContent ?? '' }; });
+  check('…the POD BAY shows the arm button `AUTO · CENTRE [G]`', !button.hidden && button.text === 'AUTO · CENTRE [G]', JSON.stringify(button));
+  await page.locator('#pbGoBtn').click();
   await page.waitForTimeout(300);
-  const held = (await autodrop()).state.held;
+  const armed = (await autodrop()).state.armed;
+  const label = await st(() => document.getElementById('pbGoBtn')?.textContent ?? '');
+  check('…a click on it arms the window, and it reads what it waits for (`ARMED · LZ-… · n PODS`)', armed === 'centre'
+    && /^ARMED · LZ-[A-D] · \d PODS?$/.test(label) && await logHas('^AUTODROP ARMED · LZ-[A-D] ×\\d · EACH POD DEAD CENTRE$'), `${armed} · ${label}`);
   const flew = await waitFor(() => window.__ap.store.getState().landing.pods.some((r) => r.fate.kind !== 'aboard' && r.fate.launch?.source === 'autodrop'), 40000);
   const bullseye = await waitFor(() => window.__ap.store.getState().log.entries.some((entry) => /LANDED · BULLSEYE$/.test(entry.text)), 20000);
-  await page.keyboard.up('KeyL');
-  check('…[L] down is a hold, and AUTODROP launches around the centre', held && flew, `held ${held} · ${JSON.stringify(await pods())}`);
+  const flown = await waitFor(() => ['centre-done', 'landing-over'].includes(window.__ap.autodrop().state.end), 30000);
+  check('…AUTODROP launches around the centre, and disarms once the window is flown', flew && flown, JSON.stringify(await pods()));
   check('…its pod lands BULLSEYE (`> podNN ... LANDED · BULLSEYE`)', bullseye);
-  check('…[L] up lets go of the hold', !(await autodrop()).state.held);
+  // [L] is a plain press: the next LAUNCH NOW launches by hand at once.
+  const launchNow = await obeyUntil(() => /^LAUNCH NOW — press \[L\]/.test(window.__ap.director().shown?.text ?? ''), 120000);
+  const before = await st(() => window.__ap.store.getState().landing.pods.filter((r) => r.fate.kind !== 'aboard' && r.fate.launch?.source === 'player').length);
+  await page.keyboard.press('KeyL');
+  await page.waitForTimeout(300);
+  const after = await st(() => window.__ap.store.getState().landing.pods.filter((r) => r.fate.kind !== 'aboard' && r.fate.launch?.source === 'player').length);
+  check('…[L] is a plain press: at `LAUNCH NOW — press [L] · … · or [G] AUTO` a pod leaves by hand at once', launchNow && after === before + 1
+    && (await autodrop()).state.armed === null, `${before} → ${after}`);
 }
 
 // --- AUTODROP v2 on KESTREL: the POD BAY's [+], [G], TAB into the MIND, PASS DONE ----------------------------------------------

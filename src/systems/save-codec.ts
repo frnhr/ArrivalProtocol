@@ -515,7 +515,7 @@ function checkBurn(reference: Readonly<Record<string, unknown>>): Check {
 // AUTODROP's machine (slice 4c, RUN_SAVE_VERSION 4), read whole and at rest: every save point is outside a landing (the
 // landing ended resets it, plan R2), so nothing is held, armed, claimed or waiting. Its pass numbers are kept between
 // passes, and with the last end's words, they may stand.
-const AUTODROP_ENDS = ['pass-done', 'plan-done', 'cancel', 'downgraded', 'off', 'offline', 'landing-over', 'released'];
+const AUTODROP_ENDS = ['centre-done', 'pass-done', 'plan-done', 'cancel', 'downgraded', 'off', 'offline', 'landing-over', 'released'];
 const wholeCounts: Check = (value, at) => {
   anyRecord(value, at);
   for (const [lz, count] of Object.entries(value as Record<string, unknown>)) whole(count, `${at}.${lz}`);

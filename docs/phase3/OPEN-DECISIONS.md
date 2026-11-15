@@ -579,6 +579,11 @@ POLISH's calls (`docs/phase3/impl/slice-8-plan.md` §2.11, §2.12 and "Deviation
 
      DEFERRED to a follow-up after slice 8 CLOSE. The fixes: time v2 from the cue, as AIM is measured (item 6), and
      hide the WIDE [L] prompt while armed.
+     - **BUILT in playtest 1, Batch B (B-DROP).** v2's pass volleys and its POD BAY rows start at the sure part's opening plus
+       the learned offset, each later pod a cadence on (`autodrop-plan.ts volleySlots` anchor `'cue'`); v1 and v3 stay
+       centred (item 146). While any version is armed, a WIDE DROP window shows AUTODROP ARMED's wait, never L5's or L3b's
+       `press [L]` (item 147). Measured: see the plan's "Deviations (B-DROP)" and the numbers under item 145.
+     - To reverse: `passVolley` and `passRows` back to the default anchor; drop `wideOpen` from `autodropLineOf`.
 121. **SURVEY's "busy CORMORANT" sweep row is not a valid number** (item 54). On seed 7's busy CORMORANT, the Core dies
      before the report with any SURVEY version aboard, v3 included, so the thread isn't the cause. THREAT's look at
      COMPETENT's Core deaths should cover this case.
@@ -851,3 +856,40 @@ renumbers them at CLOSE. "Before → after" is the number the change moved; trac
      the rule for letting an offer pass). A kid who holds F past a ring trim is not offered it again (no TACTICAL, no stop,
      no strip lead) until a launch or a new reason. Fran's call whether holding should only pass it for this loop. To
      reverse: `passStop` remembers the offer in `ff.passed` instead of writing `landing.declined`.
+
+## Playtest 1, Batch B (B-DROP)
+
+Items 123–144 are the plan's [FRAN] calls (`impl/playtest-1-plan.md` §6); 133 (v1 arms one window per [G]) is BUILT by this
+track as recommended. The new calls B-DROP made:
+
+161. **AUTODROP v1 is an arm button, and the strip offers it.** BUILT (note 9, plan §3.4.2). [L] is always the plain launch;
+     [G] arms v1 for the next sure window's volley, centred, which disarms itself once flown (`'centre-done'`) or on [G]
+     again. GET READY and LAUNCH NOW carry ` · or [G] AUTO`, and (past the plan) the waits carry ` · [G] AUTODROP` for v1
+     as they do for v2. The POD BAY's arm button is there from v1 and reads the same for every version (`AUTO · CENTRE [G]`,
+     `AUTO · PASS [G]`, `AUTO · PLAN [G]`; armed, `ARMED · LZ-B · 2 PODS`). R4's tap lesson is gone, with no v1 lesson in its
+     place: the tail and the button say it.
+     - Measured with item 120's fixes (autodrop-sweep at full depth, all four kids, landed % against the same kid's v0, before
+       → after; every other row unchanged): HALCYON sloppy v1 −20 → 0; CORMORANT busy v2 0 → +11; VESPER healed v2 +6 →
+       +12, quiet v2 +12 → +31, sloppy v2 −6 → +7, busy v1 +12 → +6 (81% → 75%, one pod). `drop.worst` −20 → −6 (VESPER
+       sloppy v1, as before). The balance report's quick rows: `worth.autodrop.v1` −0.11 ±0.08 → **0.10 ±0.06** (LOW → OK);
+       `drop.Δpods.CORMORANT.sloppy.v1` 0% → 0% (LOW: every CORMORANT window is WIDE as arrived, nothing to arm);
+       `drop.Δpods.VESPER.sloppy.v3` 19% → 19%; `drop.worst` (quick: CORMORANT, VESPER × quiet, sloppy) −6% → −6%.
+     - To reverse: the hold is in git (`autodropKeyDown`/`KeyUp`, before `0547d28`); the tails are
+       `autodropLineOf`'s `launchTail` and v1's `tailCentre`.
+162. **v3's plan stays centred; only v2 times from the cue.** BUILT. Item 120's finding was v2's; v3's rows are fitted to each
+     pod's own sure span, and centring them was not what lost CORMORANT's pods. **ASK** (low): v3 from the cue too would give
+     each plan row the same extra slots v2 gained (one `'cue'` in `computePlan`'s `volleyOn` call). Measure with
+     autodrop-sweep's VESPER rows first.
+163. **No WIDE [L] while AUTODROP is armed and has a launch to fly; v3's pin keeps its [L].** BUILT (item 120). Over a WIDE DROP
+     window the strip says AUTODROP ARMED's wait, for every version. Two exceptions, both found by autodrop-sweep: an arm with
+     nothing left to fly holds nothing back (VESPER's busy kid with v2 landed nothing: a pass of WIDE windows, re-armed at
+     each PASS DONE, held every WIDE [L]); and v3's pin of a pod outside its plan (item 5, review M2) keeps the kid's [L] in
+     the window of an LZ the plan does not use, WIDE or not, since that pod has no sure window to wait for. A sure window the
+     machine does not fly still offers its [L]. To reverse: `wideOpen` out of `autodropLineOf`.
+164. **v1 armed in the MIND waits for the SHIP screen.** BUILT. [G] arms from either screen (as v2 and v3), but v1 is still the
+     kid's key on the SHIP screen (R8: no thread). Its window near or open, the strip says `AUTODROP v1 FLIES FROM THE SHIP
+     SCREEN — [TAB]`; an arm that launched nothing stays armed for the next window. The alternative, refusing [G] at v1 in the
+     MIND, would make the one key behave differently by version.
+165. **A new AUTODROP end, `'centre-done'`, is read by the save codec without a bump.** BUILT. `end` stands at rest at every save
+     point, so `save-codec.ts AUTODROP_ENDS` takes the word (one line). `'released'` is no longer written and stays readable
+     until B-ORDER's v10 drops `held`; the v10 migration may map a stored `'released'` to null.

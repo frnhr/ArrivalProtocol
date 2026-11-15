@@ -144,9 +144,10 @@ export const TRAINING_TEXT = {
     },
     autodrop: {
       name: 'AUTODROP', branch: 'LANDING',
-      pitch: 'Hold [L] in a window: every pod waits for the dead centre.',
+      // Playtest 1 (B-DROP, plan §3.4.2): v1 is armed by [G], one window a press; [L] stays the plain launch.
+      pitch: 'Press [G] before a window: each pod leaves dead centre.',
       next: [
-        'NEXT SHIP: HOLD [L] AND EACH POD LEAVES DEAD CENTRE',
+        'NEXT SHIP: [G] BEFORE A WINDOW AND EACH POD LEAVES DEAD CENTRE',
         'NEXT SHIP: SET THE SPLIT, PRESS ONCE, THE PASS FLIES ITSELF',
         'NEXT SHIP: THE PLAN TABLE · ONE PRESS DROPS THE WHOLE SHIP',
       ],

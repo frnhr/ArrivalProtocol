@@ -2,10 +2,12 @@
 // Slice 4c, Track DROP. Each ship (HALCYON 5 pods, CORMORANT 9, VESPER 16) locked mid-band as it arrived (its own transit
 // damage: VESPER's Sensor Interp, drivers hurt by the hops), HOLLOW asleep, landed by a kid who obeys the strip:
 // • v0: by hand (landing/harness-landing followLanding: [L] when the strip names it);
-// • v1: holds [L] while the strip says `hold [L]` (and lets go when it stops saying it: review M1), [L] by hand otherwise;
+// • v1 (playtest 1, plan §3.4.2: armed by [G], one window a press): [G] whenever the strip offers it unarmed (` · [G]
+//   AUTODROP` on the waits, ` · or [G] AUTO` on GET READY and LAUNCH NOW), [L] by hand otherwise;
 // • v2: [G] with the prefilled split at every pass (the strip's `· [G] AUTODROP`), [F] between windows;
 // • v3: [G] when the strip offers the plan, [F] per gap;
-// • v2 and v3: [L] by hand where the strip asks for it (a WIDE DROP window, a never-fits LZ: what they leave).
+// • v1–v3: [L] by hand where the strip asks for it (a WIDE DROP window, a never-fits LZ: what they leave). Since OPEN-DECISIONS
+//   120 the strip asks for no WIDE [L] while AUTODROP is armed.
 // The busy kid also REPAIRs every damaged file it can, a thread each, the whole landing ("hack or drop": R8); the healed
 // kid lands a ship whose drivers and instruments are all at 100 (the windows AUTODROP can fly: sure parts).
 // Per row: pods landed in an LZ with room (%), points, mislanded, the windows used, the wall s of the landing, and how often
@@ -63,7 +65,6 @@ const SLOPPY_MISS = 1 / 3;
 function flySloppy(version: 0 | SkillVersion, rngSeed: number): { wall: number } {
   const start = h.wall();
   const rng = createRng(rngSeed);
-  let held = false;
   let seen: { text: string; at: number } | null = null;
   let wasOpen = false;
   let missing = false;
@@ -76,17 +77,13 @@ function flySloppy(version: 0 | SkillVersion, rngSeed: number): { wall: number }
     const open = st().landing.window !== null;
     if (open && !wasOpen) missing = rng() < SLOPPY_MISS;
     wasOpen = open;
-    const cue = /hold \[L\]|press \[L\]|\[G\]/.test(text);
+    const cue = /press \[L\]|\[G\]/.test(text);
     if (missing && cue && missedText === null) missedText = generic;
     if (missedText !== null && generic !== missedText) { missing = false; missedText = null; }
     if (missedText !== null) continue;
     if (h.wall() - seen.at < SLOPPY_REACTION_SEC - 1e-9) continue;
     const ad = st().landing.autodrop;
-    if (version === 1) {
-      if (!held && /hold \[L\]/.test(text)) { h.keyDown('KeyL'); held = true; continue; }
-      if (held && (!ad.held || !/hold \[L\]/i.test(text))) { h.keyUp('KeyL'); held = false; continue; }
-      if (!held && /press \[L\]/.test(text)) { h.press('KeyL'); seen = null; continue; }
-    } else if (version !== 0 && ad.armed === null && /\[G\]/.test(text)) {
+    if (version !== 0 && ad.armed === null && /\[G\]/.test(text)) {
       h.press('KeyG');
       continue;
     } else if (/press \[L\]/.test(text)) {
@@ -94,9 +91,8 @@ function flySloppy(version: 0 | SkillVersion, rngSeed: number): { wall: number }
       seen = null;
       continue;
     }
-    if (!held && st().clock.skipWarp === null && /\[F\]/.test(text) && skipBlockReason(st(), getPrediction()) === null) { h.press('KeyF'); seen = null; }
+    if (st().clock.skipWarp === null && /\[F\]/.test(text) && skipBlockReason(st(), getPrediction()) === null) { h.press('KeyF'); seen = null; }
   }
-  if (held) h.keyUp('KeyL');
   if (st().run.phase === 'landing' && st().landing.ended === null) endLanding(h.store);
   return { wall: h.wall() - start };
 }
@@ -108,29 +104,22 @@ function fly(version: 0 | SkillVersion, kidBusy: boolean): { wall: number } {
     followLanding(h, { maxWall: MAX_WALL, onTick: tick });
     return { wall: h.wall() - start };
   }
-  let held = false;
   while (st().run.phase === 'landing' && st().landing.ended === null && h.wall() - start < MAX_WALL) {
     h.step();
     tick();
     const text = shown();
     const ad = st().landing.autodrop;
-    if (version === 1) {
-      if (!held && /hold \[L\]/.test(text)) { h.keyDown('KeyL'); held = true; continue; }
-      // Review M1: it lets go when the strip stops saying HOLD (AUTODROP let go of a window it has nothing more to fly in, or
-      // the volley is over), as a real kid would, and presses [L] by hand where the strip then asks for it.
-      if (held && (!ad.held || !/hold \[L\]/i.test(text))) { h.keyUp('KeyL'); held = false; continue; }
-      if (!held && /press \[L\]/.test(text)) { h.press('KeyL'); continue; }
-    } else if (ad.armed === null && /\[G\]/.test(text)) {
+    if (ad.armed === null && /\[G\]/.test(text)) {
+      // [G] first where the strip offers both (` · or [G] AUTO` on LAUNCH NOW): the kid who has AUTODROP uses it.
       h.press('KeyG');
       continue;
     } else if (/press \[L\]/.test(text)) {
-      // What AUTODROP v2/v3 leaves (a WIDE DROP window, a never-fits LZ) the kid launches by hand.
+      // What AUTODROP leaves (a WIDE DROP window, a never-fits LZ, v1 between its windows) the kid launches by hand.
       h.press('KeyL');
       continue;
     }
-    if (!held && st().clock.skipWarp === null && /\[F\]/.test(text) && skipBlockReason(st(), getPrediction()) === null) h.press('KeyF');
+    if (st().clock.skipWarp === null && /\[F\]/.test(text) && skipBlockReason(st(), getPrediction()) === null) h.press('KeyF');
   }
-  if (held) h.keyUp('KeyL');
   if (st().run.phase === 'landing' && st().landing.ended === null) endLanding(h.store);
   return { wall: h.wall() - start };
 }

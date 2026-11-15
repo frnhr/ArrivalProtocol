@@ -4,7 +4,9 @@
 //   full LZs), a kid who obeys the strip ([G], [L], [F]): the plan ends with no pod left aboard, every AUTODROP launch at
 //   TACTICAL (its controller names its next launch to pace, so no SKIP jumps it).
 // • m7: a row whose moment passes with no launch (every thread busy) is re-planned, not held as row 0.
-// • M1: v1 held, the next pod's drop WIDE: the hold lets go, and `press [L]` launches it by hand.
+// • M1 (playtest 1: v1 armed by [G]): the next pod's drop WIDE: v1 disarms itself, and `press [L]` launches it by hand.
+// • OPEN-DECISIONS 120: while AUTODROP is armed (v2 on HALCYON with the pods after the first WIDE; v3 in B2) the strip never
+//   asks for a WIDE [L] (disarmed, it does: M1).
 // • M3: an obedient ship 1 (by the strip, by hand) trains AIM ≥ 90%: demos are measured against the slot the strip cued.
 // • M4: on CORMORANT as arrived (every window WIDE) v2's and v3's [G] refuse `NO SURE WINDOW — REPAIR …`, flashed on the
 //   strip, and their lessons are not due.
@@ -16,7 +18,7 @@ import { armLanding, ARM } from './autodrop-arm';
 import { followLanding } from '../landing/harness-landing';
 import { landingKid, VESPER_ROUTE } from './landing-kid';
 import { planLanding } from '@systems/autodrop-plan';
-import { autodropController, autodropLineOf, autodropTutorialDue } from '@systems/autodrop';
+import { autodropController, autodropLineOf, autodropTutorialDue, setPassCount } from '@systems/autodrop';
 import { activeLandingController, controllerLaunchInSec, registerLandingController } from '@systems/landing-controller';
 import { mountLastLanding } from '@systems/last-landing';
 import { getDropSolution } from '@systems/drop-cache';
@@ -40,9 +42,12 @@ const { st, shown, ad, viewNow, aboard, landedPct, launches, obey } = landingKid
   launches.length = 0;
   let named = true;
   let tacticalNear = true;
+  const wideAsks: string[] = [];
   const wall = obey(1500, {
     each: () => {
       if (ad().armed !== 'plan') return;
+      // OD 120: armed, the strip never asks for a WIDE [L] (LZ-C's windows, the leftovers' after the plan).
+      if (/WIDE DROP/.test(shown()) && /\[L\]/.test(shown())) wideAsks.push(shown());
       const controller = activeLandingController(st());
       const rows = planLanding(st(), viewNow()).rows;
       if (rows[0] !== undefined && controller?.nextLaunchAtTSec?.(st()) !== rows[0].atTSec) named = false;
@@ -54,6 +59,7 @@ const { st, shown, ad, viewNow, aboard, landedPct, launches, obey } = landingKid
   console.log(`INFO B2 (VESPER, drivers healthy, Sensor Interp ×2.5): ${flown.length} AUTODROP launches, ${launches.length - flown.length} by hand, `
     + `end ${ad().end}, ${aboard()} aboard, ${landedPct()}% landed, ${wall.toFixed(0)} wall s`);
   check('B2: the controller names the plan\'s next row to pace, and the world is TACTICAL inside its lead', named && tacticalNear);
+  check('…OD 120: while the plan is armed the strip never asks for a WIDE [L]', wideAsks.length === 0, [...new Set(wideAsks)].join(' | '));
   check('…every AUTODROP launch left at TACTICAL (no SKIP jumped a row\'s moment)', flown.length > 0 && flown.every((launch) => launch.pace === 'tactical'),
     flown.filter((launch) => launch.pace !== 'tactical').map((launch) => `${launch.pod}@${launch.pace}`).join(' '));
   check('…the plan ends (PLAN DONE) with no pod left aboard, well inside the 1,500 s the review\'s kid ran into', ad().end === 'plan-done' || st().landing.ended !== null
@@ -76,25 +82,57 @@ const { st, shown, ad, viewNow, aboard, landedPct, launches, obey } = landingKid
   for (const owner of busy) releaseThread(owner);
 }
 
-// --- M1: v1 held, the next pod WIDE: the hold lets go, `press [L]` launches it -------------------------------------------------
+// --- M1: v1 armed, the next pod WIDE: it disarms, `press [L]` launches it (playtest 1: [G] arms v1, review M1's rule kept) -----
+// --- OPEN-DECISIONS 120: armed, no WIDE [L] ---------------------------------------------------------------------------------
+// Every pod after the first gets a failing driver: its dot is wider than HALCYON's brackets (a WIDE DROP).
+const wideAfterFirst = (): void => {
+  h.store.update((draft) => { for (const seg of draft.memory) if (seg.type === 'driver' && seg.pod !== 1) seg.integrity = 25; draft.ui.memoryRev++; });
+};
 {
   armLanding(h, [ARM.ARES, ARM.HALCYON], { autodrop: 1, demos: [0.05, -0.05], healDrivers: true, healInstruments: true });
-  // Every pod after the first gets a failing driver: its dot is wider than HALCYON's brackets (a WIDE DROP).
-  h.store.update((draft) => { for (const seg of draft.memory) if (seg.type === 'driver' && seg.pod !== 1) seg.integrity = 25; draft.ui.memoryRev++; });
-  h.stepUntil(() => /hold \[L\]/.test(shown()), 900);
+  wideAfterFirst();
+  h.stepUntil(() => shown().endsWith(AUTODROP_TEXT.strip.launchTail), 900);
   launches.length = 0;
-  h.keyDown('KeyL');
+  h.press('KeyG');
+  const armed = ad().armed === 'centre';
   h.stepUntil(() => launches.length >= 1, 60);
-  h.stepUntil(() => !ad().held || st().landing.window === null, 30);
-  const letGo = !ad().held && st().landing.window !== null;
+  h.stepUntil(() => ad().armed === null || st().landing.window === null, 30);
+  const disarmed = ad().armed === null && ad().end === 'centre-done' && st().landing.window !== null;
   h.stepUntil(() => /press \[L\]/.test(shown()), 5);
-  const asks = /press \[L\]/.test(shown());
-  h.keyUp('KeyL');
+  const asks = /press \[L\] · WIDE DROP/.test(shown());
   h.press('KeyL');
   h.step();
-  check('M1: held, the first pod went by AUTODROP; with the next pod WIDE the hold lets go inside the window', launches[0]?.source === 'autodrop' && letGo,
-    `${JSON.stringify(launches)} held ${ad().held}`);
+  check('M1: armed by [G], the first pod went by AUTODROP; with the next pod WIDE it disarms inside the window (\'centre-done\')',
+    armed && launches[0]?.source === 'autodrop' && disarmed, `${JSON.stringify(launches)} · ${JSON.stringify(ad())}`);
   check('…the strip\'s `press [L]` is then true: [L] launches the WIDE pod by hand', asks && launches[1]?.source === 'player', `${shown()} · ${JSON.stringify(launches)}`);
+}
+// OD 120: v2 armed on the same ship. Its pass flies pod 1; the window then is a WIDE DROP for the rest, and while the pass
+// stays armed the strip waits (AD-armed) instead of `LAUNCH — press [L] · WIDE DROP`. Disarmed ([G]), L5 comes back.
+{
+  armLanding(h, [ARM.ARES, ARM.HALCYON], { autodrop: 2, demos: [0.05, -0.05], healDrivers: true, healInstruments: true });
+  wideAfterFirst();
+  h.step();
+  launches.length = 0;
+  h.press('KeyG');
+  const armedPass = ad().armed === 'pass';
+  // Every line the strip shows while armed over a window that is not sure, after the pass's first pod (the rest are WIDE).
+  const wideLines = new Set<string>();
+  h.stepUntil(() => {
+    const open = st().landing.window;
+    if (ad().armed !== null && launches.length >= 1 && open !== null && !open.sure) {
+      wideLines.add(`${st().director.shown?.text ?? ''} [${(st().director.shown?.keys ?? []).join(',')}]`);
+    }
+    return st().director.shown?.id === 'landing-AD-armed' && open !== null && !open.sure;
+  }, 120);
+  for (let i = 0; i < 20; i++) h.step();
+  const shownArmed = shown();
+  h.press('KeyG');
+  h.step();
+  check('OD 120: armed (v2), over a WIDE DROP window the strip never asks for [L]: AUTODROP ARMED\'s wait, no [L] in its words or keys',
+    armedPass && launches[0]?.source === 'autodrop' && wideLines.size > 0 && [...wideLines].every((text) => !/\[L\]|,L\]|\[L,|\[L\]$/.test(text))
+      && /^AUTODROP ARMED — /.test(shownArmed), `${[...wideLines].join(' | ')} · ${JSON.stringify(launches)}`);
+  // (Disarmed, the same ship's WIDE window says `LAUNCH — press [L] · WIDE DROP`: M1 above.)
+  check('…[G] cancels', ad().armed === null && ad().end === 'cancel', JSON.stringify(ad()));
 }
 
 // --- M3: an obedient ship 1 trains a centred AUTODROP ------------------------------------------------------------------------
@@ -123,6 +161,14 @@ for (const version of [2, 3] as const) {
   check(`M4 v${version}: [G] with no sure window anywhere refuses \`NO SURE WINDOW — REPAIR …\`, flashed on the strip, and its lesson was not due`,
     !due && ad().armed === null && word !== undefined && word.startsWith('NO SURE WINDOW') && /REPAIR/.test(text) && shown() === text,
     `${refusals.join(',')} · strip "${shown()}" · due ${due}`);
+  if (version === 2) {
+    // Playtest 1 (B-DROP's sweep): counts the kid set (kept between passes) fit nothing either, so [G] still refuses: an armed
+    // pass that can fly nothing would hold every WIDE [L] back (VESPER's busy kid landed nothing).
+    setPassCount(h.store, 'LZ-A', 2);
+    h.press('KeyG');
+    check('…with the kid\'s own counts set too, [G] refuses (a pass that fits nothing is no pass)', ad().pass['LZ-A'] === 2 && ad().armed === null,
+      JSON.stringify(ad()));
+  }
 }
 
 // --- m5, m6: a 'merge' resolver wrapping AUTODROP; AUTODROP stands aside under it -----------------------------------------------

@@ -1,17 +1,22 @@
 // Slice 7b: the FOUNDATION swapped its drivers-to-launch reads to selectors launchDrivers (slice-7-plan R24: THE LAST
 // LANDING's radio drivers are never in memory); nothing else here changed.
 // Slice 4c–4e: Track DROP owns this file (docs/phase3/impl/slice-4cde-plan.md §2.1, §3, §7.2).
+// Playtest 1, Track B-DROP (docs/phase3/impl/playtest-1-plan.md §3.4.2, note 9; OPEN-DECISIONS 120, 133): v1 is armed by
+// [G] like v2 and v3 ([L] is always the plain manual launch), v2 times its volleys from the strip's cue, and while anything
+// is armed the strip never offers a WIDE [L].
 //
-// AUTODROP (03 §3.3, §3.5, §3.8; 01 §3.3, §3.4, §3.14): the per-version controller, [L] held (v1), [G] (v2's pass, v3's
+// AUTODROP (03 §3.3, §3.5, §3.8; 01 §3.3, §3.4, §3.14): the per-version controller, [G] (v1's window, v2's pass, v3's
 // plan), its Core thread, downgrades, its guidance slot and its Skills row. Its machine is state.landing.autodrop (types/
 // landing.ts AutodropState), so the controller is derived from the state each tick and dies with its file.
-// • v1 CENTRE: while [L] (or the POD BAY's LAUNCH, the phone bar's) is held on the SHIP screen, each volley is timed around
-//   the bracket's centre (autodrop-plan.ts nextVolley) and only launched while the window is sure. It holds no thread
-//   (plan R8: it is the kid's key, as a manual launch is). A tap let go before the first launch sends nothing and records
-//   `end: 'released'`, which R4's one-time lesson reads. Held in an open window where it has nothing more to fly (the next
-//   pod's drop is WIDE), the hold lets go (review M1), so the strip's `press [L]` is true.
+// • v1 CENTRE: [G] arms the volley of the next sure window of any LZ with room ('centre'), each pod timed around the
+//   bracket's centre (autodrop-plan.ts nextVolley) and only launched while the window is sure, while the SHIP screen is up.
+//   It holds no thread (plan R8: it is the kid's key, as a manual launch is). Once it has launched and has nothing more to
+//   fly in that window (the volley is over, the next pod's drop is WIDE, the LZ is full) it disarms itself ('centre-done'),
+//   so the strip's `press [L]` is true and the next window needs a [G] of its own (OPEN-DECISIONS 133).
 // • v2 PASS: [G] arms this pass's split (the POD BAY's rows: autodrop-plan.ts passCounts), flown in each LZ's window of the
 //   pass, also from the MIND, holding a Core thread from AUTODROP_CLAIM_TAC before a volley until it is flown; PASS DONE.
+//   Its volleys start at the strip's cue (the sure part's opening, `LAUNCH NOW`) plus the learned offset, as AIM is measured,
+//   not at the window's centre: a pass is a count to fly, and the cue gives it every slot the sure part has (OD 120).
 // • v3 PLAN: [G] flies autodrop-plan.ts planLanding, re-planned after every launch, one [F] per gap (plan R7). It holds only
 //   the LZs its plan sends pods to; in a window of another LZ it pins LOAD NEXT to a pod outside the plan and leaves the
 //   kid's [L] there (review B2, M2).
@@ -19,7 +24,7 @@
 // SKIP stops before it, whichever window the landing itself waits on. Under a higher controller (slice 5's resident, 7's
 // MERGE) AUTODROP claims no thread and says nothing (review m5).
 // Every launch goes through landing.ts requestLaunch (the controller tick) with the kid's refusals and guards. The post
-// tick (autodropTick) runs the machine's edges: the claim, the hold's release, the steps down (plan §3.5), PASS DONE.
+// tick (autodropTick) runs the machine's edges: the claim, v1's window flown, the steps down (plan §3.5), PASS DONE.
 // Module-level state allowed here (plan §2.3): none of its own; the plan memo is autodrop-plan.ts's.
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
@@ -97,17 +102,18 @@ function passWant(state: Readonly<GameState>, fields: Readonly<AutodropPassField
   return (lz) => Math.max(0, (pass[lz] ?? 0) - (sent[lz] ?? 0));
 }
 
-// The volley the armed pass flies next, or null (the pass is over).
+// The volley the armed pass flies next, or null (the pass is over): timed from the strip's cue (OPEN-DECISIONS 120).
 function passVolley(state: Readonly<GameState>, view: Readonly<LandingView>, fields: Readonly<AutodropPassFields> = state.landing.autodrop): NextVolley | null {
-  return nextVolley(state, view, passWant(state, fields), inPassOf(state, view, fields));
+  return nextVolley(state, view, passWant(state, fields), inPassOf(state, view, fields), 'cue');
 }
 
-// v1's volley: the next sure window of any LZ with room.
-function heldVolley(state: Readonly<GameState>, view: Readonly<LandingView>): NextVolley | null {
+// v1's volley: the next sure window of any LZ with room, centred.
+function centreVolley(state: Readonly<GameState>, view: Readonly<LandingView>): NextVolley | null {
   return nextVolley(state, view, (lz) => view.remaining[lz] ?? 0);
 }
 
-// The next launch the armed machine waits for (game s), with its LZ and count: the pass's volley, or the plan's first row.
+// The next launch the armed machine waits for (game s), with its LZ and count: v1's or the pass's volley, or the plan's first
+// row.
 interface NextLaunch {
   lz: string;
   n: number;
@@ -119,6 +125,10 @@ interface NextLaunch {
 function armedNext(
   state: Readonly<GameState>, view: Readonly<LandingView>, armed: AutodropArm | null, fields: Readonly<AutodropPassFields> = state.landing.autodrop,
 ): NextLaunch | null {
+  if (armed === 'centre') {
+    const next = centreVolley(state, view);
+    return next === null ? null : volleyNext(next);
+  }
   if (armed === 'pass') {
     const next = passVolley(state, view, fields);
     return next === null ? null : volleyNext(next);
@@ -163,9 +173,9 @@ export interface AutodropOverride {
   view?: (state: Readonly<GameState>, view: Readonly<LandingView>) => LandingView;
 }
 
-// v1, held: the volley's next slot has come, and the window is sure for it now.
-function decideHeld(view: LandingView, state: Readonly<GameState>): LaunchIntent | null {
-  const next = heldVolley(state, view);
+// v1, armed for a window: the volley's next slot has come, and the window is sure for it now.
+function decideCentre(view: LandingView, state: Readonly<GameState>): LaunchIntent | null {
+  const next = centreVolley(state, view);
   if (next === null) return null;
   return launchDue(state, next.win, next.volley.firstAtTSec) ? { source: 'autodrop' } : null;
 }
@@ -213,8 +223,10 @@ function launchDue(state: Readonly<GameState>, win: Readonly<WindowAt>, atTSec: 
 }
 
 // AUTODROP's controller now, or null: null unless phase 'landing', the landing goes on and AUTODROP works (skillLive), and:
-//   v1: autodrop.held && ui.mode === 'tools'  → { source: 'autodrop', holdsTactical: true, launchesFromMind: false }
-//   v2/v3: autodrop.armed !== null           → { source: 'autodrop', holdsTactical: true, launchesFromMind: true }
+//   v1: armed 'centre' && ui.mode === 'tools' → { source: 'autodrop', holdsTactical: true, launchesFromMind: false }
+//   v2/v3: armed 'pass' or 'plan'            → { source: 'autodrop', holdsTactical: true, launchesFromMind: true }
+// (Playtest 1: v1 was `autodrop.held`, [L] held down.) A 'centre' arm flies as v1 whatever the file works as later (a REPAIR
+// that lifts it to v2 mid-window does not turn the window into a pass).
 // Every version holds TACTICAL in 4c (plan R7: no SKIP chaining yet, so no drop inside a SKIP). `override` is slice 7's seam
 // (MERGE's restored pods at the effective version); its queue is not read in 4c.
 export function autodropController(state: Readonly<GameState>, override?: Readonly<AutodropOverride>): LandingController | null {
@@ -228,6 +240,14 @@ export function autodropController(state: Readonly<GameState>, override?: Readon
   // AUTODROP's own Core thread gates its armed launches; a wrapping source (slice 5's sleeper, slice 7's MERGE) holds its
   // own (review m6).
   const claimed = source !== 'autodrop' || ad.claimed;
+  if (armed === 'centre') {
+    // R8: v1 is the kid's key, flown on the SHIP screen only, with no thread.
+    if (state.ui.mode !== 'tools') return null;
+    return {
+      source, holdsTactical: true, launchesFromMind: false, decide: (view, now) => as(decideCentre(view, now)),
+      nextLaunchAtTSec: (now) => withView(now, (view) => centreVolley(now, view)?.volley.firstAtTSec ?? null),
+    };
+  }
   if (armed !== null && version >= 2) {
     const fields = override?.pass;
     const mapView = override?.view;
@@ -253,12 +273,6 @@ export function autodropController(state: Readonly<GameState>, override?: Readon
         const next = armedNext(now, viewFor(now, view), armed, fields ?? now.landing.autodrop);
         return next === null ? null : { lz: next.lz, n: next.n, atTSec: next.atTSec };
       }),
-    };
-  }
-  if (ad.held && state.ui.mode === 'tools') {
-    return {
-      source, holdsTactical: true, launchesFromMind: false, decide: (view, now) => as(decideHeld(view, now)),
-      nextLaunchAtTSec: (now) => withView(now, (view) => heldVolley(now, view)?.volley.firstAtTSec ?? null),
     };
   }
   return null;
@@ -293,7 +307,7 @@ export function mountAutodrop(store: Store<GameState>): () => void {
 
 // --- The machine's writes ------------------------------------------------------------------------------------------------
 
-// The machine at rest (the codec's rule at every save point: nothing held, armed, claimed or waiting; plan §2.2). `pass`,
+// The machine at rest (the codec's rule at every save point: nothing armed, claimed or waiting; plan §2.2). `pass`,
 // `sent`, `flownAs` and the last `end` may stand. The thread is let go by the caller (autodropRest).
 export function restAutodrop(draft: AutodropState, end: AutodropEnd | null, atAi: number): void {
   if (draft.armed !== null && end !== null) {
@@ -307,7 +321,7 @@ export function restAutodrop(draft: AutodropState, end: AutodropEnd | null, atAi
   draft.waitingSinceTSec = null;
 }
 
-// Disarms (or lets go of the hold) with `end`, the thread released, the event emitted.
+// Disarms with `end`, the thread released, the event emitted.
 function disarm(store: Store<GameState>, end: AutodropEnd): void {
   const before = store.getState().landing.autodrop;
   const from = before.armed;
@@ -361,58 +375,18 @@ export function autodropLaunched(store: Store<GameState>, pod: number, view: Rea
   if (controller.source !== 'autodrop') {
     rest = controller.waitsFor?.(after) ?? null;
   } else if (sol !== null) {
-    rest = armedNext(after, viewOf(after, sol), after.landing.autodrop.armed) ?? (after.landing.autodrop.held ? heldNext(after, viewOf(after, sol)) : null);
+    rest = armedNext(after, viewOf(after, sol), after.landing.autodrop.armed);
   }
   emit('autodrop-volley', { lz, n: 1 + (rest !== null && rest.lz === lz ? rest.n : 0), firstAtTSec: launch.atTSec });
 }
 
-function heldNext(state: Readonly<GameState>, view: Readonly<LandingView>): NextLaunch | null {
-  const next = heldVolley(state, view);
-  return next === null ? null : volleyNext(next);
-}
-
 // --- The kid's inputs (plan §3.2–§3.3) -----------------------------------------------------------------------------------
 
-// [L] down (landing-controls.ts, also pointer-down on the POD BAY's LAUNCH and the phone bar's button): 'held' when v1 or
-// better works, the SHIP screen is up, nothing is armed, and the awaited window has a sure part that is open or opens within
-// WINDOW_TACTICAL_LEAD_TAC (plan R4); 'manual' otherwise, and the manual path runs as today (a WIDE DROP window, outside
-// every window: the confirms).
-export function autodropKeyDown(store: Store<GameState>): 'held' | 'manual' {
-  const state = store.getState();
-  if (!landingOn(state) || state.clock.paused || state.ui.mode !== 'tools') return 'manual';
-  if (state.landing.autodrop.armed !== null || skillLive(state.memory, 'autodrop').version < 1) return 'manual';
-  const sol = getDropSolution();
-  if (sol === null) return 'manual';
-  const next = heldVolley(state, viewOf(state, sol));
-  if (next === null || next.win.sure === null) return 'manual';
-  if ((next.win.sure.lo - state.clock.tSec) / state.level.tacticalWarp > WINDOW_TACTICAL_LEAD_TAC) return 'manual';
-  store.update((draft) => {
-    const ad = draft.landing.autodrop;
-    ad.held = true;
-    ad.sent = {};
-    ad.end = null;
-    ad.endAtAi = null;
-  });
-  return 'held';
-}
+// Playtest 1 (note 9, plan §3.4.1): [L] is always the plain manual launch. v1's hold on [L] (autodropKeyDown / KeyUp) went:
+// a press inside GET READY was taken as a hold that launched nothing until the centre, and looked ignored.
 
-// [L] up (or the button's pointer up): the hold ends. Nothing launched while it was held is R4's tap: `'released'`.
-export function autodropKeyUp(store: Store<GameState>): void {
-  const ad = store.getState().landing.autodrop;
-  if (!ad.held) return;
-  const sentAny = Object.values(ad.sent).some((n) => n > 0);
-  store.update((draft) => {
-    const machine = draft.landing.autodrop;
-    machine.held = false;
-    if (!sentAny) {
-      machine.end = 'released';
-      machine.endAtAi = draft.clock.aiSec;
-    }
-  });
-}
-
-// Why [G] did nothing (pressAutodrop's refusals, plan §3.3). 'ONLY v1' (Track DROP): AUTODROP works only as v1, which has
-// no [G] (hold [L] instead).
+// Why [G] did nothing (pressAutodrop's refusals, plan §3.3). Playtest 1: v1 arms too, so `ONLY v1` went; a v1 with no
+// window to centre says `NOTHING TO CENTRE` (or `NO SURE WINDOW …` when no LZ has one on this orbit).
 export type AutodropRefusal = AutodropRefusalWord;
 
 function refuse(word: AutodropRefusal): AutodropRefusal {
@@ -421,7 +395,8 @@ function refuse(word: AutodropRefusal): AutodropRefusal {
   return word;
 }
 
-// [G] (landing-controls.ts, from either screen): arms v2's 'pass' (with armedAtTSec) or v3's 'plan'; [G] again cancels.
+// [G] (landing-controls.ts and the POD BAY's button, from either screen): arms v1's 'centre' (playtest 1: the next sure
+// window's volley; it flies once the SHIP screen is up), v2's 'pass' (with armedAtTSec) or v3's 'plan'; [G] again cancels.
 export function pressAutodrop(store: Store<GameState>): AutodropRefusal | null {
   const state = store.getState();
   if (!landingOn(state)) return refuse('NOT LANDING');
@@ -438,9 +413,8 @@ export function pressAutodrop(store: Store<GameState>): AutodropRefusal | null {
     say('sys', AUTODROP_TEXT.radio.cancel, { critical: true });
     return null;
   }
-  if (live.version === 1) return refuse('ONLY v1');
   const sol = getDropSolution();
-  const empty: AutodropRefusal = live.version >= 3 ? 'NOTHING TO PLAN' : 'NOTHING SET';
+  const empty: AutodropRefusal = live.version >= 3 ? 'NOTHING TO PLAN' : live.version === 2 ? 'NOTHING SET' : 'NOTHING TO CENTRE';
   if (sol === null) return refuse(empty);
   const view = viewOf(state, sol);
   const now = state.clock.tSec;
@@ -448,14 +422,21 @@ export function pressAutodrop(store: Store<GameState>): AutodropRefusal | null {
   let line: string;
   let pass: Record<string, number> | null = null;
   const noWindow = noSureWindow(state, view);
-  if (live.version >= 3) {
+  if (live.version === 1) {
+    const next = centreVolley(state, view);
+    if (next === null) return refuse(noWindow ?? empty);
+    to = 'centre';
+    line = AUTODROP_TEXT.radio.armedCentre(next.win.lz, next.volley.n);
+  } else if (live.version >= 3) {
     const plan = planLanding(state, view);
     if (plan.rows.length === 0) return refuse(noWindow ?? empty);
     to = 'plan';
     line = AUTODROP_TEXT.radio.armedPlan(plan.passes);
   } else {
     pass = passCounts(state, view);
-    if (!Object.values(pass).some((n) => n > 0)) return refuse(noWindow ?? empty);
+    // Playtest 1 (B-DROP): a count that fits nothing this pass (the kid's numbers are kept between passes) is no pass. The
+    // tails offer [G] by the same rule, and an armed pass that can fly nothing would only hold the WIDE [L] back (OD 120).
+    if (!passRows(state, view, pass).some((row) => row.want > 0 && row.fits > 0)) return refuse(noWindow ?? empty);
     to = 'pass';
     line = AUTODROP_TEXT.radio.armedPass(pass);
   }
@@ -537,7 +518,7 @@ function versionChanged(store: Store<GameState>, live: Readonly<SkillLive>): voi
       });
       emit('autodrop', { from: 'plan', to: 'pass', end: null });
       say('sys', AUTODROP_TEXT.radio.v3to2, { critical: true });
-    } else if (to === 1 && ad.armed !== null) {
+    } else if (to === 1 && (ad.armed === 'pass' || ad.armed === 'plan')) {
       disarm(store, 'downgraded');
       say('sys', AUTODROP_TEXT.radio.v2to1, { critical: true });
     } else if (to === 0) {
@@ -630,13 +611,7 @@ export function autodropTick(store: Store<GameState>): void {
   if (live.version !== ad.flownAs) versionChanged(store, live);
   const now = store.getState();
   const machine = now.landing.autodrop;
-  // The hold lets go on a switch to the MIND, a pause or the file working no more (a keyup lost to a blur is input.ts's:
-  // its releaseAllKeys sends the keyup). No lesson: the kid did not let go.
-  if (machine.held && (now.ui.mode !== 'tools' || now.clock.paused || live.version < 1)) {
-    store.update((draft) => { draft.landing.autodrop.held = false; });
-  }
   const sol = getDropSolution();
-  if (machine.held && !now.clock.paused && sol !== null) heldTick(store, viewOf(now, sol));
   // Review m5: under a higher controller AUTODROP holds no thread and ends nothing.
   if (machine.armed === null || now.clock.paused || shadowed(now)) {
     if (machine.claimed) claimTick(store, null);
@@ -644,6 +619,10 @@ export function autodropTick(store: Store<GameState>): void {
   }
   if (sol === null) return;
   const view = viewOf(now, sol);
+  if (machine.armed === 'centre') {
+    centreTick(store, view);
+    return;
+  }
   if (machine.armed === 'plan') pinTick(store, view);
   const after = store.getState();
   if (after.landing.autodrop.armed === null) return;
@@ -652,16 +631,21 @@ export function autodropTick(store: Store<GameState>): void {
   doneTick(store, next, view);
 }
 
-// Review M1: held in an open window where v1 has nothing more to fly (the next pod's drop is WIDE, the sure part is spent,
-// the LZ is full), the hold lets go, so the strip's `press [L]` is true and the kid's next press is the manual launch. No
-// lesson (`end` stands): the kid did not let go.
-function heldTick(store: Store<GameState>, view: Readonly<LandingView>): void {
+// v1's window is flown (playtest 1, OPEN-DECISIONS 133; review M1's rule for the hold it replaces): once it has launched, and
+// it has nothing more to fly in the window open now (the volley is over, the next pod's drop is WIDE, the sure part is spent,
+// the LZ is full) or that window has closed, it disarms ('centre-done'), so the strip's `press [L]` is true there and the
+// next window asks for a [G] of its own. Nothing launched yet (the kid in the MIND through its window, every pod WIDE): it
+// stays armed for the next sure window.
+function centreTick(store: Store<GameState>, view: Readonly<LandingView>): void {
   const state = store.getState();
+  const ad = state.landing.autodrop;
+  if (!Object.values(ad.sent).some((n) => n > 0)) return;
   const open = state.landing.window;
-  if (open === null) return;
-  const next = heldVolley(state, view);
-  if (next !== null && next.win.lz === open.lz && next.win.open <= state.clock.tSec) return;
-  store.update((draft) => { draft.landing.autodrop.held = false; });
+  const next = centreVolley(state, view);
+  if (open !== null && next !== null && next.win.lz === open.lz && next.win.open <= state.clock.tSec) return;
+  const sent = { ...ad.sent };
+  disarm(store, 'centre-done');
+  say('sys', AUTODROP_TEXT.radio.centreDone(sent), { critical: true });
 }
 
 // v3's plan flies `lz`: a row of it (a count or a leftover) goes there. Judged by the LZ, not the window: a hand drop in a
@@ -708,8 +692,31 @@ function countdown(state: Readonly<GameState>, atTSec: number): string | null {
   return tac > 0.05 ? minSec(tac) : null;
 }
 
+// The armed machine flies at this version: v1's window at v1 or better, v2's pass and v3's plan from v2 (a v3 → v2 step turns
+// the plan into a pass: versionChanged).
+function armedWorks(armed: AutodropArm | null, version: EffectiveVersion): boolean {
+  return armed !== null && version >= (armed === 'centre' ? 1 : 2);
+}
+
+// The window open now is a WIDE DROP this pass (OPEN-DECISIONS 120): the next pod's whole dot does not fit and its sure part
+// is not still to come (it has none on this pass, or it is over), so the strip's row there is L5's (or L3b's) `press [L] · WIDE
+// DROP`. A window whose sure part is still ahead (GET READY counts to it) is not.
+function wideOpen(state: Readonly<GameState>, view: Readonly<LandingView>): boolean {
+  const open = state.landing.window;
+  if (open === null || open.sure) return false;
+  const win = windowsAt(view.solution, state.clock.tSec).find((candidate) => candidate.lz === open.lz);
+  return win === undefined || win.sure === null || win.sure.hi <= state.clock.tSec;
+}
+
 // AUTODROP's guidance slot (plan §3.7; landing-guidance.ts buildLandingContext reads it every tick): its own row (AD-wait,
-// AD-fly, AD-done, AD-held, AD-hold, in that order) and its tail on L13's waits.
+// AD-fly, AD-armed, AD-done, in that order), its tail on L13's waits, and (playtest 1, §3.4.2) the tail on GET READY's and
+// LAUNCH NOW's manual launch while [G] would arm v1 for that window (` · or [G] AUTO`, AUTOBURN's pattern).
+// • Armed, the strip never offers a WIDE [L] (OPEN-DECISIONS 120: an obedient kid threw CORMORANT's pods off-site under an armed
+//   v2): while it still has a launch to fly, over a WIDE DROP window it says AD-armed's wait instead of L5 or L3b, whichever
+//   LZ the window is. An arm with nothing left to fly (a pass whose every window is WIDE, the kid's REPAIR still running)
+//   holds nothing back: there the WIDE [L] is the kid's, with the tail ` · AUTODROP ARMED`. Nor does v3's pin of a pod
+//   outside its plan (review M2): that [L] throws a pod no sure window takes, never one AUTODROP would land.
+// • v1 armed in the MIND (it flies from the SHIP screen only, R8): its window near or open, the row says so, with [TAB].
 export function autodropLineOf(state: Readonly<GameState>, sol: Readonly<DropSolution>): AutodropLine | null {
   if (!landingOn(state) || sol.block !== null || sol.dot === null) return null;
   if (shadowed(state)) return controllerWaitLine(state);
@@ -720,41 +727,54 @@ export function autodropLineOf(state: Readonly<GameState>, sol: Readonly<DropSol
   const text = AUTODROP_TEXT.strip;
   let row: AutodropLine['row'] = null;
   let tail: AutodropLine['tail'] = null;
-  if (ad.armed !== null && live.version >= 2) {
-    const next = armedNext(state, view, state.landing.autodrop.armed);
-    if (ad.waitingSinceTSec !== null && next !== null) {
+  let launchTail: AutodropLine['launchTail'] = null;
+  if (armedWorks(ad.armed, live.version)) {
+    const next = armedNext(state, view, ad.armed);
+    const near = next !== null && Math.min(tacTo(state, next.atTSec), tacTo(state, next.opensAt)) <= WINDOW_TACTICAL_LEAD_TAC;
+    const open = state.landing.window;
+    if (ad.armed === 'centre' && state.ui.mode !== 'tools') {
+      if (near || open !== null) row = { id: 'landing-AD-mind', text: text.centreMind, keys: ['TAB'], urgency: 'now', layer: 'ship' };
+      else tail = { text: text.tailArmed, key: null };
+    } else if (ad.waitingSinceTSec !== null && next !== null) {
       row = { id: 'landing-AD-wait', text: text.wait(countdown(state, next.atTSec)), keys: [], urgency: 'now', layer: 'mind' };
-    } else if (next !== null && Math.min(tacTo(state, next.atTSec), tacTo(state, next.opensAt)) <= WINDOW_TACTICAL_LEAD_TAC) {
+    } else if (near) {
       row = { id: 'landing-AD-fly', text: text.fly(next.lz, next.n, countdown(state, next.atTSec)), keys: ['G'], urgency: 'wait', layer: 'ship' };
-    } else if (state.landing.window !== null && armedFor(state, view, state.landing.window.lz)) {
-      // A window the machine owns: v2's sure window of an LZ its pass flies, or any window while v3's plan has rows (the plan
-      // holds every pod for the windows it chose). It waits, so the strip doesn't offer L4–L6's manual [L] there. A v2 pass
-      // leaves a WIDE DROP window, or an LZ it doesn't fly, to the kid's hands.
+    } else if (open !== null && (armedFor(state, view, open.lz)
+      || (next !== null && wideOpen(state, view) && !(ad.armed === 'plan' && planPin(state, view) !== null)))) {
+      // A window the machine owns (v2's sure window of an LZ its pass flies, or any window while v3's plan has rows: the plan
+      // holds every pod for the windows it chose), or a WIDE DROP window (OD 120). It waits, so the strip doesn't offer
+      // L4–L6's manual [L] there. A v2 pass leaves a sure window of an LZ it doesn't fly to the kid's hands, and v3 the window
+      // of an LZ outside its plan with LOAD NEXT pinned to a pod the plan holds for no window (review M2, OPEN-DECISIONS 5):
+      // that [L], WIDE or not, throws only a pod no sure window will ever take.
       const words = next === null ? text.armedIdle : text.armedNext(next.lz, next.n, minSec(Math.max(0, tacTo(state, next.atTSec))));
       row = { id: 'landing-AD-armed', text: words, keys: ['G'], urgency: 'wait', layer: 'ship' };
     } else {
       tail = { text: text.tailArmed, key: null };
     }
-    return { row, tail };
+    return { row, tail, launchTail };
   }
   const done = (ad.end === 'pass-done' || ad.end === 'plan-done') && ad.endAtAi !== null
     && state.clock.aiSec - ad.endAtAi < AUTODROP_DONE_LINE_SEC;
-  if (done) {
+  // PASS DONE offers [G] for the next pass only when it would fly something (the tail's rule), else it says nothing.
+  const passFlies = (): boolean => passRows(state, view, passCounts(state, view)).some((r) => r.want > 0 && r.fits > 0);
+  if (done && (ad.end === 'plan-done' || passFlies())) {
     const words = ad.end === 'pass-done' ? text.passDone(ad.sent) : text.planDone(ad.sent);
     row = { id: 'landing-AD-done', text: words, keys: ad.end === 'pass-done' ? ['G'] : [], urgency: 'wait', layer: 'ship' };
   }
-  if (row === null && live.version >= 1 && state.ui.mode === 'tools') {
-    const next = heldVolley(state, view);
-    if (next !== null && next.win.sure !== null && tacTo(state, next.win.sure.lo) <= WINDOW_TACTICAL_LEAD_TAC) {
-      row = ad.held
-        ? { id: 'landing-AD-held', text: text.held(next.win.lz, next.volley.n, countdown(state, next.volley.firstAtTSec)), keys: ['L'], urgency: 'now', layer: 'ship' }
-        : { id: 'landing-AD-hold', text: text.hold(next.win.lz), keys: ['L'], urgency: 'now', layer: 'ship' };
+  // The tails offer [G] only when it would fly something (no NOTHING SET: a pass with nothing that fits, an empty plan, no
+  // window to centre).
+  if (live.version === 1) {
+    const next = centreVolley(state, view);
+    if (next !== null) {
+      tail = { text: text.tailCentre, key: 'G' };
+      // The manual launch's rows for that window (GET READY, LAUNCH NOW) carry `· or [G] AUTO` on the SHIP screen.
+      if (state.ui.mode === 'tools' && next.win.sure !== null && tacTo(state, next.win.sure.lo) <= WINDOW_TACTICAL_LEAD_TAC) {
+        launchTail = { text: text.launchTail, key: 'G' };
+      }
     }
-  }
-  // The tails offer [G] only when it would fly something (no NOTHING SET: a pass with nothing that fits, an empty plan).
-  if (live.version === 2 && passRows(state, view, passCounts(state, view)).some((r) => r.want > 0 && r.fits > 0)) tail = { text: text.tailPass, key: 'G' };
+  } else if (live.version === 2 && passFlies()) tail = { text: text.tailPass, key: 'G' };
   else if (live.version >= 3 && planLanding(state, view).rows.length > 0) tail = { text: text.tailPlan, key: 'G' };
-  return row === null && tail === null ? null : { row, tail };
+  return row === null && tail === null && launchTail === null ? null : { row, tail, launchTail };
 }
 
 // Slice 5 review fix pass (M1): a controller other than AUTODROP's own flies (the sleeper's RUN THE DROPS 5, MERGE 7: never
@@ -770,14 +790,16 @@ function controllerWaitLine(state: Readonly<GameState>): AutodropLine | null {
   const waits = activeLandingController(state)?.waitsFor?.(state) ?? null;
   if (waits === null) return null;
   const text = LANDING_LINES.L13controller(waits.lz, Math.max(0, tacTo(state, waits.atTSec)));
-  return { row: { id: 'landing-AD-armed', text, keys: [], urgency: 'wait', layer: 'ship' }, tail: null };
+  return { row: { id: 'landing-AD-armed', text, keys: [], urgency: 'wait', layer: 'ship' }, tail: null, launchTail: null };
 }
 
 // The armed machine owns the open window of `lz`: v3 when its plan sends pods to that LZ, or when it has rows and no pod
 // outside the plan to give the kid's [L] (review B2, M2: the windows of an LZ it does not fly are the kid's, with LOAD NEXT
-// pinned to a pod the plan does not hold); v2 when the window is sure and the pass sends (or sent) pods there.
+// pinned to a pod the plan does not hold); v2 when the window is sure and the pass sends (or sent) pods there. v1 owns no
+// window it is not flying (its own is AD-fly's, inside the lead; it disarms once it has flown it).
 function armedFor(state: Readonly<GameState>, view: Readonly<LandingView>, lz: string): boolean {
   const ad = state.landing.autodrop;
+  if (ad.armed === 'centre') return false;
   if (ad.armed === 'plan') {
     if (planLanding(state, view).rows.length === 0) return false;
     return planUses(state, view, lz) || planPin(state, view) === null;
@@ -787,13 +809,13 @@ function armedFor(state: Readonly<GameState>, view: Readonly<LandingView>, lz: s
 }
 
 // Whether version `version`'s once-only lesson is due now (data/script.ts SKILL_4CDE_RULES: tut-autodrop-v1/v2/v3):
-// • v1 (R4): a tap on [L] was let go before the volley's first launch (`end: 'released'`), while v1 or better works;
+// • v1: never (playtest 1, plan §3.4.2: R4's tap lesson went with the hold; the strip's ` · or [G] AUTO` on GET READY and
+//   LAUNCH NOW, and the POD BAY's `AUTO · CENTRE [G]`, say what [G] does);
 // • v2 / v3: the first landing where AUTODROP works as exactly that version, nothing armed yet, pods aboard.
 export function autodropTutorialDue(state: Readonly<GameState>, version: SkillVersion): boolean {
-  if (!landingOn(state)) return false;
+  if (!landingOn(state) || version === 1) return false;
   const live = skillLive(state.memory, 'autodrop').version;
   const ad = state.landing.autodrop;
-  if (version === 1) return live >= 1 && ad.end === 'released' && !ad.held;
   if (live !== version || ad.armed !== null || podCounts(state).aboard === 0) return false;
   // Review M4: only on a landing where [G] would fly something (no lesson to press a key that refuses NO SURE WINDOW).
   const sol = getDropSolution();
@@ -816,12 +838,21 @@ export function autodropStatus(state: Readonly<GameState>): { text: string; tone
     const next = sol === null ? null : armedNext(state, viewOf(state, sol), state.landing.autodrop.armed);
     return { text: next === null ? words.armedIdle : words.armed(next.lz, next.n, minSec(Math.max(0, tacTo(state, next.atTSec)))), tone: 'good' };
   }
-  if (landingOn(state) && ad.held) return { text: words.holding, tone: 'good' };
   if (live.nominal !== null && live.version < live.nominal.version) return { text: words.worksAs(live.version, live.nominal.version), tone: 'warn' };
   const skill = demoSkill(state.run.stats.dropDemos, AUTODROP_DEMO_TUNING);
   const mode = SKILL_TREE.autodrop.versions[live.version - 1]?.mode ?? 'CENTRE';
   if (skill.untrained) return { text: words.untrained(mode, skill.accuracy), tone: 'warn' };
   return { text: words.trained(mode, skill.accuracy, skill.demos), tone: 'good' };
+}
+
+// What the armed machine waits for next (its LZ and count), or null (nothing armed, or nothing left to fly): the POD BAY's arm
+// button reads it (`ARMED · LZ-B · 2 PODS`, playtest 1).
+export function autodropNextLaunch(state: Readonly<GameState>): { lz: string; n: number } | null {
+  if (!landingOn(state)) return null;
+  const ad = state.landing.autodrop;
+  if (!armedWorks(ad.armed, skillLive(state.memory, 'autodrop').version)) return null;
+  const next = withView(state, (view) => armedNext(state, view, ad.armed));
+  return next === null ? null : { lz: next.lz, n: next.n };
 }
 
 // The REPAIR a never-fits LZ names, as the strip and the POD BAY say it (`POD 05`, `SENSOR INTERP`).
@@ -859,7 +890,7 @@ export function autodropDebug(state: Readonly<GameState>): AutodropDebug {
   return {
     state: structuredClone(ad), version: skillLive(state.memory, 'autodrop').version,
     controller: autodropController(state) !== null,
-    volley: view === null ? null : (ad.armed === 'pass' ? passVolley(state, view) : heldVolley(state, view))?.volley ?? null,
+    volley: view === null ? null : (ad.armed === 'pass' ? passVolley(state, view) : centreVolley(state, view))?.volley ?? null,
     pass, plan: view === null ? null : planLanding(state, view),
   };
 }

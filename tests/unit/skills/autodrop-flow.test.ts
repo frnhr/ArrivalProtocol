@@ -1,13 +1,16 @@
 // Slice 4c, Track DROP (plan §8.1): AUTODROP flown on run 1's arm, store and keys (autodrop-arm: a constructed lock, so no
 // capture is flown).
-// • v1 CENTRE on HALCYON: the strip asks `WINDOW LZ-B — hold [L]`; held, each volley leaves around the bracket's centre,
-//   inside the sure part, BULLSEYE; letting go stops the volley; a tap sends nothing and records 'released' (R4's lesson);
-//   in the MIND [L] stays the manual key (SHIP SCREEN); a blur lets go. AUTODROP's own launches are no demos.
+// • v1 CENTRE on HALCYON (playtest 1, plan §3.4.2: armed by [G], one window a press): GET READY offers ` · or [G] AUTO`; [G]
+//   arms the window (`AUTODROP ARMED · LZ-B ×3 · EACH POD DEAD CENTRE`), each pod leaves around the bracket's centre, inside
+//   the sure part, BULLSEYE, and it disarms itself once the window is flown ('centre-done'); [L] is a plain launch at once,
+//   in GET READY's lead too; armed from the MIND it waits for the SHIP screen (`… FLIES FROM THE SHIP SCREEN — [TAB]`) and
+//   flies there; [G] again cancels; R4's tap lesson is gone. AUTODROP's own launches are no demos.
 // • R5 measured on CORMORANT's LZ-A (6 pods): trained, 4 pods straddle the centre; untrained, 3, 1.5 tac s late.
 // • v2 PASS on KESTREL, from the MIND: the split set in the POD BAY's numbers, [G], one Core thread per window and none
-//   between, PASS DONE · A +2 · B +1; a second pass with every thread busy waits (`NEEDS A THREAD`) and launches late.
+//   between, every pod at its strip cue (OPEN-DECISIONS 120: LAUNCH NOW, then a cadence on), PASS DONE · A +2 · B +1; a
+//   second pass with every thread busy waits (`NEEDS A THREAD`) and launches late.
 // • v3 PLAN on CORMORANT: one [G] lands all 9 pods by the plan, with one [F] per gap; v3 → v2 → v1 → OFF mid-landing (the
-//   pass keeps its numbers, then the [L], then DROP BY HAND with the warning alert); REPAIR's offline is plain; the
+//   pass keeps its numbers, then v1's [G], then DROP BY HAND with the warning alert); REPAIR's offline is plain; the
 //   controller dies with its file.
 // • The demos: ARES-VII's manual launches are recorded (their offsets), AUTODROP v1 picked at the first desk (its second card),
 //   and the next boot says `> SKILL TRAINED: AUTODROP.skl v1 · from your 3 drops · AIM n%`.
@@ -23,15 +26,16 @@ import { receiveTransmission } from '@systems/boot';
 import { setMode } from '@systems/mode';
 import { requestLaunch } from '@systems/landing';
 import { autodropLineOf, autodropTutorialDue, setPassCount } from '@systems/autodrop';
-import { centreOffsetTac, windowsAt } from '@systems/autodrop-plan';
+import { centreOffsetTac, dropDemoOffset, windowsAt } from '@systems/autodrop-plan';
 import { activeLandingController } from '@systems/landing-controller';
 import { getDropSolution } from '@systems/drop-cache';
+import { autodropBayModel } from '@systems/landing-hud';
 import { getPrediction } from '@systems/predict';
 import { skipBlockReason } from '@systems/pace';
 import { releaseThread, reserveThread, threadsBusy, threadsTotal } from '@systems/ops-core';
 import { trainingModel } from '@systems/training-model';
 import { trainCell } from '@systems/training';
-import { skillLive } from '@systems/capabilities';
+import { capabilitiesNow, skillLive } from '@systems/capabilities';
 import { freeSegment, mergeAdjacentFree, replaceRange, segmentStarts } from '@systems/memory-ops';
 import { FIRST_RUN_LINEAGE } from '@systems/meta';
 import { setLandingMode } from '../support/landing-instant';
@@ -46,28 +50,39 @@ const shown = (): string => st().director.shown?.text ?? '';
 const said = (text: string): boolean => st().log.entries.some((entry) => entry.text === text);
 const ad = () => st().landing.autodrop;
 
-// Every pod AUTODROP launched, with its offset from its window's centre (tac s, measured as it left).
-interface Sent { pod: number; lz: string; atTSec: number; offsetTac: number; sure: boolean }
+// Every pod AUTODROP launched, with its offset from its window's centre and from the slot the strip cued it at (tac s,
+// measured as it left: autodrop-plan dropDemoOffset, the rule AIM is measured by).
+interface Sent { pod: number; lz: string; atTSec: number; offsetTac: number; cueTac: number; sure: boolean }
 let sent: Sent[] = [];
+let hand: { pod: number; atTSec: number }[] = [];   // the kid's own launches since resetWatch
 const seen = new Set<string>();   // `pod@launch time`: one launch, whatever the ship
 function watchLaunches(): void {
   const sol = getDropSolution();
+  const warp = st().level.tacticalWarp;
   for (const record of st().landing.pods) {
     if (record.fate.kind !== 'falling') continue;
     const launch: LaunchRecord = record.fate.launch;
     const key = `${record.pod}@${launch.atTSec}`;
     if (seen.has(key)) continue;
     seen.add(key);
+    if (launch.source === 'player') hand.push({ pod: record.pod, atTSec: launch.atTSec });
     if (launch.source !== 'autodrop' || sol === null) continue;
     const lz = st().landing.lzs.find((candidate) => candidate.label === launch.aimLz);
     const sureKm = lz === undefined ? -1 : lz.widthKm / 2 - launch.halfWidthKm
       - Math.abs(((launch.dotRad - lz.centreRad + 3 * Math.PI) % (2 * Math.PI)) - Math.PI) * st().level.planet.R;
-    sent.push({ pod: record.pod, lz: launch.aimLz ?? '?', atTSec: launch.atTSec, offsetTac: centreOffsetTac(sol, launch, st().level.tacticalWarp) ?? NaN, sure: sureKm >= 0 });
+    const earlier = st().landing.pods.filter((other) => other.pod !== record.pod && (other.fate.kind === 'falling' || other.fate.kind === 'down'))
+      .map((other) => (other.fate.kind === 'falling' || other.fate.kind === 'down' ? other.fate.launch.atTSec : NaN));
+    const cadenceSec = (capabilitiesNow(st()).bay.cadenceTac ?? 0) * warp;
+    sent.push({
+      pod: record.pod, lz: launch.aimLz ?? '?', atTSec: launch.atTSec, offsetTac: centreOffsetTac(sol, launch, warp) ?? NaN,
+      cueTac: dropDemoOffset(sol, launch, warp, cadenceSec, earlier) ?? NaN, sure: sureKm >= 0,
+    });
   }
 }
 // A new count: the pods launched so far (falling or down) are not this count's.
 function resetWatch(): void {
   sent = [];
+  hand = [];
   seen.clear();
   for (const record of st().landing.pods) {
     if (record.fate.kind === 'falling' || record.fate.kind === 'down') seen.add(`${record.pod}@${record.fate.launch.atTSec}`);
@@ -93,56 +108,74 @@ const mean = (xs: readonly number[]): number => xs.reduce((a, b) => a + b, 0) / 
   armLanding(h, [ARM.ARES, ARM.HALCYON], { autodrop: 1, demos: [0.1, -0.1] });
   resetWatch();
   const demosBefore = st().run.stats.dropDemos.length;
-  stepUntil(() => /hold \[L\]/.test(shown()), 120, true);
+  const tail = AUTODROP_TEXT.strip.launchTail;
+  stepUntil(() => shown().endsWith(tail), 120, true);
   const first = st().landing.window?.lz ?? windowsAt(getDropSolution()!, st().clock.tSec)[0]?.lz ?? '?';
-  check('the strip asks for the hold: `WINDOW LZ-B — hold [L]: AUTODROP waits for the centre`', shown() === AUTODROP_TEXT.strip.hold(first)
-    && st().clock.pace === 'tactical', `${shown()} · ${st().clock.pace}`);
-  h.keyDown('KeyL');
-  check('[L] down in GET READY is a hold: no pod yet, AUTODROP\'s controller flies (v1, holding TACTICAL, SHIP screen only)',
-    ad().held && st().landing.pods.every((record) => record.fate.kind === 'aboard')
+  check('GET READY offers v1 as AUTOBURN\'s tail: `GET READY — LZ-B IN 0:08 · or [G] AUTO`, [G] among its keys, at TACTICAL',
+    /^GET READY — LZ-[A-D] IN \d+:\d\d · or \[G\] AUTO$/.test(shown()) && (st().director.shown?.keys ?? []).includes('G')
+      && st().clock.pace === 'tactical' && ad().armed === null, `${shown()} · ${st().clock.pace}`);
+  check('…and R4\'s tap lesson is gone (v1\'s is never due)', !autodropTutorialDue(st(), 1));
+  const bayBefore = autodropBayModel(st(), getDropSolution());
+  check('the POD BAY offers the arm button from v1: `AUTO · CENTRE [G]` under `AUTODROP ▸ CENTRE [G] · ONE WINDOW`',
+    bayBefore?.go.shown === true && bayBefore.go.label === AUTODROP_TEXT.bay.goButton('CENTRE') && !bayBefore.go.armed
+      && bayBefore.key.text === AUTODROP_TEXT.bay.keyCentre, JSON.stringify(bayBefore?.go));
+  h.press('KeyG');
+  const n = st().landing.lzs.find((lz) => lz.label === first)?.pods ?? 0;
+  const bayArmed = autodropBayModel(st(), getDropSolution());
+  check(`…armed, it reads what it waits for: \`ARMED · ${first} · ${n} PODS\`, as the AUTO button does`, bayArmed?.go.armed === true
+    && bayArmed.go.label === AUTODROP_TEXT.bay.goButtonArmed(first, n)
+    && bayArmed.key.text === AUTODROP_TEXT.bay.keyArmedCentre && bayArmed.key.look === 'armed', JSON.stringify(bayArmed?.go));
+  check(`[G] arms v1 for this window: \`AUTODROP ARMED · ${first} ×${n} · EACH POD DEAD CENTRE\`, no pod yet, its controller flies (SHIP screen only, TACTICAL)`,
+    ad().armed === 'centre' && said(AUTODROP_TEXT.radio.armedCentre(first, n)) && st().landing.pods.every((record) => record.fate.kind === 'aboard')
       && activeLandingController(st())?.source === 'autodrop' && activeLandingController(st())?.launchesFromMind === false
-      && activeLandingController(st())?.holdsTactical === true);
+      && activeLandingController(st())?.holdsTactical === true, JSON.stringify(ad()));
+  stepUntil(() => /^AUTODROP — /.test(shown()), 20);
+  check('…the strip says what it flies (`AUTODROP — LZ-B ×3 · 0:04 · [G] to cancel`)', /^AUTODROP — LZ-[A-D] ×\d · .* · \[G\] to cancel$/.test(shown()), shown());
   stepUntil(() => !windowOpen() && sent.length > 0, 60);
-  h.keyUp('KeyL');
   const count = st().landing.lzs.find((lz) => lz.label === first)?.pods ?? 0;
-  check(`held through ${first}'s window: its ${count} pods left inside the sure part, around the centre`, sent.length === count
+  check(`armed through ${first}'s window: its ${count} pods left inside the sure part, around the centre`, sent.length === count
     && sent.every((pod) => pod.sure && pod.lz === first) && Math.abs(mean(sent.map((pod) => pod.offsetTac))) < 0.35,
     sent.map((pod) => pod.offsetTac.toFixed(2)).join(' '));
+  check('…and it disarmed itself once the window was flown (\'centre-done\', `AUTODROP · B +3 · [G] FOR THE NEXT WINDOW`)',
+    ad().armed === null && ad().end === 'centre-done' && said(AUTODROP_TEXT.radio.centreDone({ [first]: count })), JSON.stringify(ad()));
   stepUntil(() => st().landing.pods.filter((record) => record.fate.kind === 'down').length >= count, 30);
   check('…and landed BULLSEYE (`> pod01 ... LANDED · BULLSEYE`)', said('> pod01 ... LANDED · BULLSEYE'));
   check('…AUTODROP\'s own launches are no demos', st().run.stats.dropDemos.length === demosBefore);
-  // The tap: the next window, [L] pressed and let go in GET READY.
-  stepUntil(() => /hold \[L\]/.test(shown()), 900, true);
-  h.press('KeyL');
-  check('a tap released before the first launch sends nothing: `end: \'released\'`, and R4\'s lesson is due',
-    ad().end === 'released' && !ad().held && st().landing.pods.filter((record) => record.fate.kind === 'aboard').length === 5 - count
-      && autodropTutorialDue(st(), 1));
-  // The lesson waits for the window's own rows (they are `now`), and says it in the wait after.
-  let lesson = '';
-  stepUntil(() => lesson !== '', 120, false, () => { if (st().director.shown?.id === 'tut-autodrop-v1') lesson = shown(); });
-  check('…the strip says it once: `HOLD [L] — AUTODROP waits for the centre`', lesson === AUTODROP_TEXT.tutorial.v1, lesson);
-  // The MIND: [L] is the manual key there (SHIP SCREEN), never a hold. At the next sure window.
-  stepUntil(() => /hold \[L\]/.test(shown()), 900, true);
-  setMode(h.store, 'memory');
-  const refusedBefore = h.events.filter((event) => event.name === 'refused').length;
-  h.keyDown('KeyL');
-  check('in the MIND [L] is no hold: refused SHIP SCREEN, nothing held', !ad().held
-    && h.events.slice(refusedBefore).some((event) => event.name === 'refused' && (event.payload as { reason: string }).reason === 'LAUNCH|SHIP SCREEN'));
-  h.keyUp('KeyL');
-  setMode(h.store, 'tools');
-  // A blur lets go (input.ts releases every held key).
-  h.keyDown('KeyL');
-  const heldThen = ad().held;
-  h.blur();
-  check('a blur lets go of the hold', heldThen && !ad().held);
-  // Hold for one pod, then let go: the rest stay aboard.
+  // [L] is a plain press: the next window's LAUNCH NOW (with the tail) launches at once, by hand.
+  stepUntil(() => /^LAUNCH NOW — press \[L\]/.test(shown()) && shown().endsWith(tail), 900, true);
+  const second = st().landing.window?.lz ?? '?';
   resetWatch();
-  h.keyDown('KeyL');
-  stepUntil(() => sent.length >= 1, 30);
-  h.keyUp('KeyL');
+  h.press('KeyL');
+  h.step();
+  watchLaunches();
+  check('[L] is always the plain launch: pressed at `LAUNCH NOW — press [L] · LZ-A 0/2 · or [G] AUTO`, a pod leaves by hand at once',
+    hand.length === 1 && sent.length === 0 && ad().armed === null, `${JSON.stringify(hand)} · ${shown()}`);
+  // [G] twice: armed, then cancelled.
+  h.press('KeyG');
+  const armedThen = ad().armed;
+  h.press('KeyG');
+  check('[G] again cancels (`AUTODROP OFF — you have the [L]`)', armedThen === 'centre' && ad().armed === null && ad().end === 'cancel'
+    && said(AUTODROP_TEXT.radio.cancel));
+  // Armed from the MIND: it waits for the SHIP screen (R8), and says so when its window is near.
   stepUntil(() => !windowOpen(), 60);
-  check('letting go stops the volley: one pod went, the rest stay aboard', sent.length === 1
-    && st().landing.pods.filter((record) => record.fate.kind === 'aboard').length === 5 - count - 1, `${sent.length} sent`);
+  setMode(h.store, 'memory');
+  h.press('KeyG');
+  const armedInMind = ad().armed === 'centre';
+  stepUntil(() => st().director.shown?.id === 'landing-AD-mind', 900, true);
+  const mindLine = shown();
+  const aboardThen = st().landing.pods.filter((record) => record.fate.kind === 'aboard').length;
+  stepUntil(() => sureOpen(), 30);
+  const mindController = activeLandingController(st());
+  stepUntil(() => false, 0.5);
+  check('[G] in the MIND arms v1; near its window the strip says `AUTODROP v1 FLIES FROM THE SHIP SCREEN — [TAB]`, and nothing flies',
+    armedInMind && mindLine === AUTODROP_TEXT.strip.centreMind && mindController === null && sent.length === 0, `${mindLine} · ${sent.length}`);
+  setMode(h.store, 'tools');
+  stepUntil(() => sent.length > 0 && !windowOpen(), 60);
+  // Its last pods: the landing ends under it ('landing-over'), else it disarms itself ('centre-done').
+  check(`…[TAB] back to the SHIP screen: it flies ${second}'s window there, and disarms`, sent.length > 0 && sent.every((pod) => pod.sure && pod.lz === second)
+    && ad().armed === null && ['centre-done', 'landing-over'].includes(ad().end ?? '')
+    && aboardThen - sent.length === st().landing.pods.filter((record) => record.fate.kind === 'aboard').length,
+    `${sent.map((pod) => `${pod.lz}:${pod.offsetTac.toFixed(2)}`).join(' ')} · ${JSON.stringify(ad())}`);
 }
 
 // --- R5 measured: trained against untrained on CORMORANT's LZ-A (6 pods, STANDARD) -------------------------------------------
@@ -150,10 +183,10 @@ const aim: Record<string, { n: number; mean: number }> = {};
 for (const [name, demos] of [['trained', [0.05, -0.05]], ['untrained', []]] as const) {
   armLanding(h, [ARM.ARES, ARM.HALCYON, ARM.KESTREL, ARM.VESPER, ARM.CORMORANT], { autodrop: 1, demos, healInstruments: true });
   resetWatch();
-  stepUntil(() => /hold \[L\]/.test(shown()) && st().landing.window?.lz !== 'LZ-B' && windowsAt(getDropSolution()!, st().clock.tSec)[0]?.lz === 'LZ-A', 900, true);
-  h.keyDown('KeyL');
+  stepUntil(() => shown().endsWith(AUTODROP_TEXT.strip.launchTail) && st().landing.window?.lz !== 'LZ-B'
+    && windowsAt(getDropSolution()!, st().clock.tSec)[0]?.lz === 'LZ-A', 900, true);
+  h.press('KeyG');
   stepUntil(() => sent.length > 0 && !windowOpen(), 60);
-  h.keyUp('KeyL');
   aim[name] = { n: sent.length, mean: mean(sent.map((pod) => pod.offsetTac)) };
 }
 check(`R5: trained, 4 pods straddle LZ-A's centre (mean ${aim.trained!.mean.toFixed(2)} tac s)`, aim.trained!.n === 4 && Math.abs(aim.trained!.mean) < 0.25);
@@ -189,9 +222,12 @@ console.log(`INFO  AIM on CORMORANT LZ-A: trained ${aim.trained!.n} pods, mean o
     if (sent.length > launches) { launches = sent.length; if (!claimedBefore) claimedAtLaunch = false; }
     claimedBefore = ad().claimed;
   });
-  check('it flew the pass from the MIND: LZ-A ×2 and LZ-B ×1, centred, all sure', sent.filter((pod) => pod.lz === 'LZ-A').length === 2
+  check('it flew the pass from the MIND: LZ-A ×2 and LZ-B ×1, all sure', sent.filter((pod) => pod.lz === 'LZ-A').length === 2
     && sent.filter((pod) => pod.lz === 'LZ-B').length === 1 && sent.every((pod) => pod.sure) && st().ui.mode === 'memory',
     sent.map((pod) => `${pod.lz}:${pod.offsetTac.toFixed(2)}`).join(' '));
+  // OPEN-DECISIONS 120: from the strip's cue, as AIM is measured (a trained AIM of 0: each pod within a few AI ticks of it).
+  check('…each pod at its strip cue, not the centre (OD 120: LAUNCH NOW, then a cadence on), before the centre', sent.every((pod) => Math.abs(pod.cueTac) < 0.2)
+    && sent.some((pod) => pod.offsetTac < -0.5), sent.map((pod) => `${pod.lz}: cue ${pod.cueTac.toFixed(2)} · centre ${pod.offsetTac.toFixed(2)}`).join(' '));
   check('…holding a Core thread for each volley and none in the CRUISE between', claimedAtLaunch && !claimedInGap && !ad().claimed && threadsBusy() === 0,
     `at launch ${claimedAtLaunch} · in a gap ${claimedInGap} · now ${ad().claimed} · busy ${threadsBusy()}`);
   const line = autodropLineOf(st(), getDropSolution()!);
@@ -212,12 +248,12 @@ console.log(`INFO  AIM on CORMORANT LZ-A: trained ${aim.trained!.n} pods, mean o
   // Free the threads 1.5 tac s after the volley's slot: it claims and launches late.
   const sol = getDropSolution()!;
   const win = windowsAt(sol, st().clock.tSec).find((candidate) => candidate.lz === 'LZ-B')!;
-  stepUntil(() => st().clock.tSec > win.centre + 1.5 * st().level.tacticalWarp, 60);
+  stepUntil(() => st().clock.tSec > win.sure!.lo + 1.5 * st().level.tacticalWarp, 60);
   check('…nothing launched while it waited', sent.length === 0);
   for (const owner of owners) releaseThread(owner);
   stepUntil(() => sent.length > 0 || !sureOpen(), 30);
-  check('…a thread freed: it claims and launches late, still inside the sure part', sent.length === 1 && sent[0]!.sure && sent[0]!.offsetTac > 1.4,
-    sent.map((pod) => pod.offsetTac.toFixed(2)).join(' '));
+  check('…a thread freed: it claims and launches late (past its cue), still inside the sure part', sent.length === 1 && sent[0]!.sure && sent[0]!.cueTac > 1.4,
+    sent.map((pod) => pod.cueTac.toFixed(2)).join(' '));
 }
 
 // --- v3 PLAN on CORMORANT ----------------------------------------------------------------------------------------------------
@@ -227,7 +263,7 @@ console.log(`INFO  AIM on CORMORANT LZ-A: trained ${aim.trained!.n} pods, mean o
   h.step();
   check('v3\'s lesson is due before [G]', autodropTutorialDue(st(), 3) && !autodropTutorialDue(st(), 2));
   h.press('KeyG');
-  check('[G] arms the plan: `AUTODROP ARMED · THE PLAN: 2 PASSES · [F] BETWEEN THEM`', ad().armed === 'plan' && said(AUTODROP_TEXT.radio.armedPlan(2)));
+  check('[G] arms the plan: `AUTODROP ARMED · THE PLAN: 2 PASSES · HOLD [F] BETWEEN THEM`', ad().armed === 'plan' && said(AUTODROP_TEXT.radio.armedPlan(2)));
   let fPresses = 0;
   stepUntil(() => st().landing.ended !== null, 2500, false, () => {
     if (st().clock.skipWarp === null && /\[F\]/.test(shown()) && skipBlockReason(st(), getPrediction()) === null) { h.press('KeyF'); fPresses++; }
@@ -260,16 +296,16 @@ console.log(`INFO  AIM on CORMORANT LZ-A: trained ${aim.trained!.n} pods, mean o
     JSON.stringify(ad()));
   setIntegrity(40);
   h.step();
-  check('v2 → v1 (40%: a v3 file FAILING works as v1): disarmed \'downgraded\', `hold [L] for the rest`', ad().armed === null
+  check('v2 → v1 (40%: a v3 file FAILING works as v1): disarmed \'downgraded\', `[G] arms one window at a time`', ad().armed === null
     && ad().end === 'downgraded' && said(AUTODROP_TEXT.radio.v2to1) && !ad().claimed);
-  stepUntil(() => /hold \[L\]/.test(shown()), 900, true);
-  h.keyDown('KeyL');
+  stepUntil(() => /\[G\]/.test(shown()) && ad().armed === null, 900, true);
+  h.press('KeyG');
+  const armedV1 = ad().armed === 'centre';
   setIntegrity(20);
   h.step();
-  check('→ OFF (20%) while held: the hold ends \'off\', `AUTODROP.skl DAMAGED — DROP BY HAND`, a warning alert (no klaxon)',
-    !ad().held && ad().end === 'off' && said(AUTODROP_TEXT.radio.damaged)
-      && st().alerts.list.some((alert) => alert.id === 'autodrop-damaged' && alert.severity === 'warn'));
-  h.keyUp('KeyL');
+  check('→ OFF (20%) with v1 armed for a window: disarmed \'off\', `AUTODROP.skl DAMAGED — DROP BY HAND`, a warning alert (no klaxon)',
+    armedV1 && ad().armed === null && ad().end === 'off' && said(AUTODROP_TEXT.radio.damaged)
+      && st().alerts.list.some((alert) => alert.id === 'autodrop-damaged' && alert.severity === 'warn'), JSON.stringify(ad()));
   setIntegrity(100);
   h.step();
   h.press('KeyG');
