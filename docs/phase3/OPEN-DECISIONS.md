@@ -740,3 +740,32 @@ renumbers them at CLOSE. "Before → after" is the number the change moved; trac
        `npm run balance:report -- --quick` after Batch B, with B-ORDER's link change, and reads MERGE's price (OD 108)
        and the arrival charge then.
      - To reverse: the card back inside the `max` in both functions (one line each).
+
+## Playtest 1, Batch B (B-DESK)
+
+141. **Training is merged into the REPOSITORY; the word stays CYCLES** (playtest 1, note 15, §3.6). BUILT, **[FRAN]**. One
+     REPOSITORY [R]: FROM EARTH (the requests) over COMPILE HERE (the skills), [T] opens it on COMPILE HERE. Where cycles
+     come from and go is a ledger under the bank (`+6 HALCYON · ARRIVED +1 · LANDED 83% +4`, `−4 AUTOBURN v2`), and the
+     LANDING REPORT says `+6 CYCLES TO COMPILE · …`. The plan's Deviations (B-DESK) have the details.
+     - To reverse: put `training` back in `DeskTabs.ts TABS` and give `TrainingWindow`'s root its own host in
+       `DeskScreen.ts` (the store's `'training'` window never went away).
+145. **The first desk's floor is the CORE RESERVE** (the first-pick top-up, 03 §3.1). BUILT, **[FRAN] the word**. The
+     ledger's row is `+2 CORE RESERVE`, and the report's line under the cycles is `+2 CYCLES · CORE RESERVE`. Playtest 1
+     (§3.7) had cut `FIRST SKILL ON THE HOUSE` as game-talk and left the number alone, which said nothing about where it
+     came from. The fiction: the Core lends what its first compile needs.
+     - To reverse: `TRAINING_TEXT.onTheHouse` and `TRAINING_TEXT.ledger.reserve` (`training-text.ts`).
+146. **The report's cycles line keeps the rule, not pods** (§3.6 proposed `+3 CYCLES · from 2 pods landed and the orbit`).
+     BUILT, **[FRAN] the wording**. It reads `+5 CYCLES TO COMPILE · ARRIVED +1 · LANDED 83% +4`. Cycles come from the
+     landing's share of points (03 §3.1), not from a count of pods, so a pod count would mislead on a mislanded or partial
+     ship. The desk ledger repeats the same breakdown, which is what ties the two screens together.
+     - To reverse: `TRAINING_TEXT.report` (`cycles`, `perfect`, `noDesk`).
+147. **FROM EARTH sits above COMPILE HERE, and the first desk opens scrolled to COMPILE HERE.** BUILT, NOTED. The order is
+     §3.6's. The other way round would put the first desk's required pick at the top with no scroll, but it would bury
+     the requests at every later desk. The right window is 620 px wide whenever the REPOSITORY is open (it was only for
+     TRAINING), so the chart is a little narrower while the kid requests a file.
+     - To reverse: append `earthHost` after `training.root` in `DeskScreen.ts`, and scroll to `earthHost.offsetTop` for FROM
+       EARTH and to 0 for COMPILE HERE (`paint`).
+148. **The +2 CYCLES salvage card reads CARRIED OVER until B-ORDER lands.** NOTED, for the lead at B-ORDER's merge. The
+     ledger shows a grant as its own row only when it is this visit's. Today the card is granted at the TRANSMIT ▸ before
+     the desk, with the previous visit's number. LEAVE ORBIT grants it at the pick (§3.3.2), and then it gets its own
+     `+2 SALVAGE` row with no change to the ledger. `skills/cycles` accepts both forms and checks the sum.
