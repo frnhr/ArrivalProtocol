@@ -1110,7 +1110,7 @@ the cycles explained in the world. Each item says what differs from §3.6 or §4
    `+5 CYCLES TO COMPILE · ARRIVED +1 · LANDED 83% +4`, `+6 CYCLES TO COMPILE · PERFECT LANDING`, `+5 CYCLES · NO DESK
    AHEAD`. Its breakdown is the ledger's row for that ship, word for word (`TRAINING_TEXT.report.earned`, shared), and its
    hover is the bank's. The LOST card (`BurnResult.ts`) reads the same `cyclesReport`, so it says it too. The first-pick
-   top-up reads `+2 CYCLES · CORE RESERVE`, the ledger's word for it (OPEN-DECISIONS 145).
+   top-up reads `+2 CYCLES · CORE RESERVE`, the ledger's word for it (OPEN-DECISIONS 151).
 3. **Which grants are "this visit's".** A grant is shown as its own row when it carries this visit's number
    (`CycleGrant.visit === visitNow`), else it is CARRIED OVER. Today the +2 CYCLES salvage card is granted at the TRANSMIT ▸
    *before* the desk, with the previous visit's number, so it reads as CARRIED OVER. **At B-ORDER's merge** it is granted
@@ -1172,20 +1172,20 @@ the cycles explained in the world. Each item says what differs from §3.6 or §4
 
 Track B-TIME (notes 6 and 24, OD 123 and 124), built on `b01cf61`. Where the build differs from §3.1, §4 and §5:
 
-1. **A third kind of stop, WAIT** (OD 145). §3.1 made AUTODROP's windows and its launches SOFT. A dwell and then on would
+1. **A third kind of stop, WAIT** (OD 155). §3.1 made AUTODROP's windows and its launches SOFT. A dwell and then on would
    jump past a window the controller has not flown yet, and skip its launches. So a window an armed controller flies
    (`activeLandingController` not null), and its next launch, hold the hold without spending it: the director's TACTICAL
    plays the window, and once it has gone by the hold goes on by itself. AUTODROP v3's plan is one hold from [G] to its
    last row (the suite's section 4: four pods down in one window, then capped while they fall, no second press).
-2. **Refusals spend the hold** (OD 146). §3.1 lists the refusals "as today", struck out. Here a refusal that arrives
+2. **Refusals spend the hold** (OD 156). §3.1 lists the refusals "as today", struck out. Here a refusal that arrives
    mid-hold (an alarm, the first ghost burst, the kid's own burn, HOLD STEADY, a hand window opening, the landing over)
    also ends the hold, like a HARD stop: a hold that resumed by itself afterwards would carry the kid past what the
    refusal was for. A burn input pressed under the hold (SPACE, BURN, [B]: `stopSkipOnPress`) spends it as `STOPPED`.
    PAUSED only freezes it. A later ghost burst running between two ticks waits (no spend).
-3. **Not SOFT stops: a full LZ's window, a later ghost burst, a drag kick** (OD 147). None was a stop for a SKIP before,
+3. **Not SOFT stops: a full LZ's window, a later ghost burst, a drag kick** (OD 157). None was a stop for a SKIP before,
    and each would add a 1.5 s dwell several times a loop. The leg still flies every later burst whole (the waypoint) and
    splits its jump at each kick. The engine-fault bursts (`ghostRefusesSkip`) run capped at CRUISE as planned.
-4. **A CRUISE cap on a CRUISE coast waits** (OD 148). When the only cap is CRUISE's (engine fault, the first seed, a
+4. **A CRUISE cap on a CRUISE coast waits** (OD 158). When the only cap is CRUISE's (engine fault, the first seed, a
    coast-tied wake) and the director runs CRUISE there anyway, the hold is struck out with the reason and waits, rather
    than show FAST at the warp the coast already has. It runs FAST where the director would hold TACTICAL (pods falling).
    `map/ghost-noswap`'s "no `hold [F]` while the bursts are due" holds unchanged.
@@ -1202,7 +1202,7 @@ Track B-TIME (notes 6 and 24, OD 123 and 124), built on `b01cf61`. Where the bui
    the SKIP's own ramp), for legs and capped runs alike. A new constant, `FF_LEG_WALL_SEC` 2 (a leg's warp is the gap to
    its stop's lead / 2): with SKIP_DIVISOR's 4 a 4.5-tactical-day WAIT took 5.95 s; at 2 it takes 4.95 s. And
    `FF_PASSED_MATCH_TAC` 60: a passed soft stop is recognised again within a minute of tactical time.
-8. **Words** (OD 149). The tails are `· hold [F]` (the flight's ` · [F] SKIP`, the landing's ` · [F] to SKIP`), MIND
+8. **Words** (OD 159). The tails are `· hold [F]` (the flight's ` · [F] SKIP`, the landing's ` · [F] to SKIP`), MIND
    CLEAR is `MIND CLEAR — hold [F] to LZ-B`, the button `▸▸ HOLD [F]`, the pace label `FAST ×n ▸▸` for a SKIP leg and the
    capped pace (a controller's own SKIP reads FAST too). The hold's stop words are `pace.ts FF_TEXT`: `BURN AHEAD`,
    `LZ-B WINDOW` (an open hand window reads the same), `FLYING AWAY`, `HOLD STEADY`, `NOTHING AHEAD`, `ENGINE FAULT`,
@@ -1283,11 +1283,11 @@ NOW carry ` · or [G] AUTO`. Item 120's two fixes are in. Where the build differ
    POD BAY rows (`passRows`, so the prefilled split counts the same slots) start at the sure part's opening plus the learned
    offset, each later pod a cadence on: the slot a hand kid gets from `LAUNCH NOW`, as `dropDemoOffset` measures AIM. v1
    CENTRE stays centred (its name), and so does **v3's plan** (item 120 named v2; its rows are pod-specific sure spans and
-   their centring was not part of the finding). OPEN-DECISIONS 146 asks whether v3 should follow.
+   their centring was not part of the finding). OPEN-DECISIONS 162 asks whether v3 should follow.
 8. **Item 120, no WIDE [L].** While anything is armed (v1, v2 or v3) and it still has a launch to fly, the open window that
    is a WIDE DROP this pass (the next pod's whole dot does not fit and its sure part is not still ahead) shows AD-armed's
    wait (`AUTODROP ARMED — next LZ-B ×2 in 0:40 · [G] to cancel`) instead of L5 or L3b. Two exceptions, both found by the
-   sweep (OPEN-DECISIONS 147):
+   sweep (OPEN-DECISIONS 163):
    - **an arm with nothing left to fly** holds nothing back (VESPER's busy kid with v2 landed 0% in 1,500 s: a pass whose
      every window was WIDE, re-armed at every PASS DONE, held every WIDE [L] back);
    - **v3's pin** (review M2, OPEN-DECISIONS 5): in the window of an LZ its plan does not use, LOAD NEXT is pinned to a pod
@@ -1459,3 +1459,52 @@ build differs from §3.3, §4 and §5, and what it touched outside its §4 list:
       then passed when run alone. The e2e runs, one at a time: `map-desk` 88/88, `run-flow` 100/100, `resume` 72/72,
       `playthrough` 274/274, `phone` 134/134.
 12. **Not done.** `npm run balance:report -- --quick` was not run; it is the lead's, after the merge (§3.3.4).
+
+## Lead notes: B-ORDER's merge, and Batch B verified
+
+B-ORDER merged last (`git merge --no-ff b-order` onto the B-DROP merge). Where the merge differs from the tracks' own
+reports, and what the whole of Batch B measured:
+
+1. **Conflicts, both sides kept.** OPEN-DECISIONS and this plan take B-ORDER's sections after B-DROP's. B-ORDER's
+   OPEN-DECISIONS 145–153 are renumbered **166–174**, with their references in its Deviations and two e2e comments. The
+   Deviations of B-TIME, B-DROP and B-DESK cited their pre-merge numbers; they now cite the logged ones (B-TIME 155–159,
+   B-DROP 162–163, B-DESK 151). The checklist keeps B-TIME's 54–56; B-ORDER's items are 57–60. `debug.ts` and `desk.ts`
+   take both imports (PAL's persona and lines; LEAVE ORBIT's model and the salvage's room). `skills/cycles` runs B-DESK's
+   ledger checks on LEAVE ORBIT's flow. B-VOICE's words, B-DESK's desk screen, B-TIME's hold drivers and B-DROP's arm
+   button needed no hand edits beyond that: B-ORDER's TransmitScreen already read `palLines`.
+2. **OPEN-DECISIONS 154 built.** The +2 CYCLES salvage is granted at LEAVE ORBIT's ENTER with this visit's number, so the
+   desk it opens shows its own `+2 SALVAGE` row, and the desk after shows it in CARRIED OVER. No ledger change was needed;
+   `skills/cycles` now checks each form at its desk strictly, where it accepted either. The card's line reads `2 more CYCLES
+   to compile at the desk ahead` (B-DESK's note 10).
+3. **B-DROP's note on v10, done.** `AutodropState.held` (always false since B-DROP) and the end `'released'` are gone;
+   `RUN_SAVE_MIGRATIONS[9]` deletes `held` and maps a stored `'released'` to no end (with its `endAtAi`; it only held a strip
+   line up for a moment). The shape pin's v10 drops `landing.autodrop.held`; the codec refuses either at v10; the v9
+   fixtures' migration checks both (`map/leave-orbit`).
+4. **A regression found at the merge: entry 01 at a migrated desk.** B-ORDER keyed `046.log`'s entry 01 to LEAVE ORBIT
+   only (`story-log.ts firstLandingKeyDue`). A v9 save at ship 1's desk found it at the PACKET in v9, and v10 resumes it at
+   the desk, so it was never found. It is now due at LEAVE ORBIT, the desk or the PACKET, before the beam (the landing is
+   still the ship's). `opening/calm-ships` checks both: at LEAVE ORBIT on the normal path, and at the desk for a run past
+   LEAVE ORBIT without it.
+5. **Stale expectations fixed, none weakened:** `map/desk-chrome` (the BEAM OUT blackout is LEAVE ORBIT's now, OD 172: it
+   checks `leaveBlackoutSec` both ways); `signals/foundation` (the v8 fixture steps to v9, then on to v10);
+   `wp11/p2/views` (CONTROL's verdict has had no `:)` since B-VOICE; it failed on main before this merge too).
+6. **`map/arm-parity`.** Both digests re-recorded, with what moved each in their comments. The slices moved only by
+   `held`'s removal (with it put back they hash to B-ORDER's `876ea9ad0ab6ac69`). The run combines B-ORDER's link removal
+   and LEAVE ORBIT, the earlier B-VOICE/B-TIME re-record, `held`, and the +2 CYCLES card's words. It ends won-merge with
+   every ship locked, as on b-order; main ended won-purge.
+7. **e2e waits.** The five fixed waits for the first pick's 1.5 s TRAIN bar (`map-desk` twice, `phone`, `playthrough`,
+   `run-flow`) use `tests/e2e/lib.mjs waitTrained`, `resume.mjs`'s pattern from ea0d6c8: the press must start the bar within
+   2 s, then the purchase is waited for while the bar still fills.
+8. **Runs, on a quiet machine (4 cores, load under 1 before each).**
+   - `typecheck` and the tests' tsc: clean.
+   - The quick unit tier: 233 passed, 0 failed, 15 balance-only skipped, **227 s** (budget 265 s). Nothing needed trimming.
+   - The full e2e tier, once: **935/935 in 17 scenarios, 2,038 s**, nothing to re-run. playthrough 275, phone 135,
+     run-flow 100, map-desk 94, resume 72, label-hops 40, residents 30, ending 30, survey 26, beam-blue 26, run2 23,
+     last-landing 22, traces 19, skills-4cde-landing 16, signals 12, skills-4cde-sentry 11, desk 4.
+9. **The balance re-read** (§3.3.4, §4 "Coordination in Batch B"): `docs/phase3/impl/balance-report-playtest1.md`, the quick
+   report with a before / after Batch B table against slice 8's. In short: MERGE affordable for COMPETENT 67% → 100% (over
+   the band; charge at the choice, median 15 → 44); the arrival charge on VESPER, CORMORANT and LAST LIGHT about 23 → 53
+   (it was link-bound; KESTREL and earlier unchanged); SLOPPY wins 96% → 100% (OD 103 still open); AUTODROP's path pays
+   −0.11 → +0.20, in the band for the first time. SENTRY's worth fell to 0.01, and `traces-sweep` now fails its own gift
+   check (a CONTACT gift ship moved 16, over 15); neither was traced. MERGE's price is not changed here: OD 174 asks for an A/B
+   at 20, 24 and 30 first.

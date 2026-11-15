@@ -931,3 +931,7 @@ track as recommended. The new calls B-DROP made:
 174. **The link slope is no longer a lever.** BUILT with OD 131. OD 108's next lever ("the link slope", R3) went with the
      link. The worked route on seed 7 (`map/arm-parity`'s strip-following kid) now ends won-merge, not won-purge: with all
      its charge crossing, the unit reaches LAST LIGHT with MERGE's 16. The lead re-reads MERGE's price after Batch B.
+     - Re-read at B-ORDER's merge (`docs/phase3/impl/balance-report-playtest1.md`): MERGE affordable, COMPETENT 67% → 100%
+       (HIGH, band 50–85%), LITERAL 67% → 50%; COMPETENT charge at the choice, median 15 → 44; arrival charge on ships 4–6
+       about 23 → 53. MERGE stays 16 for now, **[FRAN]**: even 20 would leave every COMPETENT run able to pay. Next: an
+       A/B of MERGE_COST_CHARGE at 20, 24 and 30 (`tests/unit/balance/ab.mjs`) before choosing.
