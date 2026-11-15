@@ -56,7 +56,7 @@ check(`…and every ship's built world past ARES-VII (its ship slices from a bea
 // of src/ at 20 (tests/unit/balance/ab.mjs) still gives de4d1e6da04d568e.
 // Playtest 1 B-VOICE re-recorded it again (it was 8ceb50b18060dcb5): the log holds the moved and cut lines (CONTROL's
 // official words, PAL's quips, the capture and orbit cheers once a run, so the director's done list too). Words and the
-// done list only; the arm, the ship slices and every outcome are as before (the two digests above did not move).
+// done list expected; the arm's and the ship slices' digests above did not move (outcomes not separately re-checked).
 const PINNED_RUN = '533b85a68ae903d8';
 const REQUESTS: readonly (RepoFileId | null)[] = ['mv', 'rm', 'swap', 'cp', null];
 const h = createHarness11(1, { soulsFound: false });
