@@ -935,3 +935,24 @@ track as recommended. The new calls B-DROP made:
        (HIGH, band 50–85%), LITERAL 67% → 50%; COMPETENT charge at the choice, median 15 → 44; arrival charge on ships 4–6
        about 23 → 53. MERGE stays 16 for now, **[FRAN]**: even 20 would leave every COMPETENT run able to pay. Next: an
        A/B of MERGE_COST_CHARGE at 20, 24 and 30 (`tests/unit/balance/ab.mjs`) before choosing.
+
+## Playtest 1, Batch C (C-SITES)
+
+175. **When a found site can be opened as a new LZ.** BUILT, **[FRAN]** (OD 142, plan §3.13, note 18). The SITES pill offers
+     `OPEN AS LZ-C (1,200)` once no LZ can move onto the site and at least one is held there by the landing (pods down, a pod
+     falling to it, its window open); the others may be too big for it. §3.13 asked that every refusal be one of those; on
+     CORMORANT that would never open a ROOM-4 site while LZ-A needs 5. Nothing opens in flight. SURVEY v1 may open a site
+     blind (`GROUND ?`), as it moves an LZ blind; §3.13 said "rated". Up to 4 LZs; the commit holds a Core thread for 2 AI s
+     after the LZ stands (it pre-empts SURVEY's own thread). Alternatives: require v2's rating; open before the landing too.
+176. **An opened LZ is planned 0, with its site's ROOM as its count.** BUILT. Every pod sent there is in plan up to the room
+     (full points), the LANDING REPORT's row reads `LZ-C 200 · OPENED ON SITE 5` (no `/ count`, never SHORT), and CONTROL's
+     LZ whose pods went there still reads SHORT against its own count (`LZ-B 600 / 800 · 200 SHORT` over `LANDED 1,800 /
+     1,800`), **[FRAN]**: the headline is right, the row may read as a miss. Option: credit an LZ's shortfall that an opened LZ
+     took (`· 200 TO LZ-C`). "Planned 0" is derived (an LZ CONTROL set has its own guess among the sites), so no save change.
+177. **AUTODROP v3 with an opened LZ serves three tiers.** BUILT. CONTROL's LZs on ground not known bad, then the opened LZs,
+     then any LZ on ground known ROCKY or WET; the plan is complete when every pod that fits some LZ is in a count row, and an
+     opened LZ is never short. With no opened LZ the plan is unchanged. Not swept (no balance suite opens sites).
+178. **The site labels say what a site is for.** BUILT (Q18's words). The NAV PLOT's and the GROUND TRACK's labels read
+     `SITE 4 · MOVE AN LZ HERE` **while** a move is possible (Q18 said "until"), `SITE 4 · OPEN AS LZ-D` while it can be opened
+     instead, and the bare name otherwise or on ground known bad. On a phone the plot carries up to four such labels; the
+     shots (`tests/.out/c-sites/`) read, but the plot is busy. Option: the action only on the selected or nearest site.

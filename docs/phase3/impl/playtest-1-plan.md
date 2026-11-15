@@ -1508,3 +1508,96 @@ reports, and what the whole of Batch B measured:
    −0.11 → +0.20, in the band for the first time. SENTRY's worth fell to 0.01, and `traces-sweep` now fails its own gift
    check (a CONTACT gift ship moved 16, over 15); neither was traced. MERGE's price is not changed here: OD 174 asks for an A/B
    at 20, 24 and 30 first.
+
+## Deviations (C-SITES)
+
+Track C-SITES (note 18, Q18, §3.13, OPEN-DECISIONS 142; A-LAND's leftovers), built on `d61fca6` (Batches A and B merged).
+§3.13 is built: a found site can be opened as a new LZ from the SITES window's pill (`OPEN AS LZ-C (1,200)`), up to 4 LZs,
+and is then an LZ like any other: the drop cache, AUTOBURN v3's aim and AUTODROP v3's plan re-key on `sitesRev`, the
+landing waits on its windows (a HARD stop for the kid's held [F], a WAIT one for an armed controller), and its pods score by
+the normal rules. A-LAND's two leftovers are in: the site labels and the strip flash for a refused move. Where the build
+differs, and why:
+
+1. **When OPEN is offered** (OPEN-DECISIONS 175). §3.13: "no existing LZ can move there (every refusal is `pods-down`,
+   `falling` or `window-open`)". Built: no LZ can move there, **and at least one** is held by the landing (`pods-down`,
+   `falling`, `falling-under` or `window-open`); the others may refuse for their own size (`too-small`). On CORMORANT a site
+   of ROOM 4 is too small for LZ-A (5) whatever happens, so the literal rule would never open it once LZ-B is pinned. In
+   flight no LZ is pinned, so nothing opens before the landing (an LZ too big for a site stays the move's refusal). The site's
+   own refusals (`closed`, `offline`, `not-found`, `wreck`, `taken`, `landing-over`) come first, then `can-move` (no OPEN
+   pill: the move is the answer), `not-held` (no OPEN pill), `lz-cap`, `falling-under` (a pod already falling would land in
+   the new LZ: the move's review-B1 rule) and `no-thread`; the last three dim the OPEN pill with their words
+   (`survey-model.ts openRefusal`, `OpenRefusal`).
+2. **"Rated" is not required.** §3.13 says "a found, rated site". SURVEY v1 can open a found site blind (`GROUND ?`), as v1
+   moves an LZ blind: rating is v2's reveal, and a v1 kid has the same note-18 question. A ROCKY or WET site opened blind
+   lands hard, as a move onto one does.
+3. **The new LZ's count is its site's ROOM; "planned 0" is derived** (OPEN-DECISIONS 176). `LzState` has one count, which is
+   also what decides 'lz' against 'mislanded' (`classifyLanding`), so the opened LZ takes `pods = site.roomPods`: every pod
+   sent there is in plan up to the room. "Planned 0" is read, not stored: an LZ CONTROL set has its own guess among the sites
+   (`guess-C` for LZ-C), an opened one does not (`landing-rules.ts lzOpened`, `lzPlannedPods`). So the save is untouched
+   (below). The LANDING REPORT's row for it counts 0 (`LzResult.count`), and that 0 is also how the next desk's SHIP CARD
+   knows it from the ship's tally (`POOR · LZ-C OPENED`).
+4. **The cost.** The LZ stands at once and the commit then holds a Core thread for `SURVEY_OPEN_COMMIT_SEC` (2 AI s; new
+   `tuning.ts` block `C-SITES`, with `SURVEY_OPEN_MAX_LZS` 4). §3.13 left open whether the LZ waits for the commit; at once,
+   a window opening a second later can use it, and the cost is still felt (a thrust cut, one op fewer). The claim pre-empts
+   (it takes SURVEY's own yieldable thread first, as AUTOBURN's and AUTODROP's do), and SURVEY steps aside while it runs. With
+   every thread busy and none yieldable the click is refused `NO SPARE THREAD — × AN OP` (checked at the click only:
+   the pill's model is pure).
+5. **The strip flash** (A-LAND's leftover). A refused pill is no longer `disabled` (a disabled button takes no click): it
+   is dimmed with `aria-disabled`, and its click emits `'refused'` with the words built for it, `SITES|LZ-B HAS PODS DOWN —
+   OPEN SITE 5 AS LZ-C` (the way out is named when the site can be opened; else the refusal alone). The words are per click,
+   so they cannot be one of `script.ts REFUSAL_LINES`' keys: `director.ts` reads such a reason through a small
+   `refusalLine` (REFUSAL_LINES first, then `sites-text.ts sitesFlashLine`). The 'refused' event also buzzes
+   (`audio-cues`), so the window's own `play('buzz')` is gone.
+6. **The site labels** (Q18's words, A-LAND's leftover; OPEN-DECISIONS 178). Q18 says the labels read `SITE 4 · MOVE AN LZ HERE` "until a move is
+   possible"; built as **while** a move is possible (the words invite the move), `SITE 4 · OPEN AS LZ-D` while the site can be
+   opened instead, and the bare name (`SITE 4`, rated `SITE 4 ★★★` on the GROUND TRACK) when neither, or when its ground is
+   known ROCKY or WET (drawn red, it should invite nothing; its pills still say what it can take). The NAV PLOT's label
+   stays unrated, as before. The SITES hint reads `CLICK A SITE TO OPEN IT AS A NEW LZ` once opening is the only thing a
+   site can do.
+7. **AUTODROP v3's plan with an opened LZ** (OPEN-DECISIONS 177). The counts now add up to more than the pods, so the
+   narrowest-first rule alone would hand the pods to whichever LZ is narrowest, the ROCKY one included, and the check line
+   could never read ✓. With an opened LZ standing, the LZs are served in three tiers: CONTROL's LZs on ground not known bad,
+   then the opened ones, then every LZ on ground known ROCKY or WET (each tier narrowest-first). The plan is complete when
+   every pod that fits some LZ is in a count row; an opened LZ is never short. `LandingPlan.short` carries the check line's
+   misses, which `landing-hud.ts autodropBayModel` now reads instead of working them out (one line; the file is not in
+   C-SITES' list). With no opened LZ every tier is 0: the plan, `complete` and the check line are as before.
+8. **The report's rows** (OPEN-DECISIONS 176). The opened LZ's row is `LZ-C 800 · OPENED ON SITE 5` (no `/ count`, never
+   SHORT; good once a pod is in, muted otherwise), and the SITES row `LZ-C · OPENED ON SITE 5 · ROOM 1,200 · WIDE · FLAT ★★★`.
+   CONTROL's LZ whose pods went to the opened one still reads SHORT (the e2e's CORMORANT: `LZ-B 600 / 800 · 200 SHORT · ROCKY
+   · 3 HARD` over `LANDED 1,800 / 1,800`): its count is its plan.
+9. **Events.** The open emits `'lz-moved'` with `from: null` (the stamp `LZ-C → SITE 5`, the site sound, SITES' selection),
+   so `events.ts` widens `from` to `string | null` (no listener reads it). No move is recorded (`survey.moves`), and the
+   TERMINAL types `> SURVEY: LZ-C OPENED ON SITE 5 · ROOM 1,200`. PAL says nothing new.
+10. **An opened LZ can be moved** like any LZ (no pods down yet, the rules of a move). The ship's record then reads that
+    move's `from` as the LZ's guess (`surveyNetOutcome`), so the card may say `LZ-C MOVED · LZ-C OPENED`. Rare and harmless;
+    not special-cased.
+11. **AUTOBURN v3** reads an opened LZ as one more LZ with room: its landing orbit may go lower to give it a sure window
+    (`autoburn-v3.ts`, re-keyed by `sitesRev`). Not measured; no balance suite opens sites.
+12. **The save: no change** (no v11). LZs are a list at rest (`checkLz` per entry, `likeReference` for the slice), SHIP DONE's
+    world payload carries the landing with its three or four LZs and decodes (the suite checks it), `ShipResult.lzs`
+    (`list(anyRecord)`) gains a row, and `lzOpened` needs no field. The landing itself is not a save point, and the commit's
+    thread is module state let go at the ship's end and a world reset (`survey.ts surveyShipEnd`, `onWorldReset`).
+13. **Files past §4's list**, each for its block: `survey-hud.ts` (SITES' models: the pills, labels, hint, card and report
+    tail; Track SITES' file from slice 6), `styles/survey.css` (the pill rules), `landing-report.ts` (the opened row),
+    `landing-hud.ts` (item 7), `director.ts` (item 5), `events.ts` (item 9), `tuning.ts` (item 4's block), and the tests:
+    `support/words.test.ts` (SITES_WORST gains `max` and `landed`), `survey/ui-models.test.ts` (the GROUND TRACK labels may
+    carry the action; the card fixtures carry `lzs`), `e2e/scenarios/survey.mjs` (part 4) and `e2e/run.mjs` (its line).
+14. **Tests.**
+    - New suite `survey/open-site` (29 checks, about 6 s alone, two flyOnce setups): no OPEN in flight and the `· MOVE AN LZ HERE`
+      labels; LZ-A and LZ-B pinned by a pod each, SITE 5's refused pills with their flashes and `OPEN AS LZ-C (1,200)`, the
+      director showing a refused pill's flash; the open (LZ-C's geometry, its ROOM as its count, `lzOpened`, sitesRev,
+      `'lz-moved'` from null, the TERMINAL line, the commit's thread for 2 AI s); `taken`, `lz-cap`, `falling-under`,
+      `no-thread`; the held [F] stopping HARD at `LZ-C WINDOW`, the kid's 4 pods there soft and in plan at full points; the
+      report row, SHIP DONE's save with three LZs, the card; AUTODROP v3's plan (LZ-A ×4, LZ-C ×3, none to the known-ROCKY
+      LZ-B, complete) flown by one [G] and a held [F].
+    - e2e `survey` gains part 4 at 1440 × 900 and 390 × 844 (the phone's SITES tab): the pins, the pills, the refused pill's
+      strip flash, the OPEN pill, the hold to LZ-C's window, a pod landed there, the report row. Shots
+      `survey-4-<size>-*.png` (copied to `tests/.out/c-sites/`). The e2e driver keeps [F] down while the game's hold runs
+      (the strip's row may change under it: `DROP UNCERTAIN` has no [F] tail) and clicks a refused pill with `force`
+      (Playwright waits on `aria-disabled`).
+    - **Runs.** Typecheck and the tests' tsc clean. The quick unit tier once: **234 passed, 0 failed**, 15 balance-only
+      skipped; the tier took 384 s against its 300 s budget, on a machine shared with C-UNROLL's run (load 3–8);
+      `survey/open-site` 13.5 s there. e2e `survey` alone: **40/40** (671 s), after one run whose phone part lost its page
+      mid-loop (`Target page … has been closed`, under the same load) and passed on the re-run unchanged.
+15. **Not C-SITES', left for their owners:** `AGENTS.md`'s "What's built" (a C-SITES line for the lead), the playtest
+    checklist (no Batch C items yet: try `OPEN AS LZ-C` on CORMORANT), and OD 176's report wording.
