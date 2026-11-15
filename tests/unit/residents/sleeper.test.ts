@@ -37,7 +37,7 @@ import { notableEvents } from '@systems/lineage';
 import { targetRefusal, deleteQuestion } from '@systems/tool-targets';
 import { freeSegment, mergeAdjacentFree, segmentStarts, replaceRange, newSegId } from '@systems/memory-ops';
 import { wallSpot, sleeperJobsNow, wakeSleeperNow, pickSleeperJob } from '@systems/resident-sleeper';
-import { actionScan, actionDelete, actionMove } from '@state/actions';
+import { actionScan, actionDelete, actionMove, setIntegrity } from '@state/actions';
 import { driversInMemory, isInfected, isInfectable } from '@state/selectors';
 import { RESIDENT_SEG_IDS, SLEEPER_JOB_KEYS } from '@data/residents';
 import { RESIDENT_TEXT, RESIDENT_REFUSAL, pinnedRefusal } from '@data/resident-text';
@@ -67,6 +67,12 @@ h.newRun(SEED);
 startRun(h.store, SEED, FIRST_RUN_LINEAGE);
 if (!receiveTransmission(h.store)) throw new Error('sleeper: not on the title');
 until(() => st().run.phase === 'flight', 30);
+// Playtest 1 (C-UNROLL): ARES-VII's SELF-CHECK found the ENGINE I/O FAULT; the kid repairs it there (its first lesson), so the
+// unit does not carry a 38% engine to CURLEW.
+h.store.update((draft) => {
+  for (const block of draft.memory) if (block.role === 'engine-io' && 'integrity' in block) setIntegrity(block, 100);
+  draft.ui.memoryRev++;
+});
 for (const slot of [1, 7]) {
   h.store.update((draft) => { draft.run.phase = 'report'; });
   send(h.store, slot);

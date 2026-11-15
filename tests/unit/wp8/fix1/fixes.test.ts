@@ -82,7 +82,7 @@ function transmit(): void {
 
 function boot(): void {
   receiveTransmission(h.store);
-  h.stepUntil(() => state().run.phase === 'flight', 20);
+  h.stepUntil(() => state().run.phase === 'flight', 30);
 }
 
 // --- A reload two seconds into run 1 ------------------------------------------------------------------------
@@ -110,7 +110,7 @@ h.store.mutate((d) => { d.orbit.x = d.level.planet.R + 20; d.orbit.y = 0; d.orbi
 h.stepUntil(() => h.status() !== 'approaching', 10);
 check('…a crash on ARES-VII is still `That was a simulation. :) Again.`', lossPlan(state()).kind === 'simulation');
 continueAfterLoss(h.store);
-h.stepUntil(() => state().run.phase === 'flight', 20);
+h.stepUntil(() => state().run.phase === 'flight', 30);
 check('the simulation retry is not a second ship: nothing learned yet', !stored().tutorialDone && state().run.shipIndex === 0);
 
 // --- The first lock teaches it; the next run is a returning unit ------------------------------------------------
@@ -127,7 +127,7 @@ receiveTransmission(h.store);
 h.stepFor(0.3);
 check('ship 1\'s boot: no ghost beat, the strip offers the skip ([SPACE])', !bootSkipWaits(state())
   && state().director.shown?.text === LINES.booting() && (state().director.shown?.keys.includes('SPACE') ?? false), JSON.stringify(state().director.shown));
-h.stepUntil(() => state().run.phase === 'flight', 20);
+h.stepUntil(() => state().run.phase === 'flight', 30);
 h.stepFor(0.3);
 // Playtest 1 (B-VOICE): the hello is PAL's (in this run's preset: every preset names the unit), the licence CONTROL's.
 const control = log().filter((entry) => entry.speaker === 'control' || entry.speaker === 'companion').map((entry) => entry.text);
@@ -153,7 +153,7 @@ h.stepUntil(() => !bootSkipWaits(state()), 12);
 h.stepFor(0.1);
 check('…once it has had its say, the strip offers the skip again (at once)', state().director.shown?.text === LINES.booting() && (state().director.shown?.keys.includes('SPACE') ?? false),
   JSON.stringify(state().director.shown));
-h.stepUntil(() => state().run.phase === 'flight', 20);
+h.stepUntil(() => state().run.phase === 'flight', 30);
 
 // --- RUN END's own write fails: OFFLINE before RUN END paints ---------------------------------------------------
 // To ship 2 by EMERGENCY, then on by another each ship, to the route's final ship, where the Core eaten ends the run:
@@ -164,7 +164,7 @@ while (state().run.map.route.length < route.length) {
   h.stepUntil(() => h.status() !== 'approaching', 10);
   continueAfterLoss(h.store);
   transmit();
-  h.stepUntil(() => state().run.phase === 'flight', 20);
+  h.stepUntil(() => state().run.phase === 'flight', 30);
 }
 failWrites = true;
 let statusAtEnd: string | null = null;

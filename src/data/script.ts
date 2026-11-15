@@ -84,8 +84,10 @@ import { TRACE_TEXT } from '@data/trace-text';
 import type { TraceBootLine } from '@/types/trace';
 import { traceBootLines, traceBootLineText } from '@systems/trace-gifts';
 import { faceBootLines, lineageControlLine, strangerBootLine, type LineageBootLineKind } from '@systems/lineage-boot';
+import type { CheckStage } from '@/types/self-check';
+import { SELF_CHECK_TEXT } from '@data/self-check-text';
 import {
-  MIND_CLEAR_IDLE_SEC, MAX_LINE_CHARS, NAME_MAX_CHARS, ENGINE_FAULT_AFTER_TAC, ENGINE_FAULT_INTEGRITY,
+  MIND_CLEAR_IDLE_SEC, MAX_LINE_CHARS, NAME_MAX_CHARS, ENGINE_FAULT_INTEGRITY,
   ENGINE_WEAK_MAX_SHOWN_SEC, COUNTDOWN_RED_TAC,
   SEG_NAME_MAX_CHARS, EATEN_ALARM_CLEAR_SEC, WALL_MIN_BLOCKS, FAMILY_MAX_CHARS, COLONIST_LINE_MAX_CHARS,
   WALL_RULE_SHOW_SEC, EMERGENCY_EXTRA_HITS, CORE_RESET_INTEGRITY, BEAM_OUT_EXTRA_HITS,
@@ -393,8 +395,10 @@ const BEAM_OUT_HOPELESS_WORDS: Readonly<Record<Hopeless, string>> = {
 export const LINES = {
   // 05 §3.12 (phase 3 slice 3a): `UNIT-047 · YEAR 2300 · FINAL SHIP 180 LY OUT`.
   titleUnit: (vars: LineVars): string => MAP_TEXT.title.line(unitName(vars.unit), vars.year, vars.distanceLy),
-  // The strip during the boot.
-  booting: (): string => 'RECEIVING TRANSMISSION — click or [SPACE] to skip',
+  // The strip during the boot: the SELF-CHECK's stage (playtest 1, C-UNROLL), and while it holds on the first of a kind, the
+  // click that lets it go on.
+  booting: (stage: CheckStage = 'receive', held = false): string =>
+    `${SELF_CHECK_TEXT.stage[stage]} — ${held ? SELF_CHECK_TEXT.hold : SELF_CHECK_TEXT.skip}`,
   // A returning unit's boot while its ghost types (systems/boot.ts refuses a skip until it is done).
   bootingGhost: (): string => 'RECEIVING TRANSMISSION — someone is typing…',
   paused: (): string => 'PAUSED — press [P] to resume',
@@ -785,18 +789,18 @@ export const TRANSMIT_TEXT = {
 
 // --- Scripted file damage (§5.1) ---------------------------------------------------------------
 
-// A fault that strikes one file once, on one ship, after the engine has delivered a given amount
-// of thrust (systems/faults.ts applies it; its id goes into director.done like a beat's).
+// A fault one file arrives with, on one ship (systems/faults.ts finds it; its id goes into director.done like a beat's).
+// Playtest 1 (C-UNROLL, plan §3.5, OPEN-DECISIONS 139): it no longer strikes mid-burn. It is arrival damage, found by the
+// boot's SELF-CHECK at its SHIP stage (`38% · ENGINE WEAK`), so the run's first line is the REPAIR lesson.
 export interface FileFault {
   id: string;
   shipIndex: number;
   role: SegmentRole;
-  afterThrustTac: number;
   toIntegrity: number;
 }
 
-// Ship 1, ARES-VII: the ENGINE I/O FAULT. Two seconds into the first burn the engine crunches and
-// Engine I/O falls to failing: the moment the two screens first touch, and the reason to TAB.
+// Ship 1: the ENGINE I/O FAULT. Engine I/O arrives at failing: the moment the two screens first touch, and the reason to
+// TAB. (The id keeps its name: the director's done list is saved under it.)
 export const ENGINE_FAULT_ID = 'engine-io-fault';
 
 export const FILE_FAULTS: readonly FileFault[] = [
@@ -804,7 +808,6 @@ export const FILE_FAULTS: readonly FileFault[] = [
     id: ENGINE_FAULT_ID,
     shipIndex: 0,
     role: 'engine-io',
-    afterThrustTac: ENGINE_FAULT_AFTER_TAC,
     toIntegrity: ENGINE_FAULT_INTEGRITY,
   },
 ];
@@ -1091,6 +1094,40 @@ export function bootLineTone(kind: BootLineKind): LineTone | null {
   return kind === 'receiver-closed' ? 'resident' : null;
 }
 
+// Playtest 1, C-UNROLL (plan §3.5): the SELF-CHECK stage each kind of line belongs to (systems/self-check.ts planSelfCheck
+// places it there, in plan order within its kind). RECEIVE: the sleep, the unpack, the host, the receiver. SELF: ECC's record,
+// the traces' gifts, the charge, a FIREWALL compiled, an overflow, a skill. SHIP: the ship's own arrival damage and a POOR
+// planet's site data. MANIFEST: the seeds, SENTRY's names, the deliveries, and the story (HOLLOW's reading line, the log key,
+// the mail, the lineage, HOLLOW's own line, which still closes the boot).
+const BOOT_LINE_STAGE: Readonly<Record<BootLineKind, CheckStage>> = {
+  sleep: 'receive', 'receiver-closed': 'receive', unpack: 'receive', board: 'receive', host: 'receive', receiver: 'receive',
+  'ecc-sleep': 'self', ecc: 'self', 'trace-gift': 'self', 'dish-wiped': 'self', 'dish-wild': 'self', charge: 'self',
+  firewall: 'self', overflow: 'self', skill: 'self',
+  scripted: 'ship', 'site-data': 'ship',
+  seeds: 'manifest', 'sentry-seed': 'manifest', delivery: 'manifest', reading: 'manifest', log: 'manifest', inbox: 'manifest',
+  face: 'manifest', 'lineage-control': 'manifest', stranger: 'manifest', hollow: 'manifest',
+};
+
+export function bootLineStage(kind: BootLineKind): CheckStage {
+  return BOOT_LINE_STAGE[kind];
+}
+
+// The lines the SELF-CHECK shows as marks on the strip instead of typing them (plan §3.5: the TERMINAL keeps at most six of
+// the unit's own lines a ship): what the crossing hit and ECC put back, the ship's own damage, the seeds, the deliveries, the
+// charge and the log key each name a file the sweep tags (the receiver's size is the strip's own header). They are still
+// said (their record in the log, their effects as they are said) but never typed (say.ts `mark`). The rest type: the sleep, the
+// unpack and host, a resident's closed receiver, site data, an overflow, a skill trained, the mail, the traces, and every
+// line in another voice. A TIGHT ship's charge line types when it says no charge came at all; SENTRY's FIREWALL line types
+// (what it compiled, or why not, is not a file the sweep found).
+export const BOOT_MARK_KINDS: ReadonlySet<BootLineKind> = new Set<BootLineKind>([
+  'receiver', 'ecc-sleep', 'ecc', 'seeds', 'sentry-seed', 'scripted', 'delivery', 'charge', 'log',
+]);
+
+export function bootLineTyped(kind: BootLineKind, state: Readonly<GameState>): boolean {
+  if (kind === 'charge' && zeroChargeArrival(state)) return true;
+  return !BOOT_MARK_KINDS.has(kind);
+}
+
 // A returning unit's ship-1 boot licenses REPAIR (§5.2; systems/boot.ts, at the host line): a fresh unit's boot that is
 // not the tutorial run's.
 export function bootLicensesRepair(state: Readonly<GameState>): boolean {
@@ -1180,13 +1217,6 @@ export function bootLine(kind: BootLineKind, state: Readonly<GameState>, vars: L
     }
   }
 }
-// The most a boot ever says (a later ship with the beam's seeds, arrival damage, an overflow, a skill trained, a log key
-// and HOLLOW's line; on the arm also the sleep, receiver and ECC-while-asleep lines, and since slice 3b up to
-// DELIVERY_BOOT_LINES_MAX delivery lines, the INBOX line and HOLLOW's reading line; since slice 4d up to three SENTRY seed
-// lines and its FIREWALL line: foundation review m4; since slice 5 the RECEIVER CLOSED line; since slice 6 the SITE DATA POOR
-// line; since slice 7c six more: up to three trace lines on a final ship that is also STAY's gift ship (MERGE's thread, the
-// wild dish, the supply packet), two face lines and CONTROL's lineage line).
-export const BOOT_LINE_MAX = 30;
 
 // --- Beats: lines spoken on a moment (§6.3) ---------------------------------------------------
 
@@ -1364,6 +1394,15 @@ function lowestPointNear(ctx: DirectorCtx): boolean {
   return secUntil(ctx.pred, periInSec, ctx.state.clock.tSec) / ctx.state.level.tacticalWarp < COUNTDOWN_RED_TAC;
 }
 
+// Playtest 1 (C-UNROLL, plan §3.5): ship 1's opening crash course before any burn (DON'T HIT THE PLANET, not yet KEEP
+// HOLDING). The ENGINE I/O FAULT is found by the boot's SELF-CHECK now, so the weak engine is known from the first tick:
+// the REPAIR lesson goes first, against the IMPACT clock (163 s on ARES-VII; a 38% burn clears it if it starts by ~140 s, and
+// ENGINE WEAK steps aside after ENGINE_WEAK_MAX_SHOWN_SEC for a kid who flies on instead).
+function openingCrash(ctx: DirectorCtx): boolean {
+  const id = ctx.flight?.id;
+  return id === 'F4-hold' || id === 'F4-press';
+}
+
 export const ENGINE_BEAT_RULES: readonly GuideRule[] = [
   {
     id: 'tut-engine-weak',
@@ -1375,11 +1414,14 @@ export const ENGINE_BEAT_RULES: readonly GuideRule[] = [
     // Only the weak engine: a dead one already has its own line (F2: ENGINE NOT RESPONDING).
     activeWhen: (ctx) => isFlying(ctx) && firstRun(ctx) && ctx.mode === 'tools' && engineNeedsRepair(ctx, ['failing'])
       && !lowestPointNear(ctx),
-    // The opening OUT/IN correction still short of its target: the flight can wait a few seconds.
-    preempts: (ctx) => ctx.flight?.id === 'F6-keep',
+    // The opening OUT/IN correction still short of its target: the flight can wait a few seconds. Since C-UNROLL also the
+    // opening crash course before the first burn (openingCrash): the lesson comes first.
+    preempts: (ctx) => ctx.flight?.id === 'F6-keep' || openingCrash(ctx),
     text: () => 'ENGINE WEAK — press [TAB] to look inside',
     keys: ['TAB'],
-    doneWhen: (ctx) => ctx.mode === 'memory' && engineNeedsRepair(ctx),
+    // Playtest 1 (C-UNROLL): in the flight only. The SELF-CHECK finds the fault in blue, during the boot, which is not the
+    // kid looking inside for it.
+    doneWhen: (ctx) => isFlying(ctx) && ctx.mode === 'memory' && engineNeedsRepair(ctx),
   },
   {
     id: 'tut-repair-engine',
@@ -1388,6 +1430,8 @@ export const ENGINE_BEAT_RULES: readonly GuideRule[] = [
     once: true,
     activeWhen: (ctx) => isFlying(ctx) && firstRun(ctx) && ctx.mode === 'memory' && ctx.state.run.licences.includes('repair')
       && engineNeedsRepair(ctx),
+    // C-UNROLL: in blue during the opening crash course too (its line would only say [TAB] back).
+    preempts: openingCrash,
     text: () => `PICK UP ${TOOL_WORD.repair} → CLICK ENGINE I/O`,
     highlight: (ctx) => repairStepTarget(ctx.state.ui.activeTool?.kind ?? null, 'engine-io'),
     // The repair of the faulted file is running (see the header: not a repair before the fault).
@@ -1400,6 +1444,7 @@ export const ENGINE_BEAT_RULES: readonly GuideRule[] = [
     once: true,
     activeWhen: (ctx) => isFlying(ctx) && firstRun(ctx) && ctx.mode === 'memory' && ctx.done.has(ENGINE_FAULT_ID)
       && ctx.done.has('tut-repair-engine') && engineWorks(ctx) && (ctx.flight?.keys.includes('SPACE') ?? false),
+    preempts: openingCrash,
     text: () => '[TAB] BACK — hold [SPACE]',
     keys: ['TAB', 'SPACE'],
     doneWhen: (ctx) => ctx.mode === 'tools' && ctx.done.has(ENGINE_FAULT_ID) && ctx.done.has('tut-repair-engine'),
@@ -1412,7 +1457,7 @@ export const ENGINE_BEAT_RULES: readonly GuideRule[] = [
     urgency: 'now',
     maxShownSec: ENGINE_WEAK_MAX_SHOWN_SEC,
     activeWhen: (ctx) => isFlying(ctx) && !firstRun(ctx) && engineNeedsRepair(ctx, ['failing']) && !lowestPointNear(ctx),
-    preempts: (ctx) => ctx.flight?.id === 'F6-keep',
+    preempts: (ctx) => ctx.flight?.id === 'F6-keep' || openingCrash(ctx),
     text: () => `ENGINE WEAK — ${TOOL_WORD.repair} ENGINE I/O`,
     highlight: (ctx) => (ctx.mode === 'memory' ? repairStepTarget(ctx.state.ui.activeTool?.kind ?? null, 'engine-io') : null),
     doneWhen: (ctx) => ctx.done.has(ENGINE_FAULT_ID) && ctx.caps.engine.offline === 'repairing',

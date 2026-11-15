@@ -100,7 +100,7 @@ check('run 2 after UNIT-047 was lost at CORMORANT: UNIT-048, a ghost to come, a 
   && route.length >= 5 && layerOf(route.at(-2)!) === layerOf(CORMORANT_SLOT), `${ghost} · ${route.join('-')}`);
 receiveTransmission(h.store);
 check('ship 1\'s boot does not wait for a ghost (the strip offers the skip)', !bootSkipWaits(s()));
-h.stepUntil(() => s().run.phase === 'flight', 20);
+h.stepUntil(() => s().run.phase === 'flight', 30);
 check('…ARES-VIII\'s boot: no ghost, nothing from HOLLOW (05 §3.5: never at ship 1)', !said().some((entry) => entry.speaker === 'hollow') && !s().run.ghostSpoken
   && lines(0)[0]?.text === '> UNPACKING UNIT-048 ... 100%', lines(0)[0]?.text);
 // Every ship between ship 1 and the boarding one (HALCYON and KESTREL on the classic five; one check each).
@@ -179,7 +179,7 @@ check('the boarding ship\'s first fight: the ghost spoke at this boot, but HOLLO
 // --- Run 2 after a loss on LAST LIGHT: the boarding ship's notice comes before the ghost, so it is `> ...048?` -------------
 newRun(32, 'flagship-lost', 19, CORMORANT_SLOT);
 receiveTransmission(h.store);
-h.stepUntil(() => s().run.phase === 'flight', 20);
+h.stepUntil(() => s().run.phase === 'flight', 30);
 for (let depth = 2; depth < route.length - 1; depth++) {
   crashOn();
   h.stepUntil(() => s().run.phase === 'flight', 30);

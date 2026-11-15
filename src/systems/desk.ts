@@ -6,7 +6,7 @@ import type { NoiseCloud, ShipKind, DeskWindowId, Hop, RoomFit, ShipSummary, Run
 import type { LinkNoise } from '@/types/threat';
 import type { RepoFileId } from '@/types/repo';
 import type { ColonyRecord, Departure, UnitTrail } from '@/types/lineage';
-import { currentSlot, shipSummaryAt, worldSlotOf, isEndSlot } from '@systems/map-run';
+import { currentSlot, shipSummaryAt, worldSlotOf } from '@systems/map-run';
 import { armShipAt } from '@systems/map-streams';
 import { unitTrailOf, olderColonies } from '@systems/lineage';
 import { unitName } from '@data/hollow-text';
@@ -21,7 +21,6 @@ import { unitArrival } from '@systems/arrival-preview';
 import { deliveriesForHop, hopOutlook, recommendation, setRequest, type OutlookEntry } from '@systems/repository';
 import { inboxUnread } from '@systems/inbox';
 import { playsTutorial } from '@systems/meta';
-import { shipsLeft } from '@systems/map-route';
 import { mapFacts } from '@systems/map-facts';
 import { planThreat, threatInputFor } from '@systems/threat-plan';
 import { finalTraceInput } from '@systems/traces';
@@ -176,8 +175,8 @@ export interface ChartModel {
 // UP HERE`). 3c adds 'history' (`REPORTED HOME` / `PASSED OVER ONCE`, from run 2) and 'trail' (the last unit's mark at
 // this ship's world: what the hover says on a desktop, readable on a phone, whose chart has no hover).
 export interface CardRow {
-  key: 'problems' | 'resident' | 'memory' | 'fit' | 'planet' | 'site' | 'lzs' | 'nogo' | 'beam' | 'noise' | 'range'
-    | 'noswap' | 'deliveries' | 'threat' | 'norm' | 'only' | 'run' | 'history' | 'trail' | 'trace' | 'salvage';
+  key: 'problems' | 'resident' | 'memory' | 'fit' | 'planet' | 'site' | 'beam' | 'range'
+    | 'noswap' | 'deliveries' | 'threat' | 'norm' | 'only' | 'history' | 'trail' | 'trace' | 'salvage';
   label: string;
   value: string;
   tone: 'plain' | 'good' | 'warn';
@@ -511,7 +510,8 @@ export function cardModel(state: Readonly<GameState>, slot: number): CardModel {
     const pick = state.run.leave.pick;
     const preview = unitArrival(state, { hop, threat: verdict, dropped: [], pick, deliveries: deliveriesForHop(state, from, slot, verdict) });
     fit = preview.fit;
-    row('fit', MAP_TEXT.card.fitLabel, preview.card, fitTone(fit));
+    // Playtest 1 (C-UNROLL): the room and the fit line are one row (`152 · COMPACT · YOU FIT`).
+    row('fit', MAP_TEXT.card.roomLabel, MAP_TEXT.card.room(layout.roomForUnit, ship.memoryClass, preview.card), fitTone(fit));
     // Playtest 1 (Q19): the +12 card taken says when this ship's room cannot take its charge whole (`+12 · ONLY 4 FIT`).
     const card = pickCharge(pick);
     const arrives = card > 0 && fit.word !== 'leave' ? cardArrives(fit, card) : card;
@@ -531,21 +531,21 @@ export function cardModel(state: Readonly<GameState>, slot: number): CardModel {
     && !outlook.some((entry) => entry.file === 'swap' && entry.rides)) {
     row('noswap', '', REPO_TEXT.card.noSwapInTime, 'warn');
   }
-  row('memory', MAP_TEXT.card.memoryLabel, MAP_TEXT.card.memory(layout.totalBlocks, ship.memoryClass, layout.roomForUnit));
+  // The room alone for a ship SET COURSE cannot go to (no fit line to give).
+  if (fit === null) row('memory', MAP_TEXT.card.roomLabel, MAP_TEXT.card.room(layout.roomForUnit, ship.memoryClass));
 
-  row('planet', MAP_TEXT.card.planetLabel, MAP_TEXT.card.planet(ship.terrain, FORGIVENESS_TEXT[ship.forgiveness].offSite));
-  if (ship.noGoWords.length > 0) row('nogo', MAP_TEXT.card.noGoLabel, MAP_TEXT.card.noGo(ship.noGoWords), 'warn');
-  // Slice 6 (R15): the SITE DATA row (Track SITES's model), and the LZ row's words by the site data this build plays.
+  // Playtest 1 (C-UNROLL): the ground, its LZs, what off-site pods score and the no-go zones are one LANDING row.
+  row('planet', MAP_TEXT.card.landingLabel, MAP_TEXT.card.landing(ship.terrain, FORGIVENESS_TEXT[ship.forgiveness].word, ship.lzCount,
+    siteDataOf({ site: ship.reserved?.site ?? 'good' }), ship.noGoWords), ship.noGoWords.length > 0 ? 'warn' : 'plain');
+  // Slice 6 (R15): the SITE DATA row (Track SITES's model).
   const site = surveyCardRow(state, slot);
   if (site !== null) row('site', site.label, site.value, site.tone);
-  row('lzs', MAP_TEXT.card.lzLabel, MAP_TEXT.card.lzs(ship.lzCount, siteDataOf({ site: ship.reserved?.site ?? 'good' })));
 
   if (hop !== null && hop.inRange) {
     const allowance = verdict === null ? null : seedAllowance(verdict, playsTutorial(state.run));
     // Slice 7c: the traces' seed rules into this ship (Track TRACE's, neutral until built), as the PACKET counts them.
     const seeds = allowance === null ? null : traceSeedAllowance(state, slot, allowance);
-    row('beam', MAP_TEXT.card.beamLabel, MAP_TEXT.card.beam(hop.distanceLy));
-    row('noise', '', MAP_TEXT.card.noise(hop.noise, MAP_TEXT.card.seeds(seeds)), hop.noise > 0 ? 'warn' : 'plain');
+    row('beam', MAP_TEXT.card.beamLabel, MAP_TEXT.card.beam(hop.distanceLy, hop.noise, MAP_TEXT.card.seeds(seeds)), hop.noise > 0 ? 'warn' : 'plain');
   } else if (hop !== null) {
     row('range', MAP_TEXT.card.beamLabel, MAP_TEXT.chart.outOfRange(hop.distanceLy), 'warn');
   }
@@ -570,12 +570,6 @@ export function cardModel(state: Readonly<GameState>, slot: number): CardModel {
   // Slice 7c (R38): the trace row (the last ending on the final ship, a gift ship's cache; Track CHART's, none until built).
   const trace = traceCardRow(state, slot);
   if (trace !== null) row('trace', trace.label, trace.value, trace.tone);
-
-  if (isReachable || slot === from) {
-    const [min, max] = shipsLeft(map, slot);
-    const at = slot === from ? map.route.length : depth;
-    row('run', '', isEndSlot(map, slot) ? MAP_TEXT.card.lastOfRun(at) : MAP_TEXT.card.shipOfRun(at, min, max));
-  }
 
   let schedule: string | null = null;
   let scheduleTone: CardModel['scheduleTone'] = 'plain';

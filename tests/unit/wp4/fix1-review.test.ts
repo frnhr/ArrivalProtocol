@@ -1,10 +1,12 @@
 // WP4 review fixes (round 1), headless. Each block is one finding's fix:
 // • F1 and F2 on the MIND screen name the repair (no [TAB]) and light the REPAIR chip, then the
 //   file; F1 has repairing / moving variants and asks for nothing when the plot file is missing.
-// • A repair of Engine I/O BEFORE the scripted fault leaves the tutorial intact for the fault.
+// • Playtest 1 (C-UNROLL): the ENGINE I/O FAULT is arrival damage the SELF-CHECK finds, so the flight's first line is the
+//   REPAIR lesson (ENGINE WEAK, then PICK UP REPAIR, then [TAB] BACK) against the IMPACT clock.
 // • ENGINE WEAK steps aside after ENGINE_WEAK_MAX_SHOWN_SEC (a kid who lets go and never TABs gets
 //   the flight back), never flips with ▼ TOO LOW, and never speaks with ▼ in the red.
-// • The fault waits out a crash course (a late but survivable opening burn still clears).
+// • A late opening burn on the found 38% engine still clears the planet (the fault no longer waits out the crash course: it
+//   was there from the start).
 // • The REPAIR licence waits out a pause and never comes after the flight ended.
 import { check, finish, TICK } from '../wp1/harness';
 import { stepUntil } from '../wp1-rules/flows';
@@ -127,24 +129,14 @@ function removeFile(role: Parameters<typeof getByRole>[1]): void {
   check('F2 dead in blue, REPAIR in hand: the Engine I/O file lit', h.shown()?.highlight === 'file-engine-io', JSON.stringify(h.shown()));
 }
 
-// --- A repair before the fault leaves the beat whole (correctness and experience) -------------------------
+// --- The fault found at the start: the run's first lines are the REPAIR lesson (playtest 1, C-UNROLL) ---------------
 {
   h.resetTo('flight');
+  settle();
+  check('the flight starts with Engine I/O at 38 (found) on the crash course, and the strip\'s first line is ENGINE WEAK — press [TAB]',
+    h.file('engine-io').integrity === 38 && done().includes(ENGINE_FAULT_ID) && getPrediction().outcome === 'impact'
+    && shownId() === 'tut-engine-weak' && h.shown()?.text === 'ENGINE WEAK — press [TAB] to look inside', `${shownId()}: ${h.shown()?.text}`);
   h.press('Tab');
-  for (let i = 0; i < 10; i++) h.step();
-  pickUpTool(h.store, 'repair');
-  applyTool(h.store, h.file('engine-io'), deps);
-  h.runOps();
-  h.press('Tab');
-  check('the curious kid repaired the 85% Engine I/O before the fault: no tutorial done', h.file('engine-io').integrity === 100
-    && !done().includes('tut-repair-engine') && !done().includes('tut-tab-back'), JSON.stringify(done()));
-  h.press('KeyD');
-  h.keyDown('Space');
-  stepUntil(h, () => done().includes(ENGINE_FAULT_ID), 20);
-  for (let i = 0; i < 4; i++) h.step();
-  check('…the fault still strikes (100 → 38) and ENGINE WEAK says so', h.file('engine-io').integrity === 38 && shownId() === 'tut-engine-weak', shownId());
-  h.press('Tab');
-  h.keyUp('Space');
   settle();
   check('…in blue: PICK UP REPAIR → CLICK ENGINE I/O with the chip lit', shownId() === 'tut-repair-engine' && h.shown()?.highlight === 'chip-repair',
     JSON.stringify(h.shown()));
@@ -152,7 +144,12 @@ function removeFile(role: Parameters<typeof getByRole>[1]): void {
   applyTool(h.store, h.file('engine-io'), deps);
   h.runOps();
   settle();
-  check('…and [TAB] BACK — hold [SPACE] after the repair', shownId() === 'tut-tab-back', shownId());
+  check('…and [TAB] BACK — hold [SPACE] after the repair', shownId() === 'tut-tab-back' && h.file('engine-io').integrity === 100, shownId());
+  h.press('Tab');
+  h.keyDown('Space');
+  stepUntil(h, () => getPrediction().outcome !== 'impact', 15);
+  h.keyUp('Space');
+  check('…the repaired engine clears the planet', getPrediction().outcome !== 'impact' && h.status() === 'approaching', h.status());
 }
 
 // --- ENGINE WEAK never stalls the flight (experience major) -----------------------------------------------
@@ -232,22 +229,20 @@ function removeFile(role: Parameters<typeof getByRole>[1]): void {
     && late.join() === 'tut-test' && other.length === 0);
 }
 
-// --- The fault waits out a crash course (correctness minor) -----------------------------------------------------
+// --- A late opening burn on the found engine still clears (correctness minor) ------------------------------------------
+// Since C-UNROLL the fault no longer waits out the crash course: the engine is at 38% from the start. ARES-VII falls for
+// 163 s; a burn at 38% that starts by about 140 s still clears it (a healthy engine: by about 151 s).
 {
-  for (const startWall of [151, 154]) {
+  for (const startWall of [120, 140]) {
     h.resetTo('flight');
     while (h.wall() < startWall && h.status() === 'approaching') h.step();
     h.press('KeyD');
     h.keyDown('Space');
-    let struckOnImpactCourse = false;
-    while (h.status() === 'approaching' && getPrediction().outcome === 'impact' && h.wall() < startWall + 30) {
-      h.step();
-      if (done().includes(ENGINE_FAULT_ID) && getPrediction().outcome === 'impact') struckOnImpactCourse = true;
-    }
+    while (h.status() === 'approaching' && getPrediction().outcome === 'impact' && h.wall() < startWall + 30) h.step();
     for (let i = 0; i < 20; i++) h.step();
     h.keyUp('Space');
-    check(`a late opening burn (from ${startWall} s): clears the planet, the fault strikes only once it has`, h.status() === 'approaching'
-      && done().includes(ENGINE_FAULT_ID) && !struckOnImpactCourse && h.file('engine-io').integrity === 38, h.status());
+    check(`a late opening burn (from ${startWall} s) at 38%: clears the planet`, h.status() === 'approaching'
+      && done().includes(ENGINE_FAULT_ID) && getPrediction().outcome !== 'impact' && h.file('engine-io').integrity === 38, h.status());
   }
 }
 

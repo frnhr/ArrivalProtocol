@@ -113,10 +113,14 @@ export function pageKit(page) {
 export function runKit(page, kit) {
   const { st, waitFor } = kit;
   // A circular orbit in the middle of the ring: the flight ends locked at once (the shortcut every scenario uses).
+  // Playtest 1 (C-UNROLL): ship 1's ENGINE I/O FAULT is found by its boot's SELF-CHECK, so pushing its id disarms nothing
+  // any more; the kid who flies ship 1 at once has done its first lesson, the engine's REPAIR (Engine I/O whole), so no 38%
+  // engine is carried on to the next ship.
   const lockInRing = (opts = {}) => st(({ sleep }) => {
     const ap = window.__ap;
     const s = ap.store.getState();
     const r = (s.level.ring.min + s.level.ring.max) / 2;
+    if (s.run.shipIndex === 0 && s.director.done.includes('engine-io-fault')) ap.setIntegrity('engine-io', 100);
     if (sleep) ap.store.update((d) => { d.hollow.phase = 'dormant'; });
     ap.store.mutate((d) => { d.orbit.x = r; d.orbit.y = 0; d.orbit.vx = 0; d.orbit.vy = Math.sqrt(s.level.planet.mu / r); d.director.done.push('engine-io-fault'); });
   }, { sleep: opts.sleep === true });

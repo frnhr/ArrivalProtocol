@@ -16,12 +16,6 @@ import { COMPANION_NAME } from '@data/companion-text';
 
 const yrs = (years: number): string => `${years} ${Math.abs(years) === 1 ? 'YR' : 'YRS'}`;
 const years = (n: number): string => `${n} ${Math.abs(n) === 1 ? 'YEAR' : 'YEARS'}`;
-// 2ND, 3RD, 4TH … (the card's `YOUR 3RD SHIP`).
-const ordinal = (n: number): string => {
-  const tens = n % 100;
-  const suffix = tens >= 11 && tens <= 13 ? 'TH' : (['TH', 'ST', 'ND', 'RD'][n % 10] ?? 'TH');
-  return `${n}${suffix}`;
-};
 // A waiting ship the units before passed over (playtest 1, Q4: "run" is the game's word, not the world's): `runsOnChart` 2
 // is once, and on its last run before it comes in on its own (`max`, MAX_RUNS_ON_CHART) it says it won't wait again.
 const passedOver = (runsOnChart: number, max: number): string => {
@@ -161,18 +155,19 @@ export const MAP_TEXT = {
     cost: (hits: number, land: number): string =>
       `${hits} ${hits === 1 ? 'HIT' : 'HITS'} ON THE WAY → ${land} ${land === 1 ? 'LANDS' : 'LAND'}`,
     problemsLabel: 'KNOWN PROBLEMS',
-    memoryLabel: 'MEMORY',
-    fitLabel: 'FIT',
-    planetLabel: 'PLANET',
-    noGoLabel: 'NO-GO',
-    lzLabel: 'LANDING',
+    // Playtest 1 (C-UNROLL, plan §3.5 "Where text can be cut"): the card's rows went from up to 20 to about 8. MEMORY and FIT
+    // are one ROOM row, PLANET, NO-GO and the LZs one LANDING row, the BEAM and its NOISE one row, and `YOUR 3RD SHIP` is gone
+    // (the chart's rings show the depth).
+    roomLabel: 'ROOM',
+    landingLabel: 'LANDING',
     beamLabel: 'BEAM',
     threatLabel: 'THREAT',
     onlyFromHere: 'ONLY FROM HERE · from any other ship you\'d be TOO LATE',
     here: (year: number): string => `YOU ARE HERE · ${year}`,
     debris: (rack: string): string => `DEBRIS · RACK ${rack}`,
     problems: (labels: readonly string[]): string => (labels.length === 0 ? 'none' : labels.join(', ')),
-    memory: (total: number, cls: MemoryClass, room: number): string => `MEMORY ${total} · ${cls} · ROOM FOR YOU ${room}`,
+    // The ROOM row: the unit's room on the ship and its memory class, and (for a ship SET COURSE can go to) the fit line.
+    room: (room: number, cls: MemoryClass, fit: string | null = null): string => `${room} · ${cls}${fit === null ? '' : ` · ${fit}`}`,
     // The fit line (systems/arrival-preview.ts, from roomFit): the charge that arrives with the fewest seeds, and the
     // room's worst case when seeds could take some (M2: on a TIGHT ship seeds come before the charge). Playtest 1 (note 20):
     // no link, so the room is the line's one limit.
@@ -185,21 +180,19 @@ export const MAP_TEXT = {
         case 'no-charge': return 'NO CHARGE ARRIVES';
       }
     },
-    planet: (terrain: string, offSite: string): string => `${terrain} · ${offSite}`,
-    noGo: (words: readonly string[]): string => `NO-GO ZONES: ${[...new Set(words)].join(', ')}`,
-    // Slice 6: a POOR planet's words are Track SITES's (data/sites-text.ts SITES_TEXT.card.lzs, 01 §3.15's
-    // `LZ: 3 · SURVEY NEEDED`); `site` is the site data this build plays (data/survey.ts siteDataOf).
-    lzs: (count: number, site: SiteData): string => (site === 'good' ? `LZ: ${count} · SET BY ARRIVAL CONTROL` : SITES_TEXT.card.lzs(count)),
-    // The BEAM row in two parts (02 §4's one line is 72 characters at its longest): the hop, then its noise and seeds.
-    // The hits and what ECC fixes are the lead's cost line (card.cost), so the BEAM row is the hop itself (playtest 1, note
-    // 20: its length; the link it had is gone).
-    beam: (ly: number): string => `${ly} LY`,
-    noise: (noise: LinkNoise, seeds: string): string => `NOISE ${NOISE_WORD[noise]}${noise > 0 ? ` · ${noise}` : ''} · ${seeds}`,
+    // The LANDING row: the terrain and how forgiving its ground is (GENTLE, STANDARD, ROUGH: the LANDING's own class line says
+    // what an off-site pod scores), its LZs (a POOR planet's words are Track SITES's, data/sites-text.ts SITES_TEXT.card.lzs,
+    // 01 §3.15's `LZ: 3 · SURVEY NEEDED`; `site` is the site data this build plays, data/survey.ts siteDataOf), and the no-go
+    // zones when it has some.
+    landing: (terrain: string, ground: string, lzs: number, site: SiteData, noGo: readonly string[]): string =>
+      [terrain, ground, site === 'good' ? `${lzs} ${lzs === 1 ? 'LZ' : 'LZs'}` : SITES_TEXT.card.lzs(lzs),
+        ...(noGo.length > 0 ? [`NO-GO: ${[...new Set(noGo)].join(', ')}`] : [])].join(' · '),
+    // The BEAM row: the hop, its noise and the seeds it may bring. The hits and what ECC fixes are the lead's cost line
+    // (card.cost); the link it had is gone (playtest 1, note 20).
+    beam: (ly: number, noise: LinkNoise, seeds: string): string =>
+      `${ly} LY · NOISE ${NOISE_WORD[noise]}${noise > 0 ? ` · ${noise}` : ''} · ${seeds}`,
     seeds: (range: { min: number; max: number } | null): string =>
       (range === null ? 'SEEDS: none' : range.max === range.min ? `SEEDS ${range.min}` : `SEEDS ${range.min}–${range.max}`),
-    shipOfRun: (depth: number, minLeft: number, maxLeft: number): string =>
-      `YOUR ${ordinal(depth)} SHIP · ${minLeft === maxLeft ? minLeft : `${minLeft}–${maxLeft}`} MORE TO THE FINAL SHIP`,
-    lastOfRun: (depth: number): string => `YOUR ${ordinal(depth)} SHIP · THE LAST`,
     timeline: (leave: number, arrive: number, approach: number): string =>
       `${leave} you leave · ${arrive} you get there · ${approach} ▲ approach`,
     // Slice 3c: the card's history row (`REPORTED HOME` / `PASSED OVER ONCE` / `PASSED OVER TWICE · IT WON'T WAIT AGAIN`).

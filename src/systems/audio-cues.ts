@@ -15,7 +15,7 @@ import { isThrustOn, engineAccel, thrustJitter } from '@systems/orbit-sim';
 import {
   CHIME_AFTER_TRANSMIT_SEC, FAULT_COUGH_AFTER_SEC,
   HEARTBEAT_BED_SEC, HEARTBEAT_BED_HURT_SEC, HEARTBEAT_BED_STRENGTH, HEARTBEAT_BED_INFECTED_SEC,
-  HEARTBEAT_BED_JITTER, ARRIVAL_HIT_STAGGER_SEC, BEAM_OUT_SWEEP_SEC,
+  HEARTBEAT_BED_JITTER, BEAM_OUT_SWEEP_SEC,
 } from '@data/tuning';
 // Slice 5, Track FACE's block (below): the sleeper's breath and the surprise's blip.
 import { SLEEPER_BREATH_GAIN, SLEEPER_BREATH_HZ, RESIDENT_WAKE_BLIP_AFTER_SEC } from '@data/tuning';
@@ -75,7 +75,7 @@ import {
 //   pod's driver was eaten, else hollowBite (a file or a half-written copy gone: nobody was lost);
 //   hollow-cure → driverSaved (several in one tick sound once: one bite timer, one moment); and
 //   every tick the chew follows the total drain and the tug's beating tones follow the boundary
-// • WP7: hollow-name-shown → the truth note + nameGlitch; arrival-hits → transitHit per hit (staggered);
+// • WP7: hollow-name-shown → the truth note + nameGlitch; self-check-step → the SELF-CHECK's tick, found tone, ECC pair (playtest 1);
 //   beam-out-start → transmitIn; beam-out-cancel → sag; abandoned → a short transmitSweep
 // • WP9 (KESTREL): zone-hit → debrisImpact (a cloud slams into a rack; its thud is the stamp's) or, in a belt,
 //   transitHit with a flurry of Geiger clicks; zone-forecast → the CLEAR OF THE DEBRIS stamp's thud and a chime
@@ -185,7 +185,10 @@ export function mountAudioCues(store: Store<GameState>): () => void {
       play('chime', { falling: false }, { delaySec: CHIME_AFTER_TRANSMIT_SEC });
     }),
     on('engine-cough', () => play('engineCough')),
-    on('file-fault', ({ role }) => {
+    on('file-fault', ({ role, found }) => {
+      // Playtest 1 (C-UNROLL): found by the SELF-CHECK, the fault is a finding (components/memory-view/SelfCheck plays its
+      // faultFound tone), not a crunch.
+      if (found) return;
       play('faultCrunch');
       if (role === 'engine-io') play('engineCough', undefined, { delaySec: FAULT_COUGH_AFTER_SEC });
     }),
@@ -227,12 +230,18 @@ export function mountAudioCues(store: Store<GameState>): () => void {
       play('truthNote');
       play('nameGlitch');
     }),
-    // WP7 part 2: the run. The arrival's hits crackle one by one with their red flashes (ArrivalFlash runs
-    // on the same stagger); BEAM OUT opens the link with the modem handshake, a cancelled bar sags, and a
-    // filled one sweeps the unit away as the old ship's windows go black.
-    on('arrival-hits', ({ hits }) => {
-      hits.forEach((_hit, i) => play('transitHit', undefined, { delaySec: i * ARRIVAL_HIT_STAGGER_SEC }));
+    // Playtest 1 (C-UNROLL, plan §3.5): the SELF-CHECK's sweep, one sound per step (the old boot's transit-hit crackles are
+    // gone: the damage is found, not taken). A hurt pod's driver is found with its heartbeat; a new file with the chime.
+    on('self-check-step', ({ cue }) => {
+      if (cue === 'tick') play('checkTick');
+      else if (cue === 'fault') play('faultFound');
+      else if (cue === 'ecc') play('eccFixed');
+      else if (cue === 'pod') { play('faultFound'); play('heartbeat', { strength: 0.6 }, { delaySec: 0.18 }); }
+      else if (cue === 'new') play('chime', { falling: false });
+      else play('seedWarn');
     }),
+    // WP7 part 2: BEAM OUT opens the link with the modem handshake, a cancelled bar sags, and a filled one sweeps the unit
+    // away as the old ship's windows go black.
     on('beam-out-start', () => play('transmitIn')),
     on('beam-out-cancel', () => play('lineWhoomp', { shape: 'sag' })),
     on('abandoned', () => play('transmitSweep', { seconds: BEAM_OUT_SWEEP_SEC })),

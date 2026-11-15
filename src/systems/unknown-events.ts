@@ -103,8 +103,9 @@ export function signalToolRule(seg: Readonly<SignalSegment>, ctx: Readonly<Valid
 // and the unit's own (its deliveries, HOLLOW's boarding verdict on this beam, the only-from-here and the run's count). Every
 // other row reads `??? · NO TRANSPONDER`, and the rows whose presence alone would tell (no Swap for an ENGINE FAULT, the no-go
 // sites) are dropped.
-const PUBLIC_ROWS: ReadonlySet<CardRow['key']> = new Set<CardRow['key']>(['fit', 'memory', 'beam', 'noise', 'range', 'deliveries', 'threat', 'only', 'run', 'history', 'trail']);
-const DROPPED_ROWS: ReadonlySet<CardRow['key']> = new Set<CardRow['key']>(['noswap', 'nogo']);
+// Playtest 1 (C-UNROLL): the noise is on the BEAM row now, the no-go zones on the LANDING row ('planet', which a `?` card hides).
+const PUBLIC_ROWS: ReadonlySet<CardRow['key']> = new Set<CardRow['key']>(['fit', 'memory', 'beam', 'range', 'deliveries', 'threat', 'only', 'history', 'trail']);
+const DROPPED_ROWS: ReadonlySet<CardRow['key']> = new Set<CardRow['key']>(['noswap']);
 
 // The SHIP CARD as a `?` ship not yet visited shows it (systems/desk.ts cardModel passes its model through), else `model`
 // as it is.

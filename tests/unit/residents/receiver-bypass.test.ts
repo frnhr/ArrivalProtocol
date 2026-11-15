@@ -1,15 +1,16 @@
 // Slice 8 POLISH (docs/phase3/impl/slice-8-plan.md §2.12; 04 §3.15; OPEN-DECISIONS 20): the receiver bypass's timing, pure
 // (systems/receiver-bypass.ts; the TERMINAL draws it, MindTerminal.ts, and e2e residents watches it in the page).
 // • It hangs on the 'resident' tone, the RECEIVER CLOSED boot line's (script.ts bootLineTone), and on nothing else.
-// • Its whole line is locked by BYPASS_RESOLVE_SEC, under the boot's 1.3 s line step, and the step is unchanged.
+// • Its whole line is locked by BYPASS_RESOLVE_SEC, inside the line's own SELF-CHECK step (playtest 1, C-UNROLL: a typed boot
+//   line's step is its typing time and SELF_CHECK_LINE_GAP_SEC; the boot's fixed 1.3 s line step is gone).
 // • Letters lock left to right, each at most BYPASS_LOCK_SPREAD_CHARS places early; spaces and punctuation never roll; the
 //   line keeps its length on every frame; frames inside one roll bucket are equal, the next bucket rolls.
 // • The same entry locks the same letters (its mask is seeded), and a mid-line frame really is scrambled.
 import { check, finish } from '../wp1/harness';
 import { isBypassLine, bypassMask, bypassLockSec, bypassResolvedSec, bypassParts, bypassText } from '@systems/receiver-bypass';
-import { bootLineTone } from '@data/script';
+import { bootLineTone, BOOT_MARK_KINDS } from '@data/script';
 import { RESIDENT_TEXT } from '@data/resident-text';
-import { BOOT_LINE_AT_SEC, BYPASS_LOCK_SPREAD_CHARS, BYPASS_RESOLVE_SEC, BYPASS_ROLL_GLYPHS, BYPASS_ROLL_HZ, TERMINAL_TYPE_CPS } from '@data/tuning';
+import { SELF_CHECK_LINE_GAP_SEC, BYPASS_LOCK_SPREAD_CHARS, BYPASS_RESOLVE_SEC, BYPASS_ROLL_GLYPHS, BYPASS_ROLL_HZ, TERMINAL_TYPE_CPS } from '@data/tuning';
 
 const LINE = RESIDENT_TEXT.receiverClosed;
 const ROLLS = /[A-Za-z0-9]/;
@@ -21,10 +22,9 @@ check('the bypass hangs on the \'resident\' tone (the RECEIVER CLOSED boot line\
     && !isBypassLine({ tone: 'good', channel: 'mind' }) && !isBypassLine({ tone: 'resident', channel: 'mind', divider: true }));
 
 // --- The timing ------------------------------------------------------------------------------------------------------------
-const steps = BOOT_LINE_AT_SEC.slice(1).map((at, i) => at - BOOT_LINE_AT_SEC[i]!);
-const step = Math.min(...steps);
-check(`the line resolves in ${BYPASS_RESOLVE_SEC} s, inside the boot's ${step.toFixed(1)} s line step (unchanged: every step 1.3 s)`,
-  BYPASS_RESOLVE_SEC < step && steps.every((gap) => Math.abs(gap - 1.3) < 1e-9), steps.map((gap) => gap.toFixed(2)).join());
+const step = LINE.length / TERMINAL_TYPE_CPS + SELF_CHECK_LINE_GAP_SEC;
+check(`the line resolves in ${BYPASS_RESOLVE_SEC} s, inside its own SELF-CHECK step (${step.toFixed(2)} s: its typing and the gap after it)`,
+  BYPASS_RESOLVE_SEC < step && !BOOT_MARK_KINDS.has('receiver-closed'));
 check(`…and inside the line's own typing time (${(LINE.length / TERMINAL_TYPE_CPS).toFixed(2)} s at the TERMINAL's ${TERMINAL_TYPE_CPS} cps), which the TERMINAL keeps`,
   BYPASS_RESOLVE_SEC <= LINE.length / TERMINAL_TYPE_CPS);
 

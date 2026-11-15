@@ -114,10 +114,16 @@ await page.waitForTimeout(1500);
 const bootLine = await visibleText('#objectiveText');
 check('the boot\'s strip says `click to skip` (no [BURN]: SPACE skips there)', /click to skip/.test(bootLine ?? '') && !/BURN/.test(bootLine ?? ''), bootLine);
 await shot('02-boot');
-// The boot skips with a tap (its catcher is the title card's layer).
+// The boot skips with taps (its catcher is the title card's layer). Playtest 1 (C-UNROLL): the boot is the SELF-CHECK; the
+// first tap hurries its stage (still in blue), the second skips the rest, and the cut follows once its findings are seen.
 const bootStart = Date.now();
 await page.tap('#titleCard');
-check('a tap skips the boot', await waitFor(() => window.__ap.store.getState().run.phase === 'flight', 6000) && Date.now() - bootStart < 6000);
+// Apart by more than a double-click (the card ignores a double-click's second click: TitleCard onCardClick).
+await page.waitForTimeout(700);
+const hurried = await st(() => window.__ap.store.getState().run.phase === 'boot');
+await page.tap('#titleCard');
+check('two taps skip the boot (the first hurries the SELF-CHECK, still in blue)', hurried
+  && await waitFor(() => window.__ap.store.getState().run.phase === 'flight', 6000) && Date.now() - bootStart < 6000);
 await waitFor(() => window.__ap.store.getState().run.phase === 'flight' && window.__ap.store.getState().ui.mode === 'tools', 20000);
 await page.waitForTimeout(1500);
 await shot('03-amber');
@@ -135,6 +141,13 @@ await onScreen('amber', '#sasRadOut');
 await onScreen('amber', '.phone-bar .fuel-bar');
 const burnText = await visibleText('#burnBtn');
 check('BURN reads `HOLD · BURN` (no SPACE cap)', burnText === 'HOLD · BURN', burnText);
+// Playtest 1 (C-UNROLL): the SELF-CHECK found ARES-VII's ENGINE I/O FAULT, so the run's first line is the REPAIR lesson,
+// its [TAB] read as the MIND tab. The kid does it (here by __ap), and the crash course's line names the BURN button.
+const weakOpener = await visibleText('#objectiveText');
+check('the opening line is the REPAIR lesson, its [TAB] the MIND tab: `ENGINE WEAK — press [MIND] to look inside`',
+  /^ENGINE WEAK — press \[MIND\] to look inside/.test(weakOpener ?? ''), weakOpener);
+await st(() => window.__ap.setIntegrity('engine-io', 100));
+await waitFor(() => /hold \[BURN\]/.test(document.getElementById('objectiveText')?.innerText ?? ''), 4000);
 const opener = await visibleText('#objectiveText');
 check('the opening line names the BURN button: `hold [BURN]`', /hold \[BURN\]/.test(opener ?? ''), opener);
 // (?debug adds the old warp ladder as a third row; the game's header is the rest.)

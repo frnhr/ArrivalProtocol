@@ -114,6 +114,9 @@ export const HOLLOW_STORY = {
   // ...and once the last unit's ghost has greeted you at a boot this run (§5.2, run.ghostSpoken).
   remembers: '> you remember me. good.',
   control: 'Unauthorized process detected. Disregard it.',
+  // Playtest 1 (C-UNROLL, plan §3.5, OPEN-DECISIONS 140): the first seed of a run, held by the boot's SELF-CHECK. The first
+  // time the word HOLLOW is said: by the protocol, as its name for a starved caretaker's process. From then the copy may say it.
+  fragment: 'Fragment of a HOLLOW process detected. Delete it.',
   // Ship 2, at its wake (§1, §5.1 2:50, §9 WP7 item 5): HOLLOW names itself. Every unit number is
   // templated (unitDigits, like say.ts unitName / hollowName), so run 2 reads `hello 048` / `i was 047`.
   // `charge` is the REPAIR CHARGE a unit is sent with: the same as yours.

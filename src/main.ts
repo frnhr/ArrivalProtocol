@@ -10,6 +10,7 @@ import './styles/landing.css';
 import './styles/threat.css';
 import './styles/desk.css';
 import './styles/leave.css';
+import './styles/self-check.css';
 import './styles/ending.css';
 import './styles/night.css';
 import './styles/responsive.css';
@@ -102,12 +103,12 @@ import { mountFinalCard } from '@components/run/FinalCard';
 import { mountMergeTick } from '@components/memory-view/MergeTick';
 import { mountLaunchFx } from '@components/memory-view/LaunchFx';
 import { mountPodTags } from '@components/memory-view/PodTags';
+import { mountSelfCheck } from '@components/memory-view/SelfCheck';
 import { mountFinaleChoice } from '@components/run/FinaleChoice';
 import { mountLastLandingView } from '@components/run/LastLanding';
 import { mountSkillsWindow } from '@components/run/SkillsWindow';
 import { mountInboxWindow } from '@components/run/InboxWindow';
 import { mountSitesWindow } from '@components/tools-view/SitesWindow';
-import { mountArrivalFlash } from '@components/run/ArrivalFlash';
 import { mountHollowNameFx } from '@components/memory-view/HollowNameFx';
 import { mountMovePreviewLabels } from '@components/memory-view/MovePreviewLabels';
 import { mountRackZoneMarks } from '@components/memory-view/RackZoneMarks';
@@ -278,6 +279,8 @@ mountMemoryStrip(store, memWrap, segBehavior);
 // After the strip: the bars re-dock onto its rebuilt parts, and the drivers' BAY / NEXT tags repaint (slice 1a).
 mountOpBars(store, memWrap);
 mountPodTags(store, memWrap);
+// Playtest 1 (C-UNROLL): the boot's SELF-CHECK paints the rebuilt parts too.
+mountSelfCheck(store, memWrap);
 mountFsToolsSystem(store);
 mountSelectionHighlight(store);
 mountDimPainter(store);
@@ -321,7 +324,6 @@ mountLaunchFx(store);
 // placeholder Placement paints, and the arrival's red flashes on the files the crossing hit.
 mountHollowNameFx(store);
 mountMovePreviewLabels(store);
-mountArrivalFlash(store);
 // After the strip and the mini-strip (WP9): the racks a hazard zone is coming for, tagged and flashed.
 mountRackZoneMarks(store);
 // After the memory strip: the boot assembles its rows.

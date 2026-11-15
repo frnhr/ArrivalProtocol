@@ -94,7 +94,7 @@ const memoryValid = (): boolean => {
 {
   h.newRun(7);
   receiveTransmission(h.store);
-  h.stepUntil(() => state().run.phase === 'flight', 15);
+  h.stepUntil(() => state().run.phase === 'flight', 30);
   spendAllCharge();
   check('ship 1 flies on with its pool spent', getRedundancy(state()) === undefined && state().run.phase === 'flight');
   h.flyDefending(600);

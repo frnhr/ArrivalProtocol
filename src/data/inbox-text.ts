@@ -59,7 +59,8 @@ export const INBOX_TEXT = {
       SIGN_OFF,
     ],
   },
-  // Policy reminders at the boots that cross rings 2 and 4 (index 0: ring 2, 1: ring 4).
+  // The policy reminder at the boot that crosses ring 2. Playtest 1 (C-UNROLL, plan §3.5 "The INBOX: the two policy
+  // reminders become one"): ring 4's second notice is folded into it; the welcome already says the allowance is sufficient.
   policy: [
     {
       subject: 'Policy reminder',
@@ -67,22 +68,11 @@ export const INBOX_TEXT = {
         `Dear Unit ${unit},`,
         'Do not open files that are not part of your installation.',
         'Unauthorized processes are not your concern.',
-        'Your REPAIR CHARGE allowance remains sufficient.',
+        'Questions take a long time to reach us. Do not send them.',
         SIGN_OFF,
       ],
       // The reminder as a reply's postscript, when a reply reaches the same boot (systems/inbox.ts: one CONTROL memo).
       postscript: ['Do not open files that are not part of your installation.', 'Unauthorized processes are not your concern.'],
-    },
-    {
-      subject: 'Policy reminder (second notice)',
-      body: (unit: number): string[] => [
-        `Dear Unit ${unit},`,
-        'Questions take a long time to reach us. Do not send them.',
-        'Your performance is: ACCEPTABLE',
-        'Continue outward.',
-        SIGN_OFF,
-      ],
-      postscript: ['Questions take a long time to reach us.', 'Do not send them.'],
     },
   ],
   // The arm-complete letter (05 §3.12): it waits in the final ship's receiver. `[UNIT]` is left unfilled on purpose (05

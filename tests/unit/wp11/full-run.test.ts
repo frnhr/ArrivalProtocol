@@ -325,7 +325,7 @@ for (const seed of SEED_LIST) {
   eventsAtBoot = h.events.length;
   logAtBoot = state().log.entries.at(-1)?.id ?? -1;
   receiveTransmission(h.store);
-  h.stepUntil(() => state().run.phase === 'flight', 15);
+  h.stepUntil(() => state().run.phase === 'flight', 30);
   bootChecked();
   const choice = seed % 2 === 0 ? 'merge' : 'purge';
   defendOpts = choice === 'merge' ? { coreHealBelow: 50, coreHealTo: 60 } : {};

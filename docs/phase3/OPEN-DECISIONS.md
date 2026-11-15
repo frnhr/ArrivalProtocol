@@ -956,3 +956,46 @@ track as recommended. The new calls B-DROP made:
      `SITE 4 · MOVE AN LZ HERE` **while** a move is possible (Q18 said "until"), `SITE 4 · OPEN AS LZ-D` while it can be opened
      instead, and the bare name otherwise or on ground known bad. On a phone the plot carries up to four such labels; the
      shots (`tests/.out/c-sites/`) read, but the plot is busy. Option: the action only on the selected or nearest site.
+
+## Playtest 1, Batch C (C-UNROLL)
+
+179. **The boot's lines become marks, and the unit's record keeps them.** BUILT (plan §3.5, C-UNROLL). The SELF-CHECK shows
+     what the crossing hit, ECC's corrections, the ship's own damage, the seeds, the deliveries, the charge and the log key as
+     tags on their files; their lines are still said into the log (`LogEntry.mark`), never typed. The TERMINAL types at most
+     six of the unit's own lines a ship (3–4 on run 1's first ships). HOLLOW's, the ghost's and the lineage's lines are not
+     counted.
+180. **The first of a kind holds the sweep on the tutorial run only.** BUILT, **[FRAN]**. On run 1 (and a `run.tutorial`
+     run) 046.log, the first delivery, the first seed and HOLLOW's boarded root each hold the check until a click or 4 s, and
+     are named there. On a later run each is named as the sweep passes, with no hold, so the check stays skippable and quick
+     after run 1. To hold on every run's firsts: drop `playsTutorial` from `planSelfCheck`'s `first`.
+181. **A press hurries a stage; the next skips the rest.** BUILT (plan §3.5). A press on a hold is the click. After a skip
+     that showed a finding the cut waits 0.9 s (`SELF_CHECK_SKIP_SEEN_SEC`), as the old ECC flashes did; HOLLOW's own line is
+     still waited for. `__ap.skipBoot()` makes every honoured press at once (the e2e scenarios' skip); `.once()` is one.
+182. **CONTROL says nothing at 046.log's hold.** BUILT, **[FRAN]**. The plan gave CONTROL `That file is not part of your
+     installation. Disregard it.` at the check, but that line is already CONTROL's answer to the first SCAN of the file
+     (`story-log.ts`). The check names it by its tag (`NOT IN THE MANIFEST`) and PAL's reaction only. To move CONTROL's line
+     to the check: say `LOG_TEXT.control` in `boot.ts nameFirst('log')` and drop it from `story-log.ts`.
+183. **ENGINE WEAK goes ahead of DON'T HIT THE PLANET on ship 1.** BUILT (with OD 139). The fault is found at the boot, so
+     the REPAIR lesson (`tut-engine-weak`, `tut-repair-engine`, `tut-tab-back`, and the returning unit's one hint) preempts
+     the opening crash course's F4 rows before the first burn; a burn under way on it (KEEP HOLDING) is not preempted, and
+     ENGINE WEAK still steps aside after `ENGINE_WEAK_MAX_SHOWN_SEC`. A 38% burn still clears ARES-VII's fall if it starts by
+     about 140 s (163 s to impact; a healthy engine by about 151 s), so the kid who never repairs can still fly it.
+184. **The files that tick `ECC ✓` are picked by the ship's name.** BUILT. ECC's corrections are a count
+     (`ArrivalReport.eccCorrected`), not a list of files, so the check picks that many of the unit's unhit files, the same on
+     every reload. Recording the files would need the arrival report to change (a save field).
+185. **A hurt driver's tag reads `−56% IN TRANSIT`.** BUILT. The plan's `POD 02 · 44%` is already on the driver's chip
+     (`POD 02 … 44%`); the tag says what was found, as for the unit's files.
+186. **No new SHIP-pip or NAV PLOT animation in the check.** NOT BUILT, **[FRAN]**. The SHIP stage's amber pip flashes behind
+     the blue screen (the 'file-fault' event) and shows the weak engine at the cut; SENSORS is a 0.7 s beat before the klaxon,
+     with no path drawn last on the NAV PLOT. Both are polish for a later pass if the playtest asks.
+187. **The first parcel's tag is `DELIVERY · WAITED n YRS`.** BUILT. The plan's `Mv · REQUESTED AT ARES-VII · WAITING 12
+     YEARS` names the file (the chip already does) and the ship it was asked at (not on the delivery record). A delivery the
+     crossing hit shows its damage instead (`DELIVERY · −17% IN TRANSIT`).
+188. **The SHIP CARD's merged rows.** BUILT (plan §3.5). ROOM (`152 · COMPACT · YOU FIT`), LANDING (`VOLCANIC · ROUGH · 3 LZs
+     · NO-GO: LAVA`: the ground's class word stands for `off-site pods score nothing`, which ran over a line with the no-go
+     zones), BEAM with its noise; `YOUR 3RD SHIP` is gone. SITE DATA keeps its row (Track SITES's); NOISE is not a chart icon
+     (the chart is not C-UNROLL's). HALCYON's card: 5 rows, was 8.
+189. **One policy reminder.** BUILT (plan §3.5). Ring 2's, with ring 4's `Questions take a long time to reach us. Do not send
+     them.` folded in. `Your REPAIR CHARGE allowance remains sufficient.` (the welcome says it), `Your performance is:
+     ACCEPTABLE` and `Continue outward.` are cut. 05-story's policy reminders (§3.3) now name one; the story's owner may want
+     the second notice's lines back somewhere.

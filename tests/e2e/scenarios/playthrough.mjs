@@ -469,13 +469,16 @@ for (const [index, name] of SHIPS.entries()) {
   });
   const met = { maxSegs: 0, lines: [], trace: new Set(), bitten: new Set(), firstBiteMs: null, firstLineMs: null, ghostBursts: 0, ghostSpec: false };
   const note = (seen) => {
+    // One clock reading per poll: a line and a bite first seen in the same poll are at the same moment (playtest 1, C-UNROLL:
+    // two readings a millisecond apart once read a bite as after the line it came with).
+    const now = Date.now();
     met.ghostBursts = Math.max(met.ghostBursts, seen.ghostBursts);
     met.ghostSpec ||= seen.ghostSpec;
     met.maxSegs = Math.max(met.maxSegs, seen.hollowSegs);
     for (const text of seen.hollowLines) if (!met.lines.includes(text)) met.lines.push(text);
-    if (seen.hollowLines.length > 0) met.firstLineMs ??= Date.now();
+    if (seen.hollowLines.length > 0) met.firstLineMs ??= now;
     for (const file of seen.infected) met.bitten.add(file);
-    if (seen.infected.length > 0) met.firstBiteMs ??= Date.now();
+    if (seen.infected.length > 0) met.firstBiteMs ??= now;
     for (const where of seen.trace) met.trace.add(where);
   };
   // Boot: the MIND's terminal types the ship's boot, the strip says how to skip it.
@@ -488,6 +491,14 @@ for (const [index, name] of SHIPS.entries()) {
     && new RegExp(`^${name} · \\d{4}$`).test(boot.crumb) && /\[SPACE\] to skip/.test(boot.line), JSON.stringify(boot));
   await page.waitForTimeout(1500);
   check(`${tag}: …the TERMINAL types the boot`, await st(() => document.getElementById('mindTermLines').innerText.length > 0));
+  // Playtest 1 (C-UNROLL, plan §3.5): the boot is the SELF-CHECK. The files it has not reached are dimmed; the first SPACE
+  // hurries its stage (still in blue), the second skips the rest, and the cut follows once its findings have been seen.
+  const checking = await st(() => ({ dimmed: document.querySelectorAll('#memWrap .seg.check-pending').length, line: window.__ap.director().shown?.text ?? '' }));
+  check(`${tag}: …the SELF-CHECK dims the files it has not reached, and the strip names its stage`, checking.dimmed > 0
+    && /^(RECEIVING TRANSMISSION|SELF-CHECK · [A-Z ]+) — /.test(checking.line), JSON.stringify(checking));
+  await page.keyboard.press('Space');
+  await page.waitForTimeout(150);
+  check(`${tag}: …the first SPACE hurries the check (still in blue)`, await st(() => window.__ap.store.getState().run.phase === 'boot'));
   await page.keyboard.press('Space');
   const flying = await waitFor(() => window.__ap.store.getState().run.phase === 'flight', 20000);
   check(`${tag}: SPACE skips the boot into the flight`, flying);
@@ -521,11 +532,16 @@ for (const [index, name] of SHIPS.entries()) {
   {
     const order = await st(() => window.__ap.log().filter((entry) => entry.id > window.__e2eLogFrom).map((entry) => entry.text));
     const at = order.indexOf('> SITE DATA POOR · ARRIVAL CONTROL GUESSED 2 LZs');
-    const lastEcc = order.reduce((last, text, i) => (/^> ECC:/.test(text) ? i : last), -1);
+    // Playtest 1 (C-UNROLL): the SELF-CHECK says the unit's ECC lines (SELF) and the ship's own damage (SHIP) before the site
+    // data (the end of SHIP); the beam's seeds and SENTRY's names (`> ECC: … FOREIGN BLOCK`, `… IS A SEED`) are MANIFEST's,
+    // with the deliveries, after it.
+    const seedLine = (text) => /FOREIGN BLOCK|IS A SEED/.test(text);
+    const lastEcc = order.reduce((last, text, i) => (/^> ECC:/.test(text) && !seedLine(text) ? i : last), -1);
     const firstDelivery = order.findIndex((text) => /^> DELIVERY:/.test(text));
+    const firstSeed = order.findIndex((text) => /^> ECC:/.test(text) && seedLine(text));
     if (name === 'CORMORANT') {
-      check(`${tag}: …the boot types \`> SITE DATA POOR · ARRIVAL CONTROL GUESSED 2 LZs\` after the ECC lines, before the deliveries (slice 6)`,
-        at > lastEcc && lastEcc >= 0 && (firstDelivery < 0 || at < firstDelivery), JSON.stringify({ at, lastEcc, firstDelivery }));
+      check(`${tag}: …the boot says \`> SITE DATA POOR · ARRIVAL CONTROL GUESSED 2 LZs\` after the ECC lines, before the deliveries and the seeds (slice 6)`,
+        at > lastEcc && lastEcc >= 0 && (firstDelivery < 0 || at < firstDelivery) && (firstSeed < 0 || at < firstSeed), JSON.stringify({ at, lastEcc, firstDelivery, firstSeed }));
       // CONTROL's quip at the first flight tick (read now: the log keeps only its latest lines by the landing).
       check(`${tag}: …CONTROL says \`Landing sites are estimates.\` as the flight starts (slice 6)`,
         await waitFor(() => window.__ap.log().some((entry) => entry.speaker === 'control' && entry.text === 'Landing sites are estimates.'), 5000));
@@ -1096,7 +1112,7 @@ for (const [index, name] of SHIPS.entries()) {
         deskPicked.card?.rows.includes('threat=??? WILL FIND YOU ON THIS BEAM') === true, JSON.stringify(deskPicked.card?.rows));
       // Slice 6: CORMORANT is POOR on seed 7 (LZ-B on a ROCKY guess); the kid trains no SURVEY.
       check(`${tag}: …and \`SITE DATA · POOR · ARRIVAL CONTROL GUESSED\`, \`LZ: 2 · SURVEY NEEDED\` (slice 6)`,
-        deskPicked.card?.rows.includes('site=POOR · ARRIVAL CONTROL GUESSED') === true && deskPicked.card.rows.includes('lzs=LZ: 2 · SURVEY NEEDED'),
+        deskPicked.card?.rows.includes('site=POOR · ARRIVAL CONTROL GUESSED') === true && deskPicked.card.rows.some((row) => /^planet=.* · LZ: 2 · SURVEY NEEDED( · |$)/.test(row)),
         JSON.stringify(deskPicked.card?.rows));
     }
     // Playtest 1: the PACKET asks only with a question (here a delivery to SEND ON); with none it beams at once, its rows

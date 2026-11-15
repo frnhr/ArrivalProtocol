@@ -1601,3 +1601,173 @@ differs, and why:
       mid-loop (`Target page … has been closed`, under the same load) and passed on the re-run unchanged.
 15. **Not C-SITES', left for their owners:** `AGENTS.md`'s "What's built" (a C-SITES line for the lead), the playtest
     checklist (no Batch C items yet: try `OPEN AS LZ-C` on CORMORANT), and OD 176's report wording.
+
+## Deviations (C-UNROLL)
+
+Built on `c-unroll` from d61fca6 (Batches A and B merged): §3.5 (notes 13 and 17), the SELF-CHECK and the beats for run 1's
+first three ships, and §3.5's text cuts. Where the build differs from §3.5, §4 and §5, and what it touched outside its list:
+
+1. **The shape: the line plan stays, the check is built around it.** `data/script.ts bootLinePlan` still plans every line,
+   with its words and effects (a delivery unpacks, a patch installs, a FIREWALL compiles, a key opens an entry), so nothing
+   a line did is lost. A new pure planner, `systems/self-check.ts planSelfCheck`, places each line in its stage
+   (`bootLineStage`) and adds the sweep around them: one step per file, the ship-1 fault, and the first of each kind.
+   `systems/boot.ts` plays the steps on wall time. Most lines are now **marks** (`BOOT_MARK_KINDS`: the ECC lines, the
+   seeds, SENTRY's names, the ship's own damage, the deliveries, the charge, the log key, the receiver's size). A mark is said
+   with `say(…, { mark: true })`: it keeps its record in the log (`LogEntry.mark`), is never typed, never on the ticker,
+   never unread, and takes no typing time. The tag on the file is what the kid sees. The TERMINAL types the unpack and the
+   host, the sleep, a resident's closed receiver, site data, an overflow, a skill trained, the FIREWALL line, the mail, the
+   traces and every other voice.
+   - The plan's "the TERMINAL keeps at most 6 lines" is counted as the unit's own (`mind-sys`) lines. HOLLOW's, the ghost's
+     and the lineage's lines are story and are not counted. Run 1 types 3 of the unit's lines on ARES-VII and 4 on HALCYON
+     and KESTREL (`opening/self-check` checks ≤ 6).
+   - Keeping the record in the log, not in a new store, kept 28 suites and the e2e readers of `__ap.log()` as they were.
+2. **Stage order moved three kinds of line.** The stages are RECEIVE, SELF, SHIP, HOLD, MANIFEST, SENSORS, so the charge (SELF)
+   is now said before the deliveries (MANIFEST). REPAIR's renewal happens at the charge, and the first delivery's call is the
+   no-op (it already leaves the delivered copies out, so a patch still upgrades the renewed REPAIR). The traces' gifts are
+   said in SELF, before the charge, as before. SITE DATA POOR is said at the end of SHIP, still after the ship's own damage
+   and before the deliveries (`playthrough` checks that order).
+3. **The steps' timing** (`tuning.ts` SELF_CHECK block). A file takes 0.11 s, a finding 0.5 s more, the ship-1 fault 0.9 s, a
+   typed line its typing time and 0.25 s. Stages are 0.25 s apart, SENSORS lasts 0.7 s, then the klaxon, and the cut 0.4 s
+   after it. The tutorial run's first ship is 1.3× slower. Measured headless: ARES-VII 12.6 s with its hold clicked through
+   (16.6 s waited out); HALCYON about 10.7 s plus its hold; KESTREL about 11 s plus its hold. `BOOT_LINE_AT_SEC`,
+   `BOOT_KLAXON_AFTER_LAST_LINE_SEC`, `BOOT_LINE_MAX` and `ARRIVAL_HIT_*` are gone.
+4. **Presses** (OD 177). After `BOOT_SKIP_GRACE_SEC`:
+   - a press on a hold is the click that lets it go;
+   - else the first press hurries the stage (all its steps at once), and the next skips every step left;
+   - when the skip showed a finding (a damage tag, the fault, a first), the cut waits `SELF_CHECK_SKIP_SEEN_SEC` (0.9 s, the
+     old ECC flashes' rule) and refuses presses meanwhile; HOLLOW's own line is still waited for until it has typed;
+   - the ghost's buzz and refusal are unchanged;
+   - `?debug`'s `__ap.skipBoot()` now makes every press that is honoured (a scenario's skip); `__ap.skipBoot.once()` is one
+     press, as a key's.
+5. **The first of a kind holds only on the tutorial run** (`playsTutorial`; OD 176). On a later run it is named as the sweep
+   passes, so the check stays skippable and quick after run 1. The firsts are `director.done` ids (`check-first-log`,
+   `-parcel`, `-seed`, `-hollow`) and `check-named-hollow`, saved with the run like a beat's. A reload replays the boot from
+   the BEAM point, before the ids were pushed, so it names them again, the same way.
+6. **The beats as built** (run 1, the worked route):
+   - **ARES-VII.** SELF finds Engine I/O `−15% IN TRANSIT` and Sensor Interp `−22% IN TRANSIT`. SHIP finds the ENGINE I/O
+     FAULT: 85 → 38, its tag becomes `ENGINE WEAK`, with the soft `faultFound` tone, no crunch, no shake, no stamp. HOLD
+     finds POD 02 `−56% IN TRANSIT` with its heartbeat. MANIFEST holds on 046.log (`NOT IN THE MANIFEST`), then PAL says
+     `Ooh, a mystery file! :)`. **CONTROL says nothing there** (OD 178): `That file is not part of your installation.
+     Disregard it.` is already its answer to the first SCAN (`story-log.ts`, `LOG_TEXT.control`), and saying it twice is the
+     kind of repeat Fran asked to cut. The flight's first line is `ENGINE WEAK — press [TAB] to look inside`.
+   - **HALCYON.** The sleep types first (`> ASLEEP IN HALCYON'S RECEIVER · 2321 → 2352 · 31 YEARS`, its year rolling as
+     before). SELF finds the transit hits (`−17% IN TRANSIT`), and ECC's corrections tick back `ECC ✓`. MANIFEST holds on the
+     first parcel, Mv: `DELIVERY · WAITED 15 YRS` (OD 183). MOVE is licensed with it, as before. 046.log is no longer new.
+   - **KESTREL.** SHIP finds Sensor Interp at 45 (`PATH UNCERTAIN`) before the sensors come up. MANIFEST holds on the first
+     seed, pink and pulsing: `NOT IN YOUR PACKET`. As it lets go, the tag reads `RODE YOUR BEAM · IT GROWS` (the plan's
+     INSPECT words, as a tag). ARRIVAL CONTROL then says `Fragment of a HOLLOW process detected. Delete it.`
+     (`HOLLOW_STORY.fragment`), the first time anyone says HOLLOW, and PAL follows: `Ew. :)` (DEADPAN `It came with us.
+     Rude.`, WORRIER `It grows? Please delete it. Please.`). `opening/self-check` checks that no line of the run says HOLLOW
+     before it.
+   - **The boarding** (§3.5's "fourth ship"; on run 1's worked route that is CORMORANT, where HOLLOW boards, not VESPER):
+     the 108% unpack types at RECEIVE as before, and MANIFEST finds the root, `??? · 10 BLOCKS · NOT IN YOUR PACKET`, held as
+     the first of its kind. HOLLOW speaks for itself afterwards, as before.
+7. **ARES-VII's ENGINE I/O FAULT is arrival damage** (OD 139):
+   - `FILE_FAULTS` stays in `script.ts`. It is keyed by ship index (every run's first ship), not by ARES-VII, so it is not
+     `authored-ships.ts` data. `afterThrustTac` and `ENGINE_FAULT_AFTER_TAC` are gone.
+   - `faults.ts findFault` is called by the SHIP stage. A flight that starts with no boot (the headless harnesses'
+     `resetTo('flight')`, `__ap` jumps) finds the fault on its first world tick.
+   - The 'file-fault' event gains `found` (always true now): Stamp, Juice and audio-cues skip the stamp, the shake and the
+     crunch for a found fault.
+   - The rule "the fault waits out a crash course" is gone with it: the engine is weak from the start. Measured: a 38% burn
+     still clears ARES-VII's opening crash course if it starts by about 140 s of its 163 s fall (a healthy engine: by about
+     151 s). `wp4/fix1-review` checks 120 s and 140 s.
+   - **ENGINE WEAK goes first** (OD 179): `tut-engine-weak`, `tut-repair-engine`, `tut-tab-back` and the returning unit's
+     `tut-engine-weak-known` now also preempt the opening crash course before the first burn (`openingCrash`: F4's `-hold`
+     and `-press` rows), not KEEP HOLDING. `ENGINE_WEAK_MAX_SHOWN_SEC` still hands the flight line back. `tut-engine-weak`'s
+     done rule now needs the flight: the boot is in blue, which is not the kid looking inside.
+8. **Not built from §3.5** (OD 182): the SHIP stage does not light the amber pip on screen (the 'file-fault' event still
+   flashes it behind the blue screen, and the pip shows the weak engine at the cut), and SENSORS has no new animation of the
+   NAV PLOT drawing its path: it is a 0.7 s beat before the klaxon. RECEIVE's racks assemble as before (TitleCard's).
+9. **The tags' words** (`data/self-check-text.ts`):
+   - damage reads `−n% IN TRANSIT`, for the unit's files and for a hurt driver (OD 181: the plan's `POD 02 · 44%` repeats what
+     the driver's chip already shows);
+   - the ship's own damage and the fault read their effect, the first words of `capabilities.ts BAND_COPY` (`ENGINE WEAK`,
+     `PATH UNCERTAIN`, `SENSOR INTERP DAMAGED`);
+   - the charge reads `+18 CHARGE`, a key `KEY FOUND · ENTRY 02`, a delivery the crossing hit `DELIVERY · −17% IN TRANSIT`;
+   - damage tags and a seed's stay after the boot while the file is as it was found (healed past it, eaten or gone, the tag
+     goes); the others go with the boot;
+   - ECC's corrections are a count, so the files that tick `ECC ✓` are picked by the ship's name, the same on every reload
+     (OD 180).
+10. **The strip** names the stage: `RECEIVING TRANSMISSION`, `SELF-CHECK · YOUR FILES`, `· THE SHIP`, `· THE PODS`, `· NOT IN
+    THE MANIFEST`, `· SENSORS`. Each ends `— click or [SPACE] to skip`, and `— click it or [SPACE]` on a hold
+    (`LINES.booting`; `director.ts` reads `boot.ts bootCheckLine`).
+11. **Sound.** Three new cues in `audio.ts`: `checkTick` (a dry, quiet tick per file), `faultFound` (a soft falling fourth on
+    a muted triangle) and `eccFixed` (a small rising pair). A hurt driver adds the heartbeat, a new file the chime, a seed
+    `seedWarn`. The arrival's `transitHit` crackles at the boot are gone (the cue stays for belt hits).
+12. **Removed with the old boot:** `components/run/ArrivalFlash.ts`, its mount in `main.ts`, its rules in `game.css`, and the
+    'arrival-hits' event (the ECC line's red flashes). The check's painter is `components/memory-view/SelfCheck.ts`, with
+    `styles/self-check.css`.
+13. **Text cut** (plan §3.5 "Where text can be cut overall"):
+    - the boot: the TERMINAL types 3–4 of the unit's lines on run 1's first ships (it typed 4–9);
+    - the SHIP CARD (OD 184):
+      - MEMORY and FIT are one ROOM row (`152 · COMPACT · YOU FIT`);
+      - PLANET, NO-GO and the LZs are one LANDING row (`VOLCANIC · ROUGH · 3 LZs · NO-GO: LAVA`). The ground's class word
+        stands for the off-site sentence, which ran over a line with the no-go zones;
+      - the BEAM and its NOISE are one row, and `YOUR 3RD SHIP · …` is gone;
+      - HALCYON's card has 5 rows (it had 8);
+      - SITE DATA stays its own row (Track SITES's; C-SITES is working in it), and NOISE did not become a chart icon
+        (DeskScreen's chart is not this track's);
+    - the INBOX: one policy reminder (ring 2's), with ring 4's `Questions take a long time to reach us. Do not send them.`
+      folded in; `Your performance is: ACCEPTABLE` and `Continue outward.` are cut (OD 185);
+    - the PACKET, the companion and the LANDING REPORT items of that list were Batch B's, and are done.
+14. **Files outside §4's list:**
+    - `say.ts` (the `mark` option) and `state/schema.ts` (`LogEntry.mark`);
+    - `events.ts` ('self-check-step', `found`), `faults.ts`, `director.ts` (the strip's stage);
+    - `Stamp.ts`, `Juice.ts`, `audio-cues.ts`, `main.ts`, `game.css`, `debug.ts` (`skipBoot`);
+    - `companion-text.ts` (two PAL moments in all three presets; B-VOICE's file) and `hollow-text.ts` (CONTROL's naming
+      line);
+    - `inbox.ts` (`POLICY_RINGS`), `unknown-events.ts` (the `?` card's public rows) and `map-text.ts` (the card's words);
+    - `tests/e2e/lib.mjs` (`lockInRing`, below).
+15. **No save bump.** `LogEntry.mark` is optional and the codec reads log entries as records; the firsts are `director.done`
+    ids. `save/shape-pin`, `save/codec` and `save/resume` pass unchanged.
+16. **Tests.**
+    - New: `opening/self-check` (27 checks, about 2 s). It checks, on ARES-VII, HALCYON and KESTREL along the worked route:
+      the six stages in order; each finding as a tag, its step sounded once; the ship-1 fault (85 through SELF, 38 from HOLD,
+      no crunch, no thrust); the holds (waited out, and let go by a press); the beats' words and voices; no HOLLOW before
+      CONTROL; at most six typed lines; the timing. Then a later run that holds nothing and skips with two presses, and the
+      words (no wake, waking or awake; every line ≤ 70).
+    - Moved, not weakened:
+      - the boot's skip checks (`wp2/review-fixes`, `wp2/follower`, `wp4/systems`, `wp7/fix1/run-end-and-boot`,
+        `wp10/p2/views`) take the hurry and the skip, and check the findings and the wait for them where they checked the ECC
+        flashes; `wp7/p2-models` checks each hit file found once where it counted the flashes;
+      - the fault's suites (`wp4/flight-coupling`, `wp4/fix1-review`, `wp4/p2-tutorial`, `wp8/run-flow`) check it found at the
+        start and ENGINE WEAK first;
+      - `residents/receiver-bypass` and `survey/foundation` check the line's SELF-CHECK step where they checked the fixed
+        1.3 s line times;
+      - the card and INBOX suites (`map/desk-models`, `map/text`, `signals/events`, `map/inbox`) check the merged rows and
+        the one reminder.
+    - Suites that stepped a boot to the flight within 15–20 s now wait up to 30 s (a ceiling, not a check; 12 files).
+    - `opening/calm-ships` and `residents/sleeper` have the kid repair Engine I/O after ARES-VII's boot (the run's first
+      lesson) before the lessons they test, which came after it.
+    - e2e:
+      - `lib.mjs lockInRing` (B-TIME's) repairs Engine I/O on ship 1: the shortcut skips the REPAIR lesson a kid does first,
+        and without it HALCYON opened on ENGINE WEAK;
+      - `run-flow` checks the SELF-CHECK where it checked the ECC flashes, and skips ship 1's boot (it waited 10 s for a 16 s
+        boot);
+      - `playthrough` and `phone` press twice, and check that the first press leaves the boot in blue;
+      - `map-desk`, `run-flow` and `playthrough` read the card's merged rows.
+      - `playthrough`'s CORMORANT order check reads SITE DATA POOR after the unit's and the ship's ECC lines and before the
+        deliveries and the beam's seed lines (the seeds are MANIFEST's now), and its HOLLOW-silent check reads one clock per
+        poll (a line and a bite first seen in the same poll were read a millisecond apart, and failed once).
+    - `map/arm-parity` was re-recorded twice: the SELF-CHECK moved every moment from ARES-VII's boot (11140349d6de1264), and
+      the one policy reminder every moment from VESPER's boot on (9d1eb332a03f39af); each ship's outcome and the end
+      (won-merge) as before.
+    - Results, on this machine (4 cores; C-SITES ran beside it for part of the time):
+      - `typecheck` and the tests' tsc: clean;
+      - the quick unit tier, once, quiet (load about 1.3): 234 passed, 0 failed, 15 balance-only skipped, **231 s** (budget 265 s;
+        it was 227 s; `opening/self-check` adds about 2 s). The one failure in that run, `map/arm-parity`'s digest, was the
+        second re-record above, checked alone after;
+      - e2e, one at a time against a dev server: `run-flow` 100/100, `phone` 136/136, `resume` 72/72, `map-desk` 94/94,
+        `residents` 30/30, `playthrough` 287/287. `phone` and `playthrough` passed on their second run, after the fixes above
+        (the double-tap guard, the REPAIR lesson first, the two order and clock fixes). `beam-blue`, `run2`, `traces`,
+        `desk`, `signals`, `survey`, `label-hops`, `last-landing`, `ending` and the `skills-4cde-*` scenarios skip the boot
+        through `__ap.skipBoot()` and were not run.
+    - Screenshots of the check on ARES-VII, HALCYON (Mv requested at the first desk) and KESTREL, a shot per stage and one
+      held, at 1440×900 and 390×844: `tests/.out/c-unroll/`. Seen and iterated: the tags first restarted their slide-in on
+      every step (invisible), then covered each other (now kept in their row, in lanes); on a phone the held file was off
+      screen (now scrolled into view). A phone row with many findings (KESTREL's second rack E row) still stacks three lanes
+      of tags over its files.
+17. **Not done here.** AGENTS.md's "What's built" and the playtest checklist are not updated (shared with C-SITES; the lead's
+    at the merge). 05-story's policy reminders (§3.3) and the moment HOLLOW is first named are the story owner's to re-read
+    (OD 140, 185).

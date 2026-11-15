@@ -65,17 +65,20 @@ desk();
 {
   const rows = (slot: number): Record<string, string> => Object.fromEntries(cardModel(st(), slot).rows.map((row) => [row.key, row.value]));
   const lapwing = cardModel(st(), LAPWING);
-  const hidden = ['problems', 'resident', 'planet', 'lzs'];
+  // Playtest 1 (C-UNROLL): the LZs and the no-go zones are on the LANDING row ('planet'), the noise on the BEAM row, the
+  // memory on the ROOM row ('fit').
+  const hidden = ['problems', 'resident', 'planet'];
   check('LAPWING\'s card from HALCYON: `??? COLONISTS`, `??? PODS`, no tags, and `??? · NO TRANSPONDER` for its problems, resident, planet and LZs',
     lapwing.colonists === UNKNOWN_TEXT.card.colonists && lapwing.sub.endsWith('??? PODS') && lapwing.tags.length === 0
     && hidden.every((key) => rows(LAPWING)[key] === NT) && lapwing.top.endsWith('??? COLONISTS'), JSON.stringify(lapwing.rows));
   check('…its public schedule stands: the years, the cost, the fit, the memory, the beam and its noise (02 §3.5)',
     lapwing.schedule !== null && lapwing.timeline !== null && lapwing.cost !== null
-    && ['fit', 'memory', 'beam', 'noise'].every((key) => rows(LAPWING)[key] !== undefined && rows(LAPWING)[key] !== NT), JSON.stringify(rows(LAPWING)));
+    && ['fit', 'beam'].every((key) => rows(LAPWING)[key] !== undefined && rows(LAPWING)[key] !== NT) && /NOISE/.test(rows(LAPWING).beam ?? '')
+    && /TIGHT|COMPACT|FULL/.test(rows(LAPWING).fit ?? ''), JSON.stringify(rows(LAPWING)));
   const all = [LAPWING, PLOVER, KITTIWAKE].map((slot) => cardModel(st(), slot));
   check('…PLOVER and KITTIWAKE (out of reach) read the same; no row names what is aboard (no ENGINE FAULT, no-go or SITE DATA words)',
-    all.every((card) => card.colonists === UNKNOWN_TEXT.card.colonists && !card.rows.some((row) => row.key === 'noswap' || row.key === 'nogo')
-      && card.rows.filter((row) => ['problems', 'resident', 'planet', 'lzs', 'site'].includes(row.key)).every((row) => row.value === NT)));
+    all.every((card) => card.colonists === UNKNOWN_TEXT.card.colonists && !card.rows.some((row) => row.key === 'noswap')
+      && card.rows.filter((row) => ['problems', 'resident', 'planet', 'site'].includes(row.key)).every((row) => row.value === NT)));
   const nodes = chartModel(st()).nodes;
   const node = (slot: number) => nodes.find((candidate) => candidate.slot === slot)!;
   check('the chart: the three `?` nodes are labelled `NAME · ???` and drawn as standard ships; HERON keeps its own label',

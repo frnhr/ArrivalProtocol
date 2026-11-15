@@ -86,7 +86,7 @@ function flyRoute(route: readonly number[], record: (event: string, at: Readonly
   const failures: string[] = [];
   let charge: number | null = null;
   receiveTransmission(h.store);
-  h.stepUntil(() => state().run.phase === 'flight', 15);
+  h.stepUntil(() => state().run.phase === 'flight', 30);
   record('boot', state());
   let guard = 0;
   let progress = '';

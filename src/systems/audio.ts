@@ -118,6 +118,11 @@ export interface CueParams {
   // SUNSET's low rumble fading out (the empty ship leaving orbit with you).
   spareNotes: undefined;
   sunsetRumble: undefined;
+  // Playtest 1 (C-UNROLL, plan §3.5): the boot's SELF-CHECK. The sweep reaching a file (a dry, quiet tick); a fault found
+  // there (a low, soft two-note fall: found, not a crunch); a hit ECC put back (a small rising pair).
+  checkTick: undefined;
+  faultFound: undefined;
+  eccFixed: undefined;
 }
 
 export type Cue = keyof CueParams;
@@ -1188,6 +1193,44 @@ function cueTransitHit(mix: Graph, t0: number): void {
   sweep(body.frequency, t0, 180, 70, 0.14);
 }
 
+// Playtest 1 (C-UNROLL): the SELF-CHECK's sweep. One file checked: a dry high tick, much quieter than a typed letter's, so
+// a dozen in a row read as a scan, not as clicks.
+function cueCheckTick(mix: Graph, t0: number): void {
+  const voice = makeVoice(mix.ctx);
+  const out = voice.gain(1, mix.buses.ui);
+  const amp = voice.gain(0, out);
+  const end = pluck(amp.gain, t0, 0.05, 0.001, 0.03);
+  const band = voice.filter('bandpass', 5200, 3, amp);
+  voice.noise(mix.white, t0, end, band);
+  voice.osc('sine', 2400, t0, end, voice.gain(0.4, amp));
+}
+
+// A problem found: a low, soft fall of a fourth on a muted triangle (plan §3.5: a "fault found" tone, not the crunch). It
+// says "noted", not "hit".
+function cueFaultFound(mix: Graph, t0: number): void {
+  const voice = makeVoice(mix.ctx);
+  const out = voice.gain(1, mix.buses.ui);
+  const dark = voice.filter('lowpass', 1400, 0.7, out);
+  [[0, 330], [0.11, 247]].forEach(([offset, freq]) => {
+    const at = t0 + offset!;
+    const amp = voice.gain(0, dark);
+    const end = pluck(amp.gain, at, 0.16, 0.006, 0.32);
+    voice.osc('triangle', freq!, at, end, amp);
+  });
+}
+
+// A transit hit ECC corrected: the file ticks back to its colour with a small rising pair of sines.
+function cueEccFixed(mix: Graph, t0: number): void {
+  const voice = makeVoice(mix.ctx);
+  const out = voice.gain(1, mix.buses.ui);
+  [[0, 880], [0.07, 1319]].forEach(([offset, freq]) => {
+    const at = t0 + offset!;
+    const amp = voice.gain(0, out);
+    const end = pluck(amp.gain, at, 0.07, 0.004, 0.16);
+    voice.osc('sine', freq!, at, end, amp);
+  });
+}
+
 // HOLLOW's name decoding out of `???` (on the ship it boards): its own detuned square blips, the wrong little scale it
 // types in, stepping DOWN to its lowest note while a band of static settles, the letters locking in. It
 // plays over the reveal's truth note (the floor dropping away), the first turn's sound under the second's.
@@ -1787,6 +1830,9 @@ function playOn(mix: Graph, cue: Cue, params: CueParams[Cue] | undefined, t0: nu
     case 'siteSet': cueSiteSet(mix, t0); return;
     case 'spareNotes': cueSpareNotes(mix, t0); return;
     case 'sunsetRumble': cueSunsetRumble(mix, t0); return;
+    case 'checkTick': cueCheckTick(mix, t0); return;
+    case 'faultFound': cueFaultFound(mix, t0); return;
+    case 'eccFixed': cueEccFixed(mix, t0); return;
     default: throw new Error(`play: unknown cue '${String(cue)}'`);
   }
 }

@@ -18,7 +18,7 @@ import { getPrediction } from '@systems/predict';
 import { upcomingEvents } from '@systems/flight-hud';
 import { createTypeQueue } from '@components/hud/typewriter';
 import type { ObjectiveLine } from '@state/schema';
-import { BOOT_SKIP_GRACE_SEC } from '@data/tuning';
+import { BOOT_SKIP_GRACE_SEC, SELF_CHECK_SKIP_SEEN_SEC } from '@data/tuning';
 
 let failures = 0;
 let total = 0;
@@ -181,7 +181,11 @@ const h: Harness2 = createHarness2(1);
   h.keyUp('Space');
   check('boot grace: so is a second SPACE', h.store.getState().run.phase === 'boot');
   h.stepFor(BOOT_SKIP_GRACE_SEC + 0.1);
-  check('boot grace: after it, a skip works', skipBoot(h.store) === true && h.store.getState().run.phase === 'flight');
+  // Playtest 1 (C-UNROLL): after it, a press hurries the SELF-CHECK's stage, the next skips the rest, and once what it showed
+  // has been seen (SELF_CHECK_SKIP_SEEN_SEC) a press cuts to amber.
+  check('boot grace: after it, a skip works (a hurry, a skip, then the cut)', skipBoot(h.store) === true && skipBoot(h.store) === true
+    && h.store.getState().run.phase === 'boot' && (h.stepFor(SELF_CHECK_SKIP_SEEN_SEC + 0.05), skipBoot(h.store)) === true
+    && h.store.getState().run.phase === 'flight');
 }
 
 // --- 7. A typing job ends at its line's current length ---------------------------------------------

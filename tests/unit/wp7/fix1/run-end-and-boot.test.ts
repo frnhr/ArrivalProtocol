@@ -3,8 +3,9 @@
 //   (`HALCYON LOST · END OF THE FLEET`, not hopeful), never END OF THE FLEET · FOR NOW's hope, which is
 //   only for a last ship that printed (wp11/full-run checks the victory RUN END).
 // • EMERGENCY TRANSMIT's why line says the Core's real toll (−25 from 100, −5 from 30, nothing at 25).
-// • A skipped arrival boot lands on the ECC line (the red flashes start), and only cuts to amber once the
-//   last flash has been seen: a kid mashing SPACE still sees what the crossing did.
+// • A skipped arrival boot never cuts out what the crossing did (playtest 1, C-UNROLL: the SELF-CHECK): the first press hurries
+//   the stage, the second shows every finding at once (the ECC record and the ship's own damage said, each hit file and the
+//   ship's damaged file tagged and its step sounded once), and the cut to amber waits until they have been seen.
 // • NEXT BITE on a sleeping root whose wake the coast can bring forward shows no time until the coast fixes the wake (no
 //   0:22 → 0:05 jump). Slice 2: HALCYON is calm, so phase 2's HALCYON root and HOLLOW (the WALLS stage's coast-tied wake)
 //   are planted there (support/hollow-world.ts plantHalcyonRoot).
@@ -20,10 +21,11 @@ import { skipBoot } from '@systems/boot';
 import { biteClock } from '@systems/hollow-hud';
 import { setIntegrity } from '@state/actions';
 import { scriptedDamageLine, bootLinePlan, TRANSMIT_TEXT, BEAM_OUT_TEXT } from '@data/script';
+import { checkView } from '@systems/self-check';
 import { HOLLOW_HUD_TEXT } from '@data/hollow-text';
 import { AUTHORED_SLOTS } from '@systems/arm-fixture';
 import {
-  BOOT_SKIP_GRACE_SEC, BOOT_LINE_AT_SEC, ARRIVAL_HIT_STAGGER_SEC, ARRIVAL_HIT_SEEN_SEC, EMERGENCY_EXTRA_HITS,
+  BOOT_SKIP_GRACE_SEC, SELF_CHECK_SKIP_SEEN_SEC, EMERGENCY_EXTRA_HITS,
 } from '@data/tuning';
 
 const h = createHarness7(9, { soulsFound: false });
@@ -84,29 +86,27 @@ check('the crash\'s why line keeps the extra hits either way', TRANSMIT_TEXT.why
   h.transmit();
   check('EMERGENCY TRANSMIT → HALCYON\'s boot', state().run.phase === 'boot' && state().run.shipIndex === 1 && state().run.arrival !== null);
   const arrival = state().run.arrival!;
-  const flashes = arrival.hits.length + arrival.scripted.length;
-  const hitEvents = (): number => h.events.filter((event) => event.name === 'arrival-hits').length;
-  const eventsBefore = hitEvents();
+  const found = [...new Set([...arrival.hits, ...arrival.scripted].map((hit) => hit.segId))];
+  const stepsOf = (id: string): number => h.events.filter((event) => event.name === 'self-check-step'
+    && (event.payload as { cue: string; segIds: string[] }).cue === 'fault' && (event.payload as { segIds: string[] }).segIds.includes(id)).length;
   h.stepFor(BOOT_SKIP_GRACE_SEC + 0.05);
-  check('…a skip after the grace jumps to the ECC line instead of cutting to amber', skipBoot(h.store) && state().run.phase === 'boot'
+  check('…a press after the grace hurries the SELF-CHECK\'s stage instead of cutting to amber', skipBoot(h.store) && state().run.phase === 'boot'
     && state().ui.mode === 'memory', `${state().run.phase} ${state().ui.mode}`);
+  check('…a second press shows every finding at once, still in blue', skipBoot(h.store) && state().run.phase === 'boot' && state().ui.mode === 'memory');
   // Track RETIRE: on run 1's arm a hop that ECC corrected says its own ECC line (the hits that landed), and the ship's own
-  // arrival damage (HALCYON's Sensor Interp) its own line after it, each with its flashes (the classic five folded both
-  // into one line); the skip says both at once.
+  // arrival damage (HALCYON's Sensor Interp) its own line after it. Since C-UNROLL both are marks: logged, never typed, and
+  // the files they name carry the SELF-CHECK's tags.
   const plan = bootLinePlan(state(), 0);
-  const flashLines = (plan.includes('ecc') && arrival.hits.length > 0 ? 1 : 0) + (plan.includes('scripted') ? 1 : 0);
-  const eccSaid = state().log.entries.some((entry) => entry.text.startsWith('> ECC:'))
-    && (!plan.includes('scripted') || state().log.entries.some((entry) => entry.text === scriptedDamageLine(arrival.scripted)));
-  check('…the ECC line (and the ship\'s own damage line) are said and the red flashes are sent at once', eccSaid && flashLines >= 1
-    && hitEvents() === eventsBefore + flashLines, `${eccSaid} ${hitEvents() - eventsBefore} of ${flashLines} · ${plan.join(',')}`);
-  check('…a second skip right after is ignored (the flashes are still being seen)', !skipBoot(h.store) && state().run.phase === 'boot');
-  const seenAfterSec = (flashes - 1) * ARRIVAL_HIT_STAGGER_SEC + ARRIVAL_HIT_SEEN_SEC;
-  h.stepFor(seenAfterSec + 0.1);
-  const endsBefore = BOOT_LINE_AT_SEC[3]! + 1.4 + 0.4;
-  check('…once the last flash has been seen, a skip cuts to amber (before the boot would have ended)',
-    skipBoot(h.store) && state().run.phase === 'flight' && BOOT_LINE_AT_SEC[2]! + seenAfterSec < endsBefore,
-    `${state().run.phase} (seen ${seenAfterSec.toFixed(2)} s after the ECC line)`);
-  check('…the arrival\'s flashes were sent once (one event per line that flashes)', hitEvents() === eventsBefore + flashLines);
+  const eccSaid = state().log.entries.some((entry) => entry.text.startsWith('> ECC:') && entry.mark === true)
+    && (!plan.includes('scripted') || state().log.entries.some((entry) => entry.text === scriptedDamageLine(arrival.scripted) && entry.mark === true));
+  const tagged = found.filter((id) => checkView().tags.get(id)?.tone === 'fault' && stepsOf(id) === 1);
+  check('…the ECC record (and the ship\'s own damage) are said as marks, and every file they name is tagged with its step sounded once',
+    eccSaid && found.length >= 1 && tagged.length === found.length, `${eccSaid} ${tagged.length} of ${found.length} · ${plan.join(',')}`);
+  check('…a third press right after is ignored (the findings are still being seen)', !skipBoot(h.store) && state().run.phase === 'boot');
+  h.stepFor(SELF_CHECK_SKIP_SEEN_SEC + 0.05);
+  check('…once they have been seen, a press cuts to amber (long before the check would have ended)',
+    skipBoot(h.store) && state().run.phase === 'flight', state().run.phase);
+  check('…each finding was sounded once (one step per file)', found.every((id) => stepsOf(id) === 1));
 }
 
 // --- NEXT BITE before HALCYON's coast --------------------------------------------------------------------

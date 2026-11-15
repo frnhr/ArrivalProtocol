@@ -39,6 +39,8 @@ for (const [kind, text] of Object.entries(LICENCE_LINES)) add(`LICENCE_LINES.${k
 add('LICENCE_RENEWED_REPAIR', LICENCE_RENEWED_REPAIR);
 add('SWATH_TEXT.control.boot', SWATH_TEXT.control.boot);
 add('HOLLOW_STORY.control', HOLLOW_STORY.control);
+// Playtest 1 (C-UNROLL): CONTROL's name for the first seed, the first time anyone says HOLLOW.
+add('HOLLOW_STORY.fragment', HOLLOW_STORY.fragment);
 add('HOLLOW_STORY.decommissioned', HOLLOW_STORY.decommissioned('UNIT-998·999'));
 add('HOLLOW_FINALE.deleteIt', HOLLOW_FINALE.deleteIt('UNIT-998·999'));
 add('HOLLOW_DEAL.control', HOLLOW_DEAL.control);
@@ -109,6 +111,8 @@ const render = (lines: CompanionLines): Rendered => ({
   gotHereFirst: [lines.gotHereFirst('UNIT-999')],
   beamOut: [lines.beamOut],
   travellingLight: [lines.travellingLight],
+  mysteryFile: [lines.mysteryFile],
+  firstSeed: [lines.firstSeed],
 });
 const ids = Object.keys(COMPANION_LINES.chipper).sort();
 check('the render above covers every PAL line', JSON.stringify(Object.keys(render(COMPANION_LINES.chipper)).sort()) === JSON.stringify(ids), ids.join());
