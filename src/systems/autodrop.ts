@@ -434,7 +434,9 @@ export function pressAutodrop(store: Store<GameState>): AutodropRefusal | null {
     line = AUTODROP_TEXT.radio.armedPlan(plan.passes);
   } else {
     pass = passCounts(state, view);
-    if (!Object.values(pass).some((n) => n > 0)) return refuse(noWindow ?? empty);
+    // Playtest 1 (B-DROP): a count that fits nothing this pass (the kid's numbers are kept between passes) is no pass. The
+    // tails offer [G] by the same rule, and an armed pass that can fly nothing would only hold the WIDE [L] back (OD 120).
+    if (!passRows(state, view, pass).some((row) => row.want > 0 && row.fits > 0)) return refuse(noWindow ?? empty);
     to = 'pass';
     line = AUTODROP_TEXT.radio.armedPass(pass);
   }
@@ -710,7 +712,9 @@ function wideOpen(state: Readonly<GameState>, view: Readonly<LandingView>): bool
 // AD-fly, AD-armed, AD-done, in that order), its tail on L13's waits, and (playtest 1, §3.4.2) the tail on GET READY's and
 // LAUNCH NOW's manual launch while [G] would arm v1 for that window (` · or [G] AUTO`, AUTOBURN's pattern).
 // • Armed, the strip never offers a WIDE [L] (OPEN-DECISIONS 120: an obedient kid threw CORMORANT's pods off-site under an armed
-//   v2): over a WIDE DROP window it says AD-armed's wait instead of L5 or L3b, whichever LZ the window is.
+//   v2): while it still has a launch to fly, over a WIDE DROP window it says AD-armed's wait instead of L5 or L3b, whichever
+//   LZ the window is. An arm with nothing left to fly (a pass whose every window is WIDE, the kid's REPAIR still running)
+//   holds nothing back: there the WIDE [L] is the kid's, with the tail ` · AUTODROP ARMED`.
 // • v1 armed in the MIND (it flies from the SHIP screen only, R8): its window near or open, the row says so, with [TAB].
 export function autodropLineOf(state: Readonly<GameState>, sol: Readonly<DropSolution>): AutodropLine | null {
   if (!landingOn(state) || sol.block !== null || sol.dot === null) return null;
@@ -734,7 +738,7 @@ export function autodropLineOf(state: Readonly<GameState>, sol: Readonly<DropSol
       row = { id: 'landing-AD-wait', text: text.wait(countdown(state, next.atTSec)), keys: [], urgency: 'now', layer: 'mind' };
     } else if (near) {
       row = { id: 'landing-AD-fly', text: text.fly(next.lz, next.n, countdown(state, next.atTSec)), keys: ['G'], urgency: 'wait', layer: 'ship' };
-    } else if (open !== null && (armedFor(state, view, open.lz) || wideOpen(state, view))) {
+    } else if (open !== null && (armedFor(state, view, open.lz) || (next !== null && wideOpen(state, view)))) {
       // A window the machine owns (v2's sure window of an LZ its pass flies, or any window while v3's plan has rows: the plan
       // holds every pod for the windows it chose), or a WIDE DROP window (OD 120). It waits, so the strip doesn't offer
       // L4–L6's manual [L] there. A v2 pass leaves a sure window of an LZ it doesn't fly to the kid's hands, and v3 the sure
@@ -748,7 +752,9 @@ export function autodropLineOf(state: Readonly<GameState>, sol: Readonly<DropSol
   }
   const done = (ad.end === 'pass-done' || ad.end === 'plan-done') && ad.endAtAi !== null
     && state.clock.aiSec - ad.endAtAi < AUTODROP_DONE_LINE_SEC;
-  if (done) {
+  // PASS DONE offers [G] for the next pass only when it would fly something (the tail's rule), else it says nothing.
+  const passFlies = (): boolean => passRows(state, view, passCounts(state, view)).some((r) => r.want > 0 && r.fits > 0);
+  if (done && (ad.end === 'plan-done' || passFlies())) {
     const words = ad.end === 'pass-done' ? text.passDone(ad.sent) : text.planDone(ad.sent);
     row = { id: 'landing-AD-done', text: words, keys: ad.end === 'pass-done' ? ['G'] : [], urgency: 'wait', layer: 'ship' };
   }
@@ -763,7 +769,7 @@ export function autodropLineOf(state: Readonly<GameState>, sol: Readonly<DropSol
         launchTail = { text: text.launchTail, key: 'G' };
       }
     }
-  } else if (live.version === 2 && passRows(state, view, passCounts(state, view)).some((r) => r.want > 0 && r.fits > 0)) tail = { text: text.tailPass, key: 'G' };
+  } else if (live.version === 2 && passFlies()) tail = { text: text.tailPass, key: 'G' };
   else if (live.version >= 3 && planLanding(state, view).rows.length > 0) tail = { text: text.tailPlan, key: 'G' };
   return row === null && tail === null && launchTail === null ? null : { row, tail, launchTail };
 }
