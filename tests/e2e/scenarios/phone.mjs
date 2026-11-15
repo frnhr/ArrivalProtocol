@@ -199,7 +199,13 @@ const hudBox = await rect('#miniHud');
 const statsBox = await rect('.mem-stats');
 check('blue: the mini-HUD is a top bar above the memory', hudBox !== null && hudBox.height > 0 && hudBox.height <= 70 && hudBox.bottom <= statsBox.top + 1, `${JSON.stringify(hudBox)} stats top ${statsBox.top}`);
 const hudText = await visibleText('#miniHud');
-check('…with the countdown and FUEL', /IMPACT/.test(hudText ?? '') && /fuel/i.test(hudText ?? ''), hudText);
+// The countdown is the header chip's, whichever event that counts to: the 700 ms finger burn above leaves seed 4's ▼ at
+// about 0 km, so a few frames more or less of it (a loaded machine) turn `IMPACT` into `BRAKE IN … FLYBY`.
+const countdowns = await st(() => ({ header: document.getElementById('cdLabel').textContent, mini: document.getElementById('mhCdLabel').textContent,
+  time: document.getElementById('mhCdTime').textContent, fuel: document.getElementById('mhFuelVal').textContent }));
+check('…with the countdown and FUEL', /^(✕ IMPACT|BRAKE IN|BURN IN)$/.test(countdowns.mini) && countdowns.mini === countdowns.header && /^\d\d:\d\d$/.test(countdowns.time)
+  && /^\d+%$/.test(countdowns.fuel) && /fuel/i.test(hudText ?? '') && hudText.includes(countdowns.mini) && hudText.includes(countdowns.time),
+  `${hudText} · ${JSON.stringify(countdowns)}`);
 const cut = await st(() => {
   const sizes = new Map();
   document.querySelectorAll('#memWrap .seg[data-id]').forEach((part) => sizes.set(part.dataset.id, (sizes.get(part.dataset.id) ?? 0) + Number(part.dataset.partSize)));
