@@ -18,7 +18,7 @@ import { armLanding, ARM } from './autodrop-arm';
 import { followLanding } from '../landing/harness-landing';
 import { landingKid, VESPER_ROUTE } from './landing-kid';
 import { planLanding } from '@systems/autodrop-plan';
-import { autodropController, autodropLineOf, autodropTutorialDue } from '@systems/autodrop';
+import { autodropController, autodropLineOf, autodropTutorialDue, setPassCount } from '@systems/autodrop';
 import { activeLandingController, controllerLaunchInSec, registerLandingController } from '@systems/landing-controller';
 import { mountLastLanding } from '@systems/last-landing';
 import { getDropSolution } from '@systems/drop-cache';
@@ -161,6 +161,14 @@ for (const version of [2, 3] as const) {
   check(`M4 v${version}: [G] with no sure window anywhere refuses \`NO SURE WINDOW — REPAIR …\`, flashed on the strip, and its lesson was not due`,
     !due && ad().armed === null && word !== undefined && word.startsWith('NO SURE WINDOW') && /REPAIR/.test(text) && shown() === text,
     `${refusals.join(',')} · strip "${shown()}" · due ${due}`);
+  if (version === 2) {
+    // Playtest 1 (B-DROP's sweep): counts the kid set (kept between passes) fit nothing either, so [G] still refuses: an armed
+    // pass that can fly nothing would hold every WIDE [L] back (VESPER's busy kid landed nothing).
+    setPassCount(h.store, 'LZ-A', 2);
+    h.press('KeyG');
+    check('…with the kid\'s own counts set too, [G] refuses (a pass that fits nothing is no pass)', ad().pass['LZ-A'] === 2 && ad().armed === null,
+      JSON.stringify(ad()));
+  }
 }
 
 // --- m5, m6: a 'merge' resolver wrapping AUTODROP; AUTODROP stands aside under it -----------------------------------------------
