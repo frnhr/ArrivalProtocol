@@ -1031,3 +1031,79 @@ Built on `47aa873`. Everything in A-WORDS's scope is in, with these departures f
   fails until it is removed: delete that one `ALLOWED` entry.
 - **Tests.** The ORBIT LOCKED pass edited 9 unit files, not 18: the rest read `TERMINAL.locked.word` or the status id. No
   e2e scenario matched the literal (`playthrough` and `phone` read the status id `locked`).
+
+## Deviations (B-TIME)
+
+Track B-TIME (notes 6 and 24, OD 123 and 124), built on `b01cf61`. Where the build differs from §3.1, §4 and §5:
+
+1. **A third kind of stop, WAIT** (OD 145). §3.1 made AUTODROP's windows and its launches SOFT. A dwell and then on would
+   jump past a window the controller has not flown yet, and skip its launches. So a window an armed controller flies
+   (`activeLandingController` not null), and its next launch, hold the hold without spending it: the director's TACTICAL
+   plays the window, and once it has gone by the hold goes on by itself. AUTODROP v3's plan is one hold from [G] to its
+   last row (the suite's section 4: four pods down in one window, then capped while they fall, no second press).
+2. **Refusals spend the hold** (OD 146). §3.1 lists the refusals "as today", struck out. Here a refusal that arrives
+   mid-hold (an alarm, the first ghost burst, the kid's own burn, HOLD STEADY, a hand window opening, the landing over)
+   also ends the hold, like a HARD stop: a hold that resumed by itself afterwards would carry the kid past what the
+   refusal was for. A burn input pressed under the hold (SPACE, BURN, [B]: `stopSkipOnPress`) spends it as `STOPPED`.
+   PAUSED only freezes it. A later ghost burst running between two ticks waits (no spend).
+3. **Not SOFT stops: a full LZ's window, a later ghost burst, a drag kick** (OD 147). None was a stop for a SKIP before,
+   and each would add a 1.5 s dwell several times a loop. The leg still flies every later burst whole (the waypoint) and
+   splits its jump at each kick. The engine-fault bursts (`ghostRefusesSkip`) run capped at CRUISE as planned.
+4. **A CRUISE cap on a CRUISE coast waits** (OD 148). When the only cap is CRUISE's (engine fault, the first seed, a
+   coast-tied wake) and the director runs CRUISE there anyway, the hold is struck out with the reason and waits, rather
+   than show FAST at the warp the coast already has. It runs FAST where the director would hold TACTICAL (pods falling).
+   `map/ghost-noswap`'s "no `hold [F]` while the bursts are due" holds unchanged.
+5. **The zone stop and the fresh press.** A zone entry the hold stopped at HARD is met and that entry counts as passed,
+   so the fresh press runs straight into the capped pass (no soft dwell on top of the stop: the suite's first FAST tick
+   comes 0.05 s after the press). A press made with an unmet zone already inside its lead spends at once (the kid sees
+   `BELT AHEAD`); the next press runs it capped. "Met" is any entry on this ship, by the hold or not.
+6. **The capped warp.** A zone's warp is fixed when its pass starts (`max(CRUISE, to the exit / FF_ZONE_PASS_WALL_SEC)`,
+   from the lead), not recomputed each tick (that would shrink with the rest of the pass and never end). It is also eased
+   onto the next stop's lead (`toLead / SKIP_EASE_OUT_SEC`, at least TACTICAL) so a capped run never overshoots a HARD
+   stop by a tick. On LAST LIGHT's 6,000 × 15,000 km loop: ×1.3K, about 3,500 game s a pass in 2.7 wall s, 14–19 hits a
+   pass (the belt's own rate: at most one a tick over 55 ticks).
+7. **The ramp and the leg's length.** `FF_DECADE_SEC` is a floor on the rise rate (the max of it, the director's glide and
+   the SKIP's own ramp), for legs and capped runs alike. A new constant, `FF_LEG_WALL_SEC` 2 (a leg's warp is the gap to
+   its stop's lead / 2): with SKIP_DIVISOR's 4 a 4.5-tactical-day WAIT took 5.95 s; at 2 it takes 4.95 s. And
+   `FF_PASSED_MATCH_TAC` 60: a passed soft stop is recognised again within a minute of tactical time.
+8. **Words** (OD 149). The tails are `· hold [F]` (the flight's ` · [F] SKIP`, the landing's ` · [F] to SKIP`), MIND
+   CLEAR is `MIND CLEAR — hold [F] to LZ-B`, the button `▸▸ HOLD [F]`, the pace label `FAST ×n ▸▸` for a SKIP leg and the
+   capped pace (a controller's own SKIP reads FAST too). The hold's stop words are `pace.ts FF_TEXT`: `BURN AHEAD`,
+   `LZ-B WINDOW` (an open hand window reads the same), `FLYING AWAY`, `HOLD STEADY`, `NOTHING AHEAD`, `ENGINE FAULT`,
+   `STOPPED`; zones keep `BELT AHEAD`. The strip's tail shows when holding would fast-forward
+   (`fastForwardBlockReason`), so it is now offered inside a zone and in a met zone's lead, where the tap SKIP was refused.
+   It stays up while the kid's own hold runs (a driver that holds F while the strip offers it never lets go mid-leg),
+   and, as the tap's tail did, hides while a SKIP the kid is not holding for runs (`fastForwardOffered`: a controller's, a
+   headless kid's tap). `skipBlockReason` keeps its meaning for the controllers and the harness kids.
+9. **The phone's control** is the header button itself (the phone already used it): held by a finger with the pointer
+   captured, `touch-action: none` and no long-press menu (`game.css`, by the `.skip-btn` rules). `keycaps.ts` already draws
+   [F] as `▸▸`, so the tail reads `hold ▸▸` there.
+10. **Files past §4's list, each for one line or block.** `state/schema.ts` (the `'fast'` Pace); `systems/director.ts` and
+    `debug.ts` (the landing context's `skipAvailable` reads `fastForwardBlockReason`; `__ap.fastForward()` for the e2e
+    drivers); `styles/game.css` (the button's hold rules); `tests/unit/wp1/harness.ts` (below); and the word literals in
+    22 unit files (`[F] SKIP` and `[F] to SKIP` to `hold [F]`, the pace label in `wp1/hud` and `lead2/coast-skip`).
+11. **The harness kids tap the engine.** `tests/unit/wp1/harness.ts`'s `press('KeyF')` calls `requestSkip` (its refusals
+    and the `refused` event included) instead of a keydown and keyup, so the 42 suites whose scripted kids press F keep
+    flying the SKIP engine unchanged, as §3.1 expected; `keyDown('KeyF')` … `keyUp('KeyF')` is the real hold.
+12. **`map/arm-parity`'s run digest is re-recorded** (8ceb50b18060dcb5 → b0f45b2087cb0757), with what moved it in its
+    comment: the landing's strip offers `· hold [F]` wherever holding fast-forwards, so on LAST LIGHT's final landing the
+    strip-following kid's reaction clock restarts at other moments and its first launch comes 0.15 AI s earlier. Only
+    LAST LIGHT's end moment moves; a diff of the two end states (base `b01cf61` against this track) holds times and
+    positions only.
+13. **e2e.** `tests/e2e/lib.mjs holdKey(page, code)`: `set(on, gameHeld)` keeps a key down across polls and presses it
+    afresh when the game let go of it (a modal releases held keys; an auto-repeat is never a press). `playthrough`,
+    `skills-4cde-landing` and `survey` hold F while the strip shows `[F]`, and let it up as the ship ends.
+14. **Requests to other tracks.**
+    - B-DROP: `autodrop-text.ts:63` `· [F] BETWEEN THEM` → `· HOLD [F] BETWEEN THEM` (§4's note); `landing-guidance.ts`'s
+      comment table (`:68`, `:80`, `:322`, `:341`) quotes `[F] to SKIP`.
+    - Whoever owns `skill-text.ts`: the comment at `:26` (` · [F] SKIP`) and `AUTOBURN_REFUSAL.skipping`'s
+      `STOPS THE SKIP FIRST` (AUTOBURN's [B] under a hold: the hold is spent as `STOPPED` first, then that word shows).
+15. **The checklist.** Items 54–56 under "Playtest 1, Batch B (B-TIME)" at the end of `docs/playtest-checklist.md` (no
+    Batch B owner): the held button, note 6 and note 24. Another track's items there may conflict textually.
+16. **Tests, as run on a machine at load 19–37.** The new suite `pace/fast-forward` (20 checks, about 6 s of CPU) and §5's
+    list pass. The quick tier: 215 passed; its other failures were the per-suite and tier budgets (17 suites over 90 s,
+    1,701 s in all, from the load) and one timing check, `skills/autodrop-plan`'s R18 memo at 1.08 ms against 1 ms, plus
+    `map/arm-parity`, re-pinned above. `survey` (26/26) and `skills-4cde-landing` (14/14) pass. `playthrough` 274/279:
+    every flight and landing ends by the strip with F held; the 5 failures are ship 1's first DESK, whose TRAIN bar fills
+    by animation frames (`TrainingWindow.ts`, a wall-time step capped per frame) and did not land inside the 4 s the
+    scenario waits under that load, and the four desk checks after it.
