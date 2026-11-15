@@ -112,10 +112,13 @@ export function siteAction(state: Readonly<GameState>, site: Readonly<SurveySite
 }
 
 // A free site's label on the GROUND TRACK and the NAV PLOT: its name (rated: `SITE 4 ★★★`), with what it is for while
-// something can be done with it (`SITE 4 · MOVE AN LZ HERE`, `SITE 4 ★★★ · OPEN AS LZ-D`); the wreck's `WRECK`.
+// something can be done with it (`SITE 4 · MOVE AN LZ HERE`, `SITE 4 ★★★ · OPEN AS LZ-D`) and its ground is not known bad;
+// the wreck's `WRECK`.
 function siteBracketLabel(state: Readonly<GameState>, site: Readonly<SurveySite>, rated: boolean): string {
   if (site.kind === 'wreck') return T.track.wreck;
   const name = rated && site.groundKnown ? T.track.rated(siteLabel(site), siteStars(site)) : siteLabel(site);
+  // A site known ROCKY or WET is drawn as bad: its label invites nothing (its SITES pills still offer what it can take).
+  if (site.groundKnown && site.ground !== 'flat') return name;
   const action = siteAction(state, site);
   if (action === null) return name;
   return action.kind === 'move' ? T.track.moveHere(name) : T.track.openHere(name, action.lz);

@@ -13,6 +13,9 @@
 //   at the DESK the window and its dock item are gone.
 // • The phone (360 × 740): the SITES tab in the dock, its window alone, a row tapped opens its pills, nothing wider than the
 //   page; at the DESK the tab is gone.
+// • Playtest 1, C-SITES (note 18), at 1440 × 900 and the phone's 390 × 844: with LZ-A and LZ-B each pinned by a pod, SITE 5's
+//   pills are refused and `OPEN AS LZ-C (1,200)` is offered; a click on a refused pill flashes its reason on the strip; the
+//   OPEN pill opens LZ-C; the held [F] stops at LZ-C's window, a pod lands there in plan, and the report says `OPENED ON SITE 5`.
 // Usage: node tests/e2e/scenarios/survey.mjs   (env E2E_BASE_URL; tests/e2e/run.mjs runs it)
 import { launch, BASE_URL, SHOTS, checker, pageKit, runKit, holdKey } from '../lib.mjs';
 import { join } from 'node:path';
@@ -240,5 +243,130 @@ const sites = (st) => st(() => {
   check('phone: no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
   await game.context.close();
 }
+
+// --- 4. Playtest 1, C-SITES (Fran's note 18): open a found site as a new LZ, and land a pod there ----------------------------
+// SURVEY v2, the rim mapped, locked at once; the kid lands one pod in LZ-A and one in LZ-B (both pinned: `pods-down`). SITE 5's
+// pills: LZ-A's and LZ-B's refused, then `OPEN AS LZ-C (1,200)`. A click on LZ-B's refused pill flashes its reason on the strip
+// (`LZ-B HAS PODS DOWN — OPEN SITE 5 AS LZ-C`); the OPEN pill opens LZ-C (the stamp `LZ-C → SITE 5`, its SITES row); hold [F]
+// stops at LZ-C's window, [L] lands a pod there, and the LANDING REPORT's row reads `LZ-C … · OPENED ON SITE 5`. At the
+// desktop's 1440 × 900 and the phone's 390 × 844 (the SITES tab), shots `survey-4-<size>-*.png`.
+async function openSitePart(contextOpts, size) {
+  const phone = contextOpts.isMobile === true;
+  const game = await openGame(contextOpts);
+  const { page, st, waitFor, errors } = game;
+  const tap = (locator) => (phone ? locator.tap() : locator.click());
+  await arrive(game, 2);
+  await st(() => window.__ap.survey.map(100));
+  await st(() => window.__ap.lockOn());
+  await waitFor(() => window.__ap.store.getState().run.phase === 'landing', 10000);
+  // One pod into each of LZ-A and LZ-B ([F] held between, while the strip offers it).
+  const fKey = holdKey(page, 'KeyF');
+  const pinned = () => {
+    const s = window.__ap.store.getState();
+    const down = (lz) => s.landing.pods.some((r) => r.fate.kind === 'down' && r.fate.touchdown.lz === lz);
+    return down('LZ-A') && down('LZ-B') && !s.landing.pods.some((r) => r.fate.kind === 'falling') && s.landing.window === null;
+  };
+  const end = Date.now() + 240000;
+  while (Date.now() < end && !(await st(pinned))) {
+    const now = await st(() => {
+      const s = window.__ap.store.getState();
+      const lz = s.landing.window?.lz ?? null;
+      return { lz, falling: s.landing.pods.some((r) => r.fate.kind === 'falling'), held: window.__ap.fastForward().held,
+        keys: window.__ap.director().shown?.keys ?? [], text: window.__ap.director().shown?.text ?? '',
+        has: lz !== null && s.landing.pods.some((r) => r.fate.kind !== 'aboard' && (r.fate.launch?.aimLz === lz)) };
+    });
+    // [L] only once the strip says so (the dot inside the bracket): an early [L] asks `DOT OFF-SITE · LAUNCH ANYWAY?`.
+    if ((now.lz === 'LZ-A' || now.lz === 'LZ-B') && !now.falling && !now.has) {
+      await fKey.set(false);
+      if (/press \[L\]/.test(now.text)) { await page.keyboard.press('KeyL'); await page.waitForTimeout(400); }
+    } else await fKey.set(now.lz === null && now.keys.includes('F'), now.held);
+    await page.waitForTimeout(200);
+  }
+  await fKey.set(false);
+  const isPinned = await st(pinned);
+  check(`${size}: one pod down in LZ-A and one in LZ-B, the landing goes on`, isPinned,
+    await st(() => JSON.stringify({ shown: window.__ap.director().shown?.text, pods: window.__ap.store.getState().landing.pods.map((r) => r.fate.kind) })));
+  if (!isPinned) { await page.screenshot({ path: join(SHOTS, `survey-4-${size}-0-stuck.png`) }); await game.context.close(); return; }
+  // SITES: SITE 5's pills.
+  if (phone) {
+    const tab = page.locator('.dock-item[data-tool="sites"]');
+    await tab.scrollIntoViewIfNeeded();
+    await tab.tap();
+  } else if (await st(() => document.getElementById('sitesWin').hidden)) await page.locator('.dock-item[data-tool="sites"]').click();
+  await page.waitForTimeout(400);
+  await tap(page.locator('#sitesWin .sw-row[data-site="site-5"]'));
+  await page.waitForTimeout(400);
+  const picked = await sites(st);
+  check(`${size}: SITE 5's pills: LZ-A's and LZ-B's refused (\`LZ-B ✕ LZ-B HAS PODS DOWN\`), then \`OPEN AS LZ-C (1,200)\``,
+    picked.pills.length === 3 && picked.pills[1]?.text === 'LZ-B ✕ LZ-B HAS PODS DOWN' && picked.pills[2]?.text === 'OPEN AS LZ-C (1,200)',
+    JSON.stringify(picked.pills));
+  await page.screenshot({ path: join(SHOTS, `survey-4-${size}-1-pills.png`) });
+  // A refused pill is aria-disabled (Playwright waits for an enabled one), but it takes the kid's click: forced here.
+  const refusedPill = page.locator('#sitesWin .sw-pill[data-lz="LZ-B"]');
+  await (phone ? refusedPill.tap({ force: true }) : refusedPill.click({ force: true }));
+  const flashed = await waitFor(() => document.getElementById('objectiveText').textContent === 'LZ-B HAS PODS DOWN — OPEN SITE 5 AS LZ-C', 4000, 50);
+  check(`${size}: a click on the refused pill flashes its reason on the strip: \`LZ-B HAS PODS DOWN — OPEN SITE 5 AS LZ-C\``, flashed,
+    await st(() => document.getElementById('objectiveText').textContent));
+  await page.screenshot({ path: join(SHOTS, `survey-4-${size}-2-refused.png`) });
+  await tap(page.locator('#sitesWin .sw-pill[data-kind="open"]'));
+  await page.waitForTimeout(600);
+  const opened = { view: await sites(st), lz: await st(() => window.__ap.store.getState().landing.lzs.find((lz) => lz.label === 'LZ-C') ?? null), stamps: await st(() => window.__e2eStamps) };
+  check(`${size}: OPEN AS LZ-C opens it: LZ-C on SITE 5 (6 pods of room), the stamp \`LZ-C → SITE 5\`, its row \`LZ-C · OPENED ON SITE 5 · ROOM 1,200 …\``,
+    opened.lz?.site === 'site-5' && opened.lz.pods === 6 && opened.stamps.includes('LZ-C → SITE 5') && opened.view.lzs[2] === 'LZ-C · OPENED ON SITE 5 · ROOM 1,200 · WIDE · FLAT ★★★',
+    JSON.stringify({ lz: opened.lz, lzs: opened.view.lzs, stamps: opened.stamps }));
+  await page.screenshot({ path: join(SHOTS, `survey-4-${size}-3-opened.png`) });
+  // Back to the ship's view (the phone's NAV PLOT tab), then hold [F] to LZ-C's window and [L] there.
+  if (phone) {
+    const nav = page.locator('.dock-item[data-tool="navplot"]');
+    await nav.scrollIntoViewIfNeeded();
+    await nav.tap();
+  }
+  const landedC = () => window.__ap.store.getState().landing.pods.some((r) => r.fate.kind === 'down' && r.fate.touchdown.lz === 'LZ-C');
+  // Every stop the held [F] is spent at, recorded in the page (a spent hold lasts only until the key is let go).
+  await st(() => {
+    window.__e2eSpent = [];
+    setInterval(() => {
+      const spent = window.__ap.fastForward().spent;
+      if (spent !== null && window.__e2eSpent.at(-1) !== spent) window.__e2eSpent.push(spent);
+    }, 30);
+  });
+  let launched = false;
+  let shotWindow = false;
+  const until = Date.now() + 240000;
+  while (Date.now() < until && !(await st(landedC))) {
+    const now = await st(() => {
+      const s = window.__ap.store.getState();
+      return { lz: s.landing.window?.lz ?? null, held: window.__ap.fastForward().held, spent: window.__ap.fastForward().spent,
+        keys: window.__ap.director().shown?.keys ?? [], text: window.__ap.director().shown?.text ?? '' };
+    });
+    if (now.lz === 'LZ-C') {
+      await fKey.set(false);
+      if (!shotWindow) { await page.screenshot({ path: join(SHOTS, `survey-4-${size}-4-window.png`) }); shotWindow = true; }
+      if (!launched && /press \[L\]/.test(now.text)) { await page.keyboard.press('KeyL'); launched = true; }
+    } else {
+      // Held until the game spends it (the strip's row may change under a running hold: DROP UNCERTAIN has no [F] tail).
+      const keep = fKey.down && now.held && now.spent === null;
+      await fKey.set(now.lz === null && (now.keys.includes('F') || keep), now.held);
+    }
+    await page.waitForTimeout(150);
+  }
+  await fKey.set(false);
+  const spents = await st(() => window.__e2eSpent);
+  const stopAtC = spents.includes('LZ-C WINDOW');
+  const inC = await st(() => window.__ap.store.getState().landing.pods.flatMap((r) => (r.fate.kind === 'down' && r.fate.touchdown.lz === 'LZ-C' ? [`${r.fate.touchdown.place}:${r.fate.touchdown.touch}`] : [])));
+  check(`${size}: the held [F] stops at LZ-C's window (\`LZ-C WINDOW\`), and [L] lands a pod in LZ-C, in plan (${inC.join(', ')})`,
+    stopAtC && inC.length > 0 && inC.every((one) => one === 'lz:soft'), JSON.stringify({ spents, inC }));
+  await page.screenshot({ path: join(SHOTS, `survey-4-${size}-5-landed.png`) });
+  const reportOk = await runKit(page, game).landToReport();
+  await page.waitForTimeout(2500);
+  const report = await st(() => [...document.querySelectorAll('#lrRows .lr-row')].map((row) => row.innerText.replace(/\s+/g, ' ').trim()));
+  check(`${size}: the LANDING REPORT's LZ-C row: \`LZ-C … · OPENED ON SITE 5\`, no SHORT`,
+    reportOk && report.some((row) => /^LZ-C .*· OPENED ON SITE 5/.test(row) && !/SHORT/.test(row)), report.join(' | '));
+  await page.screenshot({ path: join(SHOTS, `survey-4-${size}-6-report.png`) });
+  check(`${size}: no page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
+  await game.context.close();
+}
+await openSitePart({ viewport: { width: 1440, height: 900 } }, '1440');
+await openSitePart({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 }, '390');
 
 await finish(browser);
