@@ -1094,7 +1094,19 @@ NOW carry ` · or [G] AUTO`. Item 120's two fixes are in. Where the build differ
 9. **The words for B-TIME.** `AUTODROP ARMED · THE PLAN: 2 PASSES · HOLD [F] BETWEEN THEM` (`autodrop-text.ts radio.
    armedPlan`), as B-TIME asked. The suites and the e2e scenario still press [F] as a tap where B-DROP touched them; B-TIME's
    hold drivers replace those at the merge.
-10. **Tests.**
+10. **Measured, before (`b01cf61`) → after.**
+    - `skills/autodrop-sweep` at full depth, all four kids (landed % against the same kid's v0; the rows not named are
+      unchanged): HALCYON sloppy v1 −20 → 0; CORMORANT busy v2 0 → +11; VESPER healed v2 +6 → +12, quiet v2 +12 → +31,
+      sloppy v2 −6 → +7, busy v1 +12 → +6. `drop.worst` −20 → −6 (VESPER sloppy v1, as before). The one loss, VESPER busy
+      v1 (81% → 75%, one pod of 16), was not traced; the busy kid's REPAIRs move its windows, and v1 now waits armed where
+      the hold let go.
+    - `npm run balance:report -- --quick --only drop.,worth.autodrop` (24 seeds; the leave-one-out's AUTODROP row):
+      `worth.autodrop.v1` −0.11 ±0.08 (LOW) → **0.10 ±0.06 (OK)**; `drop.Δpods.CORMORANT.sloppy.v1` 0% → 0% (LOW: as
+      arrived, every CORMORANT window is WIDE, so there is nothing to arm); `drop.Δpods.VESPER.sloppy.v3` 19% → 19% (OK);
+      `drop.worst` −6% → −6% (LOW). `worth.autodrop.v3` is a full-profile row (`—` in quick).
+    - Run while the machine was loaded (load 20–40 on 4 cores), so wall times are long; the numbers are the harness's, not
+      the clock's.
+11. **Tests.**
     - `skills/autodrop-flow` re-scoped: v1 by [G] (the tail, the POD BAY model, the arm, the centred window, 'centre-done',
       [L] plain, [G] cancels, armed from the MIND); v2's pods at their cue (`dropDemoOffset` within 0.2 tac s) and its thread
       wait measured against the cue; R5 and the steps down armed by [G].
@@ -1106,6 +1118,9 @@ NOW carry ` · or [G] AUTO`. Item 120's two fixes are in. Where the build differ
     - `landing/table`: the launch tail on L4 and L7 (and never on L5 or L6), AD-armed over a WIDE window.
     - `landing/bay` (the bay's physics) needed nothing; the POD BAY's AUTODROP model is checked in `skills/autodrop-flow`.
     - e2e `skills-4cde-landing`: v1 by the POD BAY's arm button (a click), BULLSEYE, its disarm, then a plain [L].
+    - **Runs.** Typecheck clean. The quick tier once: 216 passed, 15 failed, every one on the time budget only (the tier
+      took 1,500 s at load 20–40); the 15 run alone all pass their checks, and `tsc-tests` is clean. e2e
+      `skills-4cde-landing` alone: 16/16.
     - **Not B-DROP's, left for their owners:** `wp12/playthrough.ts`'s landing kid still has its `hold [L]` branch. It is dead
       now and harmless: its kid presses [G] at GET READY's tail and the waits' ` · [G] AUTODROP`, and [L] at LAUNCH NOW.
       `AGENTS.md`'s "What's built" still says `v1 CENTRE (hold [L] …)` and lists item 120 as a next step. The playtest

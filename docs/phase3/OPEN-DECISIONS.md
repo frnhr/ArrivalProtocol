@@ -757,8 +757,12 @@ track as recommended. The new calls B-DROP made:
      as they do for v2. The POD BAY's arm button is there from v1 and reads the same for every version (`AUTO · CENTRE [G]`,
      `AUTO · PASS [G]`, `AUTO · PLAN [G]`; armed, `ARMED · LZ-B · 2 PODS`). R4's tap lesson is gone, with no v1 lesson in its
      place: the tail and the button say it.
-     - Measured (autodrop-sweep at full depth, all four kids, landed % against the same kid's v0; before → after):
-       NUMBERS
+     - Measured with item 120's fixes (autodrop-sweep at full depth, all four kids, landed % against the same kid's v0, before
+       → after; every other row unchanged): HALCYON sloppy v1 −20 → 0; CORMORANT busy v2 0 → +11; VESPER healed v2 +6 →
+       +12, quiet v2 +12 → +31, sloppy v2 −6 → +7, busy v1 +12 → +6 (81% → 75%, one pod). `drop.worst` −20 → −6 (VESPER
+       sloppy v1, as before). The balance report's quick rows: `worth.autodrop.v1` −0.11 ±0.08 → **0.10 ±0.06** (LOW → OK);
+       `drop.Δpods.CORMORANT.sloppy.v1` 0% → 0% (LOW: every CORMORANT window is WIDE as arrived, nothing to arm);
+       `drop.Δpods.VESPER.sloppy.v3` 19% → 19%; `drop.worst` (quick: CORMORANT, VESPER × quiet, sloppy) −6% → −6%.
      - To reverse: the hold is in git (`autodropKeyDown`/`KeyUp`, before `0547d28`); the tails are
        `autodropLineOf`'s `launchTail` and v1's `tailCentre`.
 146. **v3's plan stays centred; only v2 times from the cue.** BUILT. Item 120's finding was v2's; v3's rows are fitted to each
