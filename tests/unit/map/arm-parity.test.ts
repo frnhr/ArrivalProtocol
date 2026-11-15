@@ -94,8 +94,10 @@ check(`…and every ship's built world past ARES-VII (its ship slices from a bea
 // check-named-hollow on KESTREL, PAL's two lines and CONTROL's HOLLOW line in the log), the charge's REPAIR renewal comes before
 // the deliveries, and ARES-VII's ENGINE I/O FAULT is found at the boot (Engine I/O 38 from the first tick, not after 2 s of
 // thrust). So every moment from ARES-VII's boot moves; every ship's outcome (all locked) and the run's end (won-merge) are as
-// before.
-const PINNED_RUN = '11140349d6de1264';
+// before. That gave 11140349d6de1264; then the INBOX's one policy reminder (ring 4's second notice gone) moved every moment
+// from VESPER's boot on (its beam crosses ring 4, so its INBOX holds one memo fewer); every moment before it is the same
+// digest, and every outcome and the end as before.
+const PINNED_RUN = '9d1eb332a03f39af';
 const REQUESTS: readonly (RepoFileId | null)[] = ['mv', 'rm', 'swap', 'cp', null];
 const h = createHarness11(1, { soulsFound: false });
 const state = (): Readonly<GameState> => h.store.getState();
