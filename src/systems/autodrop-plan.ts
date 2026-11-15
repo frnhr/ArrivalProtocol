@@ -134,7 +134,10 @@ export function volleySlots(
   // An offset pushed even one pod out of a short sure part (review B2's probe: a 0.3 tac s sure part against a learned 0.33 s
   // late): the one pod goes in the middle of what is left of it instead (not on its edge, which the AI tick can pass). The
   // offset trims a volley (R5: trained by you is felt), but never makes a window that has room for a launch unflyable.
-  if (maxN >= 1 && lo <= hi) return { n: 1, first: (lo + hi) / 2 };
+  // Playtest 1 (B-DROP's sweep): the middle of the sure part itself, or now once that has passed. The middle of what is
+  // left from now receded half a tick every tick and never came (VESPER's v1 named `LAUNCHING` through a 0.28 tac s sure
+  // part and sent nothing; the hold on [L] had hidden it: the kid let go).
+  if (maxN >= 1 && lo <= hi) return { n: 1, first: Math.max((span.lo + hi) / 2, lo) };
   return null;
 }
 

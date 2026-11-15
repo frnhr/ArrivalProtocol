@@ -714,7 +714,8 @@ function wideOpen(state: Readonly<GameState>, view: Readonly<LandingView>): bool
 // • Armed, the strip never offers a WIDE [L] (OPEN-DECISIONS 120: an obedient kid threw CORMORANT's pods off-site under an armed
 //   v2): while it still has a launch to fly, over a WIDE DROP window it says AD-armed's wait instead of L5 or L3b, whichever
 //   LZ the window is. An arm with nothing left to fly (a pass whose every window is WIDE, the kid's REPAIR still running)
-//   holds nothing back: there the WIDE [L] is the kid's, with the tail ` · AUTODROP ARMED`.
+//   holds nothing back: there the WIDE [L] is the kid's, with the tail ` · AUTODROP ARMED`. Nor does v3's pin of a pod
+//   outside its plan (review M2): that [L] throws a pod no sure window takes, never one AUTODROP would land.
 // • v1 armed in the MIND (it flies from the SHIP screen only, R8): its window near or open, the row says so, with [TAB].
 export function autodropLineOf(state: Readonly<GameState>, sol: Readonly<DropSolution>): AutodropLine | null {
   if (!landingOn(state) || sol.block !== null || sol.dot === null) return null;
@@ -738,11 +739,13 @@ export function autodropLineOf(state: Readonly<GameState>, sol: Readonly<DropSol
       row = { id: 'landing-AD-wait', text: text.wait(countdown(state, next.atTSec)), keys: [], urgency: 'now', layer: 'mind' };
     } else if (near) {
       row = { id: 'landing-AD-fly', text: text.fly(next.lz, next.n, countdown(state, next.atTSec)), keys: ['G'], urgency: 'wait', layer: 'ship' };
-    } else if (open !== null && (armedFor(state, view, open.lz) || (next !== null && wideOpen(state, view)))) {
+    } else if (open !== null && (armedFor(state, view, open.lz)
+      || (next !== null && wideOpen(state, view) && !(ad.armed === 'plan' && planPin(state, view) !== null)))) {
       // A window the machine owns (v2's sure window of an LZ its pass flies, or any window while v3's plan has rows: the plan
       // holds every pod for the windows it chose), or a WIDE DROP window (OD 120). It waits, so the strip doesn't offer
-      // L4–L6's manual [L] there. A v2 pass leaves a sure window of an LZ it doesn't fly to the kid's hands, and v3 the sure
-      // window of an LZ outside its plan (its pin, review M2).
+      // L4–L6's manual [L] there. A v2 pass leaves a sure window of an LZ it doesn't fly to the kid's hands, and v3 the window
+      // of an LZ outside its plan with LOAD NEXT pinned to a pod the plan holds for no window (review M2, OPEN-DECISIONS 5):
+      // that [L], WIDE or not, throws only a pod no sure window will ever take.
       const words = next === null ? text.armedIdle : text.armedNext(next.lz, next.n, minSec(Math.max(0, tacTo(state, next.atTSec))));
       row = { id: 'landing-AD-armed', text: words, keys: ['G'], urgency: 'wait', layer: 'ship' };
     } else {
