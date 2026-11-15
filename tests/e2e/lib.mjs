@@ -47,6 +47,29 @@ export function checker() {
   return { check, results, finish };
 }
 
+// A key the scenario holds down across its polls (playtest 1, plan §3.1: [F] is held to fast-forward, a tap does nothing).
+// `set(true)` presses it once and keeps it down, `set(false)` lets it up; asking for the state it is in does nothing, so a
+// poll loop can call `set(the strip shows [F])` every time. `gameHeld` (optional, the game's own view: ?debug's
+// `__ap.fastForward().held`) catches a key the game let go while it was down here (a modal opening over the game releases
+// every held key, and the browser's auto-repeat is never taken for a press): it is then let up and pressed afresh. Every
+// scenario that drives the strip's [F] holds it this way: while the line offers `hold [F]`, and not a moment after.
+export function holdKey(page, code) {
+  let down = false;
+  return {
+    get down() { return down; },
+    async set(on, gameHeld = null) {
+      if (on && down && gameHeld === false) {
+        await page.keyboard.up(code);
+        down = false;
+      }
+      if (on === down) return;
+      down = on;
+      if (on) await page.keyboard.down(code);
+      else await page.keyboard.up(code);
+    },
+  };
+}
+
 // Page helpers every scenario writes the same way: evaluate in the page, poll a predicate, collect page errors.
 export function pageKit(page) {
   const errors = [];

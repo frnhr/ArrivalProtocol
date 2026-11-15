@@ -1,7 +1,7 @@
 // Slices 4c and 4e, the landing half of slice-4cde-plan §8.5 (the review-fix pass): AUTODROP v1–v3 and AUTOBURN v3 in the
 // page, on run 1's arm, each ship reached by ?debug's __ap.slot and locked at once (__ap.lockOn), HOLLOW asleep, the
 // beam's seeds freed and the drivers healed, so the strip shows the landing's own rows. A kid who obeys the strip: [F]
-// whenever it offers a SKIP.
+// held whenever it offers `hold [F]` (playtest 1: a hold, not a tap).
 // • AUTODROP v1 on HALCYON: [L] held down from `WINDOW … — hold [L]`, AUTODROP launches around the centre, the echo says
 //   BULLSEYE, [L] up.
 // • AUTODROP v2 on KESTREL: the POD BAY's pass rows, a [+] click, [G], TAB into the MIND, the pass flies from there and ends.
@@ -10,7 +10,7 @@
 // • AUTODROP v3 on CORMORANT: the plan table and its check line (`PLAN · n PASSES · A 6 · B 3 ✓`, pods), [G], [F] per gap,
 //   every pod down (the landing ends under the plan's last row).
 // Usage: node tests/e2e/scenarios/skills-4cde-landing.mjs   (env E2E_BASE_URL; tests/e2e/run.mjs runs it)
-import { launch, BASE_URL, checker, pageKit } from '../lib.mjs';
+import { launch, BASE_URL, checker, pageKit, holdKey } from '../lib.mjs';
 
 const { check, finish } = checker();
 const browser = await launch();
@@ -28,23 +28,27 @@ const pods = () => st(() => {
   return { total: s.landing.pods.length, aboard: of('aboard').length, down: of('down').length, auto: s.landing.pods.filter((r) => (r.fate.kind === 'falling' || r.fate.kind === 'down') && r.fate.launch.source === 'autodrop').length };
 });
 
-// [F] when the strip offers a SKIP and none runs (the kid between windows).
+// [F] held while the strip offers `hold [F]` (the kid between windows), let up as soon as it stops.
+const fKey = holdKey(page, 'KeyF');
 async function skipIfOffered() {
   const line = await shown();
-  const skipping = await st(() => window.__ap.store.getState().clock.skipWarp !== null);
-  if (!skipping && (line.keys ?? []).includes('F')) await page.keyboard.press('KeyF');
+  const held = await st(() => window.__ap.fastForward().held);
+  await fKey.set((line.keys ?? []).includes('F'), held);
 }
 
-// Polls `done` every 250 ms for `maxMs`, pressing [F] when offered and calling `each` (an async act) first.
+// Polls `done` every 250 ms for `maxMs`, holding [F] while offered and calling `each` (an async act) first; [F] is let up
+// when it returns.
 async function obeyUntil(done, maxMs, each) {
   const end = Date.now() + maxMs;
-  while (Date.now() < end) {
-    if (await st(done)) return true;
+  let ok = false;
+  while (Date.now() < end && !ok) {
+    if (await st(done)) { ok = true; break; }
     if (each) await each();
     await skipIfOffered();
     await page.waitForTimeout(250);
   }
-  return st(done);
+  await fKey.set(false);
+  return ok || st(done);
 }
 
 // The ship in `slot`, its boot skipped, quiet (HOLLOW asleep, seeds freed, drivers healed, its lessons met), with the

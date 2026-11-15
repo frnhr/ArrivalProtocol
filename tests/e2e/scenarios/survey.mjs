@@ -14,7 +14,7 @@
 // • The phone (360 × 740): the SITES tab in the dock, its window alone, a row tapped opens its pills, nothing wider than the
 //   page; at the DESK the tab is gone.
 // Usage: node tests/e2e/scenarios/survey.mjs   (env E2E_BASE_URL; tests/e2e/run.mjs runs it)
-import { launch, BASE_URL, SHOTS, checker, pageKit, runKit } from '../lib.mjs';
+import { launch, BASE_URL, SHOTS, checker, pageKit, runKit, holdKey } from '../lib.mjs';
 import { join } from 'node:path';
 
 const ROUTE = [0, 2, 5, 11, 15];
@@ -97,20 +97,22 @@ const sites = (st) => st(() => {
     opened && /^NO SURVEY/.test(view.status) && view.lzs.length === 2 && view.lzs.every((row) => row.endsWith('UNSURVEYED')), JSON.stringify(view));
   await st(() => window.__ap.lockOn());
   await waitFor(() => window.__ap.store.getState().run.phase === 'landing', 10000);
-  // The kid launches in LZ-B's window and SKIPs between, until a pod is down on LZ-B.
+  // The kid launches in LZ-B's window and holds [F] between (while the strip offers it), until a pod is down on LZ-B.
+  const fKey = holdKey(page, 'KeyF');
   const lzBDown = () => window.__ap.store.getState().landing.pods.some((record) => record.fate.kind === 'down' && record.fate.touchdown.lz === 'LZ-B');
   const end = Date.now() + 240000;
   let pressedIn = null;
   while (Date.now() < end && !(await st(lzBDown))) {
     const now = await st(() => {
       const s = window.__ap.store.getState();
-      return { window: s.landing.window?.lz ?? null, falling: s.landing.pods.some((r) => r.fate.kind === 'falling'), skipping: s.clock.skipWarp !== null,
+      return { window: s.landing.window?.lz ?? null, falling: s.landing.pods.some((r) => r.fate.kind === 'falling'), held: window.__ap.fastForward().held,
         keys: window.__ap.director().shown?.keys ?? [], rev: s.landing.pods.filter((r) => r.fate.kind !== 'aboard').length };
     });
-    if (now.window === 'LZ-B' && !now.falling && pressedIn !== now.rev) { await page.keyboard.press('KeyL'); pressedIn = now.rev; }
-    else if (now.window === null && !now.falling && !now.skipping && now.keys.includes('F')) await page.keyboard.press('KeyF');
+    if (now.window === 'LZ-B' && !now.falling && pressedIn !== now.rev) { await fKey.set(false); await page.keyboard.press('KeyL'); pressedIn = now.rev; }
+    else await fKey.set(now.window === null && now.keys.includes('F'), now.held);
     await page.waitForTimeout(200);
   }
+  await fKey.set(false);
   const shown = await st(() => ({
     reveals: window.__ap.survey().reveals, stamps: window.__e2eStamps, comms: document.getElementById('commsLog').innerText,
     tail: window.__ap.log().filter((entry) => / · LZ-B IS ROCKY$/.test(entry.text)).map((entry) => entry.text),
