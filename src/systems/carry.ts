@@ -23,15 +23,15 @@ import {
 
 export { BEAM_SEED_LAYOUT_BLOCKS };
 
-// Transmission and carry (§6.9), pure and DOM-free: what of the unit crosses the link to the next
+// Transmission and carry (§6.9), pure and DOM-free: what of the unit crosses the beam to the next
 // ship, and what the crossing does to it. systems/run.ts calls these in order at TRANSMIT:
 // 1. packUnit: the unit's own files (Core, AI tools, skills, upgrade files, fs-tools, FIREWALLs, REPAIR
 //    CHARGE) are copied out of memory with their integrity and infection (never a recoil: AI time starts
 //    over), plus the file a card picked at this TRANSMIT adds (WP8, systems/draft.ts). Files are packed
 //    in a fixed order, rack E first (the Core, the AI tools by role, upgrades and skills), then rack F
-//    (the fs-tools by kind, FIREWALLs, then REPAIR CHARGE), and the charge fills what the link has left:
-//    carried = min(charge, link − files). Dropped files stay behind; the Core, Engine I/O, Nav Plotter
-//    and the last copy of each tool kind can't be dropped.
+//    (the fs-tools by kind, FIREWALLs, then REPAIR CHARGE). The beam has no link limit (playtest 1, note 20): every block of
+//    charge crosses, and the destination's room is the one limit (layoutCarried). Dropped files stay behind; the Core,
+//    Engine I/O, Nav Plotter and the last copy of each tool kind can't be dropped.
 // 2. rollTransitHits: seeded hits (childRng(seed, next ship, 'transit')) on the packed files, weighted
 //    by size, 15–35 each. The best copy of every tool kind (an fs-tool kind or an AI tool's role) never
 //    drops below 60, and the Core takes at most 15 per hit and never drops below its emergency reset
@@ -50,7 +50,7 @@ export { BEAM_SEED_LAYOUT_BLOCKS };
 // The order rack E is packed in (§6.9): the Core, then the AI tools by their job.
 const RACK_E_ROLE_ORDER: readonly SegmentRole[] = ['core', 'engine-io', 'autopilot', 'sensor', 'navplot', 'telemetry', 'comms'];
 
-// The unit's own live files in memory, in address order: what can cross the link.
+// The unit's own live files in memory, in address order: what can cross the beam.
 export function unitFilesIn(memory: readonly Segment[]): Segment[] {
   return memory.filter(isUnitFileType);
 }
@@ -117,18 +117,13 @@ function packedCopy(seg: Segment): Segment {
 }
 
 export interface Packet {
-  linkBlocks: number;
   rackE: Segment[];         // packed copies, in rack-E order
   rackF: Segment[];         // packed fs-tools, in rack-F order (REPAIR CHARGE apart, below)
   charge: RedundancySegment | null;  // the charge's packed copy (null: the unit has none left)
   filesBlocks: number;      // the files' blocks, charge excluded
-  // Blocks of files over the link (files − link, when positive; the slice-3a review's B1): such a packet can't cross
-  // until files are left behind (the PACKET says `n TOO MANY FOR THE LINK` and TRANSMIT ▸ waits; transmitNext throws).
-  overLink: number;
-  chargeHeld: number;       // the charge the unit had at TRANSMIT
-  chargeCarried: number;    // what crosses: min(charge, link − files), none while the files are over the link
-  // The beam seeds riding along (phase 3 slice 2, 04 §3.4; systems/beam-seeds.ts rollBeamSeeds, at the beam): hitchhikers
-  // ride free, so they are in neither filesBlocks nor the link; they take room only at the boot (layoutCarried).
+  chargeHeld: number;       // the charge the unit had at TRANSMIT: all of it crosses (no link limit, playtest 1 note 20)
+  // The beam seeds riding along (phase 3 slice 2, 04 §3.4; systems/beam-seeds.ts rollBeamSeeds, at the beam): hitchhikers,
+  // not in filesBlocks; they take room only at the boot (layoutCarried).
   seeds: BeamSeedPlan[];
   // Phase 3 slice 3b: the delivery chips' files as packed (systems/draft.ts planPacket, the one adder, fills it; packUnit
   // knows no chips): each chip not sent on and the ids of the files it laid out, in chip order. The send reads it for
@@ -151,12 +146,10 @@ export interface PacketDelivery {
   segIds: string[];
 }
 
-// Packs the unit for a link of `linkBlocks` (step 1 of the header). Copies only: memory is not touched.
-// `added` is the picked card's new file (systems/draft.ts cardFiles), packed with the rest; none when the
-// card brings no file. Throws on a drop that is locked and on an unknown id. Files over the link are reported (overLink),
-// not thrown on: a unit grown past a short arm hop's link (82 at 58 LY) must still reach its PACKET, which asks for files
-// to be left behind (the slice-3a review's B1: SET COURSE threw there).
-export function packUnit(memory: readonly Segment[], linkBlocks: number, dropped: readonly string[], added: readonly Segment[] = []): Packet {
+// Packs the unit (step 1 of the header). Copies only: memory is not touched. `added` is the picked card's new file
+// (systems/draft.ts cardFiles), packed with the rest; none when the card brings no file. Throws on a drop that is locked
+// and on an unknown id. Files over the destination's room are the PACKET's question (roomFit's `leave`), not packUnit's.
+export function packUnit(memory: readonly Segment[], dropped: readonly string[], added: readonly Segment[] = []): Packet {
   const live = unitFilesIn(memory);
   const kept = live.filter((seg) => !dropped.includes(seg.id));
   for (const id of dropped) {
@@ -175,12 +168,10 @@ export function packUnit(memory: readonly Segment[], linkBlocks: number, dropped
   const rackE = files.filter((seg) => !packsInRackF(seg)).sort((a, b) => rackESortKey(a) - rackESortKey(b)).map(packedCopy);
   const rackF = files.filter(packsInRackF).sort((a, b) => rackFSortKey(a) - rackFSortKey(b)).map(packedCopy);
   const filesBlocks = [...rackE, ...rackF].reduce((sum, seg) => sum + seg.size, 0);
-  const overLink = Math.max(0, filesBlocks - linkBlocks);
   const held = charges[0] ?? null;
   const chargeHeld = held ? held.used : 0;
-  const chargeCarried = Math.max(0, Math.min(chargeHeld, linkBlocks - filesBlocks));
   const charge = held ? packedCopy(held) as RedundancySegment : null;
-  return { linkBlocks, rackE, rackF, charge, filesBlocks, overLink, chargeHeld, chargeCarried, seeds: [], deliveries: [], skills: [] };
+  return { rackE, rackF, charge, filesBlocks, chargeHeld, seeds: [], deliveries: [], skills: [] };
 }
 
 // Every packed file a hit can land on (charge is not a file: §6.9 hits "packed non-charge files").
@@ -348,7 +339,6 @@ export function layoutCarried(
   const layout = layoutFor(ship.memoryClass);
   const receiver = layout.receiverBlocks;
   const room = roomForUnitOn(ship);
-  if (packet.overLink > 0) throw new Error(`layoutCarried: ${packet.overLink} blocks of files over the link were sent`);
   if (filesBlocks > room) {
     throw new Error(`layoutCarried: ${filesBlocks} blocks of files do not fit ${ship.name}'s room (${room})`);
   }
@@ -388,7 +378,7 @@ export function layoutCarried(
 }
 
 // REPAIR CHARGE as it arrives: `points` of charge in as many blocks (the blocks a repair had spent
-// do not cross the link), a full pool again. A unit that spent its last point carried no pool file
+// do not cross the beam), a full pool again. A unit that spent its last point carried no pool file
 // (actions.ts retireEmptyCharge freed its blocks), so the floor and the star credit arrive in a fresh one,
 // written like a fresh unit's under an id of its own.
 function chargeSegment(packed: RedundancySegment | null, points: number): RedundancySegment {
@@ -418,14 +408,14 @@ export function arrivalDamage(segs: readonly Segment[], damage: readonly Arrival
 // A fresh unit (ship 1's written racks E–F: SCAN, 36 REPAIR CHARGE) as it would arrive on `ship` with no
 // transit hits and no stars: what the headless suites fly a later ship with on its own (tests/unit/wp1's
 // AP_SHIP harness and tests/unit/wp7's pass it to createInitialState explicitly; the game itself only ever
-// carries a real unit). It lives here because it is packUnit and layoutCarried run on the written racks. Packed for
-// `linkBlocks` (the hop's) and laid out for `threat` (the ship's verdict), with no beam seeds (risk 14: the flight sims stay
-// seed-free). Throws for a first ship (nothing transmits to it).
-export function freshUnitRacks(ship: ShipDef, linkBlocks: number, threat: Readonly<ShipThreat>): CarriedRacks {
-  if (ship.kind === 'first') throw new Error(`freshUnitRacks: ${ship.name} meets a fresh unit by itself (no link)`);
+// carries a real unit). It lives here because it is packUnit and layoutCarried run on the written racks. Laid out for
+// `threat` (the ship's verdict), with no beam seeds (risk 14: the flight sims stay seed-free). Throws for a first ship
+// (nothing transmits to it).
+export function freshUnitRacks(ship: ShipDef, threat: Readonly<ShipThreat>): CarriedRacks {
+  if (ship.kind === 'first') throw new Error(`freshUnitRacks: ${ship.name} meets a fresh unit by itself (no beam)`);
   const files = [...FRESH_UNIT_RACK_E, ...FRESH_UNIT_RACK_F]
     .filter((item): item is Exclude<typeof item, { free: number }> => !('free' in item))
     .map((item) => structuredClone(item) as Segment);
-  const packet = packUnit(files, linkBlocks, []);
-  return layoutCarried(packet, packet.chargeCarried, ship, threat).racks;
+  const packet = packUnit(files, []);
+  return layoutCarried(packet, packet.chargeHeld, ship, threat).racks;
 }

@@ -2,7 +2,8 @@
 // A (5 ships, noisy), B (8 ships, clean and careful) and C (8 ships, noisy and sloppy) on real run-1 routes; M3 on run 1
 // (CORMORANT true, VESPER false); the forced boarding at CORMORANT on the worked route; the scripted first seed at depth 3
 // (the tutorial run's Telemetry seed, whatever the noise); nominalRouteThreat. INFO: the share of routes with two or more
-// HOLLOW ships when every seed is left (slice-2 risk 2, moved to the route), and the final hop's link spread (risk 6).
+// HOLLOW ships when every seed is left (slice-2 risk 2, moved to the route). (The final hop's link spread, risk 6, went
+// with the link: playtest 1, note 20.)
 import { check, finish } from '../landing/checks';
 import type { RunMapState } from '@/types/map';
 import type { RunThreatState, ShipThreat, LinkNoise } from '@/types/threat';
@@ -85,7 +86,6 @@ const arms: RunMapState[] = [
 ];
 let flown = 0;
 let twoPlus = 0;
-const links: number[] = [];
 const rng = createRng(11);
 for (const arm of arms) {
   for (const route of routes(arm)) {
@@ -98,11 +98,6 @@ for (const arm of arms) {
     flown++;
     if (run.plans.filter((plan) => plan.act === 'hollow').length >= 2) twoPlus++;
   }
-  const into = new Set(routes(arm).map((route) => route[route.length - 2]!));
-  for (const from of into) links.push(hopBetween(arm, from, 19).linkBlocks);
 }
-links.sort((x, y) => x - y);
 console.log(`INFO  routes with ≥ 2 HOLLOW ships when every seed is left: ${twoPlus} of ${flown} (${((100 * twoPlus) / flown).toFixed(0)}%) on ${arms.length} arms (run 1 + fresh rolls, noise rolled per run)`);
-console.log(`INFO  the final hop's link over ${links.length} last ships: ${links[0]}–${links[links.length - 1]}, median ${links[Math.floor(links.length / 2)]} (02 §1.3: 87–117)`);
-check('the final hop\'s link stays within the arm\'s 82–123', links[0]! >= 82 && links[links.length - 1]! <= 123);
 finish();

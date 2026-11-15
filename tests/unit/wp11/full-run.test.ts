@@ -142,11 +142,11 @@ function transmitChecked(): void {
   const engineHits = arrival.hits.filter((hit) => hit.role === 'engine-io').reduce((sum, hit) => sum + (hit.from - hit.to), 0);
   expect('every hand-over: the carried Engine I/O = its integrity before the beam minus the hits the log names',
     Math.abs(integrityOf('engine-io') - (engineBefore - engineHits)) < 1e-9, `${ship.name}: ${engineBefore} − ${engineHits} → ${integrityOf('engine-io')}`);
-  const crossed = Math.min(plan.chargeHeld, plan.linkBlocks - plan.filesBlocks);
   const total = arrival.chargeCarried + arrival.starCredit + arrival.cardCharge + arrival.chargeFloorAdded - arrival.chargeOverflowLost;
-  expect('every hand-over: min(charge held, link − files) crosses, then +6 per ★, the card\'s, the floor, less any overflow',
-    arrival.chargeCarried === crossed && arrival.starCredit === credit && credit === STAR_CHARGE_BONUS * stars && chargeLeft(state()) === total,
-    `${ship.name}: held ${plan.chargeHeld}, link ${plan.linkBlocks} − files ${plan.filesBlocks} → ${arrival.chargeCarried}; ★ ${stars} → ${arrival.starCredit}; total ${total} vs ${chargeLeft(state())}`);
+  // Playtest 1 (note 20): no link, so every block of charge held crosses.
+  expect('every hand-over: all the charge held crosses, then +6 per ★, the card\'s, the floor, less any overflow',
+    arrival.chargeCarried === plan.chargeHeld && arrival.starCredit === credit && credit === STAR_CHARGE_BONUS * stars && chargeLeft(state()) === total,
+    `${ship.name}: held ${plan.chargeHeld} → ${arrival.chargeCarried}; ★ ${stars} → ${arrival.starCredit}; total ${total} vs ${chargeLeft(state())}`);
   if (plan.extraHits === 0 && plan.coreHit === 0 && !plan.coreReset) {
     expect('every hand-over (no emergency): the crossing dealt the hop\'s hits less what ECC corrected (round(d / 7) − ECC)',
       arrival.hits.length === hitsLanding(hop, 0), `${ship.name}: ${arrival.hits.length} of ${hitsLanding(hop, 0)}`);

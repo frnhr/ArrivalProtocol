@@ -159,10 +159,10 @@ export const TRAINING_TEXT = {
   // None until a ship is picked (playtest 1, §3.7: `NEXT: PICK A SHIP ON THE CHART TO SEE WHAT IT ASKS` is cut).
   ahead: (ship: string, ark: boolean, pods: number, memory: number, cls: string, noise: string): string =>
     `NEXT: ${ship}${ark ? ' · ARK' : ''} · ${plural(pods, 'POD')} · MEMORY ${memory} ${cls} · NOISE ${noise}`,
-  // The packet preview (03 §4), by the limit that binds: `FILES 72 + SKILLS 17 · LINK 86 · 3 BLOCKS OVER`.
+  // The packet preview (03 §4) against the destination's room, its one limit (playtest 1, note 20: no link):
+  // `FILES 72 + SKILLS 17 · ROOM 88 · TIGHT · 3 BLOCKS OVER`.
   preview: {
     head: (files: number, skills: number): string => `FILES ${files} + SKILLS ${skills}`,
-    link: (link: number): string => `LINK ${link}`,
     room: (room: number, tight: boolean): string => `ROOM ${room}${tight ? ' · TIGHT' : ''}`,
     over: (blocks: number): string => `${plural(blocks, 'BLOCK')} OVER`,
     roomFor: (charge: number): string => `ROOM FOR ${charge} CHARGE`,

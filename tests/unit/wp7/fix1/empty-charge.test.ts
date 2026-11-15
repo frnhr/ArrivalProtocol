@@ -19,7 +19,7 @@ import { transmitModel } from '@systems/transmit';
 import { CHARGE_ARRIVAL_FLOOR, STAR_CHARGE_BONUS } from '@data/tuning';
 import { phase2HalcyonDef } from '../../support/hollow-world';
 import { layoutOf } from '@data/memory';
-import { fixtureVerdict, fixtureHop } from '../../support/arm-ship';
+import { fixtureVerdict } from '../../support/arm-ship';
 
 const h = createHarness7(5, { soulsFound: false });
 const state = () => h.store.getState();
@@ -51,9 +51,9 @@ const memoryValid = (): boolean => {
   h.store.update((d) => { d.run.phase = 'flight'; d.run.simulationRetryUsed = true; });
   spendAllCharge();
   check('the pool is gone from memory once its last point is spent', getRedundancy(state()) === undefined);
-  const packet = packUnit(state().memory, fixtureHop(1).linkBlocks, []);
-  check('…the packet carries no pool (charge null, 0 carried)', packet.charge === null && packet.chargeCarried === 0);
-  const blocks = arrivalCharge(packet.chargeCarried, STAR_CHARGE_BONUS).blocks;
+  const packet = packUnit(state().memory, []);
+  check('…the packet carries no pool (charge null, 0 carried)', packet.charge === null && packet.chargeHeld === 0);
+  const blocks = arrivalCharge(packet.chargeHeld, STAR_CHARGE_BONUS).blocks;
   let layoutError = '';
   let pool: ReturnType<typeof getRedundancy> | null = null;
   try {

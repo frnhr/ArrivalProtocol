@@ -475,8 +475,9 @@
     </div>
   </div>
 
-  <!-- TRANSMIT (§4.1 step 5, TransmitScreen): where the unit goes next, the packet against the link, what
-       the crossing costs, the files as chips; TRANSMIT ▸ streams them out across the light-years -->
+  <!-- TRANSMIT (§4.1 step 5, TransmitScreen): where the unit goes next, the packet against the destination's room (the
+       room bar is built by the screen; playtest 1 note 20: no link bar), what the crossing costs, the files as chips;
+       TRANSMIT ▸ streams them out across the light-years -->
   <div class="transmit-screen" id="transmitScreen" hidden>
     <div class="tx-inner">
       <div class="tx-head">
@@ -489,11 +490,6 @@
       <div class="tx-draft" id="txDraft" hidden>
         <div class="tx-draft-head"><span class="tx-draft-title" id="txDraftTitle"></span><span class="tx-draft-keys" id="txDraftKeys"></span></div>
         <div class="tx-cards" id="txCards"></div>
-      </div>
-      <div class="tx-packet">
-        <div class="tx-bar" id="txBar"><span class="tx-bar-files" id="txBarFiles"></span><span class="tx-bar-charge" id="txBarCharge"></span></div>
-        <div class="tx-bar-over" id="txBarOver" hidden></div>
-        <div class="tx-packet-line" id="txPacketLine"></div>
       </div>
       <div class="tx-drop-line" id="txDropLine"></div>
       <div class="tx-chips" id="txChips"></div>

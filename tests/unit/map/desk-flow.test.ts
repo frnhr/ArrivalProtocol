@@ -46,8 +46,8 @@ setCourseFromDesk(store, KESTREL);
 state = store.getState();
 const plan = state.run.transit!;
 const hop = hopBetween(state.run.map, HALCYON, KESTREL);
-check('SET COURSE ▸ KESTREL: the PACKET against the hop (link 117, 4 hits, 26 LY, 3 fixed by ECC while asleep)',
-  state.run.phase === 'transmit' && plan.toSlot === KESTREL && plan.toShipIndex === 2 && plan.linkBlocks === hop.linkBlocks && hop.linkBlocks === 117
+check('SET COURSE ▸ KESTREL: the PACKET against the hop (4 hits, 26 LY, 3 fixed by ECC while asleep)',
+  state.run.phase === 'transmit' && plan.toSlot === KESTREL && plan.toShipIndex === 2
   && plan.hop.transitHits === 4 && plan.hop.distanceLy === 26 && plan.hop.eccFixes === 3 && plan.extraHits === 0, JSON.stringify(plan.hop));
 check('…the hop is the one hopBetween gives', JSON.stringify(plan.hop) === JSON.stringify(hop));
 backToChart(store);

@@ -175,19 +175,16 @@ export const MAP_TEXT = {
     debris: (rack: string): string => `DEBRIS · RACK ${rack}`,
     problems: (labels: readonly string[]): string => (labels.length === 0 ? 'none' : labels.join(', ')),
     memory: (total: number, cls: MemoryClass, room: number): string => `MEMORY ${total} · ${cls} · ROOM FOR YOU ${room}`,
-    // The fit line (systems/arrival-preview.ts, from roomFit): the charge that arrives with the fewest seeds, the room's
-    // worst case when seeds could take some (M2: on a TIGHT ship seeds come before the charge), and what the link leaves
-    // behind (m2: `YOU FIT` alone hid it).
+    // The fit line (systems/arrival-preview.ts, from roomFit): the charge that arrives with the fewest seeds, and the
+    // room's worst case when seeds could take some (M2: on a TIGHT ship seeds come before the charge). Playtest 1 (note 20):
+    // no link, so the room is the line's one limit.
     fit: (fit: Readonly<RoomFit>): string => {
       const seeds = fit.word !== 'leave' && fit.chargeArrivesMin < fit.chargeArrives ? ` (${fit.chargeArrivesMin} IF SEEDS RIDE)` : '';
-      const link = fit.word !== 'leave' && fit.linkLost > 0 ? ` · LINK LEAVES ${fit.linkLost}` : '';
       switch (fit.word) {
-        case 'fits': return `${seeds === '' ? 'YOU FIT' : `YOU FIT · ${fit.chargeArrives} ARRIVES${seeds}`}${link}`;
-        case 'squeezed': return `CHARGE SQUEEZED: ${fit.chargeArrives} ARRIVES${seeds}${link}`;
-        case 'leave': return fit.overLink >= fit.over
-          ? `LEAVE ${fit.overLink} BLOCKS BEHIND · TOO BIG FOR THE LINK`
-          : `LEAVE ${fit.over} BLOCKS BEHIND · TOO BIG FOR THE ROOM`;
-        case 'no-charge': return `NO CHARGE ARRIVES${link}`;
+        case 'fits': return seeds === '' ? 'YOU FIT' : `YOU FIT · ${fit.chargeArrives} ARRIVES${seeds}`;
+        case 'squeezed': return `CHARGE SQUEEZED: ${fit.chargeArrives} ARRIVES${seeds}`;
+        case 'leave': return `LEAVE ${fit.over} BLOCKS BEHIND · TOO BIG FOR THE ROOM`;
+        case 'no-charge': return 'NO CHARGE ARRIVES';
       }
     },
     planet: (terrain: string, offSite: string): string => `${terrain} · ${offSite}`,
@@ -196,8 +193,9 @@ export const MAP_TEXT = {
     // `LZ: 3 · SURVEY NEEDED`); `site` is the site data this build plays (data/survey.ts siteDataOf).
     lzs: (count: number, site: SiteData): string => (site === 'good' ? `LZ: ${count} · SET BY ARRIVAL CONTROL` : SITES_TEXT.card.lzs(count)),
     // The BEAM row in two parts (02 §4's one line is 72 characters at its longest): the hop, then its noise and seeds.
-    // The hits and what ECC fixes are the lead's cost line (card.cost), so the BEAM row is the hop itself.
-    beam: (ly: number, link: number): string => `${ly} LY · LINK ${link}`,
+    // The hits and what ECC fixes are the lead's cost line (card.cost), so the BEAM row is the hop itself (playtest 1, note
+    // 20: its length; the link it had is gone).
+    beam: (ly: number): string => `${ly} LY`,
     noise: (noise: LinkNoise, seeds: string): string => `NOISE ${NOISE_WORD[noise]}${noise > 0 ? ` · ${noise}` : ''} · ${seeds}`,
     seeds: (range: { min: number; max: number } | null): string =>
       (range === null ? 'SEEDS: none' : range.max === range.min ? `SEEDS ${range.min}` : `SEEDS ${range.min}–${range.max}`),
@@ -229,7 +227,6 @@ export const MAP_TEXT = {
     zeroConfirm: 'ARRIVE WITH NO REPAIR CHARGE?',
     zeroIfSeedsConfirm: '0 CHARGE IF SEEDS RIDE · TRANSMIT ANYWAY?',
     overRoom: (over: number): string => `${over} TOO MANY FOR THE ROOM · LEAVE FILES BEHIND`,
-    overLink: (over: number): string => `${over} TOO MANY FOR THE LINK · LEAVE FILES BEHIND`,
     // The arrival line where the room binds: the same sum as phase 2's, and the room it meets (M1: one number).
     roomFor: (parts: string, total: number, arrives: number): string => `ON ARRIVAL: ${parts} = ${total} · ROOM FOR ${arrives}`,
     arrivalLeave: 'ON ARRIVAL: LEAVE FILES BEHIND FIRST',
@@ -242,7 +239,6 @@ export const MAP_TEXT = {
     controlTag: 'CONTROL',
     controlZero: 'Travelling light! Very light. :)',
     roomLabel: 'ROOM',
-    linkLabel: 'LINK',
     confirmYes: 'TRANSMIT',
     confirmNo: 'KEEP PACKING',
     confirmKeys: '[ENTER] yes · [ESC] no',

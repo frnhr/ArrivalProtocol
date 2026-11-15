@@ -396,7 +396,7 @@ export function setCourse(store: Store<GameState>, slot: number): void {
 }
 
 // ◀ CHART (the PACKET's ESC): back to the desk. The drops, the pick and PACK AS are forgotten with the plan (a new
-// destination deals against its own link); this desk's purchases stay pending (UNDO works until TRANSMIT ▸); the lost
+// destination deals against its own room); this desk's purchases stay pending (UNDO works until TRANSMIT ▸); the lost
 // ship's extras stay on the map for whichever hop is picked.
 export function backToChart(store: Store<GameState>): void {
   const phase = store.getState().run.phase;
@@ -410,9 +410,9 @@ export function backToChart(store: Store<GameState>): void {
 }
 
 // TRANSMIT (§4.1 step 5) to the ship in `toSlot`: every op is stopped first (an op in flight at the ship's end must not
-// write into the packet), the tool is put down, the hop is worked out (systems/map-hop.ts hopBetween: link, hits, ECC,
-// years, the destination's room), the ladder plans the destination from the map's facts, the packet is packed against the
-// hop's link with the lost ship's extras (RunMapState.pendingExtra), and the draft is dealt (§6.9: PICK ONE TO CARRY;
+// write into the packet), the tool is put down, the hop is worked out (systems/map-hop.ts hopBetween: hits, ECC, years,
+// the destination's room), the ladder plans the destination from the map's facts, the packet is packed for the hop's room
+// with the lost ship's extras (RunMapState.pendingExtra), and the draft is dealt (§6.9: PICK ONE TO CARRY;
 // seeded by the slot being left, weighted by the run's stats). Throws on a slot the unit cannot reach.
 export function goTransmit(store: Store<GameState>, toSlot: number): void {
   const state = store.getState();
@@ -430,15 +430,13 @@ export function goTransmit(store: Store<GameState>, toSlot: number): void {
   // Phase 3 slice 3b: the deliveries that catch up at the destination ride this hop (02 §3.9; their seed chance reads the
   // verdict), packed by planPacket with the unit's files, so the plan's numbers count them from the start.
   const deliveries = deliveriesForHop(state, fromSlot, toSlot, threat);
-  const packet = planPacket(store.getState().memory, { linkBlocks: hop.linkBlocks, dropped: [], pick: null, deliveries, skills: skillPacketPlan(store.getState(), {}) });
+  const packet = planPacket(store.getState().memory, { dropped: [], pick: null, deliveries, skills: skillPacketPlan(store.getState(), {}) });
   const plan: TransitPlan = {
     toShipIndex,
     toSlot,
     hop,
-    linkBlocks: hop.linkBlocks,
     filesBlocks: packet.filesBlocks,
     chargeHeld: packet.chargeHeld,
-    chargeCarried: packet.chargeCarried,
     extraHits: extra.extraHits,
     coreHit: extra.coreHit,
     coreReset: extra.coreReset,
@@ -466,7 +464,7 @@ export function goTransmit(store: Store<GameState>, toSlot: number): void {
   });
 }
 
-// TRANSMIT ▸: the packet crosses the link (systems/carry.ts, in order: the picked card's file and effect,
+// TRANSMIT ▸: the packet crosses the beam (systems/carry.ts, in order: the picked card's file and effect,
 // the emergency's toll on the Core, the seeded transit hits, the charge with its star credit, the card's
 // charge and the floor, the layout, the ship's own arrival damage), and the unit boots on the next ship
 // with a report of all of it for the ECC lines. The pick is mandatory (§6.9): no pick, no send.
@@ -499,13 +497,12 @@ export function transmitNext(store: Store<GameState>): void {
   const ridingIds = new Set(packet.seeds.map((seed) => seed.targetId));
   const files = packedFiles(packet);
   // The arrival as the PACKET previewed it (systems/arrival-preview.ts), for the seeds the beam really rolled (the
-  // deliveries' included). TRANSMIT ▸ waits while files (deliveries included) are over the link or files and the floor over
-  // the room (01 §3.16; the review's B1 and the follow-up M2): a send that gets here over either is a bug, not a squeeze.
+  // deliveries' included). TRANSMIT ▸ waits while files (deliveries included) and the floor are over the room (01 §3.16;
+  // the review's B1 and the follow-up M2): a send that gets here over it is a bug, not a squeeze.
   const preview = unitArrival(state, {
     hop: plan.hop, threat: plan.threat, dropped: plan.dropped, pick: plan.pick, deliveries: plan.deliveries, packAs: plan.packAs,
   }, packet.seeds.length);
   const fit = preview.fit;
-  if (fit.overLink > 0) throw new Error(`transmitNext: ${fit.files} blocks of files are ${fit.overLink} over the link of ${fit.link}`);
   if (fit.over > 0) throw new Error(`transmitNext: ${fit.files} blocks of files and a floor of ${fit.floor} are ${fit.over} over ${ship.name}'s room of ${fit.room}`);
   const hits: TransitHit[] = [];
   if (plan.coreHit > 0 || plan.coreReset) {
@@ -518,7 +515,7 @@ export function transmitNext(store: Store<GameState>): void {
   const cardCharge = pickCharge(plan.pick);
   // Slice 7c (R32): a trace's gift arrives with the charge (Track TRACE's; 0 until built).
   const giftCharge = traceGiftCharge(state, plan.toSlot);
-  const charge = arrivalCharge(packet.chargeCarried, state.run.pendingStarCredit, cardCharge, plan.hop.chargeFloor, giftCharge);
+  const charge = arrivalCharge(packet.chargeHeld, state.run.pendingStarCredit, cardCharge, plan.hop.chargeFloor, giftCharge);
   const layout = layoutCarried(packet, charge.blocks, ship, plan.threat, hollowLabel(state.run));
   // Every arrival number the kid read must be the one that happens (the review's M1): the charge laid out and lost.
   if (charge.blocks !== fit.wanted || layout.chargeBlocks !== fit.chargeArrives || layout.overflowLost !== fit.wanted - fit.chargeArrives) {
@@ -527,7 +524,7 @@ export function transmitNext(store: Store<GameState>): void {
   const scripted = arrivalDamage(layout.racks.segs, ship.arrivalDamage);
   const arrival: ArrivalReport = {
     hits,
-    chargeCarried: packet.chargeCarried,
+    chargeCarried: packet.chargeHeld,
     starCredit: state.run.pendingStarCredit,
     stars: state.run.pendingStars,
     // Slice 5 (review B1): the leftover skill card is no card on arrival (its skill is granted, and installs at the boot).

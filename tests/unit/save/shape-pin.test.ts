@@ -588,7 +588,8 @@ const PINNED_TO_8: Readonly<Record<number, typeof shape>> = {
 
 // 9 (slice 7d): SignalRecord's `source` and `n`, and the `▓▓░▓` segment type, sit below the pinned depth (a signal's fields
 // are an array item's, memory is opaque): the keys are version 8's, and RUN_SAVE_MIGRATIONS[8] steps a v8 save up.
-const PINNED: Readonly<Record<number, typeof shape>> = { ...PINNED_TO_8, 9: PINNED_TO_8[8]! };
+// 10 (playtest 1 Batch B, B-ORDER): Hop.linkBlocks gone (a hop sits below the pinned depth).
+const PINNED: Readonly<Record<number, typeof shape>> = { ...PINNED_TO_8, 9: PINNED_TO_8[8]!, 10: PINNED_TO_8[8]! };
 
 const pinned = PINNED[RUN_SAVE_VERSION];
 check(`RUN_SAVE_VERSION ${RUN_SAVE_VERSION} has a pinned shape (pin it with AP_PIN_PRINT=1)`, pinned !== undefined);

@@ -54,11 +54,11 @@ function crossTo(harness: Harness7, index: number): void {
   if (ship.slot !== to) throw new Error(`crossTo: ${ship.name} is not the worked route's next stop (slot ${to})`);
   const hop = hopBetween(before.run.map, from, to);
   const threat = planThreat(threatInputFor(before.run.threat, mapFacts(before.run.map, from, to, before.run.map.route.length + 1), false, NO_FINAL_TRACES));
-  const packet = packUnit(before.memory, hop.linkBlocks, []);
-  const layout = layoutCarried(packet, packet.chargeCarried, ship, threat);
+  const packet = packUnit(before.memory, []);
+  const layout = layoutCarried(packet, packet.chargeHeld, ship, threat);
   const scripted = arrivalDamage(layout.racks.segs, ship.arrivalDamage);
   startShip(harness.store, to, layout.racks, {
-    hits: [], chargeCarried: packet.chargeCarried, starCredit: 0, stars: 0, card: null, cardCharge: 0, chargeFloorAdded: 0,
+    hits: [], chargeCarried: packet.chargeHeld, starCredit: 0, stars: 0, card: null, cardCharge: 0, chargeFloorAdded: 0,
     chargeOverflowLost: 0, scripted, eccCorrected: 0, seeds: [], boarded: null, deliveries: [], skills: [], traceLines: [], giftCharge: 0,
   }, threat, hop);
   for (let i = 0; i < 400 && harness.store.getState().run.phase !== 'flight'; i++) harness.step();

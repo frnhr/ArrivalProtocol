@@ -297,21 +297,20 @@ const hollowSeeds = (): HollowSegment[] => s().memory.filter((seg): seg is Hollo
   check(`no room (no open free run of 2): \`${SENTRY_TEXT.firewallNoRoom}\`, and nothing is written`,
     firewallBootText(full) === SENTRY_TEXT.firewallNoRoom && compileFirewall(fullStore) === 'no-room' && JSON.stringify(fullStore.getState().memory) === before);
 
-  const link = 120;
-  const withV3 = draftContext(s(), link);
+  const withV3 = draftContext(s());
   const noSentry = structuredClone(s()) as GameState;
   noSentry.memory = noSentry.memory.filter((seg) => !(isSkillFile(seg) && seg.upgrade === 'sentry'));
   noSentry.memory.push({ id: 'pad', name: 'Free', type: 'free', size: sentryFile().size });
-  const withoutCtx = draftContext(noSentry, link);
+  const withoutCtx = draftContext(noSentry);
   check('the salvage\'s FIREWALL card is not dealt while SENTRY v3 works (filtered before the draws), and is without it',
     withV3.firewallCompiler === true && !draftEntries(withV3).some((entry) => entry.def.id === 'firewall')
     && withoutCtx.firewallCompiler === undefined && draftEntries(withoutCtx).some((entry) => entry.def.id === 'firewall'),
-    `${withV3.firewallCompiler} ${draftEntries(withV3).map((e) => e.def.id).join(',')} / ${withoutCtx.firewallCompiler} ${draftEntries(withoutCtx).map((e) => e.def.id).join(',')} room ${withoutCtx.linkRoom} owned ${withoutCtx.owned.firewall}`);
+    `${withV3.firewallCompiler} ${draftEntries(withV3).map((e) => e.def.id).join(',')} / ${withoutCtx.firewallCompiler} ${draftEntries(withoutCtx).map((e) => e.def.id).join(',')} room ${withoutCtx.fileRoom} owned ${withoutCtx.owned.firewall}`);
   const atV1 = structuredClone(s()) as GameState;
   const v1File = atV1.memory.find((seg): seg is SkillFileSegment => isSkillFile(seg) && seg.upgrade === 'sentry')!;
   v1File.version = 1;
   check('…a deal without SENTRY v3 is the same deal (v1 aboard or no SENTRY at all)',
-    JSON.stringify(dealDraft(noSentry, link)) === JSON.stringify(dealDraft(atV1, link)) && draftContext(atV1, link).firewallCompiler === undefined);
+    JSON.stringify(dealDraft(noSentry, null)) === JSON.stringify(dealDraft(atV1, null)) && draftContext(atV1).firewallCompiler === undefined);
 }
 
 finish();

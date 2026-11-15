@@ -167,7 +167,7 @@ const SLICE_KEYS = ['mission', 'memory', 'clock', 'burn', 'orbit', 'level', 'lan
 const RUN_PHASES: readonly RunState['phase'][] = ['title', 'boot', 'flight', 'landing', 'report', 'desk', 'transmit', 'end'];
 
 const checkHop = rec({
-  from: whole, to: whole, distanceLy: int, linkBlocks: whole, transitHits: whole, eccFixes: whole, leaveYear: int, arriveYear: int,
+  from: whole, to: whole, distanceLy: int, transitHits: whole, eccFixes: whole, leaveYear: int, arriveYear: int,
   approachYear: int, slackYears: int, noise: oneOf(0, 1, 2, 3), inRange: bool, memoryClass: oneOf('FULL', 'COMPACT', 'TIGHT'),
   room: whole, chargeFloor: whole,
 });
@@ -1018,6 +1018,21 @@ function migrateRunSave8(save: Record<string, unknown>): Record<string, unknown>
   return next;
 }
 
+// 9 → 10 (playtest 1, Batch B's one bump: B-ORDER, plan §3.3.3–§3.3.4):
+// • the link limit is gone (note 20): every hop on the route drops `linkBlocks` (no other saved record holds the link: the
+//   transit plan is null at every save point).
+function migrateRunSave9(save: Record<string, unknown>): Record<string, unknown> {
+  const next = structuredClone(save);
+  const payload = isRecord(next.payload) ? next.payload : null;
+  const run = payload !== null && isRecord(payload.run) ? payload.run : null;
+  const map = run !== null && isRecord(run.map) ? run.map : null;
+  if (map !== null && Array.isArray(map.route)) {
+    for (const stop of map.route.filter(isRecord)) if (isRecord(stop.hop)) delete stop.hop.linkBlocks;
+  }
+  next.saveVersion = 10;
+  return next;
+}
+
 export const RUN_SAVE_MIGRATIONS: Readonly<Record<number, (save: Record<string, unknown>) => Record<string, unknown>>> = {
   1: migrateRunSave1,
   2: migrateRunSave2,
@@ -1027,6 +1042,7 @@ export const RUN_SAVE_MIGRATIONS: Readonly<Record<number, (save: Record<string, 
   6: migrateRunSave6,
   7: migrateRunSave7,
   8: migrateRunSave8,
+  9: migrateRunSave9,
 };
 
 export function migrateRunSave(save: Record<string, unknown>): Record<string, unknown> {

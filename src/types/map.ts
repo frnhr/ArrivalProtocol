@@ -108,7 +108,6 @@ export interface Hop {
   from: number;
   to: number;
   distanceLy: number;
-  linkBlocks: number;
   transitHits: number;          // before ECC and before any extra (BEAM OUT, EMERGENCY)
   eccFixes: number;             // floor(slack / ECC_YEARS_PER_HIT): hits ECC repairs while the unit sleeps
   leaveYear: number;            // the galaxy year at the origin
@@ -158,15 +157,15 @@ export interface RunMapState {
 }
 
 // The card's fit line and the PACKET's room bar (01 §3.16; systems/map-hop.ts roomFit): how the unit's files and
-// charge meet a destination's link and room. Charge in blocks: what the link lets cross, plus the star credit, never below
-// the floor, then the +12 card on top (arrivalCharge, playtest 1 Q19); then the room by data/memory.ts fillRoom: files, the floor, the beam seeds,
-// the rest (SEEDS FIRST). systems/arrival-preview.ts turns it into every arrival number the kid reads.
+// charge meet a destination's room (playtest 1, note 20: the beam has no link limit, so the room is the one limit). Charge
+// in blocks: all the unit holds crosses, plus the star credit, never below the floor, then the +12 card on top
+// (arrivalCharge, playtest 1 Q19); then the room by data/memory.ts fillRoom: files, the floor, the beam seeds, the rest
+// (SEEDS FIRST). systems/arrival-preview.ts turns it into every arrival number the kid reads.
 export interface RoomFit {
   files: number;
-  link: number;
   room: number;
   floor: number;
-  carried: number;              // the charge the link lets cross (min(charge, link − files); none while files are over it)
+  carried: number;              // the charge that crosses: all the unit holds
   bonus: number;                // what arrives on top of it: the star credit and the card's charge
   wanted: number;               // what would arrive with room to spare: max(floor, carried + bonus − card) + card
   floorAdded: number;           // ARRIVAL CONTROL's top-up to the floor inside `wanted`
@@ -174,10 +173,8 @@ export interface RoomFit {
   seedsMax: number;             // the most
   chargeArrives: number;        // laid out with seedsMin seeds
   chargeArrivesMin: number;     // laid out with seedsMax seeds (the room's worst case)
-  linkLost: number;             // charge the link leaves behind (the PACKET's link bar; the card's `LINK LEAVES n`)
   roomLost: number;             // charge the room has no space for (with seedsMin): `CHARGE 38 → 12 · 26 WON'T FIT`
   over: number;                 // files + floor − room, when positive: the unit does not fit until files are left
-  overLink: number;             // files − link, when positive: nor does it cross (the review's B1)
   word: 'fits' | 'squeezed' | 'leave' | 'no-charge';
 }
 

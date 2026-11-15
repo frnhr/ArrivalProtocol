@@ -336,7 +336,7 @@ export interface TransitHit {
 // charge it carried, the star credit and the floor, and anything that did not fit.
 export interface ArrivalReport {
   hits: TransitHit[];
-  chargeCarried: number;    // what crossed the link (min(charge, link − files))
+  chargeCarried: number;    // what crossed: all the charge the unit held (no link limit since playtest 1, note 20)
   starCredit: number;       // +6 per ★ on the last ship's LANDING REPORT
   stars: number;
   // The card picked at the TRANSMIT (WP8), and the REPAIR CHARGE it brings on arrival (+12, else 0).
@@ -386,21 +386,18 @@ export interface ArrivalSeed {
   disguise: string | null;
 }
 
-// The transmission being prepared ('transmit'): the next ship, the link and how the unit's files pack
-// into it, and the extra hits of the way the last ship ended (BEAM OUT +2, EMERGENCY +3 and Core −25).
+// The transmission being prepared ('transmit'): the next ship, how the unit's files pack for its room, and the extra hits of the way the last ship ended (BEAM OUT +2, EMERGENCY +3 and Core −25).
 // The TRANSMIT screen (WP7 part 2) reads it; transmitNext sends it.
 export interface TransitPlan {
   toShipIndex: number;      // the destination's position on the route (its depth − 1)
   toSlot: number;           // the destination's slot (systems/map-run.ts shipDefAt)
-  hop: Hop;                 // the beam to it (systems/map-hop.ts): its link, hits, ECC, years and the destination's room
-  linkBlocks: number;       // hop.linkBlocks (the draft and the PACKET read it here)
+  hop: Hop;                 // the beam to it (systems/map-hop.ts): its hits, ECC, years and the destination's room
   filesBlocks: number;
   chargeHeld: number;
-  chargeCarried: number;
   extraHits: number;
   coreHit: number;
   coreReset: boolean;       // HOLLOW ate the Core: it is restored to CORE_RESET_INTEGRITY (EMERGENCY)
-  // The kid's dropped files (by id), from the TRANSMIT screen: they stay behind and free link for charge.
+  // The kid's dropped files (by id), from the PACKET: they stay behind and free the destination's room for charge.
   dropped: string[];
   // PICK ONE TO CARRY (§6.9, WP8): the cards dealt for this transmission (seeded, weighted by the run's
   // stats, fixed once dealt), and the one picked. The pick is mandatory: transmitNext refuses without it.

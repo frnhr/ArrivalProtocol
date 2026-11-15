@@ -475,8 +475,7 @@ export function problemLabels(ship: Readonly<ShipSummary>): string[] {
 }
 
 function fitTone(fit: Readonly<RoomFit>): CardRow['tone'] {
-  if (fit.word !== 'fits' || fit.chargeArrivesMin < fit.chargeArrives) return 'warn';
-  return fit.linkLost > 0 ? 'plain' : 'good';
+  return fit.word !== 'fits' || fit.chargeArrivesMin < fit.chargeArrives ? 'warn' : 'good';
 }
 
 export function cardModel(state: Readonly<GameState>, slot: number): CardModel {
@@ -537,7 +536,7 @@ export function cardModel(state: Readonly<GameState>, slot: number): CardModel {
     const allowance = verdict === null ? null : seedAllowance(verdict, playsTutorial(state.run));
     // Slice 7c: the traces' seed rules into this ship (Track TRACE's, neutral until built), as the PACKET counts them.
     const seeds = allowance === null ? null : traceSeedAllowance(state, slot, allowance);
-    row('beam', MAP_TEXT.card.beamLabel, MAP_TEXT.card.beam(hop.distanceLy, hop.linkBlocks));
+    row('beam', MAP_TEXT.card.beamLabel, MAP_TEXT.card.beam(hop.distanceLy));
     row('noise', '', MAP_TEXT.card.noise(hop.noise, MAP_TEXT.card.seeds(seeds)), hop.noise > 0 ? 'warn' : 'plain');
   } else if (hop !== null) {
     row('range', MAP_TEXT.card.beamLabel, MAP_TEXT.chart.outOfRange(hop.distanceLy), 'warn');

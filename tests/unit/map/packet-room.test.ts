@@ -45,11 +45,11 @@ function packetTo(
   const from = route[route.length - 1]!;
   const real = hopBetween(state.run.map, from, to);
   const hop = opts.room === undefined ? real : { ...real, room: opts.room };
-  const packet = packUnit(state.memory, hop.linkBlocks, []);
+  const packet = packUnit(state.memory, []);
   const threat = planThreat(threatInputFor(state.run.threat, mapFacts(state.run.map, from, to, route.length + 1), false, NO_FINAL_TRACES));
   const plan: TransitPlan = {
-    toShipIndex: route.length, toSlot: to, hop, linkBlocks: hop.linkBlocks, filesBlocks: packet.filesBlocks,
-    chargeHeld: packet.chargeHeld, chargeCarried: packet.chargeCarried, extraHits: 0, coreHit: 0, coreReset: false,
+    toShipIndex: route.length, toSlot: to, hop, filesBlocks: packet.filesBlocks,
+    chargeHeld: packet.chargeHeld, extraHits: 0, coreHit: 0, coreReset: false,
     dropped: [], offer: [], pick: null, threat, deliveries: opts.deliveries ?? [], packAs: {},
   };
   store.update((draft) => {
@@ -90,10 +90,10 @@ check('TIGHT: ROOM 88 · FILES n · NO FLOOR, and the squeeze named before it ha
 check('…the arrival line is the room line\'s number: `ON ARRIVAL: n CARRIED = n · ROOM FOR m` (one preview, M1)',
   model.arrivalCharge === fit.chargeArrives && fit.chargeArrives < fit.wanted
   && model.arrivalLine === MAP_TEXT.packet.roomFor(`${fit.carried} CARRIED`, fit.wanted, fit.chargeArrives)
-  && !model.arrivalLine.includes('REPAIR CHARGE') && model.packetLine.endsWith('→ CROSSES'), `${model.arrivalLine} | ${model.packetLine}`);
+  && !model.arrivalLine.includes('REPAIR CHARGE') && fit.carried === model.chargeHeld, model.arrivalLine);
 const telemetry = model.chips.find((chip) => chip.name === 'Telemetry')!;
-check('…leaving Telemetry behind lets its blocks of charge arrive (room-bound, the link is not): arriveGain 6, chargeGain 0',
-  telemetry.arriveGain === telemetry.blocks && telemetry.chargeGain === 0 && telemetry.toggleable, JSON.stringify(telemetry));
+check('…leaving Telemetry behind lets its blocks of charge arrive (room-bound): arriveGain 6',
+  telemetry.arriveGain === telemetry.blocks && telemetry.toggleable, JSON.stringify(telemetry));
 check('…and toggleDrop takes it', toggleDrop(store, telemetry.segId) === null
   && transmitModel(store.getState()).room.fit.chargeArrives === fit.chargeArrives + telemetry.blocks);
 
@@ -111,7 +111,7 @@ check('files over the room: `n TOO MANY FOR THE ROOM · LEAVE FILES BEHIND`, the
   over > 0 && model.room.tooMany === MAP_TEXT.packet.overRoom(over) && model.dropLine === model.room.tooMany && model.room.tone === 'over');
 const spare = model.chips.find((chip) => chip.lock === null && !chip.dropped)!;
 check('…a file can be left behind though it buys no charge (01 §3.16: TRANSMIT ▸ waits)',
-  spare.chargeGain === 0 && spare.toggleable && toggleDrop(store, spare.segId) === null);
+  spare.arriveGain === 0 && spare.toggleable && toggleDrop(store, spare.segId) === null);
 check('…and the room count follows', packetFit(store.getState(), store.getState().run.transit!).over === Math.max(0, over - spare.blocks));
 // Playtest 1 (Q19): the +12 card counts after the floor and the room bar shows its own segment; a room that cannot take it
 // whole says so on the card.

@@ -669,7 +669,7 @@ function giveRepoFile(store: Store<GameState>, file: RepoFileId): Segment[] {
 // __ap.ship(index): run 1's authored ship `index` (0 ARES-VII … 4 LAST LIGHT) now, along 02 §3.14's worked route
 // (systems/arm-fixture.ts WORKED_ROUTE: LAST LIGHT is depth 6, through CORMORANT), the way __ap.route flies it: every stop
 // before it skipped (in orbit, nobody landed), the threat the nominal route's (TRACE 0, no DEAL), and the current unit
-// beamed into the ship by its real hop (its files packed for that link, the deliveries that ride it, the beam's seeds, the
+// beamed into the ship by its real hop (its files packed for that room, the deliveries that ride it, the beam's seeds, the
 // ship's own arrival damage; no transit hits, no stars). The page's createInitialState fixture is the same ship (Track
 // RETIRE retired the classic five this used to jump to). `threat` replaces the nominal verdict (__ap.board). Run 1's arm
 // only: a later run's arm is a fresh roll, with no worked route.
@@ -684,9 +684,9 @@ function debugJump(store: Store<GameState>, index: number, threat?: ShipThreat):
 // --- The galaxy map's helpers (slice 3a, Track GEN) ----------------------------------------------------------------------
 
 // The unit packed for `hop` and laid out on the ship it reaches: the current unit's
-// files with the charge the link lets cross (no transit hits, no stars, no card), the deliveries that ride the hop (phase 3
+// files with all their charge (no transit hits, no stars, no card), the deliveries that ride the hop (phase 3
 // slice 3b: every chip, none sent on; the requests move on and first-of-kind tools are licensed, as transmitNext does), the
-// beam's and the deliveries' seeds as transmitNext rolls them, and the ship's own arrival damage. Files over the link or
+// beam's and the deliveries' seeds as transmitNext rolls them, and the ship's own arrival damage. Files over
 // the destination's room throw (the PACKET would hold the send).
 function debugArrive(store: Store<GameState>, hop: Hop, threat: ShipThreat): void {
   abortAll();
@@ -706,16 +706,16 @@ function debugArrive(store: Store<GameState>, hop: Hop, threat: ShipThreat): voi
   const ship = shipDefAt(map, hop.to);
   const deliveries = deliveriesForHop(state, hop.from, hop.to, threat);
   // Slice 4: this desk's training (if any) crosses as transmitNext sends it, and is bought as it does.
-  const packet = planPacket(state.memory, { linkBlocks: hop.linkBlocks, dropped: [], pick: null, deliveries, skills: skillPacketPlan(state, {}) }, newSegId);
+  const packet = planPacket(state.memory, { dropped: [], pick: null, deliveries, skills: skillPacketPlan(state, {}) }, newSegId);
   const fit = roomFit({ files: packedFiles(packet), charge: packet.chargeHeld }, hop);
-  if (fit.over > 0 || fit.overLink > 0) throw new Error(`__ap: the unit's ${fit.files} blocks of files (and a floor of ${fit.floor}) are over ${ship.name}'s link (${fit.link}) or room (${fit.room})`);
+  if (fit.over > 0) throw new Error(`__ap: the unit's ${fit.files} blocks of files (and a floor of ${fit.floor}) are over ${ship.name}'s room (${fit.room})`);
   const delivered = packet.deliveries.flatMap((group) => group.segIds);
   const deliverySeeds = rollDeliverySeeds(deliveries, packet, hopRng(state.run, hop.from, hop.to, 'delivery-seeds'));
   packet.seeds = [
     ...rollBeamSeeds(packet, beamSourceOf(threat), playsTutorial(state.run), hopRng(state.run, hop.from, hop.to, 'beam-seeds'), delivered),
     ...deliverySeeds,
   ];
-  const charge = arrivalCharge(packet.chargeCarried, 0, 0, hop.chargeFloor);
+  const charge = arrivalCharge(packet.chargeHeld, 0, 0, hop.chargeFloor);
   const layout = layoutCarried(packet, charge.blocks, ship, threat, hollowLabel(state.run));
   const scripted = arrivalDamage(layout.racks.segs, ship.arrivalDamage);
   const plan = { toSlot: hop.to, hop, deliveries };
@@ -729,15 +729,14 @@ function debugArrive(store: Store<GameState>, hop: Hop, threat: ShipThreat): voi
     }
   });
   startShip(store, hop.to, layout.racks, {
-    hits: [], chargeCarried: packet.chargeCarried, starCredit: 0, stars: 0, card: null, cardCharge: 0, chargeFloorAdded: charge.floorAdded,
+    hits: [], chargeCarried: packet.chargeHeld, starCredit: 0, stars: 0, card: null, cardCharge: 0, chargeFloorAdded: charge.floorAdded,
     chargeOverflowLost: layout.overflowLost, scripted, eccCorrected: 0, seeds: layout.seeds, boarded: boardedBy(threat),
     deliveries: arrivalDeliveries(deliveries, packet.deliveries, deliverySeeds.map((seed) => seed.targetId)),
     skills: arrivalSkills(state, packet, layout.racks.segs), traceLines: [], giftCharge: 0,
   }, threat, hop);
 }
 
-// __ap.slot(s): the ship in slot `s`, as a beam from the current ship would bring the unit there (the hop's link and
-// room, the ladder's verdict from the map's facts and the run's threat, no transit hits), reachable or not (a quick look
+// __ap.slot(s): the ship in slot `s`, as a beam from the current ship would bring the unit there (the hop's room, the ladder's verdict from the map's facts and the run's threat, no transit hits), reachable or not (a quick look
 // at any ship further out). The route gains the stop.
 function debugSlot(store: Store<GameState>, slot: number): Hop {
   const map = store.getState().run.map;
@@ -1187,7 +1186,7 @@ export function mountDebug(store: Store<GameState>): void {
     ghost: () => ghostLine(store.getState().run.unitNumber, store.getState().run.lastUnit),
     draft: () => {
       const plan = store.getState().run.transit;
-      return plan === null ? null : { offer: plan.offer, pick: plan.pick, context: draftContext(store.getState(), plan.linkBlocks, plan.hop, plan.deliveries) };
+      return plan === null ? null : { offer: plan.offer, pick: plan.pick, context: draftContext(store.getState(), plan.hop, plan.deliveries) };
     },
     pick: (id) => pickCard(store, id),
     giveCard: (id) => giveCard(store, id),

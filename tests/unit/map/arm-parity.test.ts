@@ -40,7 +40,9 @@ const digest = (value: unknown): string => createHash('sha256').update(JSON.stri
 
 // --- The 20 ShipDefs and their built worlds -------------------------------------------------------------------------------
 const PINNED_DEFS = 'c9973645e1b66ad4';
-const PINNED_SLICES = 'ba4e29c778f55abd';
+// Playtest 1 B-ORDER re-recorded it (it was ba4e29c778f55abd): the link went (note 20), and with the link field put back
+// on every hop (Hop.linkBlocks, round((1460 − 11·d) / 10)) the slices hash to ba4e29c778f55abd again: nothing else moved.
+const PINNED_SLICES = '35d48499b88bf89a';
 const map = run1Map(SEED);
 const defs = map.arm.map((_, slot) => shipDefOf(armShipAt(map, slot)));
 const defsNow = digest(defs);
@@ -54,7 +56,11 @@ check(`…and every ship's built world past ARES-VII (its ship slices from a bea
 // (OPEN-DECISIONS 108) changes HOLLOW's `> keep 16 charge for me, 047.` line, said one hop from the final ship. The first
 // moment that moves is CORMORANT's desk, every ship's outcome and the run's end (won-purge) are as before, and an A/B copy
 // of src/ at 20 (tests/unit/balance/ab.mjs) still gives de4d1e6da04d568e.
-const PINNED_RUN = '8ceb50b18060dcb5';
+// Playtest 1 B-ORDER re-recorded it again (it was 8ceb50b18060dcb5): the link went (note 20), so every block of charge
+// crosses. The first moment that moves is KESTREL's boot (HALCYON → KESTREL's link, 117, held charge back); the moments
+// before it are the same digests, every ship's outcome is as before, and the run's end is won-merge, not won-purge: the
+// unit reaches LAST LIGHT with the 16 that MERGE costs (plan §3.3.4's expected effect; the lead re-reads the balance).
+const PINNED_RUN = 'ab2fecc0c09560be';
 const REQUESTS: readonly (RepoFileId | null)[] = ['mv', 'rm', 'swap', 'cp', null];
 const h = createHarness11(1, { soulsFound: false });
 const state = (): Readonly<GameState> => h.store.getState();

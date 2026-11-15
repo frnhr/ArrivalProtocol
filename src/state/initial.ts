@@ -438,7 +438,7 @@ export function createInitialState(opts: InitialStateOpts): GameState {
     threat = opts.threat ?? stop.verdict;
     const hop = stop.map.route.at(-1)!.hop;
     carried = opts.carried === 'fresh'
-      ? (hop === null ? null : freshUnitRacks(shipDefAt(stop.map, stop.slots.at(-1)!), hop.linkBlocks, threat))
+      ? (hop === null ? null : freshUnitRacks(shipDefAt(stop.map, stop.slots.at(-1)!), threat))
       : opts.carried ?? null;
   }
   return {

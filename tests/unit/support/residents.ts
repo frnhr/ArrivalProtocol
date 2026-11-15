@@ -40,9 +40,6 @@ export function withResidentsBuilt<T>(kinds: readonly ResidentKind[], fn: () => 
 // No kind built: the world before slice 5 (a v4 save's).
 export const NO_RESIDENTS: Readonly<Record<ResidentKind, boolean>> = { corrupted: false, left: false, sleeping: false };
 
-// Wider than any fresh unit's files: armShipSlices is about the ship, not the beam.
-const WIDE_LINK_BLOCKS = 1000;
-
 export function armShipSlices(seed: number, slot: number): { run: RunState; slices: ShipSlices } {
   const start = run1Map(seed);
   const hop = hopBetween(start, 0, slot);
@@ -52,6 +49,6 @@ export function armShipSlices(seed: number, slot: number): { run: RunState; slic
   const template = createRunState(seed, 'boot', 1, FIRST_RUN_LINEAGE);
   const run: RunState = { ...template, map, ships: [], skills: { ...template.skills, earned: [] } };
   const calm: ShipThreat = { ...fixtureVerdict(1), rootBlocks: null };
-  const carried = freshUnitRacks(shipDefAt(map, slot), WIDE_LINK_BLOCKS, calm);
+  const carried = freshUnitRacks(shipDefAt(map, slot), calm);
   return { run, slices: createShipSlices(run, carried, calm) };
 }

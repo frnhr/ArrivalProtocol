@@ -46,7 +46,7 @@ export function fixtureFreshRacks(index: number, ship: ShipDef = fixtureShip(ind
   const map = mapAlong(createRunMap({ wave: 1 }, seed), slots);
   const hop = map.route.at(-1)!.hop;
   if (hop === null) throw new Error('fixtureFreshRacks: ship 1 meets a fresh unit by itself');
-  return freshUnitRacks(ship, hop.linkBlocks, nominalAlong(map, slots).verdict);
+  return freshUnitRacks(ship, nominalAlong(map, slots).verdict);
 }
 
 // The verdict HOLLOW's forced boarding gives authored ship `index` on the worked route (as `__ap.board` makes it: the ship

@@ -105,7 +105,6 @@ export function setPackAs(store: Store<GameState>, segId: string, level: Readonl
     draft.run.transit.packAs = packAs;
     draft.run.transit.dropped = [...dropped];
     draft.run.transit.filesBlocks = packet.filesBlocks;
-    draft.run.transit.chargeCarried = packet.chargeCarried;
   });
 }
 

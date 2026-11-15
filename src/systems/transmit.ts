@@ -36,32 +36,31 @@ import { hopOutlook, markFirstOfKind, deliverySeedChance } from '@systems/reposi
 import type { DeliveryChip } from '@/types/repo';
 
 // The TRANSMIT screen's model (§4.1 step 5, §6.9, §9 WP7 item 4), pure and DOM-free. Mostly information:
-// where the unit goes next (`NEXT: HALCYON · 2,000 SOULS · 22 LY`), how the packet fits the link
-// (`LINK 120 · FILES 63 · CHARGE 14 → FITS`), what the crossing will cost (the transit hits, an emergency's
-// toll) and the REPAIR CHARGE waiting on arrival. Every packed file is a chip, safest to leave behind
+// where the unit goes next (`NEXT: HALCYON · 2,000 SOULS · 22 LY`), how the packet fits the destination's room (playtest
+// 1, note 20: the beam has no link limit; the room bar is the one bar), what the crossing will cost (the transit hits, an
+// emergency's toll) and the REPAIR CHARGE waiting on arrival. Every packed file is a chip, safest to leave behind
 // first (§6.9: copies and .bak files, Telemetry, Autopilot, Sensor Interp, AI Comms, upgrades), each with
 // what leaving it behind does; the Core, Engine I/O, Nav Plotter and the last copy of a filesystem tool
-// are locked, and say why. Leaving a file behind frees its blocks for charge, so it is offered only while
-// charge is left behind: when everything fits, a dropped file would buy nothing.
+// are locked, and say why. Leaving a file behind frees its blocks in the room for charge, so it is offered only while the
+// room squeezes the charge (or the files are over it): when everything fits, a dropped file would buy nothing.
 // toggleDrop is the one write: run.transit.dropped, with the packet's numbers worked out again. The cards dealt
 // for the crossing (WP8, PICK ONE TO CARRY) are listed with the pick; the picked card's file is in the packet's
 // numbers (systems/draft.ts planPacket), and its charge in the arrival line.
 // Phase 3 slice 2 (04 §3.3, §3.7, §3.8, §4; 05 §3.2): the threat the beam carries, read from TransitPlan.threat (the
 // ladder's verdict for the next ship) and the tally the last ship's end applied (run.threat):
 // • the uninvited chip when HOLLOW rides this beam (`??? · 10 BLOCKS · NOT IN YOUR PACKET`): it crosses at the size
-//   it will have (threat.rootBlocks), costs no link room, and says why it grew (`+2: 2 SEEDS FED IT`, lastTally.left);
+//   it will have (threat.rootBlocks), is not in the packet's numbers, and says why it grew (`+2: 2 SEEDS FED IT`, lastTally.left);
 // • 046.log's chip as `046.log · 3/12`, locked, glowing while an entry is unread (a click opens the LOG READER);
 // • `NO RM · YOU CAN'T DELETE THE ROOT` before the beam to the final ship when no working rm is aboard (information);
 // • the TRACE line: the meter, `1 MORE AND IT FINDS YOU`, or `??? WILL FIND YOU ON THIS BEAM` on a boarding beam.
 // Phase 3 slice 3a (02-map §4; 01-landing §3.16): the PACKET between the DESK and the beam.
 // • the years headline on the arm (`NEXT: KESTREL · 1,200 COLONISTS · 26 LY · SLEEP 89 YRS`) and the ECC line in place of
 //   the hits line (`ON THE WAY: 4 HITS · ECC FIXES 3 WHILE YOU SLEEP (89 YRS) → 1 LANDS`);
-// • the room bar beside the link bar (systems/map-hop.ts roomFit on the packet as it would cross: `ROOM 152 · FILES 65 +
+// • the room bar (systems/map-hop.ts roomFit on the packet as it would cross: `ROOM 152 · FILES 65 +
 //   FLOOR 12`), with the charge it costs named before it happens (`CHARGE 38 → 12 ON ARRIVAL · 26 WON'T FIT`); on a
 //   TIGHT ship whose room leaves no charge, `→ 0 ON ARRIVAL` in red, and TRANSMIT ▸ asks first (the screen's inline
 //   confirm, `ARRIVE WITH NO REPAIR CHARGE?`);
-// • TRANSMIT ▸ waits while files plus the floor are over the room (`20 TOO MANY FOR THE ROOM · LEAVE FILES BEHIND`), or
-//   files are over the link (`8 TOO MANY FOR THE LINK · …`: a unit grown past a short hop's link, the review's B1), and a
+// • TRANSMIT ▸ waits while files plus the floor are over the room (`20 TOO MANY FOR THE ROOM · LEAVE FILES BEHIND`), and a
 //   file can then be left behind even when that buys no charge (toggleDrop);
 // • every arrival number (the arrival line, the room line, the confirm) is systems/arrival-preview.ts's, from one roomFit
 //   (the review's M1: the room line and the arrival line said 20 and 54);
@@ -75,15 +74,13 @@ export interface PacketChip {
   infected: boolean;
   dropped: boolean;
   lock: DropLock | null;
-  // Can be clicked now: to leave it behind (it is not locked, and doing so carries more charge), or to
+  // Can be clicked now: to leave it behind (it is not locked, and doing so lands more charge), or to
   // take a left-behind file back.
   toggleable: boolean;
   // The chip's line: why it is locked, or what leaving it behind does.
   note: string;
-  // REPAIR CHARGE leaving it behind carries (kept: would carry; dropped: carries now).
-  chargeGain: number;
-  // REPAIR CHARGE leaving it behind lets ARRIVE (slice 3a: the destination's room can squeeze what crossed); at least
-  // chargeGain wherever the room does not bind.
+  // REPAIR CHARGE leaving it behind lets ARRIVE (slice 3a: the destination's room can squeeze what crossed; kept: would
+  // arrive; dropped: arrives now). Playtest 1 (note 20): all the charge crosses, so the room is the only thing a drop frees.
   arriveGain: number;
   // 046.log (slice 2): its chip glows while an entry is unread, and a click opens the LOG READER instead of a drop.
   log: boolean;
@@ -115,7 +112,7 @@ export interface PackAsOption {
   text: string;                 // PACK AS v1 (7) · RESTORE 3
 }
 
-// HOLLOW riding this beam (04 §3.8): a locked chip that costs no link room, at the size it will land with.
+// HOLLOW riding this beam (04 §3.8): a locked chip outside the packet's numbers, at the size it will land with.
 export interface UninvitedChip {
   owner: string;          // ??? until it named itself
   blocks: number;
@@ -156,11 +153,8 @@ export interface TransmitModel {
   headline: string;            // NEXT: HALCYON · 2,000 SOULS · 22 LY
   why: string | null;          // how the last ship was left (an emergency, BEAM OUT, a lost ship)
   emergency: boolean;          // the why line is a warning (a crash, the Core eaten)
-  link: number;
   files: number;               // blocks of the files that go
-  chargeHeld: number;
-  chargeCarried: number;
-  packetLine: string;
+  chargeHeld: number;          // all of it crosses (no link limit)
   hitsLine: string;
   arrivalLine: string;
   arrivalCharge: number;
@@ -206,7 +200,7 @@ export interface PacketRoom {
   line: string;                // ROOM 152 · FILES 65 + FLOOR 12 / ROOM 88 · FILES 73 · NO FLOOR
   charge: string | null;       // CHARGE 38 → 12 ON ARRIVAL · 26 WON'T FIT, or → 0 ON ARRIVAL; null when all of it fits
   tone: 'quiet' | 'squeezed' | 'zero' | 'over';
-  tooMany: string | null;      // 20 TOO MANY FOR THE ROOM (or LINK) · LEAVE FILES BEHIND: TRANSMIT ▸ waits
+  tooMany: string | null;      // 20 TOO MANY FOR THE ROOM · LEAVE FILES BEHIND: TRANSMIT ▸ waits
   confirm: string | null;      // the charge may arrive at 0: TRANSMIT ▸ asks this first (ARRIVE WITH NO REPAIR CHARGE?)
   // Playtest 1 (Q19): the picked card's charge that arrives (the room bar's `+12` segment, inside the charge's); null when
   // no charge card is picked.
@@ -281,7 +275,7 @@ function lockNote(state: Readonly<GameState>, lock: DropLock, seg: Segment): str
     case 'last-copy':
       if (seg.type !== 'fs-tool') throw new Error(`lockNote: ${seg.name} is a last copy but not a filesystem tool`);
       return TRANSMIT_TEXT.locked.lastCopy(TOOL_WORD[seg.fsTool]);
-    case 'charge': throw new Error('lockNote: REPAIR CHARGE is not a chip (it fills the link)');
+    case 'charge': throw new Error('lockNote: REPAIR CHARGE is not a chip (it fills the room)');
     case 'log': return bookPacketLock(state.run.log.book);   // slice 7c (R37): the book's own unit
     case 'trained': return PACKET_SKILL_TEXT.trainedHere;
   }
@@ -301,7 +295,7 @@ function effectNote(kept: readonly Segment[], seg: Segment): string {
   return TRANSMIT_TEXT.without[seg.role];
 }
 
-// The packet's fit to the destination's link and room (systems/arrival-preview.ts unitArrival, the one preview): its
+// The packet's fit to the destination's room (systems/arrival-preview.ts unitArrival, the one preview): its
 // files as they would cross (the card's file in them), the charge held, the star credit and the card's charge, and the
 // room the beam's seeds could take by the verdict.
 export function packetArrival(state: Readonly<GameState>, plan: Readonly<TransitPlan>, dropped: readonly string[] = plan.dropped): ArrivalPreview {
@@ -323,7 +317,7 @@ export function packetFit(state: Readonly<GameState>, plan: Readonly<TransitPlan
   return packetArrival(state, plan, dropped).fit;
 }
 
-// The packet is over the link or the room while a delivery rides in it (a chip not sent on): SEND ON is a way back under
+// The packet is over the room while a delivery rides in it (a chip not sent on): SEND ON is a way back under
 // as well as leaving files behind, so the gate line and the arrival line say both (review m3: they said LEAVE FILES BEHIND
 // only, and the chip that pushed the packet over sat right above them).
 function sendOnHelps(plan: Readonly<TransitPlan>, preview: Readonly<ArrivalPreview>): boolean {
@@ -344,7 +338,7 @@ function cardFitNote(state: Readonly<GameState>, plan: Readonly<TransitPlan>, id
 function packetRoom(preview: Readonly<ArrivalPreview>, plan: Readonly<TransitPlan>): PacketRoom {
   const fit = preview.fit;
   const line = fit.floor > 0 ? MAP_TEXT.packet.room(fit.room, fit.files, fit.floor) : MAP_TEXT.packet.roomNoFloor(fit.room, fit.files);
-  const tooMany = sendOnHelps(plan, preview) ? REPO_TEXT.packet.overWithDeliveries(Math.max(fit.overLink, fit.over)) : preview.tooMany;
+  const tooMany = sendOnHelps(plan, preview) ? REPO_TEXT.packet.overWithDeliveries(fit.over) : preview.tooMany;
   const blocks = pickCharge(plan.pick);
   const arrives = blocks > 0 ? cardArrives(fit, blocks) : 0;
   const card = blocks > 0 ? { blocks, arrives, label: TRANSMIT_TEXT.cardSegment(arrives) } : null;
@@ -385,10 +379,8 @@ export function transmitModel(state: Readonly<GameState>): TransmitModel {
   const replaced = skillPlan.fresh.map((entry) => entry.replaces).filter((id): id is string => id !== null);
   const live = unitFilesIn(state.memory).filter((seg) => seg.type !== 'redundancy' && !replaced.includes(seg.id));
   const kept = live.filter((seg) => !plan.dropped.includes(seg.id));
-  // The picked card's file is in the packet too (WP8): it takes link room like the unit's own files.
+  // The picked card's file is in the packet too (WP8): it takes room like the unit's own files.
   const packet = transitPacket(state, plan);
-  const carriedWith = (dropped: readonly string[]): number => transitPacket(state, withDropped(plan, dropped)).chargeCarried;
-  const chargeShort = packet.chargeHeld > packet.chargeCarried;
   const preview = packetArrival(state, plan);
   const fit = preview.fit;
   const arrivesWith = (dropped: readonly string[]): number => packetFit(state, plan, dropped).chargeArrives;
@@ -398,9 +390,6 @@ export function transmitModel(state: Readonly<GameState>): TransmitModel {
     const dropped = plan.dropped.includes(seg.id);
     const isLog = seg.type === 'log';
     const lock = dropped ? null : dropLock(kept, seg);
-    const chargeGain = dropped
-      ? packet.chargeCarried - carriedWith(plan.dropped.filter((id) => id !== seg.id))
-      : lock === null ? carriedWith([...plan.dropped, seg.id]) - packet.chargeCarried : 0;
     const arriveGain = dropped
       ? fit.chargeArrives - arrivesWith(plan.dropped.filter((id) => id !== seg.id))
       : lock === null ? arrivesWith([...plan.dropped, seg.id]) - fit.chargeArrives : 0;
@@ -413,11 +402,10 @@ export function transmitModel(state: Readonly<GameState>): TransmitModel {
       infected: isInfected(seg),
       dropped,
       lock,
-      // A drop is offered while it buys charge across the link or on arrival, or while files are over the room or the
-      // link (then it is needed whatever it buys: 01 §3.16, the review's B1; TRANSMIT ▸ waits).
-      toggleable: dropped || (lock === null && (chargeGain > 0 || arriveGain > 0 || fit.over > 0 || fit.overLink > 0)),
+      // A drop is offered while it lands more charge, or while files are over the room (then it is needed whatever it
+      // buys: 01 §3.16, the review's B1; TRANSMIT ▸ waits).
+      toggleable: dropped || (lock === null && (arriveGain > 0 || fit.over > 0)),
       note: lock !== null ? lockNote(state, lock, seg) : skill !== null ? skillNote(skill) : effectNote(kept, seg),
-      chargeGain,
       arriveGain,
       log: isLog,
       glow: isLog && log.glow,
@@ -434,7 +422,7 @@ export function transmitModel(state: Readonly<GameState>): TransmitModel {
   if (!core) throw new Error('transmitModel: the unit has no AI Core');
   // What arrives before the room has its say, on the destination's own floor (01 §3.16: none on a TIGHT ship), as the
   // arrival counts it; roomFit's `wanted` is the same number (asserted: the room bar and this line must agree).
-  const charge = arrivalCharge(packet.chargeCarried, state.run.pendingStarCredit, pickCharge(plan.pick), plan.hop.chargeFloor, traceGiftCharge(state, plan.toSlot));
+  const charge = arrivalCharge(packet.chargeHeld, state.run.pendingStarCredit, pickCharge(plan.pick), plan.hop.chargeFloor, traceGiftCharge(state, plan.toSlot));
   if (charge.blocks !== fit.wanted) throw new Error(`transmitModel: arrival charge ${charge.blocks} but the room bar wants ${fit.wanted}`);
   const infectedCount = chips.filter((chip) => chip.infected && !chip.dropped).length;
   const room = packetRoom(preview, plan);
@@ -447,20 +435,17 @@ export function transmitModel(state: Readonly<GameState>): TransmitModel {
     headline: MAP_TEXT.packet.headline(ship.name, unknownShown(state.run, plan.toSlot) ? null : ship.colonists, plan.hop.distanceLy, plan.hop.slackYears),
     why: whyLine(outcome, fromShip, crashCoreToll(core.integrity, plan.coreHit)),
     emergency: outcome === 'crashed' || outcome === 'emergency',
-    link: plan.linkBlocks,
     files: packet.filesBlocks,
     chargeHeld: packet.chargeHeld,
-    chargeCarried: packet.chargeCarried,
-    packetLine: TRANSMIT_TEXT.packet(plan.linkBlocks, packet.filesBlocks, packet.chargeHeld, packet.chargeCarried, fit.roomLost > 0),
     hitsLine: TRANSMIT_TEXT.hits(hits),
     arrivalLine: sendOnHelps(plan, preview) ? REPO_TEXT.packet.arrivalOverWithDeliveries : preview.sum,
     arrivalCharge: fit.chargeArrives,
     infectedLine: infectedCount > 0 ? TRANSMIT_TEXT.infected(infectedCount) : null,
     dropLine: room.tooMany !== null ? room.tooMany
-      : chargeShort || plan.dropped.length > 0 || fit.roomLost > 0 ? TRANSMIT_TEXT.tight : TRANSMIT_TEXT.fits,
+      : plan.dropped.length > 0 || fit.roomLost > 0 ? TRANSMIT_TEXT.tight : TRANSMIT_TEXT.fits,
     chips: chips.map(({ order: _order, ...chip }) => chip),
     cards: plan.offer.map((card, i) => {
-      // Slice 5 (review B1): a departed resident's skill card has no pool form (its skill is granted, no link room).
+      // Slice 5 (review B1): a departed resident's skill card has no pool form (its skill is granted, it takes no room).
       const def = card.id === 'skill' ? null : getUpgrade(card.id);
       const tag = def === null ? RESIDENT_UI_TEXT.deck.skillTag : DRAFT_TEXT.form(def.form, def.blocks);
       return { ...card, tag, key: String(i + 1), picked: card.id === plan.pick, fitNote: cardFitNote(state, plan, card.id, ship.name) };
@@ -509,7 +494,7 @@ export type SendOnRefusal = 'no-chip';
 // receiver to ride the unit's next hop (on a hop into a final ship there is none: it is lost, and the tally lists it), or
 // comes back into the packet. One update: the chips re-marked (a first of kind sent on hands "first" to the next chip of
 // its kind on this hop, or to none: systems/repository.ts markFirstOfKind, with the seed chances that follow) and the plan's
-// filesBlocks / chargeCarried worked out again by planPacket. The card dealt stays (the deal counted the deliveries as first
+// filesBlocks worked out again by planPacket. The card dealt stays (the deal counted the deliveries as first
 // packed). The chip's view says `IT IS LOST` on a hop into a final ship (deliveryChipView); the send writes it lost
 // (advanceRequests).
 export function toggleSendOn(store: Store<GameState>, key: string): SendOnRefusal | null {
@@ -523,7 +508,6 @@ export function toggleSendOn(store: Store<GameState>, key: string): SendOnRefusa
     if (!draft.run.transit) throw new Error('toggleSendOn: the transit plan vanished');
     draft.run.transit.deliveries = deliveries;
     draft.run.transit.filesBlocks = packet.filesBlocks;
-    draft.run.transit.chargeCarried = packet.chargeCarried;
   });
   return null;
 }
@@ -531,7 +515,7 @@ export function toggleSendOn(store: Store<GameState>, key: string): SendOnRefusa
 // Why a chip did not toggle.
 export type DropRefusal = 'locked' | 'nothing-to-gain';
 
-// A click on a chip: leave the file behind (if that carries more charge), or take it back. One update;
+// A click on a chip: leave the file behind (if that lands more charge), or take it back. One update;
 // the packet's numbers are worked out again from the new list (packUnit throws on a locked drop).
 export function toggleDrop(store: Store<GameState>, segId: string): DropRefusal | null {
   const state = store.getState();
@@ -548,7 +532,6 @@ export function toggleDrop(store: Store<GameState>, segId: string): DropRefusal 
     draft.run.transit.dropped = dropped;
     draft.run.transit.packAs = next.packAs;
     draft.run.transit.filesBlocks = packet.filesBlocks;
-    draft.run.transit.chargeCarried = packet.chargeCarried;
   });
   return null;
 }
@@ -595,7 +578,7 @@ function trainedChips(state: Readonly<GameState>, packet: Readonly<Packet>): Pac
     const level = held(state, entry.skill) ?? { version: file.version, lock: file.lock };
     return {
       segId: file.id, name: file.name, blocks: file.size, integrity: file.integrity, infected: false, dropped: false, lock: 'trained',
-      toggleable: false, note: PACKET_SKILL_TEXT.trainedHere, chargeGain: 0, arriveGain: 0, log: false, glow: false,
+      toggleable: false, note: PACKET_SKILL_TEXT.trainedHere, arriveGain: 0, log: false, glow: false,
       skill: {
         skill: entry.skill, level: { ...level }, nominal: { ...level }, trained: true, packedAs: null, restore: 0,
         without: PACKET_SKILL_TEXT.without[entry.skill], packAs: [],

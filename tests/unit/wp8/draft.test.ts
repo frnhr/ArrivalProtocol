@@ -44,7 +44,7 @@ const none: Record<UpgradeId, number> = { firewall: 0, 'repair-v2': 0, 'thread-p
 // at its base weight.
 const ctx = (over: Partial<DraftContext> = {}): DraftContext => ({
   stats: { manualCaptures: 0, demos: [], dropDemos: [], repairs: 0, moves: 0, deletes: 0, driversLost: 0, driversBitten: 0, capRefusals: 0, deal: null },
-  chargeHeld: 36, lastShip: { name: 'ARES-VII', fuelLeftPct: 70 }, owned: none, hasRepair: true, linkRoom: 50, hollowLabel: '???', ...over,
+  chargeHeld: 36, lastShip: { name: 'ARES-VII', fuelLeftPct: 70 }, owned: none, hasRepair: true, fileRoom: 50, hollowLabel: '???', ...over,
 });
 const ids = (cards: readonly { id: DraftCardId }[]): string => cards.map((card) => card.id).join(',');
 const share = (context: DraftContext, id: UpgradeId, seeds = 1000): number => {
@@ -120,10 +120,10 @@ const ever = (context: DraftContext, id: UpgradeId, seeds = 1000): boolean => {
   check('every non-stackable owned: the stackables (FIREWALL, +12 CHARGE, FUEL TRIM) fill the 3 slots', filled, ids(draftCards(ownedOnce, createRng(1))));
   check('a full FIREWALL stack (2) is never offered', !ever(ctx({ owned: { ...none, firewall: 2 } }), 'firewall'));
   check('REPAIR v2 is never offered to a unit with no Repair to bump (a crash before the licence)', !ever(ctx({ hasRepair: false }), 'repair-v2'));
-  const noRoom = ctx({ linkRoom: 1 });
-  check('a file card is never offered when its file has no link room', !ever(noRoom, 'firewall') && !ever(noRoom, 'fuel-trim')
+  const noRoom = ctx({ fileRoom: 1 });
+  check('a file card is never offered when its file has no room', !ever(noRoom, 'firewall') && !ever(noRoom, 'fuel-trim')
     && draftCards(noRoom, createRng(1)).length === DRAFT_CARDS);
-  const tight = ctx({ linkRoom: 0, hasRepair: false, owned: { ...none, 'thread-plus': 1 } });
+  const tight = ctx({ fileRoom: 0, hasRepair: false, owned: { ...none, 'thread-plus': 1 } });
   check('a hand-built state with fewer cards left deals every card it can, never a duplicate (here: +12 CHARGE alone)',
     ids(draftCards(tight, createRng(3))) === 'charge');
 }
@@ -158,9 +158,9 @@ function pick(id: UpgradeId): void {
   toTransmit(5);
   const offer = state().run.transit!.offer;
   check('TRANSMIT deals 3 cards, seeded by the ship being left (the same state deals the same)', offer.length === DRAFT_CARDS
-    && ids(dealDraft(state(), fixtureHop(1).linkBlocks)) === ids(offer), ids(offer));
+    && ids(dealDraft(state(), fixtureHop(1))) === ids(offer), ids(offer));
   check('…with no REPAIR licensed yet (a crash before the first look inside), REPAIR v2 is not among them',
-    !offer.some((card) => card.id === 'repair-v2') && !draftContext(state(), fixtureHop(1).linkBlocks).hasRepair);
+    !offer.some((card) => card.id === 'repair-v2') && !draftContext(state(), fixtureHop(1)).hasRepair);
   let threw = '';
   try { transmitNext(h.store); } catch (error) { threw = (error as Error).message; }
   check('the pick is mandatory: TRANSMIT ▸ with no card picked throws, and the unit stays', /no card picked/.test(threw) && state().run.phase === 'transmit', threw);
@@ -226,7 +226,7 @@ function pick(id: UpgradeId): void {
 // REPAIR v2: every Repair copy bumped; the held tool heals twice as fast.
 {
   toTransmit(5, () => { installTool(h.store, 'repair'); });
-  check('with REPAIR licensed, REPAIR v2 can be offered (the draft sees a Repair to bump)', draftContext(state(), fixtureHop(1).linkBlocks).hasRepair);
+  check('with REPAIR licensed, REPAIR v2 can be offered (the draft sees a Repair to bump)', draftContext(state(), fixtureHop(1)).hasRepair);
   pick('repair-v2');
   h.transmit();
   const repairs = state().memory.filter((seg) => seg.type === 'fs-tool' && seg.fsTool === 'repair');
@@ -253,7 +253,7 @@ function pick(id: UpgradeId): void {
 {
   toTransmit(5);
   pick('charge');
-  const carried = state().run.transit!.chargeCarried;
+  const carried = state().run.transit!.chargeHeld;
   h.transmit();
   const expected = Math.max(CHARGE_ARRIVAL_FLOOR, carried + state().run.pendingStarCredit) + CHARGE_CARD_BLOCKS;
   check('+12 REPAIR CHARGE arrives on top of what was carried', chargeLeft(state()) === expected && state().run.arrival?.cardCharge === CHARGE_CARD_BLOCKS,

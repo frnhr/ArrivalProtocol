@@ -167,7 +167,7 @@ check('…Swap arrived here (delivered at CORMORANT, 2659); Cp is still behind a
   const store = armRun();
   giveTools(store, ['repair']);
   toDesk(store);
-  const ctx = draftContext(store.getState(), 200);
+  const ctx = draftContext(store.getState());
   let dealtV2 = 0;
   for (let seed = 1; seed <= 300; seed++) if (draftCards(ctx, createRng(seed)).some((card) => card.id === 'repair-v2')) dealtV2++;
   check('the arm deals salvage only: REPAIR v2 in none of 300 deals (a Repair aboard to upgrade)',

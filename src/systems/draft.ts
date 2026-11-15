@@ -35,7 +35,7 @@ import { deliveryFileGroups } from '@systems/repository';
 //   eaten can be drafted again), REPAIR v2 by a Repair copy at v2, THREAD+ by the cards picked this run (it
 //   is the Core's own capacity, and the Core is never lost). The charge card stacks without limit.
 // • The pick changes the packet before it crosses: a file card's new file packs with the unit's own (it
-//   takes link room, and transit hits can land on it); REPAIR v2 bumps every Repair copy; THREAD+ the Core's
+//   takes room, and transit hits can land on it); REPAIR v2 bumps every Repair copy; THREAD+ the Core's
 //   capacity; +12 REPAIR CHARGE arrives with the star credit (systems/carry.ts arrivalCharge).
 
 // How many of each card the unit owns now (see the header).
@@ -51,22 +51,22 @@ export function ownedUpgrades(state: Readonly<GameState>): Record<UpgradeId, num
 }
 
 // What the draft reads at this TRANSMIT: the run's stats, the charge held, the ship just left, what the unit
-// owns, whether it has a Repair, the room its files leave (`linkRoom`: the next ship's link, and on a hop with a room
-// that room less the floor, whichever is less, never below 0), and what the strip calls HOLLOW (the reasons name it the
-// way the kid saw it). A unit whose files are over the link is dealt no file card (the review's B1: a FIREWALL picked
-// there would only add to what must be left behind).
+// owns, whether it has a Repair, the room its files leave (`fileRoom`: on a hop, its room less the floor and the files,
+// never below 0; with no hop, phase 2's suites, unbounded), and what the strip calls HOLLOW (the reasons name it the way
+// the kid saw it). A unit whose files fill the room is dealt no file card (the review's B1: a FIREWALL picked there would
+// only add to what must be left behind). Playtest 1 (note 20): the beam has no link limit, so the room is the one bound.
 // Phase 3 slice 3b: the files count the hop's deliveries as first packed (`deliveries`: the plan's chips, none sent on yet;
 // slice-3b-plan risk 17's reading: the deal stays keyed by the slot left, and a SEND ON later does not re-deal), and the arm
 // deals salvage only (UpgradeDef.salvage: REPAIR v2 moved to the repository, 02 §3.10).
 // Slice 4: the files count this desk's training (the pending purchases' files: skill-files.ts skillPacketPlan, nothing packed
 // lower yet), and the context says whether the unit has a tree (the arm) and whether the hop goes into a final ship
-// (`room.to`: the +2 CYCLES card is never dealt there, plan §7 R12; a bare link, phase 2's suites', goes nowhere final).
+// (`room.to`: the +2 CYCLES card is never dealt there, plan §7 R12; no hop, phase 2's suites', goes nowhere final).
 export function draftContext(
-  state: Readonly<GameState>, linkBlocks: number, room?: Readonly<Pick<Hop, 'room' | 'chargeFloor'> & Partial<Pick<Hop, 'to'>>>,
+  state: Readonly<GameState>, room?: Readonly<Pick<Hop, 'room' | 'chargeFloor'> & Partial<Pick<Hop, 'to'>>>,
   deliveries: readonly DeliveryChip[] = [],
 ): DraftContext {
   const last = state.run.ships[state.run.ships.length - 1] ?? null;
-  const files = planPacket(state.memory, { linkBlocks, dropped: [], pick: null, deliveries, skills: skillPacketPlan(state, {}) }).filesBlocks;
+  const files = planPacket(state.memory, { dropped: [], pick: null, deliveries, skills: skillPacketPlan(state, {}) }).filesBlocks;
   const roomLeft = room === undefined ? Infinity : room.room - room.chargeFloor - files;
   return {
     stats: state.run.stats,
@@ -74,7 +74,7 @@ export function draftContext(
     lastShip: last === null ? null : { name: last.shipName, fuelLeftPct: last.fuelLeftPct },
     owned: ownedUpgrades(state),
     hasRepair: state.memory.some((seg) => seg.type === 'fs-tool' && seg.fsTool === 'repair'),
-    linkRoom: Math.max(0, Math.min(linkBlocks - files, roomLeft)),
+    fileRoom: Math.max(0, roomLeft),
     hollowLabel: hollowLabel(state.run),
     salvageOnly: true,
     tree: true,
@@ -84,13 +84,13 @@ export function draftContext(
   };
 }
 
-// The cards for the TRANSMIT now being prepared (goTransmit), seeded by the ship being left: a hop (its link and room),
-// or a bare link (phase 2's suites), with the hop's delivery chips as first packed.
+// The cards for the TRANSMIT now being prepared (goTransmit), seeded by the ship being left: a hop (its room), or none
+// (phase 2's suites: no room bound), with the hop's delivery chips as first packed.
 export function dealDraft(
-  state: Readonly<GameState>, hop: number | Readonly<Pick<Hop, 'linkBlocks' | 'room' | 'chargeFloor'> & Partial<Pick<Hop, 'to'>>>,
+  state: Readonly<GameState>, hop: Readonly<Pick<Hop, 'room' | 'chargeFloor'> & Partial<Pick<Hop, 'to'>>> | null,
   deliveries: readonly DeliveryChip[] = [],
 ): DraftCard[] {
-  const context = typeof hop === 'number' ? draftContext(state, hop, undefined, deliveries) : draftContext(state, hop.linkBlocks, hop, deliveries);
+  const context = draftContext(state, hop ?? undefined, deliveries);
   const normal = draftCards(context, visitRng(state.run, 'draft'));
   return leftoverDeck(state, context, normal) ?? normal;
 }
@@ -123,7 +123,7 @@ function leftoverPoolCard(entry: Readonly<DraftEntry>, name: string, segId: stri
 // On a ship whose resident left, the cards its three leftovers deal instead of the normal deal (R14), in leftover order: two
 // pool cards (rolled at the boot onto the files, resident-left.ts rollLeftoverCards), then the skill card. Each id at most
 // once (one 'skill' at most). A leftover deals a card from the normal deal (`normal`, the cards not in the deck yet, in its
-// order) in its place when it was eaten, when its pool card can't be dealt on this hop (not usable, owned out, no link room
+// order) in its place when it was eaten, when its pool card can't be dealt on this hop (not usable, owned out, no room
 // for its file, `+2 CYCLES` into a final ship: draftEntries says), or when no skill qualifies for the skill card and `+2
 // CYCLES` can't stand in (not dealt here, or a pool card already is). Such a stand-in is a plain card (no `leftover`).
 // null: not a departed resident's ship.
@@ -167,7 +167,7 @@ export function leftoverDeck(state: Readonly<GameState>, ctx: Readonly<DraftCont
 
 // The new file a file card adds to the packet, with an id from `makeId` (the real send mints one; the
 // screen's numbers only need its size). Not a file card: none (slice 5: nor a departed resident's skill card, whose skill is
-// granted and installs at the next boot: it takes no link room, slice-5-plan §2.8).
+// granted and installs at the next boot: it takes no room, slice-5-plan §2.8).
 export function cardFiles(id: DraftCardId | null, makeId: (prefix: string) => string): Segment[] {
   if (id === null) return [];
   switch (id) {
@@ -206,7 +206,6 @@ export const PREVIEW_ID = (prefix: string): string => `${prefix}~preview`;
 // Its replaced files and the originals packed lower leave the packet with the drops (never shown as drops), and the fresh
 // and lowered files join it beside the card's; packet.skills names them.
 export interface PacketPlan {
-  linkBlocks: number;
   dropped: readonly string[];
   pick: TransitPlan['pick'];
   deliveries: readonly DeliveryChip[];
@@ -222,7 +221,7 @@ export function planPacket(
   // A file is left behind, replaced or packed lower, never two of these (setPackAs takes a dropped file back first).
   const both = plan.dropped.find((id) => skills.removed.includes(id));
   if (both !== undefined) throw new Error(`planPacket: ${both} is both left behind and replaced or packed lower`);
-  const packet = packUnit(memory, plan.linkBlocks, [...plan.dropped, ...skills.removed], [
+  const packet = packUnit(memory, [...plan.dropped, ...skills.removed], [
     ...cardFiles(plan.pick, makeId), ...groups.flatMap((group) => group.segs), ...skills.added,
   ]);
   packet.deliveries = groups.map((group) => ({ key: group.key, segIds: group.segs.map((seg) => seg.id) }));
@@ -240,11 +239,11 @@ export function planPacket(
 // The packet for a transit plan as it stands (its drops, pick, deliveries and PACK AS) on the run's training: what the
 // PACKET's model, its toggles and the send read.
 export function transitPacket(
-  state: Readonly<GameState>, plan: Readonly<Pick<TransitPlan, 'linkBlocks' | 'dropped' | 'pick' | 'deliveries' | 'packAs'>>,
+  state: Readonly<GameState>, plan: Readonly<Pick<TransitPlan, 'dropped' | 'pick' | 'deliveries' | 'packAs'>>,
   makeId: (prefix: string) => string = PREVIEW_ID,
 ): Packet {
   return planPacket(state.memory, {
-    linkBlocks: plan.linkBlocks, dropped: plan.dropped, pick: plan.pick, deliveries: plan.deliveries, skills: skillPacketPlan(state, plan.packAs),
+    dropped: plan.dropped, pick: plan.pick, deliveries: plan.deliveries, skills: skillPacketPlan(state, plan.packAs),
   }, makeId);
 }
 
@@ -269,7 +268,7 @@ export function applyPickToPacket(packet: Packet, id: DraftCardId | null): void 
 
 // Slice 5 (review B1): at TRANSMIT ▸ (run.ts transmitNext, after the layout and before commitTraining), the departed
 // resident's skill card, when it is the pick, is granted (skill-tree.ts grantSkill(store, id, 1, `from the resident that left
-// <SHIP>`, 'card')): no link room, installed at the next boot with its TRAINED line (§2.8). The deal chose the skill
+// <SHIP>`, 'card')): no room, installed at the next boot with its TRAINED line (§2.8). The deal chose the skill
 // (leftoverSkill).
 export function applyLeftoverPick(store: Store<GameState>, plan: Readonly<TransitPlan>): void {
   if (plan.pick !== 'skill') return;
@@ -300,7 +299,6 @@ export function pickCard(store: Store<GameState>, id: DraftCardId): PickRefusal 
     if (!draft.run.transit) throw new Error('pickCard: the transit plan vanished');
     draft.run.transit.pick = id;
     draft.run.transit.filesBlocks = packet.filesBlocks;
-    draft.run.transit.chargeCarried = packet.chargeCarried;
   });
   return null;
 }

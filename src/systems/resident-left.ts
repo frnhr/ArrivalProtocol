@@ -149,7 +149,7 @@ export function leftShipEnd(store: Store<GameState>): { fate: 'left'; leftoversE
 export function rollLeftoverCards(store: Store<GameState>): void {
   const state = store.getState();
   if (state.resident.def?.kind !== 'left') throw new Error('rollLeftoverCards: this ship\'s resident did not leave');
-  const pool = draftCards(draftContext(state, Infinity), shipRng(state.run, currentSlot(state.run), 'leftovers'));
+  const pool = draftCards(draftContext(state), shipRng(state.run, currentSlot(state.run), 'leftovers'));
   if (pool.length < LEFTOVER_COUNT - 1) throw new Error(`rollLeftoverCards: the pool dealt ${pool.length} cards for ${LEFTOVER_COUNT - 1} leftovers`);
   store.update((draft) => {
     LEFTOVER_IDS.forEach((_, index) => {

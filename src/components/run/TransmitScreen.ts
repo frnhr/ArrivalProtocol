@@ -32,13 +32,13 @@ import {
   DRAFT_CARDS,
 } from '@data/tuning';
 
-// The TRANSMIT screen (§4.1 step 5, §6.9, §9 WP7 item 4): between two ships, the unit packed for the link.
+// The TRANSMIT screen (§4.1 step 5, §6.9, §9 WP7 item 4): between two ships, the unit packed for the destination's room.
 // Mostly information, in the mind's own blue: where it goes (`NEXT: HALCYON · 2,000 COLONISTS · 22 LY`), how
-// it was left (an EMERGENCY's toll, BEAM OUT's extra hits), the packet against the link (a bar and `LINK 120
-// · FILES 63 · CHARGE 14 → FITS`), the files as chips (safest to leave behind first, each with what leaving
+// it was left (an EMERGENCY's toll, BEAM OUT's extra hits), the packet against the room (playtest 1, note 20: the link bar
+// went with the link), the files as chips (safest to leave behind first, each with what leaving
 // it does; locked ones say why; an infected one warns it will arrive infected), what the crossing costs and
-// the REPAIR CHARGE waiting on arrival. A chip can be clicked to leave its file behind only while charge is
-// left behind (systems/transmit.ts says so on the screen).
+// the REPAIR CHARGE waiting on arrival. A chip can be clicked to leave its file behind only while the room squeezes the
+// charge, or the files are over it (systems/transmit.ts says so on the screen).
 // TRANSMIT ▸ (or SPACE / ENTER, once armed) is the crossing itself, on wall time like the LANDING REPORT: the
 // chips stream out one after another while the light-years tick past under a rising FM sweep, then the
 // screen floods white; at full white the packet really goes (systems/run.ts transmitNext: the hits, the
@@ -53,12 +53,11 @@ import {
 // the cards. Picks wait for the same arm delay as the send, so a click meant for the LANDING REPORT's CONTINUE
 // never picks a card by accident.
 // Phase 3 slice 2 (04 §3.8, §4; 05 §3.2): HOLLOW riding the beam is an uninvited chip after the unit's own, in its pink,
-// locked and outside the bar (it rides free); on the beam it boards, the sweep stutters. 046.log's chip reads `046.log ·
+// locked and outside the bar (not in your packet); on the beam it boards, the sweep stutters. 046.log's chip reads `046.log ·
 // 3/12` and glows while an entry is unread; a click on it opens the LOG READER (it can't be left behind anyway). The
 // TRACE line and `NO RM · YOU CAN'T DELETE THE ROOT` (before the final beam) sit with the notes.
 // Phase 3 slice 3a (02-map §4, 01-landing §3.16): the PACKET between the DESK and the beam. `◀ CHART [ESC]` goes back to
-// the desk until TRANSMIT ▸ (the drops and the pick are forgotten). The room bar sits under the link bar: the files and
-// the charge that will arrive against the destination's room, and what does not fit hangs off its end (`26 WON'T FIT`),
+// the desk until TRANSMIT ▸ (the drops and the pick are forgotten). The room bar: the files and the charge that will arrive against the destination's room, and what does not fit hangs off its end (`26 WON'T FIT`),
 // with the charge line naming the loss before it happens; on a TIGHT ship whose room leaves no charge the line turns red
 // (`→ 0 ON ARRIVAL`, with buzz and CONTROL's "Travelling light! Very light. :)"), and TRANSMIT ▸ asks inline first
 // (`ARRIVE WITH NO REPAIR CHARGE?`, ENTER yes, ESC no). While files plus the floor are over the room, TRANSMIT ▸ waits
@@ -91,14 +90,13 @@ function chipNode(chip: PacketChip): HTMLButtonElement {
   button.appendChild(head);
   const foot = make('span', 'tx-chip-note', chip.dropped ? TRANSMIT_TEXT.dropped : chip.note);
   button.appendChild(foot);
-  // What leaving it behind buys: the charge that then arrives (slice 3a: a squeezing room), at least what then crosses.
-  const gain = Math.max(chip.chargeGain, chip.arriveGain);
-  if (chip.toggleable && gain > 0) button.appendChild(make('span', 'tx-chip-gain', TRANSMIT_TEXT.gain(gain)));
+  // What leaving it behind buys: the charge that then arrives (slice 3a: a squeezing room).
+  if (chip.toggleable && chip.arriveGain > 0) button.appendChild(make('span', 'tx-chip-gain', TRANSMIT_TEXT.gain(chip.arriveGain)));
   if (chip.infected && !chip.dropped) button.appendChild(make('span', 'tx-chip-warn', TRANSMIT_TEXT.chipInfected));
   return button;
 }
 
-// The picked card's new file, among the unit's own (it rides the same link and can take a transit hit).
+// The picked card's new file, among the unit's own (it rides the same beam and can take a transit hit).
 // Slice 4 (03 §3.4; plan §2.6, §3 step 7), over TREE's PacketChip.skill: a skill file's chip keeps the tree's file name
 // (`AUTOBURN.skl`) with its version badge (`v2`, `v2▸v1` under damage, the packed level once PACK AS is on), says what
 // leaving it costs after its name (`→ brake by hand · RESTORE 5`), and is followed in its grid cell by a PACK AS button per
@@ -213,7 +211,8 @@ if (CARD_KEY_CODES.length < DRAFT_CARDS) {
 }
 
 // The slice-3a parts of the PACKET, built here (index.html keeps phase 2's skeleton): ◀ CHART in the head, the room bar
-// under the link bar, CONTROL's line, the inline confirm in the foot and the BEAM stamp.
+// before the drop line (playtest 1, note 20: where the link bar was), CONTROL's line, the inline confirm in the foot and the
+// BEAM stamp.
 interface PacketParts {
   back: HTMLButtonElement;
   room: HTMLElement;
@@ -224,7 +223,6 @@ interface PacketParts {
   roomOver: HTMLElement;
   roomLine: HTMLElement;
   roomCharges: HTMLElement;
-  linkLabel: HTMLElement;
   control: HTMLElement;
   confirm: HTMLElement;
   confirmQ: HTMLElement;
@@ -240,15 +238,13 @@ interface PacketParts {
 function buildPacketParts(root: HTMLElement): PacketParts {
   const inner = root.querySelector<HTMLElement>('.tx-inner');
   const head = root.querySelector<HTMLElement>('.tx-head');
-  const packet = root.querySelector<HTMLElement>('.tx-packet');
+  const dropLine = root.querySelector<HTMLElement>('.tx-drop-line');
   const foot = root.querySelector<HTMLElement>('.tx-foot');
   const send = root.querySelector<HTMLElement>('.tx-send');
-  if (!inner || !head || !packet || !foot || !send) throw new Error('TransmitScreen: index.html lost the PACKET\'s skeleton');
+  if (!inner || !head || !dropLine || !foot || !send) throw new Error('TransmitScreen: index.html lost the PACKET\'s skeleton');
   const back = make('button', 'tx-back', MAP_TEXT.packet.backToChart);
   back.tabIndex = -1;
   head.prepend(back);
-  const linkLabel = make('div', 'tx-bar-label', MAP_TEXT.packet.linkLabel);
-  packet.prepend(linkLabel);
   const room = make('div', 'tx-packet tx-room');
   const roomLabel = make('div', 'tx-bar-label', MAP_TEXT.packet.roomLabel);
   const roomBar = make('div', 'tx-bar tx-room-bar');
@@ -262,7 +258,7 @@ function buildPacketParts(root: HTMLElement): PacketParts {
   const roomLine = make('div', 'tx-packet-line tx-room-line');
   const roomCharges = make('div', 'tx-room-charge');
   room.append(roomLabel, roomBar, roomOver, roomLine, roomCharges);
-  packet.after(room);
+  dropLine.before(room);
   const control = make('div', 'tx-control');
   control.hidden = true;
   room.after(control);
@@ -294,7 +290,7 @@ function buildPacketParts(root: HTMLElement): PacketParts {
   inTransit.hidden = true;
   chips.after(deliveries, inTransit);
   return {
-    back, room, roomBar, roomFiles, roomCharge, roomCard, roomOver, roomLine, roomCharges, linkLabel, control, confirm, confirmQ, confirmYes,
+    back, room, roomBar, roomFiles, roomCharge, roomCard, roomOver, roomLine, roomCharges, control, confirm, confirmQ, confirmYes,
     confirmNo, stamp, sendControl, deliveries, deliveryChips, inTransit,
   };
 }
@@ -308,11 +304,6 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
   const cardsEl = requireById('txCards');
   const nextEl = requireById('txNext');
   const whyEl = requireById('txWhy');
-  const barEl = requireById('txBar');
-  const barFiles = requireById('txBarFiles');
-  const barCharge = requireById('txBarCharge');
-  const barOver = requireById('txBarOver');
-  const packetLine = requireById('txPacketLine');
   const dropLine = requireById('txDropLine');
   const chipsEl = requireById('txChips');
   const infectedEl = requireById('txInfected');
@@ -365,17 +356,6 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
     whyEl.hidden = next.why === null;
     whyEl.textContent = next.why ?? '';
     whyEl.classList.toggle('emergency', next.emergency);
-    barEl.style.setProperty('--link-blocks', String(next.link));
-    barFiles.style.width = `${Math.min(100, (100 * next.files) / next.link)}%`;
-    barCharge.style.width = `${(100 * next.chargeCarried) / next.link}%`;
-    // Files over the link (the review's B1) hang off the bar's end in red, like the room's; else the charge left behind.
-    const overLink = next.room.fit.overLink;
-    const left = next.chargeHeld - next.chargeCarried;
-    barEl.classList.toggle('over-link', overLink > 0);
-    barOver.hidden = overLink <= 0 && left <= 0;
-    barOver.textContent = overLink > 0 ? `+${overLink}` : left > 0 ? TRANSMIT_TEXT.over(left) : '';
-    barOver.title = overLink > 0 ? '' : left > 0 ? TRANSMIT_TEXT.overTitle(left) : '';
-    packetLine.textContent = next.packetLine;
     dropLine.textContent = next.dropLine;
     // Slice 4: a skill file's chip (TREE's PacketChip.skill) with its badge and PACK AS buttons; the file it is in memory
     // gives the damage badge (none for a file trained here: it is fresh).
@@ -430,7 +410,7 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
     const fit = room.fit;
     const pct = (blocks: number): string => `${Math.min(100, (100 * blocks) / fit.room)}%`;
     parts.room.dataset.tone = room.tone;
-    parts.roomBar.style.setProperty('--link-blocks', String(fit.room));
+    parts.roomBar.style.setProperty('--bar-blocks', String(fit.room));
     parts.roomFiles.style.width = pct(Math.min(fit.files, fit.room));
     const charge = Math.max(0, Math.min(fit.chargeArrives, fit.room - fit.files));
     const card = Math.min(room.card?.arrives ?? 0, charge);
@@ -545,8 +525,8 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
       replayAnimation(goBtn, 'nudge');
       return;
     }
-    // Files plus the floor over the destination's room, or files over the link: TRANSMIT ▸ waits until files are left
-    // behind (01 §3.16; the review's B1).
+    // Files plus the floor over the destination's room: TRANSMIT ▸ waits until files are left behind (01 §3.16; the
+    // review's B1).
     if (current.room.tooMany !== null) {
       play('buzz');
       replayAnimation(parts.room, 'nudge');

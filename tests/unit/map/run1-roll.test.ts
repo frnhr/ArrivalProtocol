@@ -39,8 +39,8 @@ check('907 routes; the best by length 66 / 69 / 68 / 64 pods (5–8 ships)', all
 
 // The worked route (§4.3).
 const hops = WORKED_ROUTE.slice(1).map((to, i) => hopBetween(map, WORKED_ROUTE[i]!, to));
-check('the worked route: LY 21/26/55/30/54, link 123/117/86/113/87, hits 3/4/8/4/8, ECC 1/3/4/6/5, slack 31/89/103/162/149',
-  hops.map((h) => h.distanceLy).join() === '21,26,55,30,54' && hops.map((h) => h.linkBlocks).join() === '123,117,86,113,87'
+check('the worked route: LY 21/26/55/30/54, hits 3/4/8/4/8, ECC 1/3/4/6/5, slack 31/89/103/162/149',
+  hops.map((h) => h.distanceLy).join() === '21,26,55,30,54'
   && hops.map((h) => h.transitHits).join() === '3,4,8,4,8' && hops.map((h) => h.eccFixes).join() === '1,3,4,6,5'
   && hops.map((h) => h.slackYears).join() === '31,89,103,162,149');
 check('…SOL distances 8, 29, 55, 107, 129, 180', WORKED_ROUTE.map(solLy).join() === '8,29,55,107,129,180');

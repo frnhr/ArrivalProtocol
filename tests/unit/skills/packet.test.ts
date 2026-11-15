@@ -1,7 +1,7 @@
 // Slice 4 Track TREE (plan §6): skill files in the packet, store level, about a second. Run 1's worked route walked desk to
 // desk with no flights (tests/unit/map/repo-fixture.ts), every send the real one.
 // • A purchase's file joins the packet through planPacket, the one adder (03 §3.3): the first pick's AUTOBURN v1 (6) on
-//   the PACKET as a locked chip (`TRAINED HERE · ◀ CHART TO UNDO`), counted by the link, the room and the preview alike;
+//   the PACKET as a locked chip (`TRAINED HERE · ◀ CHART TO UNDO`), counted by the room and the preview alike;
 //   it arrives fresh, after the AI tools (layoutCarried), and the arrival names it 'trained'.
 // • An upgrade replaces the file with a fresh one at 100% (new code heals and cures), in the old one's place; the old one
 //   has no chip.
@@ -144,6 +144,10 @@ setCourse(store, 11);
   check('…PACK AS v1: the chip crosses as v1 + LOCK 270 (7), its option active; the packet 2 blocks lighter',
     packed.blocks === 7 && packed.skill?.packedAs?.version === 1 && packed.skill.packAs[0]!.active
       && store.getState().run.transit!.filesBlocks === before - 2 && transmitModel(store.getState()).files === before - 2);
+  // Playtest 1 (note 20): KESTREL → VESPER's link (86) squeezed the charge here, so a drop bought some; with no link, the
+  // destination's room is squeezed instead (the plan's hop is its room: ◀ CHART below deals a fresh plan).
+  const squeeze = transmitModel(store.getState()).room.fit;
+  store.update((draft) => { draft.run.transit!.hop.room = squeeze.files + squeeze.wanted - 10; });
   toggleDrop(store, fileId);
   check('…leaving it behind forgets PACK AS', store.getState().run.transit!.dropped.includes(fileId) && Object.keys(store.getState().run.transit!.packAs).length === 0);
   setPackAs(store, fileId, { version: 1, lock: 1 });
@@ -185,16 +189,16 @@ sendNow(store);
     && arrivedFresh(store, files[0]!) && store.getState().run.arrival!.skills[0]!.kind === 'restored');
 }
 
-// --- The unit room as the second limit (01 §3.16) ----------------------------------------------------------------------
+// --- The unit room as the limit (01 §3.16; playtest 1 note 20: the only one) -------------------------------------------
 toDesk(store);
 {
   const state = store.getState();
-  const files = transitPacket(state, { linkBlocks: 200, dropped: [], pick: null, deliveries: [], packAs: {} }).filesBlocks;
-  const hop = { to: currentSlot(state.run), linkBlocks: 200, room: files - 1, chargeFloor: 0 };
+  const files = transitPacket(state, { dropped: [], pick: null, deliveries: [], packAs: {} }).filesBlocks;
+  const hop = { to: currentSlot(state.run), room: files - 1, chargeFloor: 0 };
   const plan = { hop, threat: { act: 'calm' as const, beamSeeds: { kind: 'none' as const } }, dropped: [], pick: null, deliveries: [] };
   const fit = unitArrival(state, plan).fit;
-  check('a TIGHT room one block short of the files: the room binds, not the link (the skills counted in the files)',
-    fit.over === 1 && fit.overLink === 0 && fit.word === 'leave', JSON.stringify(fit));
+  check('a TIGHT room one block short of the files: the room binds (the skills counted in the files)',
+    fit.over === 1 && fit.word === 'leave', JSON.stringify(fit));
   const id = autoburn(store)[0]!.id;
   const packed = unitArrival(state, { ...plan, packAs: { [id]: { version: 1, lock: 1 } } }).fit;
   check('…PACK AS v1 brings the files under it (2 blocks)', packed.over === 0 && packed.files === files - 2, JSON.stringify(packed));

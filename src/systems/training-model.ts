@@ -115,9 +115,11 @@ export interface TrainingPending {
 }
 
 export interface TrainingPreview {
-  text: string;                // FILES 66 + SKILLS 9 · LINK 117 · ROOM FOR 42 CHARGE
+  text: string;                // FILES 66 + SKILLS 9 · ROOM 152 · ROOM FOR 42 CHARGE
   tone: 'quiet' | 'warn' | 'over';
-  binding: 'link' | 'room';
+  // The limit that binds: the room, the only one since playtest 1 (note 20: the link is gone). Kept as a field, so the
+  // TRAINING window's data-binding stays put.
+  binding: 'room';
   hint: string | null;         // when it does not fit: the cheapest way out
 }
 
@@ -328,21 +330,16 @@ export function heldSkillBlocks(state: Readonly<GameState>): number {
   }, 0);
 }
 
-// The preview's words from the fit the PACKET would have: the files and the skills, the limit that binds (the smaller of
-// the link and the room, or whichever the files are over), and what is left for charge, or how far over it is. The warning
-// colour below the charge floor; red when the files do not fit, with the cheapest way out.
+// The preview's words from the fit the PACKET would have: the files and the skills, the room (the one limit since playtest
+// 1, note 20), and what is left for charge, or how far over it is. The warning colour below the charge floor; red when the
+// files do not fit, with the cheapest way out.
 export function packetPreview(fit: Readonly<RoomFit>, skills: number, tight: boolean, hint: string | null): TrainingPreview {
   const text = TRAINING_TEXT.preview;
   const head = text.head(Math.max(0, fit.files - skills), skills);
-  if (fit.word === 'leave') {
-    const binding = fit.overLink >= fit.over ? 'link' : 'room';
-    const limit = binding === 'link' ? text.link(fit.link) : text.room(fit.room, tight);
-    return { text: [head, limit, text.over(binding === 'link' ? fit.overLink : fit.over)].join(' · '), tone: 'over', binding, hint };
-  }
-  const binding = fit.link <= fit.room ? 'link' : 'room';
-  const limit = binding === 'link' ? text.link(fit.link) : text.room(fit.room, tight);
+  const limit = text.room(fit.room, tight);
+  if (fit.word === 'leave') return { text: [head, limit, text.over(fit.over)].join(' · '), tone: 'over', binding: 'room', hint };
   const tail = fit.chargeArrives === 0 ? text.noCharge : text.roomFor(fit.chargeArrives);
-  return { text: [head, limit, tail].join(' · '), tone: fit.chargeArrives < CHARGE_ARRIVAL_FLOOR ? 'warn' : 'quiet', binding, hint: null };
+  return { text: [head, limit, tail].join(' · '), tone: fit.chargeArrives < CHARGE_ARRIVAL_FLOOR ? 'warn' : 'quiet', binding: 'room', hint: null };
 }
 
 // The cheapest way to make an over packet fit, named before the PACKET: undo a purchase made here, else the cheapest PACK
@@ -377,7 +374,7 @@ function previewFor(state: Readonly<GameState>, slot: number | null): TrainingPr
   const verdict = planThreat(threatInputFor(state.run.threat, mapFacts(map, from, slot, map.route.length + 1), state.run.stats.deal !== null, finalTraceInput(state.run)));
   const fit = unitArrival(state, { hop, threat: verdict, dropped: [], pick: null, deliveries: deliveriesForHop(state, from, slot, verdict) }).fit;
   const tight = shipSummaryAt(map, slot).memoryClass === 'TIGHT';
-  return packetPreview(fit, heldSkillBlocks(state), tight, fit.word === 'leave' ? overHint(state, Math.max(fit.over, fit.overLink)) : null);
+  return packetPreview(fit, heldSkillBlocks(state), tight, fit.word === 'leave' ? overHint(state, fit.over) : null);
 }
 
 // --- The model ---------------------------------------------------------------------------------------------------------

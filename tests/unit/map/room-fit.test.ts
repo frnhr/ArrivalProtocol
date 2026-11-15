@@ -1,7 +1,8 @@
 // Slice 3a F2 and its review follow-up (M1): the room for the unit (01-landing §3.16, the amendment of 02 §3.3;
-// systems/map-hop.ts roomFit), pure, against the PACKET's own rules (systems/carry.ts packUnit's link, arrivalCharge's
-// star credit, card and floor, layoutCarried's seeds before the charge), and the memory classes' numbers it reads
-// (FULL / COMPACT / TIGHT: 384 / 320 / 256 blocks, room 152 / 152 / 88, floor 12 / 12 / 0).
+// systems/map-hop.ts roomFit), pure, against the PACKET's own rules (arrivalCharge's star credit, card and floor,
+// layoutCarried's seeds before the charge), and the memory classes' numbers it reads (FULL / COMPACT / TIGHT: 384 / 320 /
+// 256 blocks, room 152 / 152 / 88, floor 12 / 12 / 0). Playtest 1 (note 20): no link, so every block of charge crosses
+// and the room is the one limit (the link's own checks went with it).
 import { check, finish } from '../landing/checks';
 import { roomFit, hopBetween, cardArrives } from '@systems/map-hop';
 import { arrivalCharge, BEAM_SEED_LAYOUT_BLOCKS } from '@systems/carry';
@@ -9,7 +10,7 @@ import { MEMORY_LAYOUTS, layoutForTotal, rackOf, rackStartOf } from '@data/memor
 import { run1Map } from './run1-fixture';
 
 const files = (...sizes: number[]): { size: number }[] => sizes.map((size) => ({ size }));
-const hop = (cls: 'FULL' | 'COMPACT' | 'TIGHT', linkBlocks = 123) => ({ linkBlocks, room: MEMORY_LAYOUTS[cls].roomForUnit, chargeFloor: MEMORY_LAYOUTS[cls].chargeFloor });
+const hop = (cls: 'FULL' | 'COMPACT' | 'TIGHT') => ({ room: MEMORY_LAYOUTS[cls].roomForUnit, chargeFloor: MEMORY_LAYOUTS[cls].chargeFloor });
 const json = (value: unknown): string => JSON.stringify(value);
 
 const { FULL, COMPACT, TIGHT } = MEMORY_LAYOUTS;
@@ -25,7 +26,7 @@ check('…a total no class has throws', threw);
 
 const fits = roomFit({ files: files(16, 8, 4, 8, 6, 6, 4, 3, 2, 8), charge: 40 }, hop('FULL'));
 check('a 65-block unit with 40 charge fits a FULL ship: all 40 arrive', fits.word === 'fits' && fits.files === 65 && fits.chargeArrives === 40
-  && fits.linkLost === 0 && fits.roomLost === 0, json(fits));
+  && fits.carried === 40 && fits.roomLost === 0, json(fits));
 const low = roomFit({ files: files(65), charge: 5 }, hop('COMPACT'));
 check('…5 charge arrives topped up to the floor of 12 (nothing lost)', low.word === 'fits' && low.chargeArrives === 12 && low.roomLost === 0, json(low));
 
@@ -51,19 +52,19 @@ check('…5 carried and the card: 12 + 12 (the floor tops up 7, never the card)'
 const cardTight = roomFit({ files: files(80), charge: 0, bonus: { starCredit: 0, card: 12 } }, hop('TIGHT'));
 check('…into a TIGHT room of 88 with 80 of files: only 8 of the card fit (`+12 · ONLY 8 FIT`)',
   cardTight.word === 'squeezed' && cardTight.chargeArrives === 8 && cardArrives(cardTight, 12) === 8 && cardTight.roomLost === 4, json(cardTight));
-const cardFull = roomFit({ files: files(120), charge: 40, bonus: { starCredit: 0, card: 12 } }, hop('FULL', 200));
+const cardFull = roomFit({ files: files(120), charge: 40, bonus: { starCredit: 0, card: 12 } }, hop('FULL'));
 check('…a room already full of charge takes none of the card', cardFull.chargeArrives === 32 && cardArrives(cardFull, 12) === 0, json(cardFull));
 let cardOver = false;
 try { cardArrives(cardLow, 13); } catch { cardOver = true; }
 check('…a card larger than the bonus it sits in throws', cardOver);
 
-// (b) The link's loss and the room's are apart; squeezed means the room.
-const lapwing = roomFit({ files: files(79), charge: 30 }, hop('TIGHT', 117));
+// (b) Squeezed means the room: all 30 cross, the room takes 9.
+const lapwing = roomFit({ files: files(79), charge: 30 }, hop('TIGHT'));
 check('LAPWING (TIGHT, room 88, no floor): 79 blocks of files leave room for 9 of 30 (`CHARGE SQUEEZED: 9 ARRIVES`)',
-  lapwing.word === 'squeezed' && lapwing.chargeArrives === 9 && lapwing.roomLost === 21 && lapwing.linkLost === 0 && lapwing.floor === 0, json(lapwing));
-const linked = roomFit({ files: files(80), charge: 30 }, hop('FULL', 86));
-check('a link-limited unit is not squeezed by the room: 6 cross, the floor tops up to 12, 24 left by the link',
-  linked.word === 'fits' && linked.carried === 6 && linked.chargeArrives === 12 && linked.linkLost === 24 && linked.roomLost === 0, json(linked));
+  lapwing.word === 'squeezed' && lapwing.chargeArrives === 9 && lapwing.roomLost === 21 && lapwing.carried === 30 && lapwing.floor === 0, json(lapwing));
+const unlinked = roomFit({ files: files(80), charge: 30 }, hop('FULL'));
+check('…the unit the 86-block link held to 6 now lands all 30 on a FULL ship (no link, note 20)',
+  unlinked.word === 'fits' && unlinked.carried === 30 && unlinked.chargeArrives === 30 && unlinked.roomLost === 0, json(unlinked));
 
 // (c) No charge arrives: no-charge, an empty unit included.
 const none = roomFit({ files: files(88), charge: 20 }, hop('TIGHT'));
@@ -74,7 +75,7 @@ const emptyFull = roomFit({ files: files(60), charge: 0 }, hop('FULL'));
 check('…the same unit on a FULL ship gets the floor: fits with 12', emptyFull.word === 'fits' && emptyFull.chargeArrives === 12, json(emptyFull));
 
 // (d) Seeds first (01 §3.16's fill order: files, floor, seeds, the rest).
-const seeded = roomFit({ files: files(110), charge: 40, seedBlocksMax: 3 * BEAM_SEED_LAYOUT_BLOCKS }, hop('FULL', 200));
+const seeded = roomFit({ files: files(110), charge: 40, seedBlocksMax: 3 * BEAM_SEED_LAYOUT_BLOCKS }, hop('FULL'));
 check('three seeds (21 blocks) come before the charge above the floor: 40 without them, 21 with them, never below the floor',
   seeded.chargeArrives === 40 && seeded.chargeArrivesMin === 21 && seeded.word === 'fits', json(seeded));
 const seededTight = roomFit({ files: files(80), charge: 30, seedBlocksMax: 2 * BEAM_SEED_LAYOUT_BLOCKS }, hop('TIGHT'));
@@ -84,7 +85,7 @@ check('…on a TIGHT ship (no floor) seeds take the charge\'s room first: 8 with
   seededTight.chargeArrives === 8 && seededTight.chargeArrivesMin === 1 && seededTight.seedsMax === 2, json(seededTight));
 const seededZero = roomFit({ files: files(74), charge: 30, seedBlocksMax: 2 * BEAM_SEED_LAYOUT_BLOCKS }, hop('TIGHT'));
 check('…two whole seeds in 14 blocks leave the charge at 0', seededZero.chargeArrives === 14 && seededZero.chargeArrivesMin === 0, json(seededZero));
-const floorHolds = roomFit({ files: files(130), charge: 30, seedBlocksMax: 21 }, hop('FULL', 200));
+const floorHolds = roomFit({ files: files(130), charge: 30, seedBlocksMax: 21 }, hop('FULL'));
 check('…the floor holds against them: 22 without seeds, 15 with one seed in the 10 blocks above the floor',
   floorHolds.chargeArrives === 22 && floorHolds.chargeArrivesMin === 15, json(floorHolds));
 const scripted = roomFit({ files: files(80), charge: 30, seedBlocksMin: 7, seedBlocksMax: 7 }, hop('TIGHT'));
@@ -92,14 +93,13 @@ check('…a seed that always rides (the tutorial\'s scripted one) is reserved in
   scripted.chargeArrives === 1 && scripted.chargeArrivesMin === 1 && scripted.seedsMin === 1, json(scripted));
 
 // The room's own limit.
-const leave = roomFit({ files: files(150), charge: 20 }, hop('FULL', 200));
+const leave = roomFit({ files: files(150), charge: 20 }, hop('FULL'));
 check('files + the floor over the room: leave 10 behind', leave.word === 'leave' && leave.over === 10 && leave.chargeArrives === 0, json(leave));
 const tightLeave = roomFit({ files: files(90), charge: 0 }, hop('TIGHT'));
 check('…on a TIGHT ship the files alone must fit (90 of 88: leave 2)', tightLeave.word === 'leave' && tightLeave.over === 2, json(tightLeave));
-// The link's own limit (the review's B1): files over it leave too, and nothing crosses.
-const overLink = roomFit({ files: files(90), charge: 20, bonus: { starCredit: 12, card: 0 } }, hop('FULL', 82));
-check('files over the link: leave (8 over 82), no charge crosses or arrives', overLink.word === 'leave' && overLink.overLink === 8 && overLink.over === 0
-  && overLink.carried === 0 && overLink.chargeArrives === 0 && overLink.linkLost === 20, json(overLink));
+// The 90 blocks of files that were over the shortest link (82, the review's B1) now fit a FULL ship with their charge.
+const noLink = roomFit({ files: files(90), charge: 20, bonus: { starCredit: 12, card: 0 } }, hop('FULL'));
+check('…90 blocks of files: no leave on a FULL ship, 20 + 12 arrive', noLink.word === 'fits' && noLink.over === 0 && noLink.chargeArrives === 32, json(noLink));
 
 // On run 1's hops (their room comes with the hop).
 const toLapwing = hopBetween(run1Map(), 5, 8);

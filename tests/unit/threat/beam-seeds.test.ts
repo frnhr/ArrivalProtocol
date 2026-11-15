@@ -56,7 +56,6 @@ const KESTREL = 2;
 // HALCYON; the classic one was FULL (the unit at 256) on a link of 112.
 const KESTREL_WORLD = fixtureState({ seed: 1, shipIndex: KESTREL, carried: 'fresh' });
 const kestrel = currentShip(KESTREL_WORLD);
-const KESTREL_LINK = KESTREL_WORLD.run.map.route.at(-1)!.hop!.linkBlocks;
 const KESTREL_LAYOUT = MEMORY_LAYOUTS[kestrel.memoryClass];
 // The beam into a ship at the seeds act's depth (map-facts: the scripted first-run seed beside Telemetry, NOISY later).
 const KESTREL_SEEDS: BeamSeedSource = { kind: 'scripted', firstRun: [{ role: 'telemetry' }], later: 2 };
@@ -66,7 +65,7 @@ function freshPacket(): Packet {
   const files = [...FRESH_UNIT_RACK_E, ...FRESH_UNIT_RACK_F]
     .filter((item): item is Exclude<typeof item, { free: number }> => !('free' in item))
     .map((item) => structuredClone(item) as Segment);
-  return packUnit(files, KESTREL_LINK, []);
+  return packUnit(files, []);
 }
 
 // --- The roll ---------------------------------------------------------------------------------------------------------
@@ -110,10 +109,10 @@ function freshPacket(): Packet {
 {
   const packet = freshPacket();
   const filesBefore = packet.filesBlocks;
-  const chargeBefore = packet.chargeCarried;
+  const chargeBefore = packet.chargeHeld;
   packet.seeds = rollBeamSeeds(packet, KESTREL_SEEDS, true, createRng(7));
-  check('seeds ride free: neither the files\' blocks nor the charge that crosses change', packet.filesBlocks === filesBefore && packet.chargeCarried === chargeBefore);
-  const layout = layoutCarried(packet, packet.chargeCarried, kestrel, fixtureVerdict(KESTREL), '???');
+  check('seeds ride free: neither the files\' blocks nor the charge that crosses change', packet.filesBlocks === filesBefore && packet.chargeHeld === chargeBefore);
+  const layout = layoutCarried(packet, packet.chargeHeld, kestrel, fixtureVerdict(KESTREL), '???');
   const segs = layout.racks.segs;
   const at = segs.findIndex((seg) => seg.name === 'Telemetry');
   const [gap, seed, wall] = [segs[at + 1], segs[at + 2], segs[at + 3]];
@@ -121,7 +120,7 @@ function freshPacket(): Packet {
     gap?.type === 'free' && gap.size === SEED_GAP_TO_TARGET_BLOCKS && seed?.type === 'hollow' && seed.seed === true && seed.beam === true
     && wall?.type === 'free' && wall.size === WALL_MIN_BLOCKS, segs.slice(at, at + 5).map((s) => `${s.name}:${s.size}`).join(' '));
   check('…the arrival names it (ArrivalReport.seeds) and the charge laid out is all that crossed',
-    layout.seeds.length === 1 && layout.seeds[0]!.segId === seed?.id && layout.seeds[0]!.targetName === 'Telemetry' && layout.chargeBlocks === packet.chargeCarried);
+    layout.seeds.length === 1 && layout.seeds[0]!.segId === seed?.id && layout.seeds[0]!.targetName === 'Telemetry' && layout.chargeBlocks === packet.chargeHeld);
   const memory = buildShipMemory(kestrel, layout.racks, createRng(1), true, '???', null, []);
   assertMemoryInvariants(memory, KESTREL_LAYOUT.totalBlocks);
   const reach = hollowReach(memory, 0).filter((r) => r.hollowId === seed!.id);
@@ -183,7 +182,7 @@ function freshPacket(): Packet {
   const bitten = memory.find((seg) => seg.id === telemetry.id);
   check('…it bites Telemetry, and the infection carries the beam flag', bitten?.type === 'tool' && bitten.infected?.beam === true && hollow.biteInSec !== null
     && Math.abs(hollow.biteInSec - BEAM_SEED_BITE_EVERY_SEC) < 1.2, JSON.stringify(bitten && 'infected' in bitten ? bitten.infected : null));
-  const packedInfected = packedFiles(packUnit(memory, 200, [])).find((seg) => seg.id === telemetry.id);
+  const packedInfected = packedFiles(packUnit(memory, [])).find((seg) => seg.id === telemetry.id);
   check('…a packed copy keeps it (an infection carried to the next ship stays the beam\'s)', packedInfected !== undefined && 'infected' in packedInfected && packedInfected.infected?.beam === true);
   for (let i = 0; i < 2000 && memory.some((seg) => seg.id === telemetry.id); i++, ai += dt) stepHollow(memory, dt, SEEDS_ONLY_DEF, ctx(ai, false));
   const eaten = memory.find((seg) => seg.type === 'hollow' && seg.ate === 'Telemetry') as HollowSegment | undefined;

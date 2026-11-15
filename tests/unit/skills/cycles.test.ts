@@ -82,8 +82,8 @@ const throws = (run: () => unknown): boolean => { try { run(); return false; } c
   const state = store.getState();
   const final = state.run.map.arm.findIndex((ship, slot) => ship !== undefined && shipSummaryAt(state.run.map, slot).final);
   const ids = (ctx: ReturnType<typeof draftContext>): string => draftEntries(ctx).map((entry) => entry.def.id).join();
-  const toTwo = draftContext(state, 200, { room: 152, chargeFloor: 12, to: 2 });
-  const toFinal = draftContext(state, 200, { room: 152, chargeFloor: 12, to: final });
+  const toTwo = draftContext(state, { room: 152, chargeFloor: 12, to: 2 });
+  const toFinal = draftContext(state, { room: 152, chargeFloor: 12, to: final });
   check('…on the arm it can be dealt into a ship with a desk after it, never into a final ship (no desk follows)',
     toTwo.tree === true && !toTwo.toFinal && ids(toTwo).includes('cycles') && toFinal.toFinal === true && !ids(toFinal).includes('cycles'),
     `${ids(toTwo)} | ${ids(toFinal)}`);

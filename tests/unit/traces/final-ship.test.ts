@@ -109,7 +109,7 @@ check('…the root is the last unit (UNIT-047), its FINALE seeds hunt your best 
 {
   const layoutFor = (look: FinalLook): Segment[] => {
     const s = look.state;
-    const racks = layoutCarried(packUnit(s.memory, 999, []), 20, shipDefAt(s.run.map, finalSlot),
+    const racks = layoutCarried(packUnit(s.memory, []), 20, shipDefAt(s.run.map, finalSlot),
       { hollow: s.hollow.cfg } as unknown as ShipThreat /* the layout reads only the seeds' target: the ship's HOLLOW as planned */, 'UNIT-047').racks;
     return racks.startAddr > 0 ? [freeSegment(racks.startAddr), ...racks.segs] : [...racks.segs];
   };
