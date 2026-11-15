@@ -1031,3 +1031,82 @@ Built on `47aa873`. Everything in A-WORDS's scope is in, with these departures f
   fails until it is removed: delete that one `ALLOWED` entry.
 - **Tests.** The ORBIT LOCKED pass edited 9 unit files, not 18: the rest read `TERMINAL.locked.word` or the status id. No
   e2e scenario matched the literal (`playthrough` and `phone` read the status id `locked`).
+
+## Deviations (B-DROP)
+
+Track B-DROP (note 9, 23's strip tail, OPEN-DECISIONS 120 and 133), built on `b01cf61` (Batch A merged). §3.4.2 is built as
+designed: [L] is always the plain manual launch (`landing-controls.ts launchDown` is `playerLaunch`, no keyup), [G] arms v1
+CENTRE for one window (`AutodropArm 'centre'`), the POD BAY and the phone bar carry the arm button, and GET READY and LAUNCH
+NOW carry ` · or [G] AUTO`. Item 120's two fixes are in. Where the build differs, and why:
+
+1. **v1's arm, its end.** [G] at v1 arms the volley of the next sure window of any LZ with room (`centreVolley`, the old
+   `heldVolley`, centred). It disarms itself once it has launched and has nothing more to fly in the window open now (the
+   volley is over, the next pod's drop is WIDE, the LZ is full) or that window has closed: review M1's rule for the hold,
+   kept. Its end is a new `AutodropEnd` **`'centre-done'`**, said on the TERMINAL as `AUTODROP · B +3 · [G] FOR THE NEXT
+   WINDOW`. The codec's `AUTODROP_ENDS` list (`save-codec.ts`, B-ORDER's file) gained the value in one line: `end` stands at
+   rest at a save point, so without it a save after a v1 window would be refused. No bump: the codec only accepts one more
+   word. An arm that has launched nothing (the kid stayed in the MIND through its window, every pod WIDE) stays armed for the
+   next sure window.
+2. **v1 from the MIND.** [G] arms from either screen, as for v2 and v3, but v1 still flies only on the SHIP screen (R8). While
+   it is armed in the MIND and its window is near or open, the strip says `AUTODROP v1 FLIES FROM THE SHIP SCREEN — [TAB]`
+   (a new row id, `landing-AD-mind`).
+3. **The strip's v1 offers.** Besides §3.4.2's tail on GET READY and LAUNCH NOW (`withLaunchTail` in `landing-guidance.ts`,
+   only on the SHIP screen, only while that window is v1's to fly), the L13 waits carry ` · [G] AUTODROP` for v1 too, as
+   they do for v2. AD-hold and AD-held are gone. There is no AD-done row for v1: the strip goes straight back to the
+   window's own rows, so a WIDE pod's `press [L]` is not hidden for AUTODROP_DONE_LINE_SEC.
+4. **The arm button for every version.** `AUTO · CENTRE [G]`, `AUTO · PASS [G]`, `AUTO · PLAN [G]` (AUTOBURN's `AUTO ·
+   GREEN [B]`); armed, every version reads what it waits for (`ARMED · LZ-B · 2 PODS`, or `ARMED · [G] CANCELS` with none).
+   The plan named the label for v1 only; v2 and v3 had `[G] AUTODROP` / `[G] CANCEL`. One look for one button. The key line
+   above it says `AUTODROP ▸ CENTRE [G] · ONE WINDOW` and, armed, `AUTODROP CENTRES THIS WINDOW · [G] CANCELS`.
+5. **Files outside §4's list.** The POD BAY's model is `landing-hud.ts autodropBayModel` (no Batch B track owns that file):
+   the key line, the button and the removal of LAUNCH's `AUTODROP HOLDS FOR THE CENTRE` status. `save-codec.ts` (item 1, one
+   line). `tests/e2e/run.mjs` (the scenario's one-line description). `autodrop-plan.ts` (the cue anchor, item 7): DROP's
+   file from slice 4, named in C-SITES' row as B-DROP's.
+6. **R4's lesson.** `autodropTutorialDue(state, 1)` is always false; `tut-autodrop-v1` stays in `script.ts SKILL_4CDE_RULES`
+   with its `[L]` key, never due (that table is not B-DROP's; the lead can drop the v1 entry). `AUTODROP_TEXT.tutorial.v1`
+   is reworded for the table's sake. The refusal `ONLY v1` is gone; v1 with nothing to centre says `NOTHING TO CENTRE — NO
+   POD CAN GO YET`, or `NO SURE WINDOW …` as v2 and v3 do. A v2 → v1 step mid-pass disarms and says `AUTODROP v2 → v1 —
+   [G] arms one window at a time`.
+7. **Item 120, the cue.** `volleySlots` takes an anchor, `'centre'` or `'cue'`. v2's pass volleys (`passVolley`) and its
+   POD BAY rows (`passRows`, so the prefilled split counts the same slots) start at the sure part's opening plus the learned
+   offset, each later pod a cadence on: the slot a hand kid gets from `LAUNCH NOW`, as `dropDemoOffset` measures AIM. v1
+   CENTRE stays centred (its name), and so does **v3's plan** (item 120 named v2; its rows are pod-specific sure spans and
+   their centring was not part of the finding). OPEN-DECISIONS 146 asks whether v3 should follow.
+8. **Item 120, no WIDE [L].** While anything is armed (v1, v2 or v3) and it still has a launch to fly, the open window that
+   is a WIDE DROP this pass (the next pod's whole dot does not fit and its sure part is not still ahead) shows AD-armed's
+   wait (`AUTODROP ARMED — next LZ-B ×2 in 0:40 · [G] to cancel`) instead of L5 or L3b. Two exceptions, both found by the
+   sweep (OPEN-DECISIONS 147):
+   - **an arm with nothing left to fly** holds nothing back (VESPER's busy kid with v2 landed 0% in 1,500 s: a pass whose
+     every window was WIDE, re-armed at every PASS DONE, held every WIDE [L] back);
+   - **v3's pin** (review M2, OPEN-DECISIONS 5): in the window of an LZ its plan does not use, LOAD NEXT is pinned to a pod
+     the plan holds for no window, and that [L], WIDE or not, stays the kid's.
+
+   A sure window the armed machine does not fly (an LZ outside v2's pass) still offers its [L].
+8b. **Two fixes the sweep forced.**
+   - **v2's [G] needs a count that fits.** The kid's counts are kept between passes, so [G] armed a pass of counts that fit
+     nothing this pass (the deadlock above). [G] now arms v2 only when a row has a count that fits (the tails' rule), else
+     it refuses as before (`NO SURE WINDOW …` / `NOTHING SET`); PASS DONE offers [G] by the same rule.
+   - **A short sure part's one pod.** `volleySlots`' fallback (one pod, when the offset pushes even one out of a short sure
+     part) aimed at the middle of what was left from now, which receded half a tick every tick: on VESPER (a 0.28 tac s sure
+     part) v1 said `LAUNCHING` through the window and sent nothing. The hold had hidden it (the kid let go and pressed [L]);
+     an arm does not let go, and with it armed the WIDE [L] was held back too (the sloppy kid landed 25%). It now aims at the
+     middle of the sure part, or goes at once once that has passed. This moves v3's plan rows on such windows too.
+9. **The words for B-TIME.** `AUTODROP ARMED · THE PLAN: 2 PASSES · HOLD [F] BETWEEN THEM` (`autodrop-text.ts radio.
+   armedPlan`), as B-TIME asked. The suites and the e2e scenario still press [F] as a tap where B-DROP touched them; B-TIME's
+   hold drivers replace those at the merge.
+10. **Tests.**
+    - `skills/autodrop-flow` re-scoped: v1 by [G] (the tail, the POD BAY model, the arm, the centred window, 'centre-done',
+      [L] plain, [G] cancels, armed from the MIND); v2's pods at their cue (`dropDemoOffset` within 0.2 tac s) and its thread
+      wait measured against the cue; R5 and the steps down armed by [G].
+    - `skills/autodrop-review`: M1 with v1 armed; OD 120 on HALCYON (v2, pods after the first WIDE) and in B2 (v3); M4's v2
+      also refuses the kid's own counts when they fit nothing (8b). `skills/landing-v3`'s M2 (v3's pinned [L]) passes
+      unchanged.
+    - `skills/autodrop-plan`: `volleySlots` from the cue (four checks) and the new words at their worst.
+    - `skills/autodrop-sweep`: the v1 kid presses [G] where it is offered, [L] otherwise.
+    - `landing/table`: the launch tail on L4 and L7 (and never on L5 or L6), AD-armed over a WIDE window.
+    - `landing/bay` (the bay's physics) needed nothing; the POD BAY's AUTODROP model is checked in `skills/autodrop-flow`.
+    - e2e `skills-4cde-landing`: v1 by the POD BAY's arm button (a click), BULLSEYE, its disarm, then a plain [L].
+    - **Not B-DROP's, left for their owners:** `wp12/playthrough.ts`'s landing kid still has its `hold [L]` branch. It is dead
+      now and harmless: its kid presses [G] at GET READY's tail and the waits' ` · [G] AUTODROP`, and [L] at LAUNCH NOW.
+      `AGENTS.md`'s "What's built" still says `v1 CENTRE (hold [L] …)` and lists item 120 as a next step. The playtest
+      checklist has no B-DROP items yet.
