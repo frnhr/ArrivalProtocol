@@ -1083,3 +1083,10 @@ Built on `b-voice` from b01cf61, for note 3 and §3.2. These are the departures 
    comments only, and are left to the owners to avoid conflicts.
 10. **05-story.** §3.4 is redrafted as "The two voices", marked DRAFT, with a list of what §1.4, §3.5, entries 03 and 11, and
     §3.12 still need from the story's owner.
+11. **Tests, on a loaded machine (load average 17–35 on 4 cores).**
+    - `typecheck` is clean.
+    - The quick tier ran 228 passed, 0 failed, but in 573 s: the 300 s run budget failed on the load alone.
+    - Six e2e scenarios fully passed: `playthrough` (279/279), `map-desk`, `survey`, `run2` and `traces`.
+    - `residents` failed different timing checks on each of two runs (the receiver bypass's frames, HERON's SCAN, MEND);
+      every voice check in it passed.
+    - `ending` fails `[ENTER] skips THE LAST LANDING` the same way on b01cf61, before this track.
