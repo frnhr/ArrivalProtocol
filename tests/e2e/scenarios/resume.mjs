@@ -29,7 +29,7 @@
 // the key, a reload, then __ap.resume() (or the ABANDON RUN button).
 // About 5 minutes; shots under tests/.out/e2e/shots/resume-*.
 // Usage: node tests/e2e/scenarios/resume.mjs   (env E2E_BASE_URL, SHOT_VIEWPORT; tests/e2e/run.mjs runs it)
-import { launch, BASE_URL, SHOTS, checker, pageKit, runKit, viewportFromEnv } from '../lib.mjs';
+import { launch, BASE_URL, SHOTS, checker, pageKit, runKit, viewportFromEnv, waitTrained } from '../lib.mjs';
 import { join } from 'node:path';
 
 const SEED = 4;
@@ -242,9 +242,7 @@ const armed = (await screens.desk()).go;
 await page.keyboard.press('Enter');
 // The bar fills on wall time, but by at most WALL_FRAME_MAX_SEC (0.1 s) a frame: on a loaded machine at 2–3 frames a
 // second its 1.5 s take 6 s or more. ENTER must start it at once; the purchase is waited for while the bar still fills.
-const started = await waitFor(() => window.__ap.store.getState().ui.trainingHoldSec !== null || window.__ap.store.getState().run.skills.pending.length === 1, 2000, 20);
-const firstPick = started && await waitFor(() => window.__ap.store.getState().run.skills.pending.length === 1
-  || window.__ap.store.getState().ui.trainingHoldSec === null, 30000) && await st(() => window.__ap.store.getState().run.skills.pending.length === 1);
+const firstPick = await waitTrained(page);
 const pendingPick = await st(() => window.__ap.store.getState().run.skills.pending.map((buy) => `${buy.skill}:${buy.kind}:v${buy.to.version}`).join());
 check('desk 1 opens on TRAINING: [1] arms AUTOBURN v1 (`TRAIN ▸ 3 CYCLES [ENTER]`), ENTER trains it (pending)', firstTab === 'training'
   && armed === 'TRAIN ▸ 3 CYCLES [ENTER]' && firstPick && pendingPick === 'autoburn:train:v1', JSON.stringify({ firstTab, armed, firstPick, pendingPick }));

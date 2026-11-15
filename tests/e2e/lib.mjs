@@ -70,6 +70,26 @@ export function holdKey(page, code) {
   };
 }
 
+// The first desk's TRAIN bar (or any purchase's): `count` purchases pending once it has filled. The bar fills on wall time
+// but by at most WALL_FRAME_MAX_SEC (0.1 s) a frame, so on a loaded machine drawing the desk at 2–3 frames a second its
+// 1.5 s take 6 s or more (resume.mjs, ea0d6c8). The press (ENTER, or the tap on the bar) must start it at once: within 2 s
+// the bar is running (ui.trainingHoldSec) or already done; then it is waited for while it still fills (up to 30 s), and
+// the purchase must be there when it stops.
+export async function waitTrained(page, count = 1) {
+  const poll = async (pred, maxMs, stepMs) => {
+    const end = Date.now() + maxMs;
+    while (Date.now() < end) {
+      if (await page.evaluate(pred, count)) return true;
+      await page.waitForTimeout(stepMs);
+    }
+    return false;
+  };
+  const started = await poll((n) => { const s = window.__ap.store.getState(); return s.ui.trainingHoldSec !== null || s.run.skills.pending.length === n; }, 2000, 20);
+  if (!started) return false;
+  await poll((n) => { const s = window.__ap.store.getState(); return s.run.skills.pending.length === n || s.ui.trainingHoldSec === null; }, 30000, 100);
+  return page.evaluate((n) => window.__ap.store.getState().run.skills.pending.length === n, count);
+}
+
 // Page helpers every scenario writes the same way: evaluate in the page, poll a predicate, collect page errors.
 export function pageKit(page) {
   const errors = [];

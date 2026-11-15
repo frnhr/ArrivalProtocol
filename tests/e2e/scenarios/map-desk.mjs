@@ -42,7 +42,7 @@
 // Slice 6: HALCYON's card has `SITE DATA · GOOD`; from VESPER's DESK (__ap.route along the worked route) KITTIWAKE's card says
 // `SITE DATA · POOR · ARRIVAL CONTROL GUESSED` (warn) and `LZ: 2 · SURVEY NEEDED`, and TRAINING's AHEAD row its second line.
 // Usage: node tests/e2e/scenarios/map-desk.mjs   (env E2E_BASE_URL; tests/e2e/run.mjs runs it). Shots: tests/.out/e2e/shots/map-desk-*.
-import { launch, BASE_URL, SHOTS, checker, pageKit, runKit } from '../lib.mjs';
+import { launch, BASE_URL, SHOTS, checker, pageKit, runKit, waitTrained } from '../lib.mjs';
 import { join } from 'node:path';
 
 const HALCYON = 2;
@@ -201,9 +201,9 @@ async function toFirstDesk(tab, tap = false) {
   check('…[1] arms AUTOBURN v1 instead: the bar reads `TRAIN ▸ 3 CYCLES [ENTER]`', view.go === 'TRAIN ▸ 3 CYCLES [ENTER]'
     && cards.map((card) => card.selected).join(',') === 'true,false', `${view.go} ${JSON.stringify(cards)}`);
   await page.keyboard.press('Enter');
-  // 10 s: the 1.5 s bar runs on wall frames, and a headless Chromium on a busy machine draws the desk at a few frames a
-  // second (4.6 s measured at b01cf61, before the merge).
-  const trained = await waitFor(() => window.__ap.store.getState().run.skills.pending.length === 1, 10000, 100)
+  // The 1.5 s bar runs on wall frames, and a headless Chromium on a busy machine draws the desk at a few frames a second
+  // (4.6 s measured at b01cf61): ENTER must start it at once, then it is waited for while it fills (lib waitTrained).
+  const trained = await waitTrained(page)
     && (await st(() => window.__ap.store.getState().run.skills.pending[0]?.skill)) === 'autoburn';
   await page.waitForTimeout(300);
   view = await run.desk();
@@ -721,7 +721,7 @@ async function toFirstDesk(tab, tap = false) {
   await page.waitForTimeout(400);
   const armedGo = await run.capsText('#deskGo');
   await page.tap('#deskGo');
-  const phoneTrained = await waitFor(() => window.__ap.store.getState().run.skills.pending.length === 1, 10000, 100)
+  const phoneTrained = await waitTrained(page)
     && (await st(() => window.__ap.store.getState().run.skills.pending[0]?.skill)) === 'autoburn';
   check('…a tap on card 1 arms AUTOBURN (the bar reads `TRAIN ▸ 3 CYCLES [ENTER]`), a tap on the bar trains it', armedGo === 'TRAIN ▸ 3 CYCLES [ENTER]' && phoneTrained,
     `${armedGo} ${phoneTrained}`);

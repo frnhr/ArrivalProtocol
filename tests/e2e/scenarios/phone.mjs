@@ -32,7 +32,7 @@
 // • across the 768 px breakpoint and back, the desktop keeps Telemetry, Engine, NAV PLOT and COMMS open.
 // Slice 5: the sleeper's offer (CURLEW on seed 7, BARNABY woken) in the TERMINAL at 360 × 740: untimed, its buttons on screen.
 // Usage: node tests/e2e/scenarios/phone.mjs   (env PHONE_VIEWPORT=390x844, E2E_BASE_URL; tests/e2e/run.mjs runs it)
-import { launch, BASE_URL } from '../lib.mjs';
+import { launch, BASE_URL, waitTrained } from '../lib.mjs';
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 
@@ -446,7 +446,8 @@ check('playtest 1: the sheet shows the REPOSITORY lit on COMPILE HERE, its head 
 await page.tap('#deskScreen .tr-card[data-card="1"]');
 await page.waitForTimeout(400);
 await page.tap('#deskGo');
-check('slice 4: …the first pick by taps (card 1, then the bar): AUTOBURN v1', await waitFor(() => window.__ap.store.getState().run.skills.pending.length === 1, 4000, 100)
+// The tap must start the 1.5 s bar at once; it is waited for while it fills on wall frames (lib waitTrained).
+check('slice 4: …the first pick by taps (card 1, then the bar): AUTOBURN v1', await waitTrained(page)
   && (await st(() => window.__ap.store.getState().run.skills.pending[0]?.skill)) === 'autoburn');
 await page.tap('#deskScreen .desk-tab[data-tab="card"]');
 await page.waitForTimeout(500);

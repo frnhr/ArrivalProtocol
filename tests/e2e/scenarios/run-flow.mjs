@@ -23,7 +23,7 @@
 // card reads `??? · NO TRANSPONDER` for its site data and LZs; the POOR card (`SITE DATA · POOR · ARRIVAL CONTROL GUESSED`,
 // `LZ: 2 · SURVEY NEEDED`) is KITTIWAKE's, clicked at VESPER's DESK before CORMORANT is picked (as map-desk checks it).
 // Usage: node tests/e2e/scenarios/run-flow.mjs [outPrefix]   env SHOT_VIEWPORT=1280x720, E2E_BASE_URL (tests/e2e/run.mjs runs it)
-import { launch, BASE_URL, runKit } from '../lib.mjs';
+import { launch, BASE_URL, runKit, waitTrained } from '../lib.mjs';
 const out = process.argv[2] ?? 'tests/.out/e2e/shots/p2';
 const [vw, vh] = (process.env.SHOT_VIEWPORT ?? '1440x900').split('x').map(Number);
 const tag = `${vw}x${vh}`;
@@ -63,7 +63,8 @@ async function throughDesk(slot, name, request = null) {
     await page.keyboard.press('Digit1');
     await page.waitForTimeout(300);
     await page.keyboard.press('Enter');
-    const picked = await waitFor(() => window.__ap.store.getState().run.skills.pending.length === 1, 4000);
+    // ENTER must start the 1.5 s bar at once; it is waited for while it fills on wall frames (lib waitTrained).
+    const picked = await waitTrained(page);
     check(`the first DESK opens on TRAINING: [1], ENTER trains AUTOBURN v1 before ${name}`, picked);
     await page.keyboard.press('Escape');
     await page.waitForTimeout(300);

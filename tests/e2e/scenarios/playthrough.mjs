@@ -62,7 +62,7 @@
 // Debugging a ship: PLAY_FROM=6 flies headless to LAST LIGHT after the title (__ap.route along the worked route, a fresh
 // unit carried in; the earlier ships' checks are skipped), PLAY_TRACE=1 logs every strip line the kid reads, with the time
 // and the screen. LAND_BY_STRIP=1,2,3,4,5,6 lands those ships by the strip (default 1,2,6: all six add about 4 minutes).
-import { launch, BASE_URL, SHOTS, checker, pageKit, runKit, viewportFromEnv, holdKey } from '../lib.mjs';
+import { launch, BASE_URL, SHOTS, checker, pageKit, runKit, viewportFromEnv, holdKey, waitTrained } from '../lib.mjs';
 import { join } from 'node:path';
 
 const SEED = Number(process.env.SEED ?? 7);
@@ -972,7 +972,8 @@ for (const [index, name] of SHIPS.entries()) {
       await page.waitForTimeout(300);
       const armed = (await runScreens.desk()).go;
       await page.keyboard.press('Enter');
-      const picked = await waitFor(() => window.__ap.store.getState().run.skills.pending.length === 1, 4000, 100)
+      // ENTER must start the 1.5 s bar at once; it is waited for while it fills on wall frames (lib waitTrained).
+      const picked = await waitTrained(page)
         && (await st(() => window.__ap.store.getState().run.skills.pending[0]?.skill)) === 'autoburn';
       check(`${tag}: the first DESK opens on TRAINING with two cards (${cards.join(', ')}): [1] arms AUTOBURN v1 (\`${armed}\`), ENTER trains it`,
         index === 0 && cards.join(' | ') === 'AUTOBURN v1 | AUTODROP v1' && armed === 'TRAIN ▸ 3 CYCLES [ENTER]' && picked,
