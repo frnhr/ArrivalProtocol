@@ -7,21 +7,21 @@
 //   THREADS refusal, REPAIR CHARGE under 30, half the FUEL burned), so a clean tutorial's draft is shaped by
 //   that kid's play: no line says HOLLOW;
 // • owned non-stackables never appear; when every non-stackable is owned the stackables fill the 3 slots;
-//   a full FIREWALL stack, a REPAIR v2 with no Repair to bump, a file with no link room are never offered.
-// The cards in the run (harness7, a crash's EMERGENCY TRANSMIT to reach TRANSMIT quickly):
-// • the deal is seeded by the ship being left and fixed in the plan; the pick is mandatory;
-// • FIREWALL.sys arrives as a 2-block file in rack F (it took link room), REPAIR v2 bumps every Repair copy
+//   a full FIREWALL stack, a REPAIR v2 with no Repair to bump, a file with no room are never offered.
+// The cards in the run (harness7, a crash's EMERGENCY TRANSMIT to reach the salvage quickly; playtest 1: LEAVE ORBIT):
+// • the deal is seeded by the ship being left and kept in run.leave; the pick is mandatory;
+// • FIREWALL.sys arrives as a 2-block file in rack F (it took room), REPAIR v2 bumps every Repair copy
 //   (heal ×2), THREAD+ makes three threads, +12 REPAIR CHARGE arrives with the star credit (the boot says
 //   so), FUEL TRIM widens the Δv budget +15% on arrival (none below 50%; eaten mid-ship it keeps this ship's
 //   budget and gives none on the next arrival);
 // • a FIREWALL can be MOVEd next to HOLLOW's root and holds that side when HOLLOW wakes; it can't be copied.
 import { check, finish } from '../wp1/harness';
-import { fixtureShip, fixtureHop } from '../support/arm-ship';
+import { fixtureShip } from '../support/arm-ship';
 import { createHarness7 } from './../wp7/harness7';
 import { draftCards, draftEntries, UPGRADES, BASE_WHY, type DraftContext, type UpgradeId, type DraftCardId } from '@data/upgrades';
-import { dealDraft, draftContext, pickCard, ownedUpgrades, PREVIEW_ID } from '@systems/draft';
-import { transmitNext } from '@systems/run';
-import { continueAfterLoss } from '../support/desk';
+import { dealDraft, draftContext, pickCard, ownedUpgrades, transitPacket, PREVIEW_ID } from '@systems/draft';
+import { throughDesk } from '../support/desk';
+import { leaveOrbit, continueAfterLoss } from '@systems/run';
 import { installTool } from '@systems/licences';
 import { createRng } from '@systems/rng';
 import { capabilitiesNow, flightModsOf, liveUpgrades } from '@systems/capabilities';
@@ -134,7 +134,8 @@ const state = () => h.store.getState();
 const halcyon = fixtureShip(1);
 const memoryValid = (): boolean => { try { assertMemoryInvariants(state().memory, layoutOf(state()).totalBlocks); return true; } catch { return false; } };
 
-// Ship 1, run 1, the simulation already used: a crash goes to EMERGENCY TRANSMIT (TRANSMIT in a few ticks).
+// Ship 1, run 1, the simulation already used: a crash goes to EMERGENCY TRANSMIT (playtest 1: LEAVE ORBIT in a few ticks, the
+// cards dealt there; harness7's transmit takes the pick, sails the worked route and sends).
 // `prepare` runs on ship 1 before the crash (licences, damage).
 function toTransmit(seed: number, prepare: () => void = () => {}): void {
   h.newRun(seed);
@@ -144,37 +145,39 @@ function toTransmit(seed: number, prepare: () => void = () => {}): void {
   h.store.mutate((d) => { d.orbit.x = radius; d.orbit.y = 0; d.orbit.vx = -3; d.orbit.vy = 0.05; });
   h.stepUntil(() => h.status() !== 'approaching', 10);
   continueAfterLoss(h.store);
-  if (state().run.phase !== 'transmit') throw new Error(`toTransmit: phase ${state().run.phase}`);
+  if (state().run.phase !== 'leave') throw new Error(`toTransmit: phase ${state().run.phase}`);
 }
 
-// Deals `id` on this TRANSMIT (test scaffolding: the offer is data) and picks it.
+// Deals `id` on this LEAVE ORBIT (test scaffolding: the offer is data) and picks it.
 function pick(id: UpgradeId): void {
-  h.store.update((d) => { d.run.transit!.offer = [{ id, title: id, effect: '', why: BASE_WHY, boosted: false }]; });
+  h.store.update((d) => { d.run.leave.offer = [{ id, title: id, effect: '', why: BASE_WHY, boosted: false }]; });
   const refusal = pickCard(h.store, id);
   if (refusal !== null) throw new Error(`pick ${id}: ${refusal}`);
 }
 
 {
   toTransmit(5);
-  const offer = state().run.transit!.offer;
-  check('TRANSMIT deals 3 cards, seeded by the ship being left (the same state deals the same)', offer.length === DRAFT_CARDS
-    && ids(dealDraft(state(), fixtureHop(1))) === ids(offer), ids(offer));
+  const offer = state().run.leave.offer;
+  check('LEAVE ORBIT deals 3 cards, seeded by the ship being left (the same state deals the same)', offer.length === DRAFT_CARDS
+    && ids(dealDraft(state())) === ids(offer), ids(offer));
   check('…with no REPAIR licensed yet (a crash before the first look inside), REPAIR v2 is not among them',
-    !offer.some((card) => card.id === 'repair-v2') && !draftContext(state(), fixtureHop(1)).hasRepair);
+    !offer.some((card) => card.id === 'repair-v2') && !draftContext(state()).hasRepair);
   let threw = '';
-  try { transmitNext(h.store); } catch (error) { threw = (error as Error).message; }
-  check('the pick is mandatory: TRANSMIT ▸ with no card picked throws, and the unit stays', /no card picked/.test(threw) && state().run.phase === 'transmit', threw);
+  try { leaveOrbit(h.store); } catch (error) { threw = (error as Error).message; }
+  check('the pick is mandatory: ENTER with no card picked throws, and the unit stays', /no salvage taken/.test(threw) && state().run.phase === 'leave', threw);
   const notOffered = (['firewall', 'repair-v2', 'thread-plus', 'charge', 'fuel-trim'] as UpgradeId[]).find((id) => !offer.some((card) => card.id === id))!;
-  check('a card that was not dealt can\'t be picked', pickCard(h.store, notOffered) === 'not-offered' && state().run.transit!.pick === null);
+  check('a card that was not dealt can\'t be picked', pickCard(h.store, notOffered) === 'not-offered' && state().run.leave.pick === null);
 }
 
-// FIREWALL.sys: a 2-block file in rack F, link room taken; then MOVEd next to HALCYON's root, it holds that side.
+// FIREWALL.sys: a 2-block file in rack F, room taken; then MOVEd next to HALCYON's root, it holds that side.
 {
   toTransmit(5);
-  const filesBefore = state().run.transit!.filesBlocks;
   pick('firewall');
-  check('picking FIREWALL.sys puts its 2 blocks in the packet (the link carries it like the unit\'s files)',
-    state().run.transit!.filesBlocks === filesBefore + FIREWALL_BLOCKS && state().run.transit!.pick === 'firewall');
+  leaveOrbit(h.store);
+  throughDesk(h.store);
+  const plan = state().run.transit!;
+  check('picking FIREWALL.sys puts its 2 blocks in the packet (it crosses like the unit\'s files)',
+    plan.filesBlocks === transitPacket(state(), { ...plan, pick: null }).filesBlocks + FIREWALL_BLOCKS && plan.pick === 'firewall');
   h.transmit();
   const starts = segmentStarts(state().memory);
   const index = state().memory.findIndex(isFirewall);
@@ -226,7 +229,7 @@ function pick(id: UpgradeId): void {
 // REPAIR v2: every Repair copy bumped; the held tool heals twice as fast.
 {
   toTransmit(5, () => { installTool(h.store, 'repair'); });
-  check('with REPAIR licensed, REPAIR v2 can be offered (the draft sees a Repair to bump)', draftContext(state(), fixtureHop(1)).hasRepair);
+  check('with REPAIR licensed, REPAIR v2 can be offered (the draft sees a Repair to bump)', draftContext(state()).hasRepair);
   pick('repair-v2');
   h.transmit();
   const repairs = state().memory.filter((seg) => seg.type === 'fs-tool' && seg.fsTool === 'repair');
@@ -253,7 +256,7 @@ function pick(id: UpgradeId): void {
 {
   toTransmit(5);
   pick('charge');
-  const carried = state().run.transit!.chargeHeld;
+  const carried = chargeLeft(state());
   h.transmit();
   const expected = Math.max(CHARGE_ARRIVAL_FLOOR, carried + state().run.pendingStarCredit) + CHARGE_CARD_BLOCKS;
   check('+12 REPAIR CHARGE arrives on top of what was carried', chargeLeft(state()) === expected && state().run.arrival?.cardCharge === CHARGE_CARD_BLOCKS,

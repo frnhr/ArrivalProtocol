@@ -27,6 +27,7 @@ import { REFUSAL_FLASH_SEC } from '@data/tuning';
 import { CORE_LOST_TEXT } from '@data/hollow-text';
 import { shipSummaryAt } from '@systems/map-run';
 import { deskSteps } from '@systems/desk';
+import { LEAVE_TEXT } from '@data/leave-text';
 
 // The director (§6.3) composes the one line the objective strip shows and speaks the story
 // beats. It runs at the end of every clock tick, in every phase and while paused, so PAUSED,
@@ -251,6 +252,10 @@ export function composeObjective(ctx: DirectorCtx, rules: readonly GuideRule[]):
     const step = deskSteps(ctx.state).find((candidate) => !candidate.done);
     if (!step) throw new Error('composeObjective: a desk step is always left (SET COURSE)');
     return { id: `desk-${step.id}`, text: step.text, keys: step.id === 'set-course' ? ['ENTER'] : [], urgency: 'now', layer: 'mind', highlight: null, source: 'over' };
+  }
+  // Playtest 1 (note 5): LEAVE ORBIT, the salvage before the chart.
+  if (ctx.phase === 'leave') {
+    return { id: 'leave', text: LEAVE_TEXT.strip, keys: ['ENTER'], urgency: 'now', layer: 'mind', highlight: null, source: 'over' };
   }
   // WP7: between ships (TRANSMIT) and after the run (RUN END) their screens explain.
   if (ctx.phase === 'transmit') {

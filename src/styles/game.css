@@ -592,13 +592,6 @@ kbd.keycap[hidden] { display: none; }
 @keyframes receive-glow {
   50% { box-shadow: 0 0 22px color-mix(in srgb, var(--accent) 60%, transparent); }
 }
-.title-note {
-  margin-top: 6px;
-  font-size: 9px;
-  letter-spacing: 0.25em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-}
 /* A returning unit (WP8): the one before it, in HOLLOW's pink (that unit is what waits in the memory), and
    the endings found. A unit that stayed with its colonists became no HOLLOW: its line is the colonists' green. */
 .title-lineage {

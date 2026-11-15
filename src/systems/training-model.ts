@@ -363,7 +363,7 @@ function aheadLine(state: Readonly<GameState>, slot: number | null): string | nu
 }
 
 // The fit is the SHIP CARD's (desk.ts cardModel, the same plan: the selected hop, the ladder's verdict for it, the
-// deliveries riding it, nothing left behind or picked yet), through the one arrival preview.
+// deliveries riding it, LEAVE ORBIT's salvage, nothing left behind yet), through the one arrival preview.
 // unitArrival reads this desk's pending purchases from the state (TREE's skillPacketPlan), so the fit counts the trained
 // files at their new sizes and FILES = fit.files − the held skills' blocks. Nothing is packed lower at the desk.
 function previewFor(state: Readonly<GameState>, slot: number | null): TrainingPreview | null {
@@ -372,7 +372,7 @@ function previewFor(state: Readonly<GameState>, slot: number | null): TrainingPr
   if (slot === null || !reachableFrom(map, from).includes(slot)) return null;
   const hop = hopBetween(map, from, slot);
   const verdict = planThreat(threatInputFor(state.run.threat, mapFacts(map, from, slot, map.route.length + 1), state.run.stats.deal !== null, finalTraceInput(state.run)));
-  const fit = unitArrival(state, { hop, threat: verdict, dropped: [], pick: null, deliveries: deliveriesForHop(state, from, slot, verdict) }).fit;
+  const fit = unitArrival(state, { hop, threat: verdict, dropped: [], pick: state.run.leave.pick, deliveries: deliveriesForHop(state, from, slot, verdict) }).fit;
   const tight = shipSummaryAt(map, slot).memoryClass === 'TIGHT';
   return packetPreview(fit, heldSkillBlocks(state), tight, fit.word === 'leave' ? overHint(state, fit.over) : null);
 }

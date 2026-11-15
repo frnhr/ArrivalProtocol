@@ -38,7 +38,7 @@ import { createHarness11 } from './harness11';
 import { receiveTransmission } from '@systems/boot';
 import { shipLost, startRun, continueAfterReport, continueAfterLoss } from '@systems/run';
 import { FIRST_RUN_LINEAGE } from '@systems/meta';
-import { setCourseFromDesk } from '../support/desk';
+import { setCourseFromDesk, leaveOrbit } from '../support/desk';
 import { setRequest, recommendation } from '@systems/repository';
 import { currentShip } from '@systems/map-run';
 import { hitsLanding } from '@systems/map-hop';
@@ -62,7 +62,6 @@ import { setLandingMode } from '../support/landing-instant';
 import { followLanding } from '../landing/harness-landing';
 import { mountStoryLog } from '@systems/story-log';
 import { logEntriesAtBoot } from '@state/log-selectors';
-import { pickCard } from '@systems/draft';
 import { getOps } from '@systems/ops-core';
 import { assertMemoryInvariants } from '@systems/memory-ops';
 import { capabilitiesNow } from '@systems/capabilities';
@@ -121,10 +120,9 @@ const integrityOf = (role: 'engine-io' | 'sensor' | 'thrust-ctrl'): number => {
 let eventsAtBoot = 0;
 let logAtBoot = -1;
 
-// TRANSMIT ▸ with the hand-over's checks: the first card picked (as the harness would), the packet read, then the arrival.
+// TRANSMIT ▸ with the hand-over's checks: the packet read (LEAVE ORBIT took the first card, as the harness would), then the
+// arrival.
 function transmitChecked(): void {
-  const before = state().run.transit;
-  if (before && before.pick === null && before.offer.length > 0) pickCard(h.store, before.offer[0]!.id);
   const plan = state().run.transit!;
   const engineBefore = integrityOf('engine-io');
   const stars = state().run.pendingStars;
@@ -357,6 +355,8 @@ for (const seed of SEED_LIST) {
       shipChecked();
       continueAfterReport(h.store);
     }
+    // Playtest 1 (note 5): LEAVE ORBIT first, its first card taken.
+    if (state().run.phase === 'leave') leaveOrbit(h.store);
     if (state().run.phase === 'desk') {
       const next = WORKED_ROUTE[state().run.map.route.length];
       if (next === undefined) break;

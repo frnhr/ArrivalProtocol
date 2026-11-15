@@ -731,6 +731,12 @@ export function endsInOrbit(outcome: ShipOutcome): boolean {
   return outcome === 'locked' || outcome === 'partial' || outcome === 'stranded' || outcome === 'emergency';
 }
 
+// Playtest 1 (note 5, OPEN-DECISIONS 129): a ship is left without an orbit when it did not end with a landing ('locked',
+// 'partial'): LEAVE ORBIT reads `LEAVING <SHIP>` then (systems/leave-orbit.ts), and so does the title's RESUME line.
+export function leftWithoutOrbit(outcome: ShipOutcome): boolean {
+  return outcome !== 'locked' && outcome !== 'partial';
+}
+
 // Why a pod still aboard is parked when the landing ends in orbit.
 export function parkReasonOf(record: Readonly<PodRecord>): ParkReason {
   return record.driverLost ?? 'no-time';

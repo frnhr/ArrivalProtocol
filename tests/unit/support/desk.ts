@@ -5,9 +5,12 @@
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import type { RunMapState } from '@/types/map';
+import type { DraftCard, DraftCardId } from '@data/upgrades';
 import {
-  setCourse, continueAfterReport as runContinueAfterReport, continueAfterLoss as runContinueAfterLoss, type LossPlan,
+  setCourse, leaveOrbit as runLeaveOrbit, continueAfterReport as runContinueAfterReport, continueAfterLoss as runContinueAfterLoss,
+  type LossPlan,
 } from '@systems/run';
+import { pickCard } from '@systems/draft';
 import { WORKED_ROUTE } from '@systems/arm-fixture';
 import { deskBlocker } from '@systems/skill-tree';
 import { pickFirstSkill } from './skills';
@@ -15,7 +18,31 @@ import { reachableFrom } from '@systems/map-hop';
 import { layerOf } from '@systems/map-geometry';
 import { END_SLOTS, FIRST_SLOT } from '@data/arm';
 
+// Playtest 1 (note 5): LEAVE ORBIT, as a suite takes it: the card `pick` names (an id, or a chooser over the offer; left
+// out: the card already picked there, else the first card dealt, as the old PACKET's interim send took it), then ENTER
+// (systems/run.ts leaveOrbit). Nothing when the run is not on LEAVE ORBIT. Returns the card taken (null: none).
+export type SalvageChoice = DraftCardId | ((offer: readonly DraftCard[]) => DraftCardId);
+
+export function leaveOrbit(store: Store<GameState>, pick: SalvageChoice | null = null): DraftCardId | null {
+  const state = store.getState();
+  if (state.run.phase !== 'leave') return null;
+  const offer = state.run.leave.offer;
+  let id: DraftCardId | null = state.run.leave.pick;
+  if (offer.length > 0 && !(pick === null && id !== null)) {
+    id = pick === null ? offer[0]!.id : typeof pick === 'function' ? pick(offer) : pick;
+    const refusal = pickCard(store, id);
+    if (refusal !== null) throw new Error(`support/desk leaveOrbit: '${id}' could not be taken (${refusal})`);
+  }
+  runLeaveOrbit(store);
+  return id;
+}
+
+// The +12 card when dealt (no file joins the packet), else the first: the store-level fixtures' choice.
+export const preferCharge = (offer: readonly DraftCard[]): DraftCardId => (offer.some((card) => card.id === 'charge') ? 'charge' : offer[0]!.id);
+
+// Playtest 1 (note 5): from LEAVE ORBIT too (its first card taken, leaveOrbit above), for the suites that sail on.
 export function setCourseFromDesk(store: Store<GameState>, slot: number): void {
+  leaveOrbit(store);
   if (deskBlocker(store.getState()) === 'first-pick') pickFirstSkill(store);
   setCourse(store, slot);
 }
@@ -35,12 +62,13 @@ export function climbingRoutes(map: Readonly<RunMapState>): number[][] {
 }
 
 // The run through the DESK for the suites written before it (slice 3a foundation F2; Track RETIRE moved it here from
-// retired support/classic-flow). A ship's end opens the DESK (systems/run.ts openDesk) before TRANSMIT; these set course
-// to the worked route's next stop (systems/arm-fixture.ts WORKED_ROUTE: run 1's arm, the fixture world) when the call left
+// retired support/classic-flow). A ship's end opens LEAVE ORBIT (playtest 1: the first card dealt is taken, leaveOrbit
+// above) and then the DESK (systems/run.ts openDesk) before TRANSMIT; these set course to the worked route's next stop (systems/arm-fixture.ts WORKED_ROUTE: run 1's arm, the fixture world) when the call left
 // the run on the desk (and do nothing when it ended the run or restarted ship 1), with the first desk's required pick made
 // (setCourseFromDesk). Nothing is requested: the suites' tools are their own. A suite on a later run's arm (a fresh roll)
 // sets its own course (climbingRoutes).
 export function throughDesk(store: Store<GameState>): void {
+  leaveOrbit(store);
   const state = store.getState();
   if (state.run.phase !== 'desk') return;
   const next = WORKED_ROUTE[state.run.map.route.length];

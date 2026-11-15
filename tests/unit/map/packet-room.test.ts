@@ -3,8 +3,8 @@
 // headline, the ECC line, the room bar and its words (`ROOM 88 · FILES n · NO FLOOR`, `CHARGE 40 → 31 ON ARRIVAL · 9 WON'T
 // FIT`), the arrival line on the destination's own floor, TIGHT's `→ 0 ON ARRIVAL` (TRANSMIT ▸ asks first), files over
 // the room (TRANSMIT ▸ waits; a drop is offered even when it buys no charge), and a drop's charge on arrival.
-// Slice 3b (Track UI): the DELIVERIES chips' words and SEND ON labels (sent on; lost into a final ship), the IN TRANSIT
-// line and the SALVAGE heading.
+// Slice 3b (Track UI): the DELIVERIES chips' words and SEND ON labels (sent on; lost into a final ship) and the IN TRANSIT
+// line (the SALVAGE heading moved to LEAVE ORBIT with the cards: playtest 1, note 5).
 import { check, finish } from '../landing/checks';
 import { createStore, type Store } from '@state/store';
 import type { GameState, TransitPlan } from '@state/schema';
@@ -50,7 +50,7 @@ function packetTo(
   const plan: TransitPlan = {
     toShipIndex: route.length, toSlot: to, hop, filesBlocks: packet.filesBlocks,
     chargeHeld: packet.chargeHeld, extraHits: 0, coreHit: 0, coreReset: false,
-    dropped: [], offer: [], pick: null, threat, deliveries: opts.deliveries ?? [], packAs: {},
+    dropped: [], pick: null, threat, deliveries: opts.deliveries ?? [], packAs: {},
   };
   store.update((draft) => {
     draft.run.ships.push({
@@ -114,40 +114,42 @@ check('…a file can be left behind though it buys no charge (01 §3.16: TRANSMI
   spare.arriveGain === 0 && spare.toggleable && toggleDrop(store, spare.segId) === null);
 check('…and the room count follows', packetFit(store.getState(), store.getState().run.transit!).over === Math.max(0, over - spare.blocks));
 // Playtest 1 (Q19): the +12 card counts after the floor and the room bar shows its own segment; a room that cannot take it
-// whole says so on the card.
+// whole says so under the PACKET's SALVAGE line (playtest 1, note 5: the card is taken at LEAVE ORBIT, before any
+// destination, so the note is the taken card's, at the PACKET and on the SHIP CARD).
 {
   const chargeCard: DraftCard = { id: 'charge', title: '+12 REPAIR CHARGE', effect: '', why: '', boosted: false };
   const offered = (store: Store<GameState>, pick: 'charge' | null): Store<GameState> => {
-    store.update((draft) => { draft.run.transit!.offer = [chargeCard]; draft.run.transit!.pick = pick; });
+    store.update((draft) => { draft.run.leave = { offer: [chargeCard], pick }; draft.run.transit!.pick = pick; });
     return store;
   };
   let card = transmitModel(offered(packetTo([0, 2, 5], 11, { charge: 0 }), 'charge').getState());
   check('Q19: no charge held, the card picked into VESPER (FULL): the floor\'s 12, then the card\'s 12, a `+12` segment',
     card.room.fit.chargeArrives === CHARGE_ARRIVAL_FLOOR + CHARGE_CARD_BLOCKS && card.room.card?.arrives === CHARGE_CARD_BLOCKS
-    && card.room.card.label === TRANSMIT_TEXT.cardSegment(12) && card.room.card.label === '+12' && card.cards[0]!.fitNote === null,
+    && card.room.card.label === TRANSMIT_TEXT.cardSegment(12) && card.room.card.label === '+12' && card.pickFit === null
+    && card.salvage === '+12 REPAIR CHARGE',
     JSON.stringify(card.room));
   card = transmitModel(offered(packetTo([0, 2, 5], 11, { charge: 0 }), null).getState());
-  check('…not picked: no segment, the floor alone', card.room.card === null && card.room.fit.chargeArrives === CHARGE_ARRIVAL_FLOOR
-    && card.cards[0]!.fitNote === null);
-  card = transmitModel(offered(packetTo([0, 2, 5], 8, { charge: 40 }), null).getState());
-  check('…into LAPWING with its room full of charge: the card says `+12 · NO ROOM FOR IT ON LAPWING`, picked or not',
-    card.cards[0]!.fitNote === TRANSMIT_TEXT.cardFits(12, 0, 'LAPWING') && card.cards[0]!.fitNote === '+12 · NO ROOM FOR IT ON LAPWING',
-    card.cards[0]!.fitNote ?? 'null');
+  check('…not taken: no segment, the floor alone, no SALVAGE line', card.room.card === null && card.room.fit.chargeArrives === CHARGE_ARRIVAL_FLOOR
+    && card.pickFit === null && card.salvage === null);
+  card = transmitModel(offered(packetTo([0, 2, 5], 8, { charge: 40 }), 'charge').getState());
+  check('…into LAPWING with its room full of charge: the card taken says `+12 · NO ROOM FOR IT ON LAPWING`',
+    card.pickFit === TRANSMIT_TEXT.cardFits(12, 0, 'LAPWING') && card.pickFit === '+12 · NO ROOM FOR IT ON LAPWING',
+    card.pickFit ?? 'null');
   const lapwing = offered(packetTo([0, 2, 5], 8, { charge: 0 }), 'charge');
   card = transmitModel(lapwing.getState());
   const room = card.room.fit.room - card.room.fit.files;
   check(`…LAPWING with no charge held: the card fits whole when the room has 12 (room left ${room})`,
-    room >= 12 ? card.room.card?.arrives === 12 && card.cards[0]!.fitNote === null
-      : card.room.card?.arrives === room && card.cards[0]!.fitNote === TRANSMIT_TEXT.cardFits(12, room, 'LAPWING'),
-    `${JSON.stringify(card.room.card)} ${card.cards[0]!.fitNote}`);
+    room >= 12 ? card.room.card?.arrives === 12 && card.pickFit === null
+      : card.room.card?.arrives === room && card.pickFit === TRANSMIT_TEXT.cardFits(12, room, 'LAPWING'),
+    `${JSON.stringify(card.room.card)} ${card.pickFit}`);
   const squeezed = offered(packetTo([0, 2, 5], 8, { charge: 0, room: card.room.fit.files + 4 }), 'charge');
   card = transmitModel(squeezed.getState());
   check('…a room with 4 blocks left: `+12 · ONLY 4 FIT ON LAPWING`, and the segment is `+4`',
-    card.cards[0]!.fitNote === '+12 · ONLY 4 FIT ON LAPWING' && card.room.card?.arrives === 4 && card.room.card.label === '+4',
-    `${JSON.stringify(card.room.card)} ${card.cards[0]!.fitNote}`);
+    card.pickFit === '+12 · ONLY 4 FIT ON LAPWING' && card.room.card?.arrives === 4 && card.room.card.label === '+4',
+    `${JSON.stringify(card.room.card)} ${card.pickFit}`);
 }
 check('hitsLanding is the ECC line\'s count', hitsLanding(hopBetween(run1Map(4), 5, 11), 0) === 4);
-// --- 3b: the DELIVERIES chips, IN TRANSIT and SALVAGE ------------------------------------------------------------------
+// --- 3b: the DELIVERIES chips and IN TRANSIT (the SALVAGE heading is LEAVE ORBIT's: map/leave-orbit) ------------------------------------------------------------------
 const chip = (key: string, file: DeliveryChip['file'], blocks: number, arrivedYear: number, sendOn = false): DeliveryChip => ({
   key, file, blocks, source: 'caught-up', arrivedYear, sendOn, firstOfKind: false, seedChance: 0,
 });
@@ -155,7 +157,6 @@ model = transmitModel(packetTo([0, 2, 5], 11, { deliveries: [chip('rq2', 'rm', 1
 check('a delivery chip: `Rm · 1 BLOCK · ARRIVED 2436 · [SEND ON]`', model.deliveries.length === 1
   && model.deliveries[0]!.text === 'Rm · 1 BLOCK · ARRIVED 2436' && model.deliveries[0]!.sendOnLabel === REPO_TEXT.packet.sendOn
   && !model.deliveries[0]!.lost, JSON.stringify(model.deliveries));
-check('…the arm\'s draft is headed SALVAGE', model.salvageTitle === 'SALVAGE · PICK ONE TO CARRY');
 model = transmitModel(packetTo([0, 2, 5], 11, { deliveries: [chip('rq2', 'rm', 1, 2436, true)] }).getState());
 check('…sent on: `SENT ON · RIDES YOUR NEXT HOP`', model.deliveries[0]!.sendOn && model.deliveries[0]!.sendOnLabel === REPO_TEXT.packet.sentOn);
 model = transmitModel(packetTo([0, 2, 5, 11, 15], 19, { deliveries: [chip('rq4', 'cp', 3, 2861, true)] }).getState());

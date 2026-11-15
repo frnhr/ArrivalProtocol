@@ -71,7 +71,6 @@ export function mountTitleCard(store: Store<GameState>): () => void {
   const abandonBtn = requireById<HTMLButtonElement>('titleAbandon');
   const keepBtn = requireById<HTMLButtonElement>('titleKeep');
   const notesEl = requireById('titleNotes');
-  const noteEl = requireById('titleNote');
   const memWrap = requireById('memWrap');
   const eraseEl = requireById('titleErase');
   const eraseBtn = requireById<HTMLButtonElement>('titleEraseBtn');
@@ -202,8 +201,6 @@ export function mountTitleCard(store: Store<GameState>): () => void {
     keepBtn.hidden = !asking;
     renderKeyCaps(abandonBtn, asking ? MAP_TEXT.save.abandonAskKey : MAP_TEXT.save.abandonKey);
     receiveBtn.hidden = !model.receive;
-    noteEl.hidden = model.saveNote === null;
-    noteEl.textContent = model.saveNote ?? '';
     notesEl.hidden = model.notes.length === 0;
     notesEl.replaceChildren(...model.notes.map((note) => make('div', 'title-notes-line', note)));
     paintErase();

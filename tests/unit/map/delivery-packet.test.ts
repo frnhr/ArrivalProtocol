@@ -16,9 +16,8 @@ import type { Store } from '@state/store';
 import type { GameState, ArrivalReport } from '@state/schema';
 import type { DeliveryChip, RepoFileId } from '@/types/repo';
 import { goTransmit, transmitNext, arrivalDeliveries } from '@systems/run';
-import { setCourseFromDesk } from '../support/desk';
+import { setCourseFromDesk, leaveOrbit } from '../support/desk';
 import { transmitModel, toggleSendOn } from '@systems/transmit';
-import { pickCard } from '@systems/draft';
 import { undeliveredFiles } from '@systems/repository';
 import { receiveDeliveryAtBoot } from '@systems/delivery-boot';
 import { deliveryBootLines, deliveryBootLineText } from '@systems/map-boot';
@@ -33,7 +32,7 @@ import { REPO_TEXT, REPO_FILE_TEXT } from '@data/repo-text';
 import { DELIVERY_SEED_CHANCE, REPAIR_V2_VERSION } from '@data/tuning';
 import { createRng } from '@systems/rng';
 import { byDepth } from '../depth';
-import { armRun, toDesk, send, fitPacket, flyRoute, giveTools, dropTools, addRequest, throws } from './repo-fixture';
+import { armRun, toDesk, toLeave, send, fitPacket, flyRoute, giveTools, dropTools, addRequest, throws } from './repo-fixture';
 
 const at = (store: Store<GameState>): Readonly<GameState> => store.getState();
 const chipsOf = (store: Store<GameState>): DeliveryChip[] => at(store).run.transit!.deliveries;
@@ -66,8 +65,6 @@ const repairs = (store: Store<GameState>) => at(store).memory.filter((seg) => se
     && at(store).run.transit!.filesBlocks === files - 3);
   const cpKey = chipsOf(store)[0]!.key;
   fitPacket(store);
-  const offer = at(store).run.transit!.offer;
-  if (offer.length > 0) pickCard(store, offer.some((card) => card.id === 'charge') ? 'charge' : offer[0]!.id);
   transmitNext(store);
   const cp = at(store).run.repo.requests.find((request) => request.id === cpKey)!;
   check('…after the send it waits in VESPER\'s receiver; nothing of it was laid out', cp.status === 'waiting' && cp.at === 11
@@ -89,8 +86,7 @@ const repairs = (store: Store<GameState>) => at(store).memory.filter((seg) => se
   setCourseFromDesk(store, 8);
   const model = transmitModel(at(store));
   check(`the deliveries push the packet over KESTREL → LAPWING's room (${model.room.fit.room}): TRANSMIT ▸ waits, the send throws`,
-    model.room.tooMany !== null && model.room.fit.over > 0 && throws(() => transmitNext(at(store).run.transit!.offer.length > 0
-      ? (pickCard(store, at(store).run.transit!.offer[0]!.id), store) : store)), `${model.files} files, room ${model.room.fit.room}`);
+    model.room.tooMany !== null && model.room.fit.over > 0 && throws(() => transmitNext(store)), `${model.files} files, room ${model.room.fit.room}`);
   check('…the gate and arrival lines say SEND ON helps too: `n BLOCKS TOO MANY · LEAVE FILES OR SEND ON` (review m3)',
     model.room.tooMany === REPO_TEXT.packet.overWithDeliveries(model.room.fit.over)
     && model.dropLine === model.room.tooMany && model.arrivalLine === REPO_TEXT.packet.arrivalOverWithDeliveries,
@@ -118,8 +114,6 @@ const repairs = (store: Store<GameState>) => at(store).memory.filter((seg) => se
   const view = transmitModel(at(store)).deliveries.find((chip) => chip.key === cp.key)!;
   check('…SEND ON into the final ship says `NO SHIP AFTER LAST LIGHT · IT IS LOST`', view.lost && view.sendOnLabel === REPO_TEXT.packet.lostAfter('LAST LIGHT'));
   fitPacket(store);
-  const offer = at(store).run.transit!.offer;
-  if (offer.length > 0) pickCard(store, offer[0]!.id);
   transmitNext(store);
   const request = at(store).run.repo.requests.find((entry) => entry.id === cp.key)!;
   check('…the send writes it lost at LAST LIGHT, and the tally lists it (NEVER ARRIVED: Cp)', request.status === 'lost' && request.at === 19
@@ -144,8 +138,6 @@ const repairs = (store: Store<GameState>) => at(store).memory.filter((seg) => se
   toggleSendOn(store, first!.key);
   check('…and back', chipsOf(store)[0]!.firstOfKind && !chipsOf(store)[1]!.firstOfKind);
   fitPacket(store);
-  const offer = at(store).run.transit!.offer;
-  if (offer.length > 0) pickCard(store, offer[0]!.id);
   transmitNext(store);
   const state = at(store);
   check('…after the send: MOVE licensed once, untried once, two Mv files laid out', state.run.licences.filter((kind) => kind === 'move').length === 1
@@ -159,7 +151,6 @@ const repairs = (store: Store<GameState>) => at(store).memory.filter((seg) => se
   setCourseFromDesk(store, 15);
   check('a delivery of a kind already here is a spare: not first of kind, not untried', !chipsOf(store)[0]!.firstOfKind);
   fitPacket(store);
-  if (at(store).run.transit!.offer.length > 0) pickCard(store, at(store).run.transit!.offer[0]!.id);
   transmitNext(store);
   check('…and the boot leaves untriedTools without it', !at(store).hollow.untriedTools.includes('move') && at(store).run.licences.filter((kind) => kind === 'move').length === 1);
 }
@@ -257,7 +248,9 @@ const repairs = (store: Store<GameState>) => at(store).memory.filter((seg) => se
       const options = reachableFrom(at(store).run.map, currentSlot(at(store).run));
       send(store, options[Math.floor(rng() * options.length)]!);
     }
-    toDesk(store);
+    // Playtest 1 (note 5): the random card is taken at LEAVE ORBIT, before the chart.
+    toLeave(store);
+    leaveOrbit(store, (offer) => offer[Math.floor(rng() * offer.length)]!.id);
     const here = currentSlot(at(store).run);
     const options = reachableFrom(at(store).run.map, here);
     const to = options[Math.floor(rng() * options.length)]!;
@@ -267,8 +260,6 @@ const repairs = (store: Store<GameState>) => at(store).memory.filter((seg) => se
     setCourseFromDesk(store, to);
     for (const entry of chipsOf(store)) if (rng() < 0.2) toggleSendOn(store, entry.key);
     fitPacket(store);
-    const offer = at(store).run.transit!.offer;
-    if (offer.length > 0) pickCard(store, offer[Math.floor(rng() * offer.length)]!.id);
     const plan = structuredClone(at(store).run.transit!);
     try {
       transmitNext(store);

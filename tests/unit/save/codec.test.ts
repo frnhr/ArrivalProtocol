@@ -69,7 +69,7 @@ const ending = written.at(-1)!;
 check('…the sticky burst\'s Infinity is tagged and comes back', ending.raw.includes('{"$num":"Infinity"}') && ending.save.payload.kind === 'world'
   && ending.save.payload.slices.burn.ghost?.endTSec === Infinity);
 check('…the resume lines: RUN START names ARES-VII 2300, BEAM 2 names HALCYON at depth 2, ENDING CHOSEN LAST LIGHT at depth 6',
-  JSON.stringify(written[0]!.save.resume) === JSON.stringify({ unit: 47, depth: 1, ship: 'ARES-VII', year: 2300, point: 'run-start' })
+  JSON.stringify(written[0]!.save.resume) === JSON.stringify({ unit: 47, depth: 1, ship: 'ARES-VII', year: 2300, point: 'run-start', stage: 'boot' })
   && written[2]!.save.resume.ship === 'HALCYON' && written[2]!.save.resume.depth === 2
   && ending.save.resume.ship === 'LAST LIGHT' && ending.save.resume.depth === 6, JSON.stringify(written.map((entry) => entry.save.resume.ship)));
 check('…every save is the archive\'s run: unit 47, archiveRuns 1 (counted at RUN START)', written.every((entry) => entry.save.unit === 47
@@ -212,7 +212,11 @@ check('…a disguised arrival seed and a recorded first seed on the route pass t
     && refused.startsWith('shape:') && refused.includes('world'), refused);
 }
 check('a route that does not match the point → route (the point, the depth, the ships ended)',
-  kind(edit(desk, (save) => { save.point = 'ending-chosen'; save.resume.point = 'ending-chosen'; save.payload.phase = 'report'; save.payload.run.phase = 'report'; })) === 'route'
+  kind(edit(desk, (save) => {
+    save.point = 'ending-chosen'; save.resume.point = 'ending-chosen'; save.payload.phase = 'report'; save.payload.run.phase = 'report';
+    // Playtest 1 (v10): the stage and the salvage as a report holds them, so the route is what is wrong.
+    save.resume.stage = 'report'; save.payload.run.leave = { offer: [], pick: null };
+  })) === 'route'
   && kind(edit(desk, (save) => { save.payload.run.shipIndex = 3; save.resume.depth = 4; })) === 'route'
   && kind(edit(desk, (save) => { save.payload.run.ships.pop(); save.payload.run.skills.earned.pop(); })) === 'route');
 check('ENDING CHOSEN with an undecided finale → route', kind(edit(ending.raw, (save) => { save.payload.slices.hollow.finale.phase = 'step1'; })) === 'route');

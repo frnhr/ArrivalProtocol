@@ -172,6 +172,7 @@ export function createRunState(
     simulationRetryUsed: false,
     ghostSpoken: false,
     beamOut: null,
+    leave: { offer: [], pick: null },
     transit: null,
     arrival: null,
     endCause: null,

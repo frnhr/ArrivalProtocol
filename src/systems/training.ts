@@ -16,7 +16,6 @@ import { skillPacketPlan } from '@systems/skill-files';
 import { planPacket } from '@systems/draft';
 import { isSkillFile } from '@state/selectors';
 import { skillBlocks, SKILL_TREE } from '@data/skills';
-import { CYCLES_CARD_CYCLES } from '@data/tuning';
 
 function sameRow(a: CellRow, b: CellRow): boolean {
   return a.kind === 'version' ? b.kind === 'version' && a.version === b.version : b.kind === 'lock' && a.level === b.level;
@@ -109,16 +108,14 @@ export function setPackAs(store: Store<GameState>, segId: string, level: Readonl
 }
 
 // TRANSMIT ▸ (run.ts transmitNext, before the ship starts, so the BEAM save holds no pending purchase): this desk's pending
-// purchases become bought, and the +2 CYCLES salvage card (when it was the pick) becomes a grant at this visit. Every
-// purchase must still be payable (the bank throws below 0) and its file in the packet (transmitNext checks the layout).
+// purchases become bought. Every purchase must still be payable (the bank throws below 0) and its file in the packet
+// (transmitNext checks the layout). Playtest 1 (note 5): the +2 CYCLES salvage card is granted at LEAVE ORBIT now (run.ts
+// leaveOrbit), before this desk, so its cycles can be spent here.
 export function commitTraining(store: Store<GameState>): void {
-  const state = store.getState();
-  const salvage = state.run.transit?.pick === 'cycles';
   store.update((draft) => {
     const skills = draft.run.skills;
     skills.bought.push(...skills.pending);
     skills.pending = [];
-    if (salvage) skills.grants.push({ source: 'salvage', cycles: CYCLES_CARD_CYCLES, visit: visitNow(draft.run), label: null });
   });
   bankOf(store.getState().run.skills);
 }

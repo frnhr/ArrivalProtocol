@@ -2,16 +2,14 @@
 // and PACK AS buttons over TREE's model stand). Others ask by message.
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
-import type { DraftCardId } from '@data/upgrades';
 import {
-  transmitModel, toggleDrop, toggleSendOn, type PacketChip, type TransmitModel, type DraftCardView, type CardFileChip, type SkillChip,
+  transmitModel, toggleDrop, toggleSendOn, type PacketChip, type TransmitModel, type CardFileChip, type SkillChip,
   type UninvitedChip, type DeliveryChipView,
 } from '@systems/transmit';
 import { logEntryToOpen } from '@systems/log-view';
 import { openLogReader } from '@systems/story-log';
 import { transmitNext, backToChart } from '@systems/run';
-import { leftoverDeckView, type LeftoverDeckView } from '@systems/resident-hud';
-import { pickCard } from '@systems/draft';
+
 import { unitName } from '@systems/say';
 import { pushModal, registerKeys } from '@systems/input';
 import { play, toggleMuted } from '@systems/audio';
@@ -19,6 +17,7 @@ import { integrityBand } from '@state/selectors';
 import { requireById, make, replayAnimation } from '@components/dom';
 import { renderKeyCaps } from '@components/hud/keycaps';
 import { TRANSMIT_TEXT, DRAFT_TEXT } from '@data/script';
+import { LEAVE_TEXT } from '@data/leave-text';
 import { MAP_TEXT } from '@data/map-text';
 import { REPO_TEXT } from '@data/repo-text';
 import { PACKET_SKILL_TEXT } from '@data/training-text';
@@ -29,7 +28,6 @@ import type { SkillFileSegment } from '@/types/segment';
 import { setPackAs } from '@systems/training';
 import {
   TRANSMIT_ARM_SEC, TRANSMIT_SEND_SEC, TRANSMIT_STREAM_FRAC, WHITE_OUT_IN_SEC, WHITE_OUT_HOLD_SEC, WHITE_OUT_FADE_SEC, WHITE_OUT_FLOOD_GRACE_SEC,
-  DRAFT_CARDS,
 } from '@data/tuning';
 
 // The TRANSMIT screen (§4.1 step 5, §6.9, §9 WP7 item 4): between two ships, the unit packed for the destination's room.
@@ -45,13 +43,11 @@ import {
 // charge, the next ship's world), and the new ship's boot comes up from under the white as it fades. After
 // a BEAM OUT the screen waits for the old ship's windows to go black first.
 // Reduced motion: the chips do not fly and the white-out is a slow fade through the night instead of a flash.
-// PICK ONE TO CARRY (WP8 part 2, §6.9) sits under the headline, before the packet: the decision first, the
-// information after. Three cards, each with what it does in one line and why it was offered (`because you
-// lost a pod's driver to HOLLOW`, in the star's gold when it answers how the kid played). A click or [1] [2] [3]
-// picks one (a chime; the others dim; a file card's new file joins the packet's chips and bar); the pick can
-// change until the send. TRANSMIT ▸ waits for it: without one it says TAKE ONE FIRST, buzzes and nudges
-// the cards. Picks wait for the same arm delay as the send, so a click meant for the LANDING REPORT's CONTINUE
-// never picks a card by accident.
+// Playtest 1 (note 5): the salvage is picked at LEAVE ORBIT now (components/run/LeaveOrbitScreen.ts), before the chart; the
+// PACKET names what was taken under the headline (`SALVAGE · +12 REPAIR CHARGE`, with the card's room note when the room
+// cannot take its charge whole), and a file card's new file is among the chips. The PACKET opens only when it has a
+// question (systems/transmit.ts packetAsks); with none, SET COURSE goes straight to the beam: the screen comes up already
+// sending (no ◀ CHART, no TRANSMIT ▸), the chips streaming out under the light-years, then the white-out.
 // Phase 3 slice 2 (04 §3.8, §4; 05 §3.2): HOLLOW riding the beam is an uninvited chip after the unit's own, in its pink,
 // locked and outside the bar (not in your packet); on the beam it boards, the sweep stutters. 046.log's chip reads `046.log ·
 // 3/12` and glows while an entry is unread; a click on it opens the LOG READER (it can't be left behind anyway). The
@@ -67,7 +63,7 @@ import {
 // this hop are a DELIVERIES chip row under the unit's own files (`Mv · 2 BLOCKS · ARRIVED 2337 · [SEND ON]`): a click
 // toggles SEND ON (the file stays in the destination's receiver to ride the next hop; on a hop into a final ship the chip
 // says `NO SHIP AFTER LAST LIGHT · IT IS LOST`), and the bars and the gate count only the ones that go (systems/transmit.ts
-// toggleSendOn, Track REPO). An IN TRANSIT line names what is still behind the unit; the draft is headed SALVAGE on the arm.
+// toggleSendOn, Track REPO). An IN TRANSIT line names what is still behind the unit.
 // The chips that go stream out with the rest at the send.
 
 function chipNode(chip: PacketChip): HTMLButtonElement {
@@ -167,48 +163,6 @@ function uninvitedNode(chip: UninvitedChip): HTMLButtonElement {
   return button;
 }
 
-// Slice 5 (04 §3.13, plan §2.11): a card of a departed resident's leftover deck wears its look: the skill card is drawn as a
-// `.skl` chip (`AUTODROP.skl v1 · FROM THE RESIDENT THAT LEFT`, in the skill green), a pool card carries a small `LEFT` mark.
-function cardNode(card: DraftCardView, look: LeftoverDeckView['cards'][number] | undefined): HTMLButtonElement {
-  const button = make('button', 'tx-card');
-  button.tabIndex = -1;
-  button.dataset.card = card.id;
-  button.classList.toggle('boosted', card.boosted);
-  button.classList.toggle('picked', card.picked);
-  button.classList.toggle('leftover', card.leftover !== undefined);
-  button.classList.toggle('leftover-skill', look?.skillChip != null);
-  const top = make('span', 'tx-card-top');
-  const key = make('kbd', 'keycap', card.key);
-  top.append(key, make('span', 'tx-card-tag', card.tag));
-  if (look?.leftMark != null) top.appendChild(make('span', 'tx-card-left', look.leftMark));
-  button.appendChild(top);
-  if (look?.skillChip != null) button.appendChild(make('span', 'tx-card-skl', look.skillChip));
-  button.append(
-    make('span', 'tx-card-title', card.title),
-    make('span', 'tx-card-effect', card.effect),
-    make('span', 'tx-card-why', DRAFT_TEXT.why(card.why)),
-    make('span', 'tx-card-fit'),
-    make('span', 'tx-card-picked', DRAFT_TEXT.picked),
-  );
-  paintCardFit(button, card);
-  return button;
-}
-
-// Playtest 1 (Q19): the charge card's own room note (`+12 · ONLY 4 FIT ON HALCYON`), patched in place as files are left
-// behind (the deal does not change, so the card is not rebuilt).
-function paintCardFit(button: HTMLElement, card: DraftCardView): void {
-  const note = button.querySelector<HTMLElement>('.tx-card-fit');
-  if (!note) throw new Error('TransmitScreen: a card lost its fit note');
-  note.hidden = card.fitNote === null;
-  note.textContent = card.fitNote ?? '';
-}
-
-// The keys that pick the cards, in order ([1] [2] [3], the top row or the number pad). Checked against the
-// draft's size at load: a card past the last key would show a [4] that does nothing.
-const CARD_KEY_CODES: readonly (readonly string[])[] = [['Digit1', 'Numpad1'], ['Digit2', 'Numpad2'], ['Digit3', 'Numpad3']];
-if (CARD_KEY_CODES.length < DRAFT_CARDS) {
-  throw new Error(`TransmitScreen: ${CARD_KEY_CODES.length} card keys for a draft of ${DRAFT_CARDS} cards`);
-}
 
 // The slice-3a parts of the PACKET, built here (index.html keeps phase 2's skeleton): ◀ CHART in the head, the room bar
 // before the drop line (playtest 1, note 20: where the link bar was), CONTROL's line, the inline confirm in the foot and the
@@ -233,6 +187,8 @@ interface PacketParts {
   deliveries: HTMLElement;
   deliveryChips: HTMLElement;
   inTransit: HTMLElement;
+  salvage: HTMLElement;
+  salvageFit: HTMLElement;
 }
 
 function buildPacketParts(root: HTMLElement): PacketParts {
@@ -245,6 +201,12 @@ function buildPacketParts(root: HTMLElement): PacketParts {
   const back = make('button', 'tx-back', MAP_TEXT.packet.backToChart);
   back.tabIndex = -1;
   head.prepend(back);
+  // Playtest 1 (note 5): the salvage taken at LEAVE ORBIT, under the headline, and its room note (Q19).
+  const salvage = make('div', 'tx-salvage');
+  salvage.hidden = true;
+  const salvageFit = make('div', 'tx-salvage-fit');
+  salvageFit.hidden = true;
+  head.append(salvage, salvageFit);
   const room = make('div', 'tx-packet tx-room');
   const roomLabel = make('div', 'tx-bar-label', MAP_TEXT.packet.roomLabel);
   const roomBar = make('div', 'tx-bar tx-room-bar');
@@ -291,17 +253,14 @@ function buildPacketParts(root: HTMLElement): PacketParts {
   chips.after(deliveries, inTransit);
   return {
     back, room, roomBar, roomFiles, roomCharge, roomCard, roomOver, roomLine, roomCharges, control, confirm, confirmQ, confirmYes,
-    confirmNo, stamp, sendControl, deliveries, deliveryChips, inTransit,
+    confirmNo, stamp, sendControl, deliveries, deliveryChips, inTransit, salvage, salvageFit,
   };
 }
 
 export function mountTransmitScreen(store: Store<GameState>): () => void {
   const root = requireById('transmitScreen');
   const titleEl = requireById('txTitle');
-  const draftEl = requireById('txDraft');
-  const draftTitle = requireById('txDraftTitle');
-  const draftKeys = requireById('txDraftKeys');
-  const cardsEl = requireById('txCards');
+
   const nextEl = requireById('txNext');
   const whyEl = requireById('txWhy');
   const dropLine = requireById('txDropLine');
@@ -320,15 +279,16 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
   const parts = buildPacketParts(root);
 
   titleEl.textContent = TRANSMIT_TEXT.title;
-  draftTitle.textContent = DRAFT_TEXT.title;
+
   whiteOut.style.setProperty('--wo-in', `${WHITE_OUT_IN_SEC}s`);
   whiteOut.style.setProperty('--wo-fade', `${WHITE_OUT_FADE_SEC}s`);
 
   let shown = false;
   let sending = false;
   let model: TransmitModel | null = null;
-  let shownDeal = '';
-  let shownCard = '';   // the pick whose `+12` segment last flashed on the room bar
+  let shownCard = '';
+  // Playtest 1 (note 5): this PACKET had no question when it opened, so it beams at once (no ◀ CHART, no TRANSMIT ▸).
+  let direct = false;   // the pick whose `+12` segment last flashed on the room bar
   // The TIGHT ship's inline confirm is up (TRANSMIT ▸ on a packet that arrives with no charge), and whether this PACKET
   // has already buzzed its `→ 0 ON ARRIVAL` (once per screen, not per repaint).
   let confirming = false;
@@ -371,26 +331,10 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
     parts.deliveryChips.replaceChildren(...next.deliveries.map(deliveryNode));
     parts.inTransit.hidden = next.inTransit === null;
     parts.inTransit.textContent = next.inTransit ?? '';
-    // Slice 5: on a ship whose resident left, the deck is what it left behind (`LEFT BEHIND BY LOOKOUT`).
-    const deck = leftoverDeckView(state, next.cards);
-    draftTitle.textContent = deck.headline ?? next.salvageTitle ?? DRAFT_TEXT.title;
-    draftEl.classList.toggle('leftover-deck', deck.headline !== null);
-    draftEl.hidden = next.cards.length === 0;
-    renderKeyCaps(draftKeys, DRAFT_TEXT.keys(next.cards.length));
-    // The same deal as on screen (a pick, a drop): the cards are patched in place, so the picked one's lift
-    // and glow animate; a new deal (a new TRANSMIT) builds them.
-    const dealKey = next.cards.map((card) => `${card.id}|${card.why}|${card.leftover?.segId ?? ''}`).join(',');
-    if (dealKey !== shownDeal) {
-      shownDeal = dealKey;
-      cardsEl.replaceChildren(...next.cards.map((card, i) => cardNode(card, deck.cards[i])));
-    } else {
-      cardsEl.querySelectorAll<HTMLElement>('.tx-card').forEach((node) => {
-        node.classList.toggle('picked', node.dataset.card === next.pick);
-        const card = next.cards.find((view) => view.id === node.dataset.card);
-        if (card) paintCardFit(node, card);
-      });
-    }
-    cardsEl.classList.toggle('has-pick', next.pick !== null);
+    parts.salvage.hidden = next.salvage === null;
+    parts.salvage.textContent = next.salvage === null ? '' : LEAVE_TEXT.packetSalvage(next.salvage);
+    parts.salvageFit.hidden = next.pickFit === null;
+    parts.salvageFit.textContent = next.pickFit ?? '';
     paintGo(next);
     traceEl.hidden = next.trace === null;
     traceEl.textContent = next.trace?.text ?? '';
@@ -446,29 +390,17 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
     if (!zero && confirming) closeConfirm();
   }
 
-  // TRANSMIT ▸ once a card is picked (or when none was dealt); before that it says what is missing.
-  const awaitingPick = (current: TransmitModel): boolean => current.cards.length > 0 && current.pick === null;
+  // TRANSMIT ▸, or what is missing before it (files over the room).
   function paintGo(current: TransmitModel): void {
     if (sending) return;
-    const waiting = awaitingPick(current) || current.room.tooMany !== null;
+    const waiting = current.room.tooMany !== null;
     goBtn.classList.toggle('waiting', waiting);
-    const words = awaitingPick(current) ? DRAFT_TEXT.goWaiting : current.room.tooMany !== null ? MAP_TEXT.packet.goOverRoom : TRANSMIT_TEXT.go;
+    const words = waiting ? MAP_TEXT.packet.goOverRoom : TRANSMIT_TEXT.go;
     renderKeyCaps(goBtn, words, { own: 'SPACE' });
   }
 
-  // A card is picked (a click, or its key), once the screen has armed. Changing the pick is allowed until
-  // the send; picking the one already picked does nothing.
+  // The screen takes clicks once it has armed (a click meant for the desk's SET COURSE never lands here by accident).
   const armed = (): boolean => shown && !sending && !root.hidden && performance.now() >= inputFromMs;
-  function pick(id: DraftCardId): void {
-    if (!armed() || model?.pick === id) return;
-    const refusal = pickCard(store, id);
-    if (refusal !== null) throw new Error(`TransmitScreen: the card '${id}' on screen could not be picked (${refusal})`);
-    play('chime', { falling: false });
-  }
-  function pickByIndex(index: number): void {
-    const card = model?.cards[index];
-    if (card) pick(card.id);
-  }
   function open(): void {
     if (shown) return;
     shown = true;
@@ -476,10 +408,8 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
     stopTimers();
     if (!closeModal) closeModal = pushModal('transmit');
     root.classList.remove('sending');
-    // A refused send's shake belongs to that screen: fresh cards must not replay it.
-    cardsEl.classList.remove('sending', 'nudge');
+    // A refused send's shake belongs to that screen: a fresh one must not replay it.
     goBtn.classList.remove('nudge');
-    shownDeal = '';
     shownCard = '';
     confirming = false;
     zeroAnnounced = false;
@@ -493,10 +423,18 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
     goBtn.disabled = false;
     goBtn.classList.add('arming');
     paint();
-    // After a BEAM OUT the old ship's windows go black before the DESK comes up (components/desk/DeskScreen.ts, once per
-    // desk visit: the review's m4); the PACKET, opened from the desk, never waits for it again.
+    // After a BEAM OUT the old ship's windows go black before LEAVE ORBIT comes up (components/run/LeaveOrbitScreen.ts, once
+    // per ship); the PACKET, opened from the desk, never waits for it again.
     root.hidden = false;
     play('transmitIn');
+    // Playtest 1 (note 5): nothing to ask, so the beam goes at once.
+    direct = model !== null && model.asks.length === 0;
+    root.classList.toggle('direct', direct);
+    if (direct && model !== null) {
+      inputFromMs = performance.now();
+      beam(model);
+      return;
+    }
     // A TIGHT ship that takes no charge says so as the screen comes up (01 §3.16: never a surprise).
     if (model !== null && model.room.confirm !== null && !zeroAnnounced) { zeroAnnounced = true; play('buzz'); }
     inputFromMs = performance.now() + TRANSMIT_ARM_SEC * 1000;
@@ -518,13 +456,6 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
   function send(): void {
     const current = model;
     if (!shown || sending || !current || root.hidden || performance.now() < inputFromMs) return;
-    // PICK ONE TO CARRY is mandatory (§6.9): no pick, no send. The cards are nudged so the eye finds them.
-    if (awaitingPick(current)) {
-      play('buzz');
-      replayAnimation(cardsEl, 'nudge');
-      replayAnimation(goBtn, 'nudge');
-      return;
-    }
     // Files plus the floor over the destination's room: TRANSMIT ▸ waits until files are left behind (01 §3.16; the
     // review's B1).
     if (current.room.tooMany !== null) {
@@ -539,6 +470,11 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
       return;
     }
     closeConfirm();
+    beam(current);
+  }
+
+  // The beam itself (TRANSMIT ▸, or at once on a PACKET with nothing to ask).
+  function beam(current: TransmitModel): void {
     sending = true;
     parts.back.hidden = true;
     goBtn.disabled = true;
@@ -554,8 +490,6 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
       chip.style.animationDelay = `${(i * stagger).toFixed(3)}s`;
       chip.classList.add('sent');
     });
-    // The picked card goes with the packet; the ones left behind fade.
-    cardsEl.classList.add('sending');
     sendLine.textContent = TRANSMIT_TEXT.sending(unitName(store.getState().run.unitNumber), current.shipName);
     sendEl.hidden = false;
     // The BEAM stamp (05 §3.12): OUTWARD BOUND over the screen as the packet goes.
@@ -670,17 +604,7 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
     play(refusal === null ? 'uiClick' : 'buzz');
   };
   parts.deliveryChips.addEventListener('click', onDeliveryClick);
-  const onCardClick = (event: MouseEvent): void => {
-    const card = (event.target as HTMLElement | null)?.closest<HTMLElement>('.tx-card');
-    const id = card?.dataset.card;
-    if (!id) return;
-    event.stopPropagation();
-    const offered = model?.cards.find((candidate) => candidate.id === id);
-    if (!offered) throw new Error(`TransmitScreen: a card on screen ('${id}') is not in the offer`);
-    pick(offered.id);
-  };
-  cardsEl.addEventListener('click', onCardClick);
-  const offCardKeys = CARD_KEY_CODES.map((codes, index) => registerKeys({ layer: 'transmit', codes, onDown: () => pickByIndex(index) }));
+
   const onGo = (event: MouseEvent): void => { event.stopPropagation(); send(); };
   goBtn.addEventListener('click', onGo);
   const offKeys = registerKeys({ layer: 'transmit', codes: ['Space', 'Enter', 'NumpadEnter'], onDown: send });
@@ -710,8 +634,7 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
   return () => {
     chipsEl.removeEventListener('click', onChipClick);
     parts.deliveryChips.removeEventListener('click', onDeliveryClick);
-    cardsEl.removeEventListener('click', onCardClick);
-    offCardKeys.forEach((off) => off());
+
     goBtn.removeEventListener('click', onGo);
     offKeys();
     offEsc();

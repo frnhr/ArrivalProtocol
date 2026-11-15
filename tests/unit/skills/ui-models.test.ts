@@ -29,7 +29,6 @@ import {
   openDeskWindow, selectShip, deskCandidates, deskEnter, disarmTraining, stepTrainingCell,
 } from '@systems/desk';
 import { setCourse, transmitNext, backToChart } from '@systems/run';
-import { pickCard } from '@systems/draft';
 import { trainCell } from '@systems/training';
 import { createRunMap } from '@systems/map-run';
 import { FIRST_RUN_LINEAGE } from '@systems/meta';
@@ -189,8 +188,6 @@ const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), '..', 'save', 'fi
   toDesk(store);
   trainCell(store, 'autoburn', { kind: 'version', version: 1 });
   setCourse(store, deskCandidates(store.getState())[0]!);
-  const offer = store.getState().run.transit!.offer;
-  if (offer.length > 0) pickCard(store, offer.some((card) => card.id === 'charge') ? 'charge' : offer[0]!.id);
   transmitNext(store);
   toDesk(store);
   const slot = deskCandidates(store.getState())[0]!;

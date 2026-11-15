@@ -66,7 +66,7 @@ import { rollBeamSeeds, rollDeliverySeeds, plantBeamSeed, seedTargetsOf, disguis
 import { autodropDebug, setPassCount, setDropDemos, type AutodropDebug } from '@systems/autodrop';
 import { preemptSeed, type PreemptRefusal } from '@systems/sentry';
 import { v3Debug, type LandingOrbitAim } from '@systems/autoburn-v3';
-import { beamSourceOf, arrivalDeliveries, arrivalSkills } from '@systems/run';
+import { beamSourceOf, arrivalDeliveries, arrivalSkills, leaveOrbit } from '@systems/run';
 import { playsTutorial } from '@systems/meta';
 import type { ResidentKind, ResidentShown, SleeperJob, SignalRecord } from '@/types/resident';
 import { residentDebug, type ResidentDebug } from '@systems/residents';
@@ -117,7 +117,8 @@ import {
   archiveLineage, archiveMeta, freshMeta, saveMeta, lineageOf, recordRunStart, recordRunEnd, recordTutorialDone, ghostLine, browserStorage,
   LAST_CAUSES, eraseAllRecords, gameKeysIn, type LastCause, type Meta,
 } from '@systems/meta';
-import { pickCard, draftContext, cardFiles, planPacket, type PickRefusal } from '@systems/draft';
+import { pickCard, draftContext, leaveRoom, cardFiles, planPacket, type PickRefusal } from '@systems/draft';
+import { leaveModel, type LeaveModel } from '@systems/leave-orbit';
 import { upgradeRepairsToV2 } from '@systems/delivery-boot';
 import { REPAIR_V2_VERSION, THREAD_PLUS_THREADS } from '@data/tuning';
 import type { UpgradeId, DraftContext, DraftCard, DraftCardId } from '@data/upgrades';
@@ -314,8 +315,12 @@ interface DebugHooks {
   abandon: () => void;
   updateArm: (route?: readonly number[]) => ArmUpdate;
   ghost: () => string | null;
+  // Playtest 1 (note 5): LEAVE ORBIT's salvage (run.leave) from the ship's end to the beam; null outside it. `pick` picks on
+  // LEAVE ORBIT, `leave()` is its ENTER, `leaveModel()` the screen's model.
   draft: () => { offer: DraftCard[]; pick: DraftCardId | null; context: DraftContext } | null;
   pick: (id: DraftCardId) => PickRefusal | null;
+  leave: () => void;
+  leaveModel: () => LeaveModel;
   // Gives the unit a card now, on the ship being flown, as if it had been picked and carried here (a look at
   // FIREWALL.sys or FUEL TRIM on the strip without flying to a TRANSMIT; FUEL TRIM's Δv applies from the next
   // arrival, as it would).
@@ -1185,10 +1190,13 @@ export function mountDebug(store: Store<GameState>): void {
     },
     ghost: () => ghostLine(store.getState().run.unitNumber, store.getState().run.lastUnit),
     draft: () => {
-      const plan = store.getState().run.transit;
-      return plan === null ? null : { offer: plan.offer, pick: plan.pick, context: draftContext(store.getState(), plan.hop, plan.deliveries) };
+      const state = store.getState();
+      if (!['leave', 'desk', 'transmit'].includes(state.run.phase)) return null;
+      return { offer: state.run.leave.offer, pick: state.run.leave.pick, context: draftContext(state, leaveRoom(state)) };
     },
     pick: (id) => pickCard(store, id),
+    leave: () => leaveOrbit(store),
+    leaveModel: () => leaveModel(store.getState()),
     giveCard: (id) => giveCard(store, id),
     request: (file) => setRequest(store, file),
     repo: () => {

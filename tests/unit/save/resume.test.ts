@@ -1,7 +1,10 @@
 // Track SAVE (slice 3c plan §6.1 save/resume): resuming at each point rebuilds a playable store, on the WP7 harness (every
 // DOM-free system mounted, as main.ts mounts them) and run 1's worked route walked with no flights (save-fixture.ts):
 // • RUN START: the same ship-1 boot (comparable state), the boot's lines the same once it plays;
-// • SHIP DONE: the same desk; SET COURSE then gives the same plan, offer and deliveries as before the reload;
+// • SHIP DONE at LEAVE ORBIT (playtest 1, note 5): the same screen, the same three cards and no pick; the pick taken after
+//   the reload is the one the desk then holds;
+// • SHIP DONE at the desk: the same desk, the pick held; SET COURSE then gives the same plan and deliveries as before the
+//   reload;
 // • BEAM: the state right after the original startShip (minus rev, the UI and the rebuilt free blocks' ids), and the ship
 //   replays from its boot with the same lines (decision 5); a second reload replays it again (the boot writes nothing);
 // • ENDING CHOSEN: the final LANDING REPORT; its CONTINUE writes the archive once (the run end, the world update, run.next)
@@ -25,7 +28,7 @@ import { createInitialState } from '@state/initial';
 import { resumeRun } from '@systems/run-save';
 import { pendingRunSave } from '@systems/save-write';
 import { backToChart, continueAfterReport, transmitNext } from '@systems/run';
-import { setCourseFromDesk } from '../support/desk';
+import { setCourseFromDesk, leaveOrbit, preferCharge } from '../support/desk';
 import { pickFirstSkill } from '../support/skills';
 import { giveTools, fitPacket } from '../map/repo-fixture';
 import { actionDelete } from '@state/actions';
@@ -33,7 +36,6 @@ import { skillFilesOf } from '@state/selectors';
 import { treeCells, visitNow, bankOf, lostLevels, paid, held as heldLevel, grantCycles } from '@systems/skill-tree';
 import { restoreSkill, setPackAs, trainCell } from '@systems/training';
 import { restoreCost } from '@systems/training-model';
-import { pickCard } from '@systems/draft';
 import type { SkillFileSegment } from '@/types/segment';
 import { resetReport } from '@systems/reset';
 import { reachableFrom } from '@systems/map-hop';
@@ -42,7 +44,7 @@ import { newSegId, freeSegment, highestSegId } from '@systems/memory-ops';
 import { logDivider } from '@systems/say';
 import { META_STORAGE_KEY, RUN_SAVE_KEY } from '@data/tuning';
 import {
-  stubStorage, pageOpen, storedSave, storedMeta, receiveToReport, toDesk, beamTo, finalReport, comparable, WORKED_ROUTE, type StubStorage,
+  stubStorage, pageOpen, storedSave, storedMeta, receiveToReport, toDesk, toLeave, beamTo, finalReport, comparable, WORKED_ROUTE, type StubStorage,
 } from './save-fixture';
 import { decidedAs } from '../support/finale';
 
@@ -122,9 +124,25 @@ check('RUN START: the same ship-1 boot (the run, the slices, the log, the direct
   differs(comparable(state()), atStart));
 check('…and the boot says the same lines once it plays', isDeepStrictEqual(playBoot(h.store), startLines), startLines.length.toString());
 
-// --- SHIP DONE -------------------------------------------------------------------------------------------------------------
+// --- SHIP DONE at LEAVE ORBIT (playtest 1, plan §3.3.3) ----------------------------------------------------------------------
 h.store.update((draft) => { draft.run.phase = 'report'; });
-toDesk(h.store);
+toLeave(h.store);
+const atLeave = comparable(state());
+const dealt = structuredClone(state().run.leave.offer);
+check('SHIP DONE is written at LEAVE ORBIT: phase leave, the deal in the save, no pick, the resume line\'s stage `leave-orbit`',
+  storedSave(storage).save.point === 'ship-done' && storedSave(storage).save.payload.run.phase === 'leave'
+  && storedSave(storage).save.payload.run.leave.pick === null && storedSave(storage).save.payload.run.leave.offer.length === 3
+  && storedSave(storage).save.resume.stage === 'leave-orbit', JSON.stringify(storedSave(storage).save.resume));
+reloadAndResume('SHIP DONE (LEAVE ORBIT)');
+check('SHIP DONE at LEAVE ORBIT: the same screen, the same three cards, nothing taken (the run and the ship\'s slices as they stood)',
+  state().run.phase === 'leave' && state().clock.paused && isDeepStrictEqual(state().run.leave.offer, dealt) && state().run.leave.pick === null
+  && isDeepStrictEqual(comparable(state()), atLeave), differs(comparable(state()), atLeave));
+const taken = leaveOrbit(h.store, preferCharge);
+check('…the card taken after the reload is the desk\'s pick, and SHIP DONE is written again at the desk with it (stage `desk`)',
+  state().run.phase === 'desk' && state().run.leave.pick === taken && storedSave(storage).save.payload.run.leave.pick === taken
+  && storedSave(storage).save.resume.stage === 'desk', String(taken));
+
+// --- SHIP DONE at the desk ------------------------------------------------------------------------------------------------
 const atDesk = comparable(state());
 const deskUi = { selected: state().ui.deskSelected, window: state().ui.deskWindow };
 setCourseFromDesk(h.store, WORKED_ROUTE[1]!);
@@ -136,8 +154,8 @@ check('SHIP DONE: the same desk (phase desk, the clock paused, the run and the s
 check('…the desk opens as openDesk opens it (deskUiOnOpen: the selection and the tab, no tool held)',
   state().ui.deskSelected === deskUi.selected && state().ui.deskWindow === deskUi.window && state().ui.activeTool === null);
 setCourseFromDesk(h.store, WORKED_ROUTE[1]!);
-check('…SET COURSE then gives the same plan, offer and deliveries as before the reload', isDeepStrictEqual(state().run.transit, plan),
-  JSON.stringify(state().run.transit?.offer.map((card) => card.id)));
+check('…the pick held, and SET COURSE then gives the same plan (the pick, the deliveries) as before the reload',
+  state().run.leave.pick === taken && isDeepStrictEqual(state().run.transit, plan), JSON.stringify(state().run.transit?.pick));
 backToChart(h.store);
 
 // --- BEAM ------------------------------------------------------------------------------------------------------------------
@@ -270,8 +288,6 @@ const G1_SEED = 7;
   toDesk(h.store);
   setCourseFromDesk(h.store, WORKED_ROUTE[3]!);
   setPackAs(h.store, held!.id, { version: 1, lock: 0 });
-  const offer = state().run.transit!.offer;
-  if (offer.length > 0) pickCard(h.store, offer.some((card) => card.id === 'charge') ? 'charge' : offer[0]!.id);
   fitPacket(h.store);
   transmitNext(h.store);
   h.store.update((draft) => { draft.run.phase = 'report'; });

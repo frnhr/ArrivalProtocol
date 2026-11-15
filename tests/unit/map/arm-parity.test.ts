@@ -14,7 +14,7 @@ import { createHarness11 } from '../wp11/harness11';
 import { followDirector } from '../wp2/harness2';
 import { receiveTransmission } from '@systems/boot';
 import { shipLost, startRun, continueAfterReport, continueAfterLoss } from '@systems/run';
-import { setCourseFromDesk } from '../support/desk';
+import { setCourseFromDesk, leaveOrbit as takeSalvage } from '../support/desk';
 import { autoburnAvailable } from '@systems/autoburn';
 import { getPrediction } from '@systems/predict';
 import { pickChoice } from '@systems/say';
@@ -40,9 +40,11 @@ const digest = (value: unknown): string => createHash('sha256').update(JSON.stri
 
 // --- The 20 ShipDefs and their built worlds -------------------------------------------------------------------------------
 const PINNED_DEFS = 'c9973645e1b66ad4';
-// Playtest 1 B-ORDER re-recorded it (it was ba4e29c778f55abd): the link went (note 20), and with the link field put back
-// on every hop (Hop.linkBlocks, round((1460 − 11·d) / 10)) the slices hash to ba4e29c778f55abd again: nothing else moved.
-const PINNED_SLICES = '35d48499b88bf89a';
+// Playtest 1 B-ORDER re-recorded it twice (it was ba4e29c778f55abd): the link went (note 20), and with the link field put
+// back on every hop (Hop.linkBlocks, round((1460 − 11·d) / 10)) the slices hashed to ba4e29c778f55abd again (35d48499b88bf89a
+// without it); then LEAVE ORBIT's run.leave joined the run (note 5), and with that one key taken out they hash to
+// 35d48499b88bf89a again: nothing else moved.
+const PINNED_SLICES = '876ea9ad0ab6ac69';
 const map = run1Map(SEED);
 const defs = map.arm.map((_, slot) => shipDefOf(armShipAt(map, slot)));
 const defsNow = digest(defs);
@@ -60,7 +62,10 @@ check(`…and every ship's built world past ARES-VII (its ship slices from a bea
 // crosses. The first moment that moves is KESTREL's boot (HALCYON → KESTREL's link, 117, held charge back); the moments
 // before it are the same digests, every ship's outcome is as before, and the run's end is won-merge, not won-purge: the
 // unit reaches LAST LIGHT with the 16 that MERGE costs (plan §3.3.4's expected effect; the lead re-reads the balance).
-const PINNED_RUN = 'ab2fecc0c09560be';
+// Then LEAVE ORBIT (note 5): every moment holds run.leave, the salvage is dealt before the desk (against the largest room in
+// reach, no deliveries counted) and taken there (the first card, as before), so every moment's digest moves; every ship's
+// outcome and the run's end (won-merge) are as with the link gone (ab2fecc0c09560be).
+const PINNED_RUN = 'f0e22aa93db09b2d';
 const REQUESTS: readonly (RepoFileId | null)[] = ['mv', 'rm', 'swap', 'cp', null];
 const h = createHarness11(1, { soulsFound: false });
 const state = (): Readonly<GameState> => h.store.getState();
@@ -124,6 +129,8 @@ while (state().run.phase !== 'end' && guard++ < 16) {
     if (state().run.phase === 'report') continueAfterReport(h.store);
     else if (shipLost(state())) continueAfterLoss(h.store);
   } else if (state().run.phase === 'report') continueAfterReport(h.store);
+  // Playtest 1 (note 5): LEAVE ORBIT first, its first card taken.
+  if (state().run.phase === 'leave') takeSalvage(h.store);
   if (state().run.phase === 'desk') {
     record('desk');
     const next = route[state().run.shipIndex + 1];

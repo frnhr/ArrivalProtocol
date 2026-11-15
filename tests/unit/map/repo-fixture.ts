@@ -1,5 +1,5 @@
 // Track REPO's store-level fixture for the slice-3b suites (map/repository, map/delivery-packet): a run on an arm flown
-// desk to desk with no flights (link-over's pattern: endShip, openDesk, setCourse, a card, transmitNext), so every send is
+// desk to desk with no flights (endShip, LEAVE ORBIT with a card, setCourse, transmitNext), so every send is
 // the real one (the packet, the deliveries, the seeds, the layout, the requests moving on) and every number stays the
 // game's. Ships end 'locked' on their LANDING REPORT; nothing is flown, so nothing ticks: no licence by REPAIR's own rule
 // (giveTools writes one), no HOLLOW, and the boot's lines are not said (a suite calls receiveDeliveryAtBoot itself).
@@ -9,10 +9,9 @@ import type { FsToolKind } from '@/types/fs-tool';
 import type { RepoFileId, RepoRequest } from '@/types/repo';
 import { createInitialState } from '@state/initial';
 import { createRunMap } from '@systems/map-run';
-import { endShip, openDesk, transmitNext } from '@systems/run';
-import { setCourseFromDesk } from '../support/desk';
+import { endShip, openLeaveOrbit, transmitNext } from '@systems/run';
+import { setCourseFromDesk, leaveOrbit, preferCharge } from '../support/desk';
 import { setRequest } from '@systems/repository';
-import { pickCard } from '@systems/draft';
 import { transmitModel, toggleSendOn, toggleDrop } from '@systems/transmit';
 import {
   unitInstallAddress, replaceRange, mergeAdjacentFree, assertMemoryInvariants, newSegId, freeSegment,
@@ -29,23 +28,28 @@ export function armRun(seed = 3, wave = 1): Store<GameState> {
   return store;
 }
 
-// The ship ends on its report and the desk opens (the next ship's choice).
-export function toDesk(store: Store<GameState>): void {
-  if (store.getState().run.phase !== 'desk') {
+// The ship ends on its report, LEAVE ORBIT opens (playtest 1, note 5) and its salvage is taken (the +12 card when dealt, so
+// no file joins the packet; else the first), and the desk opens (the next ship's choice).
+export function toLeave(store: Store<GameState>): void {
+  const phase = store.getState().run.phase;
+  if (phase !== 'leave' && phase !== 'desk') {
     endShip(store, 'locked');
-    openDesk(store, null);
+    openLeaveOrbit(store, null);
   }
 }
 
-// From the desk: SET COURSE to `slot` (with `ask` requested first, when given), the first card dealt picked (the +12 card
-// when dealt, so no file joins the packet), every chip sent on and then files left behind while the packet is over the
-// link or the room (TRANSMIT ▸ waits there), then TRANSMIT ▸. Returns the PACKET's plan as it was sent.
+export function toDesk(store: Store<GameState>): void {
+  toLeave(store);
+  leaveOrbit(store, preferCharge);
+}
+
+// From the desk: SET COURSE to `slot` (with `ask` requested first, when given), every chip sent on and then files left
+// behind while the packet is over the room (TRANSMIT ▸ waits there), then TRANSMIT ▸. Returns the PACKET's plan as it was
+// sent.
 export function send(store: Store<GameState>, slot: number, ask: RepoFileId | null = null): GameState['run']['transit'] {
   toDesk(store);
   if (ask !== null) setRequest(store, ask);
   setCourseFromDesk(store, slot);
-  const offer = store.getState().run.transit!.offer;
-  if (offer.length > 0) pickCard(store, offer.some((card) => card.id === 'charge') ? 'charge' : offer[0]!.id);
   fitPacket(store);
   const plan = structuredClone(store.getState().run.transit);
   transmitNext(store);
@@ -60,7 +64,7 @@ export function fitPacket(store: Store<GameState>): void {
   }
   for (let guard = 0; guard < 40 && transmitModel(store.getState()).room.tooMany !== null; guard++) {
     const chip = transmitModel(store.getState()).chips.find((candidate) => candidate.toggleable && !candidate.dropped);
-    if (chip === undefined) throw new Error('fitPacket: over the link or room with nothing left to leave behind');
+    if (chip === undefined) throw new Error('fitPacket: over the room with nothing left to leave behind');
     if (toggleDrop(store, chip.segId) !== null) throw new Error(`fitPacket: ${chip.name} would not stay behind`);
   }
 }

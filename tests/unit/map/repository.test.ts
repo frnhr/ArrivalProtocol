@@ -148,13 +148,14 @@ check('…Swap arrived here (delivered at CORMORANT, 2659); Cp is still behind a
   send(store, 2, 'rm');
   check('a desk with an rm aboard opens on the SHIP CARD', (toDesk(store), store.getState().ui.deskWindow === null));
   dropTools(store, 'delete');
-  store.update((draft) => { draft.run.phase = 'desk'; });
-  openDesk(store, null);
+  store.update((draft) => { draft.run.phase = 'leave'; });
+  openDesk(store);
   check('the last rm gone (DELETE licensed): the desk opens on the REPOSITORY, Rm lit, Rm tagged',
     store.getState().ui.deskWindow === 'repository' && repoModel(store.getState(), null).available.filter((entry) => entry.focus).map((entry) => entry.id).join() === 'rm'
     && recommendation(store.getState()) === 'rm');
   addRequest(store, { file: 'rm', status: 'in-transit', lateness: 20 });
-  openDesk(store, null);
+  store.update((draft) => { draft.run.phase = 'leave'; });
+  openDesk(store);
   check('…an Rm already on its way answers it: the card again, nothing lit', store.getState().ui.deskWindow === null
     && repoModel(store.getState(), null).available.every((entry) => !entry.focus));
   const never = armRun();
@@ -277,9 +278,10 @@ check('…Swap arrived here (delivered at CORMORANT, 2659); Cp is still behind a
       const next = options[Math.floor(rng() * options.length)]!;
       const tag = recommendation(store.getState());
       if (tag !== null) requests++;
-      const plan = send(store, next, tag);
+      // Playtest 1 (note 5): the deal is LEAVE ORBIT's, held to the beam (run.leave).
+      if (store.getState().run.leave.offer.length < 3) shortDeals++;
+      send(store, next, tag);
       deals++;
-      if (plan!.offer.length < 3) shortDeals++;
       const now = store.getState();
       if (armShipAt(now.run.map, next).modifiers.includes('engine-fault')) {
         faultShips++;

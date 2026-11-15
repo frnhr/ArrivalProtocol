@@ -16,7 +16,7 @@ import { createHarness7 } from '../wp7/harness7';
 import { lockOn } from '../landing/harness-landing';
 import { continueAfterReport as runContinueAfterReport } from '@systems/run';
 import { setRequest } from '@systems/repository';
-import { setCourseFromDesk } from '../support/desk';
+import { setCourseFromDesk, leaveOrbit as takeSalvage } from '../support/desk';
 import { giveSkillFile } from '../support/skills';
 import { phase2HollowOf } from '../support/hollow-world';
 import { armRun, send, toDesk } from '../map/repo-fixture';
@@ -136,6 +136,7 @@ if (!h.untilPhase('report', 120)) throw new Error(`HALCYON never reached its rep
 // Track RETIRE: on run 1's arm, Rm requested at HALCYON's desk arrives at KESTREL's boot (the classic schedule licensed
 // DELETE at KESTREL's start).
 runContinueAfterReport(h.store);
+takeSalvage(h.store);
 setRequest(h.store, 'rm');
 setCourseFromDesk(h.store, WORKED_ROUTE[s().run.map.route.length]!);
 h.transmit();
@@ -310,7 +311,7 @@ const hollowSeeds = (): HollowSegment[] => s().memory.filter((seg): seg is Hollo
   const v1File = atV1.memory.find((seg): seg is SkillFileSegment => isSkillFile(seg) && seg.upgrade === 'sentry')!;
   v1File.version = 1;
   check('…a deal without SENTRY v3 is the same deal (v1 aboard or no SENTRY at all)',
-    JSON.stringify(dealDraft(noSentry, null)) === JSON.stringify(dealDraft(atV1, null)) && draftContext(atV1).firewallCompiler === undefined);
+    JSON.stringify(dealDraft(noSentry)) === JSON.stringify(dealDraft(atV1)) && draftContext(atV1).firewallCompiler === undefined);
 }
 
 finish();

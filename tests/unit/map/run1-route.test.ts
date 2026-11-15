@@ -16,7 +16,7 @@ import { check, finish } from '../wp1/harness';
 import { createHarness11 } from '../wp11/harness11';
 import { receiveTransmission } from '@systems/boot';
 import { shipLost, startRun, continueAfterReport, continueAfterLoss } from '@systems/run';
-import { setCourseFromDesk } from '../support/desk';
+import { setCourseFromDesk, leaveOrbit as takeSalvage } from '../support/desk';
 import { autoburnAvailable } from '@systems/autoburn';
 import { getPrediction } from '@systems/predict';
 import { followDirector } from '../wp2/harness2';
@@ -119,7 +119,9 @@ function flyRoute(route: readonly number[], record: (event: string, at: Readonly
       if (state().run.phase === 'report') continueAfterReport(h.store);
       else if (shipLost(state())) continueAfterLoss(h.store);
     } else if (state().run.phase === 'report') continueAfterReport(h.store);
-    if (state().run.phase === 'desk') {
+    // Playtest 1 (note 5): LEAVE ORBIT first, its first card taken.
+  if (state().run.phase === 'leave') takeSalvage(h.store);
+  if (state().run.phase === 'desk') {
       record('desk', state());
       const next = route[state().run.shipIndex + 1];
       if (next === undefined) { failures.push('the route ran out before the final ship'); break; }

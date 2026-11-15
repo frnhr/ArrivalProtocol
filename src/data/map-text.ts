@@ -54,7 +54,6 @@ export const MAP_TEXT = {
     // included): `UNIT-048 · YEAR 2303 · LAUNCHED 3 YEARS AFTER UNIT-047`.
     launched: (unit: string, year: number, gap: number, last: string): string =>
       (gap === 0 ? `${unit} · YEAR ${year} · LAUNCHED IN THE SAME YEAR AS ${last}` : `${unit} · YEAR ${year} · LAUNCHED ${years(gap)} AFTER ${last}`),
-    savesBetweenShips: 'runs save between ships',
     // Track UI: the stamp the launch line lands with once its year has rolled up (02 §3.12 step 6: the valve says so).
     stamp: (gap: number): string => `+${years(gap)}`,
     stampSameYear: 'SAME YEAR',
@@ -285,6 +284,10 @@ export const MAP_TEXT = {
     // The RESUME block's line, by the point it was written at.
     resumeBoot: (unit: string, depth: number, ship: string, year: number): string => `RESUME · ${unit} · SHIP ${depth} · bound for ${ship} · ${year}`,
     resumeDesk: (unit: string, depth: number, year: number): string => `RESUME · ${unit} · SHIP ${depth} DONE · AT THE DESK · ${year}`,
+    // Playtest 1 (B-ORDER, plan §3.3.3): a SHIP DONE save written at LEAVE ORBIT.
+    resumeLeave: (unit: string, depth: number, leaving: string, year: number): string => `RESUME · ${unit} · SHIP ${depth} DONE · ${leaving} · ${year}`,
+    leavingOrbit: 'LEAVING ORBIT',
+    leavingShip: (ship: string): string => `LEAVING ${ship}`,
     resumeReport: (unit: string, ship: string, year: number): string => `RESUME · ${unit} · ${ship} · LANDING REPORT · ${year}`,
     resume: 'RESUME ▸',
     newRun: 'NEW RUN',

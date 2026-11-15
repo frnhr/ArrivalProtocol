@@ -20,7 +20,7 @@ import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import type { Segment, SkillFileSegment } from '@/types/segment';
 import { setCourse, backToChart, transmitNext } from '@systems/run';
-import { pickCard, transitPacket, planPacket } from '@systems/draft';
+import { transitPacket, planPacket } from '@systems/draft';
 import { transmitModel, toggleDrop, type PacketChip } from '@systems/transmit';
 import { unitArrival } from '@systems/arrival-preview';
 import { setPackAs, restoreSkill, trainCell } from '@systems/training';
@@ -51,10 +51,8 @@ function toPacket(store: Store<GameState>, slot: number): void {
   setCourse(store, slot);
 }
 
-// The PACKET's send with the +12 card (no file joins), or the first card dealt.
+// The PACKET's send (LEAVE ORBIT took the +12 card, no file joins, or the first card dealt: repo-fixture toDesk).
 function sendNow(store: Store<GameState>): void {
-  const offer = store.getState().run.transit!.offer;
-  if (offer.length > 0) pickCard(store, offer.some((card) => card.id === 'charge') ? 'charge' : offer[0]!.id);
   transmitNext(store);
 }
 

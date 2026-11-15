@@ -19,7 +19,7 @@ import { stepHollow, hollowReach, bitersOf, type HollowStepCtx } from '@systems/
 import { endShip } from '@systems/run';
 import { continueAfterReport as runContinueAfterReport } from '@systems/run';
 import { setRequest } from '@systems/repository';
-import { setCourseFromDesk } from '../support/desk';
+import { setCourseFromDesk, leaveOrbit as takeSalvage } from '../support/desk';
 import { WORKED_ROUTE } from '@systems/arm-fixture';
 import { actionDelete, deleteSec } from '@state/actions';
 import { getOps } from '@systems/ops-core';
@@ -222,6 +222,7 @@ function toKestrel(seed: number): void {
   lockOn(h);
   if (!h.untilPhase('report', 120)) throw new Error(`HALCYON never reached its report (${s().run.phase})`);
   runContinueAfterReport(h.store);
+  takeSalvage(h.store);
   setRequest(h.store, 'rm');
   setCourseFromDesk(h.store, WORKED_ROUTE[s().run.map.route.length]!);
   h.transmit();

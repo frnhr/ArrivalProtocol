@@ -2640,3 +2640,12 @@ export const BYPASS_ROLL_HZ = 24;
 export const BYPASS_ROLL_GLYPHS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#%&@$';
 
 // --- end of 8 POLISH -------------------------------------------------------------------------------------------------
+
+// --- Playtest 1, Batch B: B-ORDER (LEAVE ORBIT before the chart; docs/phase3/impl/playtest-1-plan.md §3.3) ---------------
+
+// LEAVE ORBIT's ENTER: the picked card lifts away this long before the STAR CHART opens. WHY 0.45: the card's own send
+// animation (game.css tx-chip-send, 0.7 s with a 0.2 s delay) is read by then; any longer and ENTER feels slow (reduced
+// motion: none).
+export const LEAVE_TAKE_SEC = 0.45;
+
+// --- end of B-ORDER -------------------------------------------------------------------------------------------------------

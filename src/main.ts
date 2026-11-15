@@ -9,6 +9,7 @@ import './styles/game.css';
 import './styles/landing.css';
 import './styles/threat.css';
 import './styles/desk.css';
+import './styles/leave.css';
 import './styles/ending.css';
 import './styles/night.css';
 import './styles/responsive.css';
@@ -93,6 +94,7 @@ import { mountStoryLog, openLogReader } from '@systems/story-log';
 import { logEntryToOpen } from '@systems/log-view';
 import { mountLogReader, mountLogChips } from '@components/memory-view/LogReader';
 import { mountTransmitScreen } from '@components/run/TransmitScreen';
+import { mountLeaveOrbitScreen } from '@components/run/LeaveOrbitScreen';
 import { mountDeskScreen } from '@components/desk/DeskScreen';
 import { mountRunEnd } from '@components/run/RunEnd';
 import { mountEpilogue } from '@components/run/Epilogue';
@@ -293,6 +295,7 @@ mountBurnResult(store);
 mountLandingReport(store);
 // Between ships and after the run (WP7): the packet for the link, and the run's end.
 mountDeskScreen(store);
+mountLeaveOrbitScreen(store);
 mountTransmitScreen(store);
 mountRunEnd(store);
 // Slice 7a (R19): the night after the RUN TALLY (Track NIGHT's screens).

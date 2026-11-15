@@ -8,7 +8,7 @@ import { createHarness6, type Harness6 } from '../wp6/harness6';
 import { followDirector } from '../wp2/harness2';
 import { mountRun, startRun, transmitNext } from '@systems/run';
 import { FIRST_RUN_LINEAGE } from '@systems/meta';
-import { pickCard } from '@systems/draft';
+import { leaveOrbit, throughDesk } from '../support/desk';
 import { hollowReach } from '@systems/hollow';
 import { resetWorld } from '@systems/reset';
 import { actionRepair, actionMove } from '@state/actions';
@@ -103,13 +103,10 @@ export function createHarness7(seed = 1, opts: { soulsFound?: boolean } = {}): H
       return base.store.getState().run.phase === phase;
     },
     transmit() {
-      // WP8: PICK ONE TO CARRY is mandatory. A suite that has not picked takes the first card dealt, as the
-      // TRANSMIT screen's interim send does (WP8 part 1).
-      const plan = base.store.getState().run.transit;
-      if (plan && plan.pick === null && plan.offer.length > 0) {
-        const refusal = pickCard(base.store, plan.offer[0]!.id);
-        if (refusal !== null) throw new Error(`harness7.transmit: could not pick the first card (${refusal})`);
-      }
+      // WP8: the salvage is mandatory. Playtest 1 (note 5): it is taken at LEAVE ORBIT, before the desk: a suite still there
+      // takes the card it picked (or the first dealt, as the old interim send did), then sails the worked route's next hop.
+      leaveOrbit(base.store);
+      throughDesk(base.store);
       transmitNext(base.store);
     },
   };

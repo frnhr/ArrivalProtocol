@@ -195,7 +195,6 @@ check('the sleep line\'s years read back for the roll (the approach year where i
 lines.push(
   ['title.launched', MAP_TEXT.title.launched(UNIT, YEAR, 46, UNIT)],
   ['title.launched same year', MAP_TEXT.title.launched(UNIT, YEAR, 0, UNIT)],
-  ['title.savesBetweenShips', MAP_TEXT.title.savesBetweenShips],
   ['chart.taken', MAP_TEXT.chart.taken(SHIP, UNIT)],
   ['chart.noColony', MAP_TEXT.chart.noColony(UNIT)],
   ['chart.colony 3c', MAP_TEXT.chart.colony(COLONY, 999, UNIT)],

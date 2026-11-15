@@ -1,6 +1,7 @@
 // Slice 4c–4e: Track ORBIT owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2). Others ask by message.
 import type { AutoMode } from '@/types/skill';
 import { MAP_TEXT } from '@data/map-text';
+import { LEAVE_TEXT } from '@data/leave-text';
 import type { GameState, Pace, PresetMode, TerminalStatus, LogEntry, Speaker } from '@state/schema';
 import { liveLockText, engineOverriddenBy } from '@state/resident-selectors';
 import { WARDEN_TEXT } from '@data/warden-text';
@@ -300,6 +301,7 @@ export function headerCrumbs(state: Readonly<GameState>, pred: Prediction): Head
   const year = state.run.map.galaxyYear;
   const crumbs = (phase: Label): HeaderCrumbs => ({ unit, wave, ship, year, phase });
   if (state.run.phase === 'title') return crumbs({ text: 'STANDBY', tone: 'plain' });
+  if (state.run.phase === 'leave') return crumbs({ text: LEAVE_TEXT.crumb, tone: 'plain' });
   if (state.run.phase === 'desk') return crumbs({ text: MAP_TEXT.desk.title, tone: 'plain' });
   if (state.run.phase === 'transmit') return crumbs({ text: MAP_TEXT.desk.packetCrumb, tone: 'plain' });
   if (state.run.phase === 'boot') return crumbs({ text: 'RECEIVING', tone: 'plain' });

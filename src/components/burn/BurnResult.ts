@@ -118,8 +118,8 @@ export function mountBurnResult(store: Store<GameState>): () => void {
     const state = store.getState();
     stopTimers();
     document.body.dataset.burnStatus = coreLost ? CORE_LOST_OUTCOME : status;
-    // The DESK, TRANSMIT and RUN END have their own screens; the card is only ever over a lost ship.
-    if (phase === 'desk' || phase === 'transmit' || phase === 'end') {
+    // LEAVE ORBIT, the DESK, TRANSMIT and RUN END have their own screens; the card is only ever over a lost ship.
+    if (phase === 'leave' || phase === 'desk' || phase === 'transmit' || phase === 'end') {
       root.hidden = true;
       return;
     }

@@ -1,8 +1,8 @@
 // Slice 3c Track UI: the title's model (systems/title.ts titleModel; 02-map §3.11, §4; 05-story §3.12; 3c plan §3 steps 2
 // and 6), pure on crafted states: run 1's line, run 2's launch line (`UNIT-048 · YEAR 2302 · LAUNCHED 1 YEAR AFTER UNIT-047`)
-// with its roll's years and its stamp (the valve's years included, `SAME YEAR` for 0), the RESUME block by save point,
+// with its roll's years and its stamp (the valve's years included, `SAME YEAR` for 0), the RESUME block by save point (and LEAVE ORBIT's stage, playtest 1),
 // CAN'T RESUME with the refusal's words (never its detail), RUN SAVE OFFLINE, RECEIVE TRANSMISSION hidden while a save is
-// there, `runs save between ships`, and the archive's one-off notes.
+// there, and the archive's one-off notes (the `runs save between ships` line is cut: playtest 1 §3.7).
 import { check, finish } from '../landing/checks';
 import type { GameState } from '@state/schema';
 import type { SaveState, ResumeLine } from '@/types/save';
@@ -28,9 +28,10 @@ function run2(save: SaveState = NO_SAVE, history: Partial<GameState['run']['map'
 }
 
 const one = titleModel(run1(), null);
-check('run 1: `UNIT-047 · YEAR 2300 · FINAL SHIP 180 LY OUT`, no launch roll, RECEIVE offered, `runs save between ships`',
+// Playtest 1 (§3.7, B-ORDER): the meta line `runs save between ships` is cut, and its checks with it.
+check('run 1: `UNIT-047 · YEAR 2300 · FINAL SHIP 180 LY OUT`, no launch roll, RECEIVE offered',
   one.unitLine === 'UNIT-047 · YEAR 2300 · FINAL SHIP 180 LY OUT' && one.launch === null && one.receive && one.save === null
-  && one.saveNote === 'runs save between ships' && one.notes.length === 0, one.unitLine);
+  && one.notes.length === 0 && !('saveNote' in one), one.unitLine);
 
 const two = titleModel(run2(), null);
 check('run 2: `UNIT-048 · YEAR 2301 · LAUNCHED 1 YEAR AFTER UNIT-047`, the roll from 2300, the stamp `+1 YEAR`',
@@ -53,30 +54,34 @@ check('the traces: run 1 none; run 2 after PURGE + REASSIGNMENT its two NEXT RUN
   JSON.stringify(two.traces));
 
 // --- The RESUME block ---------------------------------------------------------------------------------------------------------
-const resume = (point: ResumeLine['point'], depth: number, ship: string, year: number): SaveState =>
-  ({ status: 'ok', resume: { unit: 47, depth, ship, year, point }, refusal: null });
+const resume = (point: ResumeLine['point'], depth: number, ship: string, year: number, stage: ResumeLine['stage'] = 'boot'): SaveState =>
+  ({ status: 'ok', resume: { unit: 47, depth, ship, year, point, stage }, refusal: null });
 const boot = titleModel(run1(resume('beam', 4, 'VESPER', 2625)), null);
-check('a save at BEAM: `RESUME · UNIT-047 · SHIP 4 · bound for VESPER · 2625` (02 §3.11\'s line), RECEIVE hidden, no note',
-  boot.save?.kind === 'resume' && boot.save.line === 'RESUME · UNIT-047 · SHIP 4 · bound for VESPER · 2625' && !boot.receive && boot.saveNote === null,
+check('a save at BEAM: `RESUME · UNIT-047 · SHIP 4 · bound for VESPER · 2625` (02 §3.11\'s line), RECEIVE hidden',
+  boot.save?.kind === 'resume' && boot.save.line === 'RESUME · UNIT-047 · SHIP 4 · bound for VESPER · 2625' && !boot.receive,
   JSON.stringify(boot.save));
 check('…NEW RUN asks first: `ABANDON UNIT-047\'S RUN? · ITS SHIPS COUNT AS DONE`',
   boot.save?.kind === 'resume' && boot.save.confirm === 'ABANDON UNIT-047\'S RUN? · ITS SHIPS COUNT AS DONE');
 check('…the other points: RUN START names ship 1, SHIP DONE the desk (the walk\'s line), ENDING CHOSEN the final report',
   resumeLineText(resume('run-start', 1, 'ARES-VII', 2300).resume!) === 'RESUME · UNIT-047 · SHIP 1 · bound for ARES-VII · 2300'
-  && resumeLineText({ unit: 48, depth: 3, ship: 'STEADFAST', year: 2470, point: 'ship-done' }) === 'RESUME · UNIT-048 · SHIP 3 DONE · AT THE DESK · 2470'
-  && resumeLineText(resume('ending-chosen', 6, 'LAST LIGHT', 3020).resume!) === 'RESUME · UNIT-047 · LAST LIGHT · LANDING REPORT · 3020');
+  && resumeLineText({ unit: 48, depth: 3, ship: 'STEADFAST', year: 2470, point: 'ship-done', stage: 'desk' }) === 'RESUME · UNIT-048 · SHIP 3 DONE · AT THE DESK · 2470'
+  && resumeLineText(resume('ending-chosen', 6, 'LAST LIGHT', 3020, 'report').resume!) === 'RESUME · UNIT-047 · LAST LIGHT · LANDING REPORT · 3020');
+// Playtest 1 (B-ORDER, plan §3.3.3): SHIP DONE at LEAVE ORBIT, after a landing and after a lost ship.
+check('…SHIP DONE at LEAVE ORBIT: `RESUME · UNIT-047 · SHIP 2 DONE · LEAVING ORBIT · 2378`, and `LEAVING HALCYON` after a lost ship',
+  resumeLineText(resume('ship-done', 2, 'HALCYON', 2378, 'leave-orbit').resume!) === 'RESUME · UNIT-047 · SHIP 2 DONE · LEAVING ORBIT · 2378'
+  && resumeLineText(resume('ship-done', 2, 'HALCYON', 2378, 'leaving').resume!) === 'RESUME · UNIT-047 · SHIP 2 DONE · LEAVING HALCYON · 2378');
 const cant = titleModel(run1({ status: 'cant-resume', resume: null, refusal: { kind: 'stale', detail: 'unit 47 ≠ archive unit 48 (secret)' } }), null);
 check('CAN\'T RESUME: `RUN SAVE CAN\'T RESUME · THAT RUN ALREADY ENDED` from the refusal\'s kind; its detail never on screen',
   cant.save?.kind === 'cant-resume' && cant.save.line === 'RUN SAVE CAN\'T RESUME · THAT RUN ALREADY ENDED' && !cant.save.line.includes('secret')
-  && !cant.receive && cant.saveNote === null, JSON.stringify(cant.save));
+  && !cant.receive, JSON.stringify(cant.save));
 let threw = false;
 try { titleModel(run1({ status: 'cant-resume', resume: null, refusal: null }), null); } catch { threw = true; }
 check('…a CAN\'T RESUME with no refusal is a bug and throws', threw);
 const offline = titleModel(run1({ status: 'offline', resume: null, refusal: null }), null);
-check('RUN SAVE OFFLINE: said, and RECEIVE still offered (play goes on unsaved); no `runs save between ships`',
-  offline.save?.kind === 'offline' && offline.save.line === 'RUN SAVE OFFLINE' && offline.receive && offline.saveNote === null);
+check('RUN SAVE OFFLINE: said, and RECEIVE still offered (play goes on unsaved)',
+  offline.save?.kind === 'offline' && offline.save.line === 'RUN SAVE OFFLINE' && offline.receive);
 const headless = titleModel(run1({ status: 'none', resume: null, refusal: null }), null);
-check('a headless world (no save behind it): no block, no note', headless.save === null && headless.saveNote === null && headless.receive);
+check('a headless world (no save behind it): no block', headless.save === null && headless.receive);
 
 // --- The one-off notes -------------------------------------------------------------------------------------------------------
 check('the archive\'s one-off notes, each once (older archive, arm redrawn)',
@@ -84,10 +89,6 @@ check('the archive\'s one-off notes, each once (older archive, arm redrawn)',
   && titleModel(run1(), { olderArchive: false, armReset: false }).notes.length === 0);
 
 // --- Review fixes (slice 3c): the archive and the save, ENTER and [DEL] on the save block ------------------------------------
-for (const status of ['corrupt', 'offline', 'without'] as const) {
-  check(`review M1: no \`runs save between ships\` beside ARCHIVE ${status.toUpperCase()} (the save goes OFFLINE at RUN START)`,
-    titleModel(run1(NO_SAVE, status), null).saveNote === null);
-}
 const superseded = titleModel(run1({ status: 'cant-resume', resume: null, refusal: { kind: 'superseded', detail: 'unit 48 ≠ 49' } }), null);
 check('review minor 7: another run in progress reads `RUN SAVE CAN\'T RESUME · ANOTHER RUN HAS STARTED SINCE`, not THAT RUN ALREADY ENDED',
   superseded.save?.line === 'RUN SAVE CAN\'T RESUME · ANOTHER RUN HAS STARTED SINCE', JSON.stringify(superseded.save));

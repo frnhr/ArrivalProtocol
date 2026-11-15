@@ -35,6 +35,7 @@ import {
   packedFiles, rollTransitHits, emergencyCoreToll, arrivalCharge, layoutCarried, arrivalDamage,
 } from '@systems/carry';
 import { dealDraft, planPacket, transitPacket, applyPickToPacket, pickCharge, applyLeftoverPick } from '@systems/draft';
+import { CYCLES_CARD_CYCLES } from '@data/tuning';
 import { shipCycles } from '@systems/run-score';
 import { bankOf, branchToLatch, deskBlocker, firstPickOwed, visitNow, shipMetSeeds } from '@systems/skill-tree';
 import { skillPacketPlan, mountSkillWatch } from '@systems/skill-files';
@@ -67,12 +68,13 @@ import {
 // The run (§4.1, §4.3, §9 WP7 items 1, 2, 6 and 8), DOM-free: a route of ships on the run's map (systems/map-run.ts),
 // each one's end deciding how the unit reaches the next. The phase machine:
 //
-//   title → boot → flight → landing → report → desk → transmit → boot (next ship) … → end
-//                    └→ (lost: its card) → continueAfterLoss → desk | boot (simulation) | end
+//   title → boot → flight → landing → report → leave → desk → transmit → boot (next ship) … → end
+//                    └→ (lost: its card) → continueAfterLoss → leave | boot (simulation) | end
 //
 // • A ship that reached orbit ends at its LANDING REPORT's CONTINUE (continueAfterReport): its result and its
-//   stars' REPAIR CHARGE are recorded, then the DESK (openDesk: the kid picks the next ship, SET COURSE goes to
-//   TRANSMIT), or the run ends after the final ship.
+//   stars' REPAIR CHARGE are recorded, then LEAVE ORBIT (openLeaveOrbit, playtest 1 note 5: the salvage, one card taken
+//   with ENTER, leaveOrbit), then the DESK (openDesk: the kid picks the next ship, SET COURSE goes to TRANSMIT), or the
+//   run ends after the final ship.
 // • A ship that was lost (crashed, escaped, stranded, its Core eaten) waits under its card; the card's
 //   button is continueAfterLoss, which plays the soft fails of §4.3:
 //   – run 1, ship 1, the first crash: "That was a simulation. :) Again." and ship 1 starts over, once;
@@ -261,6 +263,8 @@ export function startShip(
     map,
     arrival,
     transit: null,
+    // LEAVE ORBIT's salvage rode the beam that brought the unit here (its file is in the racks, its charge in the arrival).
+    leave: { offer: [], pick: null },
     pendingStarCredit: 0,
     pendingStars: 0,
     threat: applyThreat(state.run.threat, threat),
@@ -311,28 +315,30 @@ export function endShip(store: Store<GameState>, outcome: ShipOutcome, stars = 0
   return result;
 }
 
-// --- The DESK (phase 3 slice 3a, 02-map §3.10, slice-3a-plan §2.5) --------------------------------------------------------
-//   report ─CONTINUE→ endShip → [final? endRun : openDesk]        lost card → endShip → [end | openDesk with its extras]
-//   desk ─SET COURSE(slot)→ goTransmit(slot) → transmit (PACKET) ─◀ CHART→ desk
+// --- LEAVE ORBIT and the DESK (phase 3 slice 3a, 02-map §3.10, slice-3a-plan §2.5; playtest 1 §3.3) ---------------------
+//   report ─CONTINUE→ endShip → [final? endRun : openLeaveOrbit]   lost card → endShip → [end | openLeaveOrbit, its extras]
+//   leave ─pick + ENTER→ leaveOrbit → openDesk
+//   desk ─SET COURSE(slot)→ goTransmit(slot) → transmit (PACKET, or the beam at once: transmit.ts packetAsks) ─◀ CHART→ desk
 //                                               └ TRANSMIT ▸ → transmitNext → startShip(slot) → boot
 
-// The ship is over and not the final one: every op stops, the tool is put down, both clocks stop, and the STAR CHART
-// opens. `extra` is the way the ship ended's toll on the next hop (BEAM OUT +2, EMERGENCY +3 and Core −25; null after a
-// LANDING REPORT), held on the map until the kid picks the hop (RunMapState.pendingExtra). No reachable ship from a
+// The ship is over and not the final one (playtest 1, note 5): every op stops, the tool is put down, both clocks stop, and
+// LEAVE ORBIT opens with the salvage dealt (systems/draft.ts dealDraft, seeded by the slot being left: a reload deals the
+// same three). `extra` is the way the ship ended's toll on the next hop (BEAM OUT +2, EMERGENCY +3 and Core −25; null after
+// a LANDING REPORT), held on the map until the kid picks the hop (RunMapState.pendingExtra). No reachable ship from a
 // non-final ship throws: the arm's checks 1 and 4 guarantee one.
 // Slice 4 (03 §3.1–§3.2; plan §2.4–§2.5), inside the same update, before SHIP DONE's save (so a reload resumes the same
-// bank and branches): a branch newly due by the map ('after-seeds', 'poor-ahead') is latched open, and at the run's first
-// desk on the arm the bank is raised to FIRST_PICK_FLOOR_CYCLES (`+2 CYCLES`) while no skill
-// is paid for, so the required first pick can always buy a root.
-export function openDesk(store: Store<GameState>, extra: PendingExtra | null): void {
+// bank and branches): a branch newly due by the map ('after-seeds', 'poor-ahead') is latched open (before the deal: a
+// departed resident's skill card reads the open branches), and at the run's first desk on the arm the bank is raised to
+// FIRST_PICK_FLOOR_CYCLES (`+2 CYCLES`) while no skill is paid for, so the required first pick can always buy a root (before
+// the salvage, so a +2 CYCLES taken here comes on top of the floor, as it did when it was granted at TRANSMIT ▸).
+export function openLeaveOrbit(store: Store<GameState>, extra: PendingExtra | null): void {
   const state = store.getState();
-  if (currentShip(state).final) throw new Error('openDesk: the final ship ends the run (endRun)');
-  if (!shipEnded(state)) throw new Error('openDesk: the ship has not ended (endShip first)');
+  if (currentShip(state).final) throw new Error('openLeaveOrbit: the final ship ends the run (endRun)');
+  if (!shipEnded(state)) throw new Error('openLeaveOrbit: the ship has not ended (endShip first)');
   const offered = reachableFrom(state.run.map, currentSlot(state.run));
-  if (offered.length === 0) throw new Error(`openDesk: no ship is reachable from slot ${currentSlot(state.run)}`);
+  if (offered.length === 0) throw new Error(`openLeaveOrbit: no ship is reachable from slot ${currentSlot(state.run)}`);
   abortAll();
-  // Read after abortAll (the review follow-up): an op aborted here may have changed what the desk opens on.
-  const ui = deskUiOnOpen(store.getState());
+  // Read after abortAll (the review follow-up): an op aborted here may have changed what the screens open on.
   const opened = store.getState();
   const visit = visitNow(opened.run);
   const latch = branchToLatch(opened, visit);
@@ -340,17 +346,53 @@ export function openDesk(store: Store<GameState>, extra: PendingExtra | null): v
   store.update((draft) => {
     if (latch !== null) draft.run.skills.opened.push({ skill: latch, visit });
     if (topUp > 0) draft.run.skills.grants.push({ source: 'first-pick', cycles: topUp, visit, label: null });
-    draft.run.phase = 'desk';
+    draft.run.phase = 'leave';
     draft.run.map.pendingExtra = extra === null ? null : { ...extra };
     draft.run.transit = null;
     draft.run.beamOut = null;
     draft.clock.paused = true;
+    draft.ui.activeTool = null;
+    draft.ui.pickedSourceId = null;
+    draft.ui.pendingPlacement = null;
+    draft.ui.memoryRev++;
+  });
+  const offer = dealDraft(store.getState());
+  store.update((draft) => { draft.run.leave = { offer, pick: null }; });
+  // SHIP DONE (02 §3.11): the archive's run in progress takes the ship's result (a run abandoned here keeps its colony), and
+  // a reload resumes at this LEAVE ORBIT, with the same three cards and no pick (plan §3.3.3).
+  archiveShipDone(store);
+  writeRunSave(store, 'ship-done');
+}
+
+// LEAVE ORBIT's ENTER: the pick is taken (mandatory when cards were dealt), its grants land (+2 CYCLES as a 'salvage' grant
+// at this visit, a departed resident's skill card through grantSkill), and the STAR CHART opens. A call off LEAVE ORBIT, or
+// with no pick while cards wait, is a bug: it throws.
+export function leaveOrbit(store: Store<GameState>): void {
+  const state = store.getState();
+  if (state.run.phase !== 'leave') throw new Error(`leaveOrbit: not on LEAVE ORBIT (phase ${state.run.phase})`);
+  const { offer, pick } = state.run.leave;
+  if (offer.length > 0 && pick === null) throw new Error('leaveOrbit: no salvage taken (TAKE ONE WITH YOU is mandatory)');
+  if (pick === 'cycles') {
+    store.update((draft) => {
+      draft.run.skills.grants.push({ source: 'salvage', cycles: CYCLES_CARD_CYCLES, visit: visitNow(draft.run), label: null });
+    });
+  }
+  applyLeftoverPick(store);
+  openDesk(store);
+}
+
+// The STAR CHART opens (from LEAVE ORBIT's ENTER): the desk's selection and tab, and SHIP DONE written again with the pick
+// held (a reload at the desk keeps it: plan §3.3.3).
+export function openDesk(store: Store<GameState>): void {
+  const state = store.getState();
+  if (state.run.phase !== 'leave') throw new Error(`openDesk: not from LEAVE ORBIT (phase ${state.run.phase}; openLeaveOrbit first)`);
+  const ui = deskUiOnOpen(state);
+  store.update((draft) => {
+    draft.run.phase = 'desk';
+    draft.run.transit = null;
     Object.assign(draft.ui, ui);
     draft.ui.memoryRev++;
   });
-  // SHIP DONE (02 §3.11): the archive's run in progress takes the ship's result (a run abandoned here keeps its colony), and
-  // a reload resumes at this desk.
-  archiveShipDone(store);
   writeRunSave(store, 'ship-done');
 }
 
@@ -395,8 +437,8 @@ export function setCourse(store: Store<GameState>, slot: number): void {
   goTransmit(store, slot);
 }
 
-// ◀ CHART (the PACKET's ESC): back to the desk. The drops, the pick and PACK AS are forgotten with the plan (a new
-// destination deals against its own room); this desk's purchases stay pending (UNDO works until TRANSMIT ▸); the lost
+// ◀ CHART (the PACKET's ESC): back to the desk. The drops and PACK AS are forgotten with the plan (the pick is LEAVE
+// ORBIT's, run.leave, and stays); this desk's purchases stay pending (UNDO works until TRANSMIT ▸); the lost
 // ship's extras stay on the map for whichever hop is picked.
 export function backToChart(store: Store<GameState>): void {
   const phase = store.getState().run.phase;
@@ -412,11 +454,13 @@ export function backToChart(store: Store<GameState>): void {
 // TRANSMIT (§4.1 step 5) to the ship in `toSlot`: every op is stopped first (an op in flight at the ship's end must not
 // write into the packet), the tool is put down, the hop is worked out (systems/map-hop.ts hopBetween: hits, ECC, years,
 // the destination's room), the ladder plans the destination from the map's facts, the packet is packed for the hop's room
-// with the lost ship's extras (RunMapState.pendingExtra), and the draft is dealt (§6.9: PICK ONE TO CARRY;
-// seeded by the slot being left, weighted by the run's stats). Throws on a slot the unit cannot reach.
+// with the lost ship's extras (RunMapState.pendingExtra), and LEAVE ORBIT's pick rides in it (run.leave.pick; playtest 1,
+// note 5: the deal came before the chart). Throws on a slot the unit cannot reach.
 export function goTransmit(store: Store<GameState>, toSlot: number): void {
   const state = store.getState();
   if (currentShip(state).final) throw new Error('goTransmit: the final ship has no next ship (endRun)');
+  // Playtest 1 (note 5): the PACKET follows the desk, which follows LEAVE ORBIT's pick (a plan built before it would carry none).
+  if (state.run.phase !== 'desk') throw new Error(`goTransmit: not on the DESK (phase ${state.run.phase})`);
   if (!shipEnded(state)) throw new Error('goTransmit: the ship has not ended (endShip first)');
   const fromSlot = currentSlot(state.run);
   if (!reachable(state.run.map, fromSlot, toSlot)) throw new Error(`goTransmit: slot ${toSlot} is not reachable from slot ${fromSlot}`);
@@ -430,7 +474,8 @@ export function goTransmit(store: Store<GameState>, toSlot: number): void {
   // Phase 3 slice 3b: the deliveries that catch up at the destination ride this hop (02 §3.9; their seed chance reads the
   // verdict), packed by planPacket with the unit's files, so the plan's numbers count them from the start.
   const deliveries = deliveriesForHop(state, fromSlot, toSlot, threat);
-  const packet = planPacket(store.getState().memory, { dropped: [], pick: null, deliveries, skills: skillPacketPlan(store.getState(), {}) });
+  const pick = store.getState().run.leave.pick;
+  const packet = planPacket(store.getState().memory, { dropped: [], pick, deliveries, skills: skillPacketPlan(store.getState(), {}) });
   const plan: TransitPlan = {
     toShipIndex,
     toSlot,
@@ -441,8 +486,7 @@ export function goTransmit(store: Store<GameState>, toSlot: number): void {
     coreHit: extra.coreHit,
     coreReset: extra.coreReset,
     dropped: [],
-    offer: dealDraft(store.getState(), hop, deliveries),
-    pick: null,
+    pick,
     threat,
     deliveries,
     packAs: {},
@@ -467,12 +511,14 @@ export function goTransmit(store: Store<GameState>, toSlot: number): void {
 // TRANSMIT ▸: the packet crosses the beam (systems/carry.ts, in order: the picked card's file and effect,
 // the emergency's toll on the Core, the seeded transit hits, the charge with its star credit, the card's
 // charge and the floor, the layout, the ship's own arrival damage), and the unit boots on the next ship
-// with a report of all of it for the ECC lines. The pick is mandatory (§6.9): no pick, no send.
+// with a report of all of it for the ECC lines. The pick was taken at LEAVE ORBIT (mandatory there, §6.9).
 export function transmitNext(store: Store<GameState>): void {
   const state = store.getState();
   const plan = state.run.transit;
   if (state.run.phase !== 'transmit' || !plan) throw new Error(`transmitNext: nothing to transmit (phase ${state.run.phase})`);
-  if (plan.offer.length > 0 && plan.pick === null) throw new Error('transmitNext: no card picked (PICK ONE TO CARRY is mandatory)');
+  if (plan.pick !== state.run.leave.pick || (state.run.leave.offer.length > 0 && plan.pick === null)) {
+    throw new Error(`transmitNext: the plan carries '${String(plan.pick)}', LEAVE ORBIT took '${String(state.run.leave.pick)}'`);
+  }
   const ship = shipDefAt(state.run.map, plan.toSlot);
   const fromSlot = currentSlot(state.run);
   const packet = transitPacket(state, plan, newSegId);
@@ -556,9 +602,7 @@ export function transmitNext(store: Store<GameState>): void {
     draft.run.repo = advanceRequests(draft.run.repo, plan, draft.run.map);
     for (const kind of firstKinds) if (!draft.run.licences.includes(kind)) draft.run.licences.push(kind);
   });
-  // Slice 5 (review B1): a departed resident's leftover pick (the skill card's grant: Track KIN's draft.ts), before this desk's
-  // purchases are bought, so a grant never doubles a skill trained here.
-  applyLeftoverPick(store, plan);
+  // Slice 5's leftover skill card and the +2 CYCLES card were granted at LEAVE ORBIT (leaveOrbit), before the desk.
   // Slice 4: this desk's purchases are bought as the packet crosses, before the ship starts, so the BEAM save holds none
   // pending (the codec refuses one).
   commitTraining(store);
@@ -646,7 +690,7 @@ export function setRunEndStage(store: Store<GameState>, stage: RunEndStage): voi
   store.update((draft) => { draft.ui.runEndStage = stage; });
 }
 
-// The LANDING REPORT's CONTINUE: the ship's result and its stars, then TRANSMIT, or, after the flagship (the last ship),
+// The LANDING REPORT's CONTINUE: the ship's result and its stars, then LEAVE ORBIT, or, after the flagship (the last ship),
 // RUN END with what its finale decided (systems/finale.ts: PURGE, MERGE, or UNRESOLVED; the report waits for it).
 export function continueAfterReport(store: Store<GameState>): void {
   const state = store.getState();
@@ -656,7 +700,7 @@ export function continueAfterReport(store: Store<GameState>): void {
   endShip(store, shipOutcomeOf(state), earned);
   store.update((draft) => { draft.run.pendingStarCredit = starCharge(stars); });
   if (currentShip(state).final) endRun(store, finaleRunCause(store.getState()));
-  else openDesk(store, null);
+  else openLeaveOrbit(store, null);
 }
 
 // The LOST card's button (see the header and lossPlan).
@@ -688,7 +732,7 @@ export function continueAfterLoss(store: Store<GameState>): LossPlan {
   }
   endShip(store, plan.outcome);
   if (plan.kind === 'end') endRun(store, plan.cause);
-  else openDesk(store, { extraHits: plan.extraHits, coreHit: plan.coreHit, coreReset: plan.coreReset });
+  else openLeaveOrbit(store, { extraHits: plan.extraHits, coreHit: plan.coreHit, coreReset: plan.coreReset });
   return plan;
 }
 

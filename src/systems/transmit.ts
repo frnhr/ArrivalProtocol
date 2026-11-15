@@ -14,8 +14,7 @@ import { SKILL_TREE, skillBlocks } from '@data/skills';
 import { PACKET_SKILL_TEXT } from '@data/training-text';
 import type { SkillId, SkillLevel } from '@/types/skill';
 import type { SkillFileSegment } from '@/types/segment';
-import { getUpgrade, type DraftCard, type DraftCardId } from '@data/upgrades';
-import { RESIDENT_UI_TEXT } from '@data/resident-ui-text';
+import type { DraftCardId } from '@data/upgrades';
 import { hasIntegrity, isInfected, getAiCore } from '@state/selectors';
 import { shipSummaryAt } from '@systems/map-run';
 import { unknownShown } from '@systems/signals';
@@ -23,7 +22,7 @@ import { hitsLanding, cardArrives } from '@systems/map-hop';
 import { unitArrival, type ArrivalPreview } from '@systems/arrival-preview';
 import { MAP_TEXT } from '@data/map-text';
 import { TOOL_WORD } from '@data/fs-tools';
-import { TRANSMIT_TEXT, DRAFT_TEXT } from '@data/script';
+import { TRANSMIT_TEXT } from '@data/script';
 import { bookPacketLock } from '@data/log-books';
 import { THREAT_TEXT } from '@data/threat-text';
 import { noWorkingRm } from '@state/threat-selectors';
@@ -43,9 +42,12 @@ import type { DeliveryChip } from '@/types/repo';
 // what leaving it behind does; the Core, Engine I/O, Nav Plotter and the last copy of a filesystem tool
 // are locked, and say why. Leaving a file behind frees its blocks in the room for charge, so it is offered only while the
 // room squeezes the charge (or the files are over it): when everything fits, a dropped file would buy nothing.
-// toggleDrop is the one write: run.transit.dropped, with the packet's numbers worked out again. The cards dealt
-// for the crossing (WP8, PICK ONE TO CARRY) are listed with the pick; the picked card's file is in the packet's
-// numbers (systems/draft.ts planPacket), and its charge in the arrival line.
+// toggleDrop is the one write: run.transit.dropped, with the packet's numbers worked out again. The salvage taken at LEAVE
+// ORBIT (playtest 1, note 5: the cards are dealt and picked there now, before the chart) rides here: its file is in the
+// packet's numbers (systems/draft.ts planPacket), and its charge in the arrival line.
+// Playtest 1 (note 5, OPEN-DECISIONS 130): the PACKET is shown only when it has a question (packetAsks): files plus the floor
+// over the room, the zero-charge confirm, a delivery that can be SENT ON, or a skill the room squeezes (PACK AS). Otherwise
+// SET COURSE goes straight to the beam (components/run/TransmitScreen.ts: the light-years count at once).
 // Phase 3 slice 2 (04 §3.3, §3.7, §3.8, §4; 05 §3.2): the threat the beam carries, read from TransitPlan.threat (the
 // ladder's verdict for the next ship) and the tally the last ship's end applied (run.threat):
 // • the uninvited chip when HOLLOW rides this beam (`??? · 10 BLOCKS · NOT IN YOUR PACKET`): it crosses at the size
@@ -129,16 +131,12 @@ export interface PacketTraceLine {
   tone: 'quiet' | 'warn' | 'boards';
 }
 
-// A card dealt for this crossing, as the screen shows it (WP8 part 2): what it is, what it does, why it was
-// offered, the key that picks it, and whether it is the one picked.
-export interface DraftCardView extends DraftCard {
-  tag: string;        // FILE · 2 BLOCKS / UPGRADE / AI CORE / ON ARRIVAL
-  key: string;        // '1', '2', '3'
-  picked: boolean;
-  // Playtest 1 (Q19): a charge card the destination's room cannot take whole says so on itself (`+12 · ONLY 4 FIT ON
-  // HALCYON`), picked or not; null when all of it would arrive, and for every other card.
-  fitNote: string | null;
-}
+// The questions the PACKET has for the kid (playtest 1, note 5; plan §3.3.2), in this order; none: the beam goes at once.
+// • 'leave-files': files plus the floor are over the room (LEAVE FILES BEHIND: TRANSMIT ▸ waits);
+// • 'zero-charge': the charge may arrive at 0 (the inline confirm);
+// • 'deliveries': a delivery rides this hop, so SEND ON is a choice;
+// • 'pack-as': the room squeezes the charge and a skill file could cross lower (PACK AS frees room).
+export type PacketAsk = 'leave-files' | 'zero-charge' | 'deliveries' | 'pack-as';
 
 // The picked card's new file, riding in the packet (a file card only): a chip of its own beside the unit's.
 export interface CardFileChip {
@@ -161,11 +159,12 @@ export interface TransmitModel {
   infectedLine: string | null;
   dropLine: string;            // everything fits, or: click a file to carry more charge
   chips: PacketChip[];
-  // PICK ONE TO CARRY (WP8): the cards dealt for this crossing, each with what it does and why it was
-  // offered, and the one picked (null until the kid picks; the send needs one when cards were dealt).
-  cards: DraftCardView[];
+  // The salvage taken at LEAVE ORBIT (TransitPlan.pick), its file's chip, and (playtest 1 Q19) a charge card the room cannot
+  // take whole (`+12 · ONLY 4 FIT ON HALCYON`; null when all of it arrives, and for every other card).
   pick: DraftCardId | null;
+  salvage: string | null;      // the card's title (`+12 REPAIR CHARGE`), from LEAVE ORBIT's offer; null: none taken
   cardFile: CardFileChip | null;
+  pickFit: string | null;
   // Slice 2: the threat the beam carries.
   uninvited: UninvitedChip | null;
   noRm: string | null;
@@ -174,10 +173,11 @@ export interface TransmitModel {
   room: PacketRoom;
   onTheWay: string;            // the ECC line
   // Slice 3b (02 §3.9, §4; plan §1.1 item 14): the DELIVERIES chip row (the plan's chips, oldest first), the IN TRANSIT
-  // line (requests still behind the unit after this hop: null when none) and the draft's heading (SALVAGE).
+  // line (requests still behind the unit after this hop: null when none).
   deliveries: DeliveryChipView[];
   inTransit: string | null;
-  salvageTitle: string;
+  // Playtest 1 (note 5): what the PACKET asks (packetAsks); empty, the screen beams at once.
+  asks: PacketAsk[];
 }
 
 // One delivery chip on the PACKET: `Mv · 2 BLOCKS · ARRIVED 2337` and its SEND ON toggle. `lost`: sent on from a hop into a
@@ -324,13 +324,11 @@ function sendOnHelps(plan: Readonly<TransitPlan>, preview: Readonly<ArrivalPrevi
   return preview.tooMany !== null && plan.deliveries.some((chip) => !chip.sendOn);
 }
 
-// Playtest 1 (Q19): what a charge card would bring if picked, against the room as the packet stands with that pick (the
-// card's note says what the room cannot take); null for any other card, or when all of it would arrive.
-function cardFitNote(state: Readonly<GameState>, plan: Readonly<TransitPlan>, id: DraftCardId, ship: string): string | null {
-  const blocks = pickCharge(id);
-  if (blocks === 0) return null;
-  const fit = unitArrival(state, { hop: plan.hop, threat: plan.threat, dropped: plan.dropped, pick: id, deliveries: plan.deliveries, packAs: plan.packAs }).fit;
-  if (fit.word === 'leave') return null;
+// Playtest 1 (Q19): what the charge card taken brings, against the room as the packet stands (the note says what the room
+// cannot take); null for any other card, or when all of it arrives.
+function pickFitNote(fit: Readonly<RoomFit>, pick: DraftCardId | null, ship: string): string | null {
+  const blocks = pickCharge(pick);
+  if (blocks === 0 || fit.word === 'leave') return null;
   const arrives = cardArrives(fit, blocks);
   return arrives < blocks ? TRANSMIT_TEXT.cardFits(blocks, arrives, ship) : null;
 }
@@ -358,8 +356,9 @@ function lastOutcome(state: Readonly<GameState>): { outcome: ShipOutcome; ship: 
   return { outcome: last.outcome, ship: last.shipName };
 }
 
-// `coreToll`: what the crash's emergency transmission takes from the Core (carry.ts crashCoreToll).
-function whyLine(outcome: ShipOutcome, ship: string, coreToll: number): string | null {
+// `coreToll`: what the crash's emergency transmission takes from the Core (carry.ts crashCoreToll). LEAVE ORBIT says it too
+// (systems/leave-orbit.ts).
+export function whyLine(outcome: ShipOutcome, ship: string, coreToll: number): string | null {
   switch (outcome) {
     case 'locked':
     case 'partial': return null;
@@ -427,6 +426,12 @@ export function transmitModel(state: Readonly<GameState>): TransmitModel {
   const infectedCount = chips.filter((chip) => chip.infected && !chip.dropped).length;
   const room = packetRoom(preview, plan);
   const hits = plan.hop.transitHits + plan.extraHits;
+  const outChips = chips.map(({ order: _order, ...chip }) => chip);
+  const asks: PacketAsk[] = [];
+  if (room.tooMany !== null) asks.push('leave-files');
+  if (room.confirm !== null) asks.push('zero-charge');
+  if (plan.deliveries.length > 0) asks.push('deliveries');
+  if (fit.roomLost > 0 && outChips.some((chip) => (chip.skill?.packAs.length ?? 0) > 0 && !chip.dropped)) asks.push('pack-as');
   return {
     toShipIndex: plan.toShipIndex,
     shipName: ship.name,
@@ -443,15 +448,11 @@ export function transmitModel(state: Readonly<GameState>): TransmitModel {
     infectedLine: infectedCount > 0 ? TRANSMIT_TEXT.infected(infectedCount) : null,
     dropLine: room.tooMany !== null ? room.tooMany
       : plan.dropped.length > 0 || fit.roomLost > 0 ? TRANSMIT_TEXT.tight : TRANSMIT_TEXT.fits,
-    chips: chips.map(({ order: _order, ...chip }) => chip),
-    cards: plan.offer.map((card, i) => {
-      // Slice 5 (review B1): a departed resident's skill card has no pool form (its skill is granted, it takes no room).
-      const def = card.id === 'skill' ? null : getUpgrade(card.id);
-      const tag = def === null ? RESIDENT_UI_TEXT.deck.skillTag : DRAFT_TEXT.form(def.form, def.blocks);
-      return { ...card, tag, key: String(i + 1), picked: card.id === plan.pick, fitNote: cardFitNote(state, plan, card.id, ship.name) };
-    }),
+    chips: outChips,
     pick: plan.pick,
+    salvage: state.run.leave.offer.find((card) => card.id === plan.pick)?.title ?? null,
     cardFile: cardFileChip(plan.pick),
+    pickFit: pickFitNote(fit, plan.pick, ship.name),
     uninvited: uninvitedChip(state, plan),
     noRm: plan.threat.isFinal && noWorkingRm(state) ? THREAT_TEXT.noRmPacket : null,
     trace: packetTraceLine(state, plan),
@@ -459,8 +460,13 @@ export function transmitModel(state: Readonly<GameState>): TransmitModel {
     onTheWay: MAP_TEXT.packet.onTheWay(hits, plan.hop.eccFixes, plan.hop.slackYears, hitsLanding(plan.hop, plan.extraHits)),
     deliveries: plan.deliveries.map((chip) => deliveryChipView(chip, ship.name, ship.final)),
     inTransit: inTransitLine(state, plan),
-    salvageTitle: REPO_TEXT.packet.salvage,
+    asks,
   };
+}
+
+// What the PACKET for the plan now being prepared asks (TransmitModel.asks): empty, SET COURSE beams at once.
+export function packetAsks(state: Readonly<GameState>): PacketAsk[] {
+  return transmitModel(state).asks;
 }
 
 function deliveryChipView(chip: Readonly<DeliveryChip>, shipName: string, intoFinal: boolean): DeliveryChipView {
