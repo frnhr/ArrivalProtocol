@@ -771,3 +771,9 @@ renumbers them at CLOSE. "Before → after" is the number the change moved; trac
 149. **The caretakers' logs keep their own `:)`, beside the CONTROL they report.** BUILT as the plan says. For example,
      `ARRIVAL CONTROL says I'm the best they've ever built. :)`. Only quoted CONTROL turned cold (`"Disregard it."`).
      **[FRAN]** and the story owner: entry 01 could read `PAL says…` to tie the habit to the companion.
+
+## Playtest 1, lead notes
+
+150. **The last-landing e2e measures the [ENTER] skip's jank by main-thread time, not wall time.** BUILT (e2e only).
+    Under a loaded machine a 12 ms slice took up to 320 ms of wall time, while its main-thread time stayed at 2–12 ms.
+    The limit is unchanged: no task over 100 ms. To restore the wall-clock check, revert that part of 18fcc37.
