@@ -1,7 +1,7 @@
 // Slice 6: Track SWATH owns this file (docs/phase3/impl/slice-6-plan.md §2.1, §2.8, §6.2). The FOUNDATION wrote the final
 // signatures (plan §6.1 item 6); SWATH built them. The UI may call any of them on every paint. Others ask by message.
 // SURVEY's pure rules: the cells a tick sweeps, a site's ★, what SURVEY is doing, the swath's width, why a site can't take an
-// LZ, the LZs a site can take, the swap the strip offers. No module state, no store. (mappedPct is
+// LZ, the LZs a site can take, why it can't be opened as a new LZ (playtest 1, C-SITES), the swap the strip offers. No module state, no store. (mappedPct is
 // state/survey-selectors.ts's: the ship's record needs it.)
 import type { GameState } from '@state/schema';
 import type { LzState } from '@/types/landing';
@@ -11,8 +11,9 @@ import { isLivePhase } from '@systems/clock';
 import { pendingTouchdowns } from '@systems/landing-rules';
 import { surveyVersion, groundKnownAt, siteVisible, lzOnSite } from '@state/survey-selectors';
 import { fileLevel } from '@systems/skill-levels';
+import { lzLetter } from '@data/survey-sites';
 import {
-  SURVEY_CELL_DEG, SURVEY_CELLS, SURVEY_SWATH_DEG, SURVEY_SWEEP_FACTOR, SURVEY_SWEEP_VERSION, SURVEY_RATE_VERSION,
+  SURVEY_CELL_DEG, SURVEY_CELLS, SURVEY_SWATH_DEG, SURVEY_SWEEP_FACTOR, SURVEY_SWEEP_VERSION, SURVEY_RATE_VERSION, SURVEY_OPEN_MAX_LZS,
 } from '@data/tuning';
 
 const TWO_PI = 2 * Math.PI;
@@ -189,6 +190,78 @@ export function assignableLzs(state: Readonly<GameState>, siteId: string): { lz:
   return [...state.landing.lzs]
     .sort((a, b) => a.label.localeCompare(b.label))
     .map((lz) => ({ lz: lz.label, refusal: assignRefusal(state, lz.label, siteId) }));
+}
+
+// --- Opening a site as a new LZ (playtest 1, C-SITES: plan §3.13, Fran's note 18) -----------------------------------------
+
+// Why a site can't be opened as a new LZ now (openRefusal), or why the SITES window offers no OPEN pill at all:
+// • the assign refusals that are about the site or the moment, not about one LZ: 'closed', 'offline', 'not-found',
+//   'wreck', 'taken' (an LZ stands on it), 'landing-over';
+// • 'can-move': an LZ can move there (assignRefusal null): the move is the answer, and no new LZ is opened beside it;
+// • 'not-held': no LZ is held by the landing there (none has pods down, a pod falling to it, or its window open: in flight
+//   every LZ that can't move there is too big for it). §3.13 opens a site only once the landing has pinned the LZs;
+// • 'lz-cap': SURVEY_OPEN_MAX_LZS LZs already;
+// • 'falling-under': a pod already falling would come down in the new LZ (it would count as an LZ pod: review B1's rule);
+// • 'no-thread': no Core thread for the commit (survey.ts openSite asks ops-core; this pure rule never does).
+// The SITES window shows the OPEN pill unless the refusal is 'can-move', 'not-held' or one of the site's own (the pills of
+// the LZs already say those); 'lz-cap', 'falling-under' and 'no-thread' dim it with their words.
+export type OpenRefusal =
+  | Extract<AssignRefusal, 'closed' | 'offline' | 'not-found' | 'wreck' | 'taken' | 'landing-over'>
+  | 'can-move' | 'not-held' | 'lz-cap' | 'falling-under' | 'no-thread';
+
+// The refusals that mean the landing holds an LZ where it is (§3.13's "every refusal is pods-down, falling or window-open").
+const HELD_BY_LANDING: ReadonlySet<AssignRefusal> = new Set<AssignRefusal>(['pods-down', 'falling', 'falling-under', 'window-open']);
+const SITE_REFUSALS: ReadonlySet<AssignRefusal> = new Set<AssignRefusal>(['closed', 'offline', 'not-found', 'wreck', 'landing-over']);
+
+// The label the next opened LZ takes (`LZ-C` after LZ-A and LZ-B): the letter after the landing's LZs.
+export function nextLzLabel(state: Readonly<GameState>): string {
+  return `LZ-${lzLetter(state.landing.lzs.length)}`;
+}
+
+// The LZ opening the site `siteId` would add: the site's place, width and ground, its ROOM as its count (landing-rules
+// lzOpened: planned 0, in plan up to the room).
+export function openedLzOf(state: Readonly<GameState>, siteId: string): LzState {
+  const site = siteOf(state, siteId);
+  return {
+    label: nextLzLabel(state), centreRad: site.centreRad, halfWidthRad: site.halfWidthRad, widthKm: site.widthKm,
+    pods: site.roomPods, ground: site.ground, site: site.id,
+  };
+}
+
+// Whether a new LZ on `site` would change where a pod already falling comes down (its place or its LZ): the move's B1 rule.
+function openRejudgesFalling(state: Readonly<GameState>, siteId: string): boolean {
+  if (!anyFalling(state)) return false;
+  const lzs = [...state.landing.lzs, openedLzOf(state, siteId)];
+  const before = pendingTouchdowns(state);
+  const after = pendingTouchdowns({ ...state, landing: { ...state.landing, lzs } });
+  for (const [pod, touchdown] of before) {
+    const now = after.get(pod);
+    if (now === undefined || now.place !== touchdown.place || now.lz !== touchdown.lz) return true;
+  }
+  return false;
+}
+
+// Why the site `siteId` can't be opened as a new LZ now, or null when it can (order as OpenRefusal lists them). The thread
+// is survey.ts openSite's to check. Throws on a site the ship does not have.
+export function openRefusal(state: Readonly<GameState>, siteId: string): Exclude<OpenRefusal, 'no-thread'> | null {
+  const { landing } = state;
+  if (landing.survey.site !== 'poor') return 'closed';
+  const site = siteOf(state, siteId);
+  if (lzOnSite(landing, siteId) !== null) return 'taken';
+  const refusals = landing.lzs.map((lz) => assignRefusal(state, lz.label, siteId));
+  const siteWide = refusals.find((refusal): refusal is Extract<OpenRefusal, AssignRefusal> => refusal !== null && SITE_REFUSALS.has(refusal));
+  if (siteWide !== undefined) return siteWide;
+  if (site.kind === 'wreck') return 'wreck';
+  if (refusals.some((refusal) => refusal === null)) return 'can-move';
+  if (!refusals.some((refusal) => refusal !== null && HELD_BY_LANDING.has(refusal))) return 'not-held';
+  if (landing.lzs.length >= SURVEY_OPEN_MAX_LZS) return 'lz-cap';
+  if (openRejudgesFalling(state, siteId)) return 'falling-under';
+  return null;
+}
+
+// Whether the SITES window shows the OPEN pill for the site (dimmed or not): see OpenRefusal.
+export function openOffered(refusal: OpenRefusal | null): boolean {
+  return refusal === null || refusal === 'lz-cap' || refusal === 'falling-under' || refusal === 'no-thread';
 }
 
 // OPEN-DECISIONS 53 (slice 8, Track ECONOMY): v1's rough tell. A CONTROL guess the ship's own swath has passed (its centre's

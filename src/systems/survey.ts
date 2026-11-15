@@ -3,22 +3,27 @@ import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import type { AssignRefusal, BadGround, SurveyRecord, SurveySite, SurveyState } from '@/types/survey';
 import type { EffectiveVersion } from '@/types/skill';
-import { onGameTick, onPostTick, isLivePhase } from '@systems/clock';
+import { onGameTick, onPostTick, onAiTick, isLivePhase } from '@systems/clock';
 import { onWorldReset } from '@systems/reset';
 import { on, emit } from '@systems/events';
 import { say } from '@systems/say';
 import { palLines } from '@systems/companion';
 import { releaseThread, reserveThread, holdsThread, threadsTotal, threadsBusy } from '@systems/ops-core';
 import { surveyRecordOf, surveyVersion, mappedPct, candidatesFound, lzSiteOf, lzOnSite } from '@state/survey-selectors';
-import { sweptCells, swathHalfRad, surveyRunning, surveyWantsThread, cellOf, assignRefusal, dropSwathOn } from '@systems/survey-model';
+import {
+  sweptCells, swathHalfRad, surveyRunning, surveyWantsThread, cellOf, assignRefusal, dropSwathOn, openRefusal, openedLzOf, type OpenRefusal,
+} from '@systems/survey-model';
 import { getDropSolution } from '@systems/drop-cache';
 import { SWATH_TEXT, WIDTH_WORD } from '@data/swath-text';
 import { SURVEY_TEXT, siteLabel } from '@data/survey-text';
-import { SURVEY_RATE_VERSION, SURVEY_SWEEP_VERSION, SURVEY_KEEP_FREE_THREADS, SURVEY_CELLS } from '@data/tuning';
+import { SITES_TEXT } from '@data/sites-text';
+import {
+  SURVEY_RATE_VERSION, SURVEY_SWEEP_VERSION, SURVEY_KEEP_FREE_THREADS, SURVEY_CELLS, SURVEY_OPEN_COMMIT_SEC,
+} from '@data/tuning';
 
 // The survey machine (01-landing §3.13, 03-skills §3.9; plan §2.8): it maps the swath under the ship from the first flight
 // tick after the boot, finds and rates the sites, holds a yieldable Core thread at v1–v2 (R8), and moves an LZ onto a site
-// the kid picks (assignSite).
+// the kid picks (assignSite), or opens one as a new LZ (openSite: playtest 1, C-SITES).
 // • All its state is state.landing.survey. Whether it holds a thread is `claimed`, reconciled each tick with ops-core
 //   holdsThread(SURVEY_THREAD_OWNER): AUTOBURN's and AUTODROP's preempting claims may take it (R8), and then it claims again
 //   once a spare one frees. Its one module variable (plan §2.3, review m3) is `lastRunning`, the last 'survey-state' it
@@ -36,16 +41,26 @@ import { SURVEY_RATE_VERSION, SURVEY_SWEEP_VERSION, SURVEY_KEEP_FREE_THREADS, SU
 
 // Its Core thread's owner (ops-core reserveThread(SURVEY_THREAD_OWNER, { yieldable: true })).
 export const SURVEY_THREAD_OWNER = 'survey';
+// Playtest 1, C-SITES (plan §3.13): the thread an opened site's commit holds for SURVEY_OPEN_COMMIT_SEC AI seconds.
+export const SURVEY_OPEN_THREAD_OWNER = 'survey-open';
 
 // The skills SURVEY steps aside for (R8 as the lead corrected it, review M1): while either holds a thread SURVEY holds none, so
 // a skill's claim never adds a second thrust cut (each busy thread costs REACTOR_THREAD_SHARE) nor a second thread. ops-core's
 // preempting claim takes SURVEY's thread when it holds one; this keeps SURVEY from claiming a spare one beside the skill.
 // Their owners as autoburn.ts and autodrop.ts reserve them.
-const STEP_ASIDE_FOR = ['autoburn', 'autodrop'] as const;
+const STEP_ASIDE_FOR = ['autoburn', 'autodrop', SURVEY_OPEN_THREAD_OWNER] as const;
 const skillHoldsThread = (): boolean => STEP_ASIDE_FOR.some((owner) => holdsThread(owner));
 
 const OFF_KEY = 'off|0';
 let lastRunning: string = OFF_KEY;
+// C-SITES: AI seconds the open's commit still holds its thread (0: none held). Module state like lastRunning: the landing is
+// never a save point, and a world reset or the ship's end lets the thread go.
+let commitLeftSec = 0;
+
+function endCommit(): void {
+  commitLeftSec = 0;
+  releaseThread(SURVEY_OPEN_THREAD_OWNER);
+}
 
 // --- The thread (R8, review m4) ---------------------------------------------------------------------------------------------
 
@@ -236,13 +251,21 @@ export function mountSurvey(store: Store<GameState>): () => void {
   const offGame = onGameTick((dtWorld) => mapTick(store, dtWorld));
   const offPost = onPostTick(() => postTick(store));
   const offLanded = on('pod-landed', ({ lz }) => touchdownReveal(store, lz));
-  const offReset = onWorldReset('survey', () => { lastRunning = OFF_KEY; }, () => ({ lastRunning }));
+  // The open's commit runs on AI time, as an op does (pause freezes it, a SKIP does not shorten it).
+  const offAi = onAiTick((dtAi) => {
+    if (commitLeftSec <= 0) return;
+    commitLeftSec -= dtAi;
+    if (commitLeftSec <= 0) endCommit();
+  });
+  const offReset = onWorldReset('survey', () => { lastRunning = OFF_KEY; endCommit(); }, () => ({ lastRunning, commitLeftSec }));
   return () => {
     offGame();
     offPost();
     offLanded();
+    offAi();
     offReset();
     lastRunning = OFF_KEY;
+    commitLeftSec = 0;
   };
 }
 
@@ -276,6 +299,38 @@ export function assignSite(store: Store<GameState>, lz: string, siteId: string):
   return null;
 }
 
+// Playtest 1, C-SITES (plan §3.13, Fran's note 18): opens the found site `siteId` as a new LZ, when no LZ can move there
+// because the landing holds them (survey-model.ts openRefusal, whose refusal is returned and nothing changes). The commit
+// takes a Core thread for SURVEY_OPEN_COMMIT_SEC (a preempting claim: it takes SURVEY's own yieldable thread first; 'no-thread'
+// when none is free). In one update the new LZ (survey-model openedLzOf: the site's place, width and ground, its ROOM as its
+// count, planned 0) joins the landing's LZs and sitesRev grows, so the drop cache, AUTOBURN v3's aim and AUTODROP v3's plan
+// re-key, and the landing waits on its windows like any LZ with room (landing-rules landingMoment: a HARD stop for the kid's
+// hold [F]). 'lz-moved' (from null: the stamp `LZ-D → SITE 4`, the sound, SITES's selection) and the TERMINAL's line. No move
+// is recorded: the LZ is known as opened by having no guess of its own (landing-rules lzOpened). Called by the SITES window's
+// OPEN pill and by the suites.
+export function openSite(store: Store<GameState>, siteId: string): OpenRefusal | null {
+  const refusal = openRefusal(store.getState(), siteId);
+  if (refusal !== null) return refusal;
+  if (commitLeftSec > 0) endCommit();
+  if (!reserveThread(SURVEY_OPEN_THREAD_OWNER, { preempt: true })) return 'no-thread';
+  commitLeftSec = SURVEY_OPEN_COMMIT_SEC;
+  const state = store.getState();
+  const lz = openedLzOf(state, siteId);
+  const site = state.landing.survey.sites.find((one) => one.id === siteId)!;
+  store.update((draft) => {
+    draft.landing.lzs.push({ ...lz });
+    draft.landing.sitesRev++;
+  });
+  emit('lz-moved', { lz: lz.label, from: null, to: siteId });
+  say('mind-sys', SITES_TEXT.terminal.opened(lz.label, siteLabel(site), SURVEY_TEXT.room(site.roomPods)), { critical: true });
+  return null;
+}
+
+// Whether the open's commit holds its thread now (the suites).
+export function openCommitting(): boolean {
+  return commitLeftSec > 0 && holdsThread(SURVEY_OPEN_THREAD_OWNER);
+}
+
 // The SITES header's [ PAUSE ] / [ RESUME ] (R7): flips survey.paused, and the thread goes back (or is claimed) at once.
 // Only on a POOR planet (the SITES window shows nowhere else).
 export function toggleSurveyPause(store: Store<GameState>): void {
@@ -289,6 +344,7 @@ export function toggleSurveyPause(store: Store<GameState>): void {
 // on a GOOD planet; state/survey-selectors.ts surveyRecordOf's).
 export function surveyShipEnd(store: Store<GameState>): SurveyRecord | null {
   releaseThread(SURVEY_THREAD_OWNER);
+  endCommit();
   const { survey } = store.getState().landing;
   if (survey.claimed || survey.lastRad !== null) {
     store.update((draft) => {

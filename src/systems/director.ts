@@ -28,6 +28,13 @@ import { CORE_LOST_TEXT } from '@data/hollow-text';
 import { shipSummaryAt } from '@systems/map-run';
 import { deskSteps } from '@systems/desk';
 import { LEAVE_TEXT } from '@data/leave-text';
+import { sitesFlashLine } from '@data/sites-text';
+
+// A refused input's strip line: script.ts REFUSAL_LINES by key, or the words a SITES pill sent (playtest 1, C-SITES: built per
+// click, `LZ-B HAS PODS DOWN — OPEN SITE 4 AS LZ-D`).
+function refusalLine(reason: string): { text: string; keys: readonly string[] } | null {
+  return REFUSAL_LINES[reason] ?? sitesFlashLine(reason);
+}
 
 // The director (§6.3) composes the one line the objective strip shows and speaks the story
 // beats. It runs at the end of every clock tick, in every phase and while paused, so PAUSED,
@@ -279,7 +286,7 @@ export function composeObjective(ctx: DirectorCtx, rules: readonly GuideRule[]):
     return { id: `over-${status}`, text: FLIGHT_OVER_LINE[status], keys: [], urgency: 'now', layer: 'ship', highlight: null, source: 'over' };
   }
   if (ctx.flash) {
-    const refusal = REFUSAL_LINES[ctx.flash];
+    const refusal = refusalLine(ctx.flash);
     if (!refusal) throw new Error(`composeObjective: no REFUSAL_LINES entry for '${ctx.flash}'`);
     return { id: `flash-${ctx.flash}`, text: refusal.text, keys: refusal.keys, urgency: 'now', layer: screen, highlight: null, source: 'flash' };
   }
@@ -484,7 +491,7 @@ export function mountDirector(store: Store<GameState>): () => void {
     pendingEvents.add(name);
     if (name === 'refused') {
       const reason = (payload as { reason: string }).reason;
-      if (REFUSAL_LINES[reason]) flash = { reason, leftSec: REFUSAL_FLASH_SEC };
+      if (refusalLine(reason)) flash = { reason, leftSec: REFUSAL_FLASH_SEC };
     }
     // A refusal explains what went wrong on the screen the kid was on. After a switch it is
     // stale, and the one that matters most (SHIP CONTROLS ARE ON THE AMBER SCREEN — [TAB]) has

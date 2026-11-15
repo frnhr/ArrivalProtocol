@@ -282,8 +282,9 @@ export interface GameEvents {
   // A bad ground an LZ stands on was made known (R5): by SURVEY's swath or by the first pod down on it (the stamp
   // `LZ-B · WET ✕`, CONTROL's reveal quip).
   'site-revealed': { lz: string; siteId: string; ground: BadGround; by: RevealBy };
-  // assignSite moved an LZ from one site to another (the stamp `LZ-B → SITE 4`).
-  'lz-moved': { lz: string; from: string; to: string };
+  // assignSite moved an LZ from one site to another (the stamp `LZ-B → SITE 4`). Playtest 1, C-SITES: openSite opened a site
+  // as a new LZ (`from` null: it stood nowhere before).
+  'lz-moved': { lz: string; from: string | null; to: string };
   // --- end of 6 SURVEY ---
 
   // === Slice 7a (docs/phase3/impl/slice-7-plan.md §2.5): the FOUNDATION named every event; Track FINALE emits the FINALE's

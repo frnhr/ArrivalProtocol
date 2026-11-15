@@ -13,6 +13,7 @@ import type { Rng } from '@systems/rng';
 import { autoburnHoldsLandingOrbit, filesWithRole, integrityBand, launchDrivers, repairPossible } from '@state/selectors';
 import { bayCapability, capabilitiesNow, roleHealth } from '@systems/capabilities';
 import { groundAt } from '@state/survey-selectors';
+import { guessSiteId } from '@data/survey-sites';
 import { angleDelta, dropHalfWidthKm, secFromNow } from '@systems/landing-solve';
 import {
   decayForecast, decayWarned, dragLineKm, goLowerFit, highestFittingRadius, sureTacAt, timeToAngle, travelSign,
@@ -182,6 +183,26 @@ export function lzRemaining(state: Readonly<GameState>): Record<string, number> 
   const remaining: Record<string, number> = {};
   for (const lz of state.landing.lzs) remaining[lz.label] = Math.max(0, lz.pods - (fill[lz.label] ?? 0));
   return remaining;
+}
+
+// Playtest 1, C-SITES (plan §3.13, Fran's note 18): an LZ the kid opened on a found site (survey.ts openSite), not one
+// ARRIVAL CONTROL set. It is derived, not stored (no save change): every LZ the roller set on a POOR planet has CONTROL's guess
+// of its own (`guess-B` for LZ-B, data/survey-sites.ts guessSiteId) among the sites, and an opened LZ, labelled past them,
+// has none. Its `pods` is its site's ROOM (what it takes in plan, §3.9's 'lz' up to its count), and its planned count is 0:
+// the LANDING REPORT's row counts 0 (landingResult) and AUTODROP v3 fills it with the pods the other LZs leave
+// (autodrop-plan.ts planLanding). Never on a GOOD planet.
+export function lzOpened(landing: Readonly<Pick<GameState['landing'], 'survey'>>, label: string): boolean {
+  const { survey } = landing;
+  if (survey.site !== 'poor') return false;
+  const index = label.charCodeAt(label.length - 1) - 65;
+  return !survey.sites.some((site) => site.kind === 'guess' && site.id === guessSiteId(index));
+}
+
+// The pods an LZ was planned to take (its count), as the report and the plan's check line read it: 0 for an opened one.
+export function lzPlannedPods(landing: Readonly<Pick<GameState['landing'], 'survey' | 'lzs'>>, label: string): number {
+  const lz = landing.lzs.find((candidate) => candidate.label === label);
+  if (lz === undefined) throw new Error(`lzPlannedPods: no LZ ${label}`);
+  return lzOpened(landing, label) ? 0 : lz.pods;
 }
 
 export interface Placement {
@@ -793,7 +814,10 @@ export function pendingTouchdowns(state: Readonly<GameState>): Map<number, Touch
 export function landingResult(state: Readonly<GameState>, outcome: ShipOutcome): LandingTally {
   const { landing } = state;
   const rows = new Map<string, LzResult>();
-  for (const lz of landing.lzs) rows.set(lz.label, { lz: lz.label, count: lz.pods * COLONISTS_PER_POD, landed: 0, mislanded: 0, hard: 0 });
+  // C-SITES: an opened LZ's row counts 0 (it was planned to take none): every colonist landed there is a bonus over the plan.
+  for (const lz of landing.lzs) {
+    rows.set(lz.label, { lz: lz.label, count: lzPlannedPods(landing, lz.label) * COLONISTS_PER_POD, landed: 0, mislanded: 0, hard: 0 });
+  }
   const tally: LandingTally = {
     colonistsAboard: 0, lzs: [], offSite: 0, noGo: 0, restored: 0, parked: [], notLaunched: 0, landedInLz: 0, points: 0,
     colony: landing.colony, pods: [],

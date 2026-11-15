@@ -260,8 +260,9 @@ built(() => {
   const ground = giveSurvey(cormorant((s) => { mapCells(s, 0, 36, true); s.run.phase = 'landing'; }), 2);
   const brackets = surveyGroundBrackets(ground);
   const model = groundTrackModel(ground, null);
+  // Playtest 1 (note 18, C-SITES): a site an LZ can move onto says so (`SITE 2 ★★★ · MOVE AN LZ HERE`; survey/open-site).
   check('GROUND TRACK: the free sites as candidate brackets keyed by their site (`SITE 2 ★★★` once rated), none on a GOOD planet',
-    brackets.length === freeSites(ground).length && brackets.every((bracket) => /^(SITE \d+( ★+)?|WRECK)$/.test(bracket.label))
+    brackets.length === freeSites(ground).length && brackets.every((bracket) => /^(SITE \d+( ★+)?( · MOVE AN LZ HERE)?|WRECK)$/.test(bracket.label))
     && model.planet.brackets.filter((bracket) => bracket.look === 'candidate').every((bracket) => bracket.site !== null && bracket.lz === bracket.site)
     && model.planet.brackets.filter((bracket) => bracket.look === 'candidate').length === brackets.length
     && surveyGroundBrackets(cormorant((s) => { s.landing.survey = createSurveyState('good', []); })).length === 0,
@@ -289,7 +290,7 @@ built(() => {
   const record = (patch: Partial<SurveyRecord>): SurveyRecord => ({ ranAt: 0, mappedPct: 0, found: 0, moves: [], badKept: [], movedOff: [], ...patch });
   const visited = (survey: SurveyRecord | null): GameState => {
     const { run, slices } = armShipSlices(SEED, CORMORANT);
-    return { ...createInitialState({ seed: SEED }), run: { ...run, phase: 'desk', ships: [{ slot: CORMORANT, survey } as unknown as ShipResult] }, ...slices } as GameState;
+    return { ...createInitialState({ seed: SEED }), run: { ...run, phase: 'desk', ships: [{ slot: CORMORANT, survey, lzs: [] } as unknown as ShipResult] }, ...slices } as GameState;
   };
   check('…after the ship: `POOR · LZ-B MOVED` (good), `POOR · SURVEYED, KEPT`, `POOR · NOT SURVEYED`',
     surveyCardRow(visited(record({ ranAt: 2, moves: [{ lz: 'LZ-B', from: 'guess-B', site: 'site-5' }] })), CORMORANT)?.value === SITES_TEXT.card.moved('LZ-B')
@@ -381,7 +382,7 @@ built(() => {
 built(() => {
   const { run, slices } = armShipSlices(SEED, VESPER);
   const visited = (survey: SurveyRecord): GameState => ({
-    ...createInitialState({ seed: SEED }), run: { ...run, phase: 'desk', ships: [{ slot: CORMORANT, survey } as unknown as ShipResult],
+    ...createInitialState({ seed: SEED }), run: { ...run, phase: 'desk', ships: [{ slot: CORMORANT, survey, lzs: [] } as unknown as ShipResult],
       map: { ...run.map, route: [...run.map.route, { slot: CORMORANT } as never] } }, ...slices,
   } as GameState);
   const back: SurveyRecord = {

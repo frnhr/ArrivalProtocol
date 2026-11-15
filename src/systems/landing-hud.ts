@@ -833,9 +833,8 @@ export function autodropBayModel(state: Readonly<GameState>, sol: Readonly<DropS
     });
     const extra = planned.rows.length - rows.length;
     if (extra > 0) rows.push({ text: words.planMore(extra), forecast: true, mislanded: false, now: false });
-    const missing = [...planned.neverFits.map((never) => never.lz),
-      ...state.landing.lzs.filter((lz) => (view.remaining[lz.label] ?? 0) > (planned.perLz[lz.label] ?? 0)
-        && !planned.neverFits.some((never) => never.lz === lz.label)).map((lz) => lz.label)];
+    // The plan's own short list (playtest 1, C-SITES: an LZ opened on a found site is planned 0, so the counts outgrow the pods).
+    const missing = planned.short;
     const perLz: Record<string, number> = {};
     for (const lz of state.landing.lzs) if ((view.remaining[lz.label] ?? 0) > 0) perLz[lz.label] = planned.perLz[lz.label] ?? 0;
     const notes = planned.neverFits.map((never) => words.neverFits(never.lz, repairWord(never.repair), whoGoesLower(state, never.lz)));

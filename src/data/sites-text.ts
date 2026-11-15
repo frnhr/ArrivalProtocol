@@ -48,12 +48,17 @@ export const SITES_TEXT = {
     emptyOffline: 'REPAIR SURVEY.skl TO MAP AND FIND BETTER SITES',
     emptyDone: 'NO OTHER SITES ON THIS PLANET',
     hint: 'CLICK A SITE TO MOVE AN LZ THERE',
+    // Playtest 1, C-SITES (Fran's note 18): once the landing pins the LZs, a found site can be opened as a new one.
+    hintOpen: 'CLICK A SITE TO OPEN IT AS A NEW LZ',
   },
   row: {
     // `SITE 4 · ROOM 800 · WIDE · FLAT ★★★`. `groundWord`: the ground as shown (`FLAT ★★★`, `GROUND ?`; review m10).
     site: (label: string, room: string, width: string, groundWord: string): string => `${label} · ROOM ${room} · ${width} · ${groundWord}`,
     // An LZ: where it stands (`GUESS`: CONTROL's, or `SITE 4`), its count, its width, its ground.
     lz: (lz: string, where: string, podCount: number, width: string, groundWord: string): string => `${lz} · ${where} · ${podsWord(podCount)} · ${width} · ${groundWord}`,
+    // Playtest 1, C-SITES: an LZ opened on a found site (`LZ-D · OPENED ON SITE 4 · ROOM 800 · WIDE · FLAT ★★★`).
+    lzOpened: (lz: string, site: string, room: string, width: string, groundWord: string): string =>
+      `${lz} · OPENED ON ${site} · ROOM ${room} · ${width} · ${groundWord}`,
     guess: 'GUESS',
     // 01 §7's story find: never assignable.
     wreck: (label: string): string => `${label} · AN OLD POD. NOT OURS.`,
@@ -68,9 +73,28 @@ export const SITES_TEXT = {
   // A click's pill row: an LZ the site can take, or why not (the lead's refusal words, data/survey-text.ts), dimmed.
   pill: (lz: string, room: string): string => `SET AS ${lz} (${room})`,
   pillRefused: (lz: string, why: string): string => `${lz} ✕ ${why}`,
+  // Playtest 1, C-SITES (plan §3.13): the pill that opens the site as a new LZ (its ROOM in colonists), after the LZs' own
+  // pills, which all say why none of them can move there.
+  pillOpen: (lz: string, room: string): string => `OPEN AS ${lz} (${room})`,
+  // Why the site can't be opened (survey-model.ts OpenRefusal; the site's own refusals are the lead's SURVEY_TEXT words).
+  openRefusal: {
+    'can-move': 'AN LZ CAN MOVE THERE',
+    'not-held': 'MOVE AN LZ THERE INSTEAD',
+    'lz-cap': (max: number): string => `${max} LZs ALREADY`,
+    'falling-under': 'A POD IS FALLING — WAIT FOR IT',
+    'no-thread': 'NO SPARE THREAD — × AN OP',
+  },
+  // A refused pill flashes its reason on the strip (A-LAND's leftover of note 18), with the way out when there is one:
+  // `LZ-B HAS PODS DOWN — OPEN SITE 4 AS LZ-D`.
+  flash: (why: string): string => why,
+  flashOpen: (why: string, site: string, lz: string): string => `${why} — OPEN ${site} AS ${lz}`,
   stamp: {
     bad: (lz: string, ground: BadGround): string => `${lz} · ${GROUND_WORD[ground]} ✕`,
     moved: (lz: string, site: string): string => `${lz} → ${site}`,
+  },
+  // The TERMINAL's line for an opened site (survey.ts openSite).
+  terminal: {
+    opened: (lz: string, site: string, room: string): string => `> SURVEY: ${lz} OPENED ON ${site} · ROOM ${room}`,
   },
   // The NAV PLOT: an LZ's mark in flight (`LZ-B ?`, `LZ-B ✕`; in LANDING the landing layer names it and this layer adds the
   // glyph), and a found site's name.
@@ -83,6 +107,10 @@ export const SITES_TEXT = {
   track: {
     rated: (label: string, stars: number): string => `${label} ${starsOf(stars)}`,
     wreck: 'WRECK',
+    // Playtest 1 (Fran's note 18, plan Q18): a free site's label on the plot and the GROUND TRACK says what it is for while
+    // something can be done with it (`SITE 4 · MOVE AN LZ HERE`, `SITE 4 ★★★ · OPEN AS LZ-D`), and is the bare name otherwise.
+    moveHere: (label: string): string => `${label} · MOVE AN LZ HERE`,
+    openHere: (label: string, lz: string): string => `${label} · OPEN AS ${lz}`,
   },
   card: {
     label: 'SITE DATA',
@@ -90,6 +118,9 @@ export const SITES_TEXT = {
     poor: 'POOR · ARRIVAL CONTROL GUESSED',
     // After the ship (ShipResult.survey): the LZs moved (`LZ-B`, `LZ-A, LZ-B`), surveyed and kept, or never surveyed.
     moved: (lzs: string): string => `POOR · ${lzs} MOVED`,
+    // C-SITES: LZs opened on found sites (read from the ship's tally: an opened LZ's row counts 0), alone or after the moves.
+    opened: (lzs: string): string => `POOR · ${lzs} OPENED`,
+    movedOpened: (lzs: string, where: string): string => `POOR · ${lzs} MOVED · ${where} OPENED`,
     kept: 'POOR · SURVEYED, KEPT',
     notSurveyed: 'POOR · NOT SURVEYED',
     // The 'lzs' row's words on a POOR planet (01 §3.15; data/map-text.ts MAP_TEXT.card.lzs reads it).
@@ -104,6 +135,10 @@ export const SITES_TEXT = {
     site: (site: string): string => ` · ${site}`,
     hard: (ground: BadGround, pods: number): string => ` · ${GROUND_WORD[ground]} · ${pods} HARD`,
     bad: (ground: BadGround): string => ` · ${GROUND_WORD[ground]}`,
+    // C-SITES: an opened LZ's row (planned 0: no `/ count`, never SHORT) and its tail (` · OPENED ON SITE 4`, instead of the
+    // moved LZ's ` · SITE 4`).
+    openedRow: (lz: string, landed: string): string => `${lz} ${landed}`,
+    opened: (site: string): string => ` · OPENED ON ${site}`,
   },
   glossary: {
     siteData: 'SITE DATA · GOOD: CONTROL\'S LZs ARE SOUND. POOR: THEY ARE GUESSES.',
@@ -111,3 +146,17 @@ export const SITES_TEXT = {
     ground: 'GROUND · FLAT, ROCKY OR WET. ROCKY AND WET LAND HARD.',
   },
 } as const;
+
+// Playtest 1, C-SITES (A-LAND's leftover of note 18): a refused pill's flash rides the 'refused' event as `SITES|<words>`, and
+// the director shows the words on the strip as any refused input's line (systems/director.ts refusalLine). The words are
+// built per click (the LZ, the site, the label an open would take), so they are not one of script.ts REFUSAL_LINES' keys.
+export const SITES_FLASH_PREFIX = 'SITES|';
+
+export function sitesFlashReason(words: string): string {
+  return `${SITES_FLASH_PREFIX}${words}`;
+}
+
+// The strip's line for a 'refused' reason SITES sent, or null for any other reason.
+export function sitesFlashLine(reason: string): { text: string; keys: readonly string[] } | null {
+  return reason.startsWith(SITES_FLASH_PREFIX) ? { text: reason.slice(SITES_FLASH_PREFIX.length), keys: [] } : null;
+}

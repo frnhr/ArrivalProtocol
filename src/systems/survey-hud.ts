@@ -13,7 +13,12 @@ import { SITES_TEXT as T } from '@data/sites-text';
 import { COLONISTS_PER_POD, SITES_RIM_BAR_CELLS, SURVEY_SWEEP_VERSION } from '@data/tuning';
 import { lzLetter } from '@data/survey-sites';
 import { surveyVersion, mappedPct, lzSiteOf, siteVisible, lzOnSite, candidatesFound, surveyNetOutcome } from '@state/survey-selectors';
-import { surveyRunning, swathHalfRad, siteStars, assignableLzs, dropSwathOn, guessTell, type SiteStars } from '@systems/survey-model';
+import {
+  surveyRunning, swathHalfRad, siteStars, assignableLzs, dropSwathOn, guessTell, openRefusal, openOffered, nextLzLabel,
+  type SiteStars, type OpenRefusal,
+} from '@systems/survey-model';
+import { lzOpened } from '@systems/landing-rules';
+import { SURVEY_OPEN_MAX_LZS } from '@data/tuning';
 import { getDropSolution } from '@systems/drop-cache';
 import { shipSummaryAt } from '@systems/map-run';
 import { openBranchesAt } from '@systems/skill-tree';
@@ -96,12 +101,35 @@ const lookOf = (site: Readonly<SurveySite>): SurveyBracket['look'] =>
 
 // --- The GROUND TRACK ---------------------------------------------------------------------------------------------------
 
-// The GROUND TRACK's candidate brackets (the free sites; plan §2.14): `SITE 4`, rated `SITE 4 ★★★`, the wreck's `WRECK`.
+// What can be done with a free site now (playtest 1, Fran's note 18): an LZ can move onto it, it can be opened as a new LZ
+// (the label it would take), or neither.
+export type SiteAction = { kind: 'move' } | { kind: 'open'; lz: string } | null;
+
+export function siteAction(state: Readonly<GameState>, site: Readonly<SurveySite>): SiteAction {
+  if (site.kind === 'wreck' || state.landing.survey.site !== 'poor') return null;
+  if (assignableLzs(state, site.id).some((one) => one.refusal === null)) return { kind: 'move' };
+  return openRefusal(state, site.id) === null ? { kind: 'open', lz: nextLzLabel(state) } : null;
+}
+
+// A free site's label on the GROUND TRACK and the NAV PLOT: its name (rated: `SITE 4 ★★★`), with what it is for while
+// something can be done with it (`SITE 4 · MOVE AN LZ HERE`, `SITE 4 ★★★ · OPEN AS LZ-D`) and its ground is not known bad;
+// the wreck's `WRECK`.
+function siteBracketLabel(state: Readonly<GameState>, site: Readonly<SurveySite>, rated: boolean): string {
+  if (site.kind === 'wreck') return T.track.wreck;
+  const name = rated && site.groundKnown ? T.track.rated(siteLabel(site), siteStars(site)) : siteLabel(site);
+  // A site known ROCKY or WET is drawn as bad: its label invites nothing (its SITES pills still offer what it can take).
+  if (site.groundKnown && site.ground !== 'flat') return name;
+  const action = siteAction(state, site);
+  if (action === null) return name;
+  return action.kind === 'move' ? T.track.moveHere(name) : T.track.openHere(name, action.lz);
+}
+
+// The GROUND TRACK's candidate brackets (the free sites; plan §2.14): `SITE 4`, rated `SITE 4 ★★★`, the wreck's `WRECK`, with
+// what the site is for while it is for something (siteBracketLabel).
 export function surveyGroundBrackets(state: Readonly<GameState>): SurveyBracket[] {
   return freeSites(state).map((site) => ({
     site: site.id, centreRad: site.centreRad, halfWidthRad: site.halfWidthRad, look: lookOf(site),
-    label: site.kind === 'wreck' ? T.track.wreck
-      : site.groundKnown ? T.track.rated(siteLabel(site), siteStars(site)) : siteLabel(site),
+    label: siteBracketLabel(state, site, true),
   }));
 }
 
@@ -172,7 +200,7 @@ export function surveyPlotModel(
     unmapped: cellArcs(survey.mapped, false),
     brackets: freeSites(state).map((site) => ({
       site: site.id, centreRad: site.centreRad, halfWidthRad: site.halfWidthRad, look: lookOf(site),
-      label: site.kind === 'wreck' ? T.track.wreck : siteLabel(site),
+      label: siteBracketLabel(state, site, false),
     })),
     lzs,
   };
@@ -203,6 +231,10 @@ export function surveyCardRow(state: Readonly<GameState>, slot: number): SurveyC
   if (record === null || record === undefined) return row(T.card.notSurveyed);
   // Review m5: the LZs that ended off their own guess (a move away and back is none), from the record's net outcome.
   const moved = surveyNetOutcome(record).filter((outcome) => outcome.moved).map((outcome) => outcome.lz);
+  // C-SITES: an LZ opened on a found site has a row of its own that counts 0 in the ship's tally (landing-rules landingResult).
+  const opened = result.lzs.filter((lz) => lz.count === 0).map((lz) => lz.lz);
+  if (moved.length > 0 && opened.length > 0) return row(T.card.movedOpened(moved.join(', '), opened.join(', ')), 'good');
+  if (opened.length > 0) return row(T.card.opened(opened.join(', ')), 'good');
   if (moved.length > 0) return row(T.card.moved(moved.join(', ')), 'good');
   return record.ranAt > 0 ? row(T.card.kept) : row(T.card.notSurveyed);
 }
@@ -231,7 +263,7 @@ export function surveyLzRowSuffix(state: Readonly<GameState>, lz: string): strin
   const site = lzSiteOf(state.landing, lz);
   if (site === null) return '';
   const ownGuess = site.kind === 'guess' && `LZ-${lzLetter(site.number)}` === lz;
-  let suffix = ownGuess ? '' : T.report.site(siteLabel(site));
+  let suffix = ownGuess ? '' : lzOpened(state.landing, lz) ? T.report.opened(siteLabel(site)) : T.report.site(siteLabel(site));
   if (site.ground !== 'flat') {
     const hard = state.landing.pods.filter((record) => record.fate.kind === 'down' && record.fate.touchdown.lz === lz
       && record.fate.touchdown.touch === 'hard').length;
@@ -255,11 +287,15 @@ export interface SitesRow {
   moved: boolean;                 // an LZ SURVEY moved off CONTROL's guess
 }
 
-// A pill under the selected site: an LZ that can take it (`SET AS LZ-B (800)`), or why not, dimmed.
+// A pill under the selected site: an LZ that can take it (`SET AS LZ-B (800)`), or why not, dimmed; then, once the landing
+// pins every LZ, the new LZ it can be opened as (`OPEN AS LZ-C (1,200)`: playtest 1, C-SITES). A refused pill still takes a
+// click: it flashes `flash` on the strip (`LZ-B HAS PODS DOWN — OPEN SITE 4 AS LZ-C`), so the reason is never only a dim pill.
 export interface SitesPill {
+  kind: 'move' | 'open';
   lz: string;
   text: string;
-  refusal: AssignRefusal | null;
+  refusal: AssignRefusal | OpenRefusal | null;
+  flash: string | null;           // the strip's words for a refused pill; null for one that works
 }
 
 export interface SitesWindowModel {
@@ -276,15 +312,41 @@ export interface SitesWindowModel {
 }
 
 // The pill (or the refusal, in the lead's words) for one LZ and a site.
-function pillOf(state: Readonly<GameState>, site: Readonly<SurveySite>, lz: Readonly<LzState>, refusal: AssignRefusal | null): SitesPill {
+function pillOf(
+  state: Readonly<GameState>, site: Readonly<SurveySite>, lz: Readonly<LzState>, refusal: AssignRefusal | null, open: string | null,
+): SitesPill {
   const room = SURVEY_TEXT.room(lz.pods);
-  if (refusal === null) return { lz: lz.label, text: T.pill(lz.label, room), refusal };
+  if (refusal === null) return { kind: 'move', lz: lz.label, text: T.pill(lz.label, room), refusal, flash: null };
   // 'taken' names the LZ standing on the site (`SITE 4 IS LZ-A's`); every other refusal the LZ asked about.
   const owner = lzOnSite(state.landing, site.id) ?? lz.label;
   const why = SURVEY_TEXT.refusal[refusal]({
     site: siteLabel(site), lz: refusal === 'taken' ? owner : lz.label, holds: site.roomPods * COLONISTS_PER_POD, needs: lz.pods * COLONISTS_PER_POD,
   });
-  return { lz: lz.label, text: T.pillRefused(lz.label, why), refusal };
+  // The way out, when the site can be opened instead (`open`: the label it would take).
+  const flash = open === null ? T.flash(why) : T.flashOpen(why, siteLabel(site), open);
+  return { kind: 'move', lz: lz.label, text: T.pillRefused(lz.label, why), refusal, flash };
+}
+
+// The words of an open refusal (OpenRefusal): the site's own are the lead's assign words.
+export function openRefusalWords(state: Readonly<GameState>, site: Readonly<SurveySite>, refusal: OpenRefusal): string {
+  const words = { site: siteLabel(site), lz: lzOnSite(state.landing, site.id) ?? nextLzLabel(state), holds: site.roomPods * COLONISTS_PER_POD, needs: 0 };
+  switch (refusal) {
+    case 'closed': case 'offline': case 'not-found': case 'wreck': case 'taken': case 'landing-over':
+      return SURVEY_TEXT.refusal[refusal](words);
+    case 'lz-cap': return T.openRefusal['lz-cap'](SURVEY_OPEN_MAX_LZS);
+    case 'can-move': case 'not-held': case 'falling-under': case 'no-thread':
+      return T.openRefusal[refusal];
+  }
+}
+
+// The OPEN pill for the site, or null when none is offered (survey-model openOffered).
+function openPillOf(state: Readonly<GameState>, site: Readonly<SurveySite>): SitesPill | null {
+  const refusal = openRefusal(state, site.id);
+  if (!openOffered(refusal)) return null;
+  const lz = nextLzLabel(state);
+  if (refusal === null) return { kind: 'open', lz, text: T.pillOpen(lz, SURVEY_TEXT.room(site.roomPods)), refusal, flash: null };
+  const why = openRefusalWords(state, site, refusal);
+  return { kind: 'open', lz, text: T.pillRefused(lz, why), refusal, flash: T.flash(why) };
 }
 
 // The rim as SITES_RIM_BAR_CELLS glyphs: a glyph is mapped when every cell under it is.
@@ -335,8 +397,12 @@ export function sitesWindowModel(state: Readonly<GameState>, selected: string | 
     if (site === null) throw new Error(`sitesWindowModel: ${lz.label} stands on no site on a POOR planet`);
     const ground = groundShown(state, site, aboard);
     const where = site.kind === 'guess' ? T.row.guess : siteLabel(site);
+    // C-SITES: an opened LZ says so, with its ROOM (its count is the site's room: it was planned to take none).
+    const text = lzOpened(state.landing, lz.label)
+      ? T.row.lzOpened(lz.label, siteLabel(site), SURVEY_TEXT.room(lz.pods), T.width[site.width], ground.word)
+      : T.row.lz(lz.label, where, lz.pods, T.width[site.width], ground.word);
     return {
-      kind: 'lz', key: lz.label, site: site.id, text: T.row.lz(lz.label, where, lz.pods, T.width[site.width], ground.word), ground,
+      kind: 'lz', key: lz.label, site: site.id, text, ground,
       selectable: false, selected: false, moved: site.kind !== 'guess',
     };
   });
@@ -352,16 +418,21 @@ export function sitesWindowModel(state: Readonly<GameState>, selected: string | 
       ground, selectable: true, selected: site.id === chosen?.id, moved: false,
     };
   });
+  const openPill = chosen === null ? null : openPillOf(state, chosen);
   const pills = chosen === null ? [] : assignableLzs(state, chosen.id).map(({ lz, refusal }) => {
     const at = state.landing.lzs.find((candidate) => candidate.label === lz);
     if (at === undefined) throw new Error(`sitesWindowModel: assignableLzs named ${lz}, which the landing does not have`);
-    return pillOf(state, chosen, at, refusal);
+    return pillOf(state, chosen, at, refusal, openPill?.refusal === null ? openPill.lz : null);
   });
+  if (openPill !== null) pills.push(openPill);
   const empty = sites.length > 0 ? null
     : !surveying ? (aboard ? T.window.emptyOffline : T.window.emptyNone) : allMapped ? T.window.emptyDone : T.window.emptyMapping;
   const anyRoom = sites.some((row) => row.kind === 'site');
+  // C-SITES: once no LZ can move anywhere but a site can be opened, the hint says so.
+  const actions = chosen === null && anyRoom && surveying ? free.map((site) => siteAction(state, site)) : [];
+  const hint = chosen !== null || !anyRoom || !surveying ? null
+    : !actions.some((action) => action?.kind === 'move') && actions.some((action) => action?.kind === 'open') ? T.window.hintOpen : T.window.hint;
   return {
-    header: T.window.header(pct), rim: rimBar(survey.mapped), status, tone, pause, lzs, sites, empty, pills,
-    hint: chosen === null && anyRoom && surveying ? T.window.hint : null,
+    header: T.window.header(pct), rim: rimBar(survey.mapped), status, tone, pause, lzs, sites, empty, pills, hint,
   };
 }

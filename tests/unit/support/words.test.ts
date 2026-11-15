@@ -418,6 +418,8 @@ function renderSlice6(value: unknown, out: string[], owner: string, extra: Reado
   const SITES_WORST: Readonly<Record<string, unknown>> = {
     groundWord: 'FLAT ★★★', where: 'SITE 12', why: 'SITE 12 HOLDS 3,200 · LZ-D NEEDS 3,200 · LZ-D!!', stars: 3, glyph: '✕',
     lzs: 'LZ-A, LZ-B, LZ-C, LZ-D', podCount: 16,
+    // Playtest 1, C-SITES: the opened LZ's words (`where` above is also the card's opened LZs), the LZ cap, a row's landed.
+    max: 4, landed: '3,200',
   };
   const lines = renderSlice6(SITES_TEXT, [], 'SITES_TEXT', SITES_WORST);
   // A pod-only rule (`offline`, `lost`) binds a line about pods, as the guard above reads it: `SURVEY OFFLINE — REPAIR IT`

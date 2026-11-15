@@ -2439,6 +2439,16 @@ export const SURVEY_WEDGE_REACH = 0.9;
 
 // --- end of 6 SITES ------------------------------------------------------------------------------------------------------
 
+// --- Playtest 1, C-SITES (docs/phase3/impl/playtest-1-plan.md §3.13, Fran's note 18): a found site opened as a new LZ ------
+// The most LZs a landing can have once sites are opened: 01's roller never rolls more than 4, and the words, the POD BAY's
+// rows and the plan's check line were all laid out for LZ-A … LZ-D (lzLetter handles D).
+export const SURVEY_OPEN_MAX_LZS = 4;
+// The cost of opening one (§3.13): one Core thread for this many AI seconds while SURVEY "commits" the site. A thrust cut
+// and one op fewer for a moment, never a wait: the new LZ stands at once, so a window opening a second later can use it.
+export const SURVEY_OPEN_COMMIT_SEC = 2;
+
+// --- end of playtest 1 C-SITES -------------------------------------------------------------------------------------------
+
 
 // =====================================================================================================================
 // --- Phase 3 slice 7a, THE ENDING (docs/phase3/impl/slice-7-plan.md §2.6). The FOUNDATION wrote every number below; each
