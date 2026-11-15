@@ -70,6 +70,16 @@ function skipEaseCap(state: Readonly<GameState>, dtWall: number): number {
   return Math.max(cruise, (scheduled * -Math.expm1((-efolds * dtWall) / SKIP_EASE_OUT_SEC)) / dtWall);
 }
 
+// Playtest 1 (§3.1, hold [F]): while the fast-forward runs, rises climb at least one decade per this many wall seconds
+// (pace.ts sets it every pre-tick: FF_DECADE_SEC while [F] is held, else null). A module value, not a clock field: the
+// clock's keys are pinned in the save shape.
+let fastRampDecadeSec: number | null = null;
+
+export function setFastForwardRamp(decadeSec: number | null): void {
+  if (decadeSec !== null && !(decadeSec > 0)) throw new Error(`setFastForwardRamp: ${decadeSec} is not a positive time`);
+  fastRampDecadeSec = decadeSec;
+}
+
 // Moves clock.speed toward clock.speedTarget.
 // • Drops SNAP: slowing down must be immediate (Fran), e.g. SKIP ending or a burn starting.
 // • Resuming from a halt snaps to min(target, tactical warp), so a resume never lands the
@@ -96,7 +106,8 @@ function advanceSpeedGlide(store: Store<GameState>, dtWall: number): void {
   const logFrom = Math.log10(speed);
   const distance = Math.log10(speedTarget) - logFrom;
   const skipRamp = skipping ? Math.log10(skipWarp / state.level.cruiseWarp) / SKIP_RAMP_SEC : 0;
-  const rate = Math.max(1 / GLIDE_SECONDS_PER_DECADE, distance / GLIDE_TAU_SECONDS, skipRamp);
+  const fastRamp = fastRampDecadeSec === null ? 0 : 1 / fastRampDecadeSec;
+  const rate = Math.max(1 / GLIDE_SECONDS_PER_DECADE, distance / GLIDE_TAU_SECONDS, skipRamp, fastRamp);
   const step = rate * dtWall;
   const next = step >= distance ? speedTarget : Math.pow(10, logFrom + step);
   store.mutate((draft) => { draft.clock.speed = next; });

@@ -74,7 +74,7 @@ const h: Harness2 = createHarness2(1);
   check('structure: a countdown tick is the same line',
     sameObjectiveStructure(line('WAIT — brake at ▼ in 2:58'), line('WAIT — brake at ▼ in 10:00')));
   check('structure: new words are a new line',
-    !sameObjectiveStructure(line('WAIT — brake at ▼ in 2:58'), line('WAIT — brake at ▼ in 2:58 · [F] SKIP')));
+    !sameObjectiveStructure(line('WAIT — brake at ▼ in 2:58'), line('WAIT — brake at ▼ in 2:58 · hold [F]')));
   check('structure: a new id is a new line', !sameObjectiveStructure(line('X 1'), line('X 1', 'other')));
 }
 

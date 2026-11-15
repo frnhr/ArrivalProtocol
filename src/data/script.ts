@@ -2641,12 +2641,12 @@ export const GUIDE_RULES: readonly GuideRule[] = [
       && ctx.flight?.urgency === 'wait'
       && ctx.skipAvailable
       && ctx.flight.keys.includes('F'),
-    text: (ctx) => `MIND CLEAR — press [F] to SKIP to ${ctx.vars.nextApsis}`,
+    text: (ctx) => `MIND CLEAR — hold [F] to ${ctx.vars.nextApsis}`,
     keys: ['F'],
   },
   {
     // The landing's twin (01-landing §3.11): in blue with nothing to do between windows, when the landing table's WAIT
-    // offers the SKIP (its F key), it says where the SKIP goes: `MIND CLEAR — press [F] to SKIP to LZ-B`.
+    // offers the fast-forward (its F key), it says where it goes: `MIND CLEAR — hold [F] to LZ-B` (playtest 1, §3.1).
     id: 'hint-mind-clear-landing',
     layer: 'mind',
     priority: 'hint',

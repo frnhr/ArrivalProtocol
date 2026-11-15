@@ -57,7 +57,14 @@ check(`…and every ship's built world past ARES-VII (its ship slices from a bea
 // Playtest 1 B-VOICE re-recorded it again (it was 8ceb50b18060dcb5): the log holds the moved and cut lines (CONTROL's
 // official words, PAL's quips, the capture and orbit cheers once a run, so the director's done list too). Words and the
 // done list expected; the arm's and the ship slices' digests above did not move (outcomes not separately re-checked).
-const PINNED_RUN = '533b85a68ae903d8';
+// Playtest 1, B-TIME re-recorded it again (it was 8ceb50b18060dcb5), and found what moved it: the landing's strip offers
+// `· hold [F]` wherever holding fast-forwards (pace fastForwardBlockReason; the tap's `[F] to SKIP` only where a SKIP would
+// start), so on LAST LIGHT's final landing the strip-following kid's reaction clock restarts at other moments and its
+// first launch comes 0.15 AI s earlier. The only moment that moves is LAST LIGHT's end; every boot, every flight, every
+// desk and every outcome (won-purge) are as before, and the end state differs only in times and positions (a diff of the
+// two end states: 0.25 AI s, 1e-9 of game time, nothing else).
+// Merged (B-VOICE's words and done list plus B-TIME's earlier first launch on LAST LIGHT): re-recorded at the merge.
+const PINNED_RUN = '2e6391c568d99052';
 const REQUESTS: readonly (RepoFileId | null)[] = ['mv', 'rm', 'swap', 'cp', null];
 const h = createHarness11(1, { soulsFound: false });
 const state = (): Readonly<GameState> => h.store.getState();

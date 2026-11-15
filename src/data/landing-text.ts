@@ -165,10 +165,10 @@ export const LANDING_LINES = {
   // END LANDING parks the rest. While that window is open: [L]; until it is: the wait to it.
   L3b: (factor: number): string => `NO ROOM IN THE BAND — [L] lands in a full LZ (${scoreFraction(factor)}), or END LANDING`,
   L13noRoom: (lz: string, inSec: number, skip: boolean): string =>
-    `NO ROOM IN THE BAND — ${lz} in ${minSec(inSec)}${skip ? ' · [F] to SKIP' : ''}, or END LANDING`,
-  // `· [F] to SKIP` only while a SKIP would start (as the flight's WAIT rows offer it).
+    `NO ROOM IN THE BAND — ${lz} in ${minSec(inSec)}${skip ? ' · hold [F]' : ''}, or END LANDING`,
+  // `· hold [F]` only while holding [F] would fast-forward (as the flight's WAIT rows offer it; playtest 1, §3.1).
   L13: (lz: string, inSec: number, skip: boolean, outOfBand: boolean): string =>
-    `WAIT — ${lz} in ${minSec(inSec)} ▸▸${skip ? ' · [F] to SKIP' : ''}${outOfBand ? ' · OUT OF BAND' : ''}`,
+    `WAIT — ${lz} in ${minSec(inSec)} ▸▸${skip ? ' · hold [F]' : ''}${outOfBand ? ' · OUT OF BAND' : ''}`,
   // Slice 5 review fix pass (M1): an open window another controller flies (autodrop.ts controllerWaitLine: the sleeper's
   // RUN THE DROPS, MERGE's landing): its next launch, with no key and no name (R21).
   L13controller: (lz: string, inSec: number): string => `WAIT — ${lz} in ${minSec(inSec)}`,
@@ -185,7 +185,7 @@ export const LANDING_SKIP_REFUSAL = {
 // The strip's asks and hints around a landing (§3.11, plan §1.6).
 export const LANDING_ASKS = {
   hurtDriver: (pod: number): string => `${podCode(pod)} WILL LAND HARD — REPAIR its driver`,
-  mindClear: (lz: string): string => `MIND CLEAR — press [F] to SKIP to ${lz}`,
+  mindClear: (lz: string): string => `MIND CLEAR — hold [F] to ${lz}`,
 } as const;
 
 // Lessons, once each (§3.11).

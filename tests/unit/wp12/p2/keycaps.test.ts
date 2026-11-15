@@ -26,7 +26,7 @@ const phone = (text: string, options: CapOptions = {}): string =>
 const cases: { text: string; options?: CapOptions; want: string; why: string }[] = [
   { text: 'DON\'T HIT THE PLANET — hold [SPACE]', want: 'DON\'T HIT THE PLANET — hold [BURN]', why: 'the opening line names the BURN button' },
   { text: '▼ TOO LOW — press [D] (OUT)', want: '▼ TOO LOW — press [OUT]', why: 'a preset cap names the preset, once' },
-  { text: 'WAIT — brake at ▼ in 0:35 · [F] SKIP', want: 'WAIT — brake at ▼ in 0:35 · [▸▸] SKIP', why: 'SKIP is the ▸▸ button' },
+  { text: 'WAIT — brake at ▼ in 0:35 · hold [F]', want: 'WAIT — brake at ▼ in 0:35 · hold [▸▸]', why: 'SKIP is the ▸▸ button' },
   { text: 'WAIT — brake at ▼ in 0:35 · or [B] AUTO', want: 'WAIT — brake at ▼ in 0:35 · or [AUTO]', why: '[B] AUTO says AUTO once' },
   { text: '[TAB] BACK — hold [SPACE]', options: { tab: 'SHIP' }, want: '[SHIP] BACK — hold [BURN]', why: '[TAB] names the line\'s screen' },
   { text: 'THE COLONISTS ARE IN MEMORY — press [TAB] to see them', options: { tab: 'MIND' }, want: 'THE COLONISTS ARE IN MEMORY — press [MIND] to see them', why: 'into the MIND' },

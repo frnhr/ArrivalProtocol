@@ -37,9 +37,11 @@ export interface MissionMeta {
 // CRUISE: a quiet coast, the world runs at ship.cruiseWarp. TACTICAL: something is about to
 // happen (crash course, burn, lock hold), the world runs at ship.tacticalWarp so countdowns
 // are real seconds. SKIP: the player fast-forwards to the next event at clock.skipWarp (LEAD-2: along the
-// orbit in exact jumps, landing on clock.skipEndTSec).
+// orbit in exact jumps, landing on clock.skipEndTSec). FAST (playtest 1, hold [F]): the fast-forward runs capped, on the
+// normal tick integrator (never the Kepler jump), at a warp pace.ts sets (inside a hazard zone, while pods fall, while
+// the story waits on wall time); orbit-sim flies it like CRUISE.
 // systems/pace.ts is the only writer.
-export type Pace = 'cruise' | 'tactical' | 'skip';
+export type Pace = 'cruise' | 'tactical' | 'skip' | 'fast';
 
 export interface ClockState {
   tSec: number;            // mission (game) seconds

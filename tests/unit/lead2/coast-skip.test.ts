@@ -139,15 +139,15 @@ const longWait = (): void => {
   const after = elementsFromState(state().orbit, mu);
   const raceTac = (landedTSec - t0) / tacticalWarp;
   check(`${ship}: a WAIT of ${(waitTac / 60).toFixed(0)} tactical minutes ("${line.replace(/\d+:\d+/, 'm:ss')}") takes one SKIP of a few seconds`,
-    /^WAIT — brake at ▼ in \d+:\d\d · \[F\] SKIP$/.test(line) && waitTac > 60 * 60 && wallSec <= FEW_SKIP_SEC && wallSec >= SKIP_DIVISOR,
+    /^WAIT — brake at ▼ in \d+:\d\d · hold \[F\]$/.test(line) && waitTac > 60 * 60 && wallSec <= FEW_SKIP_SEC && wallSec >= SKIP_DIVISOR,
     `${wallSec.toFixed(2)} wall s`);
   check(`${ship}: …it lands exactly ${SKIP_END_LEAD_TAC} tac s before START BURN`,
     Math.abs(landedTac - SKIP_END_LEAD_TAC) < 0.01, `${landedTac.toFixed(4)} tac s before`);
   // The ease-out: the last tick at SKIP pace runs within a decade of CRUISE, and the fall to it takes several ticks.
   const easeTicks = speeds.length - speeds.lastIndexOf(maxSpeed) - 1;
   const easedTo = speeds[speeds.length - 1] ?? Infinity;
-  check(`${ship}: …the time-lapse: the warp ramps up, holds (×${maxSpeed.toExponential(1)}) and eases back down over ${easeTicks} ticks, the clock races, the header says SKIP ▸▸`,
-    ramped && easeTicks >= 8 && easeTicks <= 2 * SKIP_EASE_OUT_SEC / TICK && easedTo < 10 * cruiseWarp && maxSpeed > 100 * cruiseWarp && Math.abs(raceTac - (waitTac - SKIP_END_LEAD_TAC)) < 0.01 && /^SKIP ▸▸ ×/.test(label) && chipFast,
+  check(`${ship}: …the time-lapse: the warp ramps up, holds (×${maxSpeed.toExponential(1)}) and eases back down over ${easeTicks} ticks, the clock races, the header says FAST ×n ▸▸`,
+    ramped && easeTicks >= 8 && easeTicks <= 2 * SKIP_EASE_OUT_SEC / TICK && easedTo < 10 * cruiseWarp && maxSpeed > 100 * cruiseWarp && Math.abs(raceTac - (waitTac - SKIP_END_LEAD_TAC)) < 0.01 && /^FAST ×.* ▸▸$/.test(label) && chipFast,
     `"${label}", the clock moved ${(raceTac / 60).toFixed(0)} tac min, chip ▸▸ ${chipFast}`);
   check(`${ship}: …the ship sweeps along its loop out to ▲ and back, and the loop itself is untouched (a pure coast)`,
     farthest > 0.9 * pred.ra && Math.abs(after.rp - before.rp) / before.rp < 1e-6 && Math.abs(after.e - before.e) < 1e-9,
@@ -255,7 +255,7 @@ fullOnly(`${ship}: SHRINK ignored for an hour (LEAD-1 deviation 1)`, () => {
       + `${fuelHeld.toFixed(1)}% after 2 s held, "${lineHeld.replace(/\d+:\d+/, 'm:ss')}", fresh press fires ${freshFires}; `
       + `then ${harness.status()}, longest SKIP ${flown.longestSkipSec.toFixed(1)} s`;
     rows.push(row);
-    const ok = skipping && !asked && stopped && fuelHeld === fuelBefore && !firedWhileHeld && /^WAIT — .* · \[F\] SKIP$/.test(lineHeld)
+    const ok = skipping && !asked && stopped && fuelHeld === fuelBefore && !firedWhileHeld && /^WAIT — .* · hold \[F\]$/.test(lineHeld)
       && freshFires && ['locked', 'accepted'].includes(harness.status()) && flown.longestSkipSec <= FEW_SKIP_SEC;
     if (!ok) bad ||= row;
   }

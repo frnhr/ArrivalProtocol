@@ -63,12 +63,12 @@ const store = harness.store;
       const objective = flightObjective(buildFlightContext(store.getState(), pred));
       if (!objective) { failure = `null objective while approaching (rp ${rp.toFixed(0)}, e ${e.toFixed(2)})`; break; }
       ids.add(objective.id.replace(/-(rp|ra)-(low|high)$/, '-trim'));
-      if (/^F9-(press|hold)$/.test(objective.id) && objective.text.endsWith('· [F] SKIP')) variants.add('F9+skip');
+      if (/^F9-(press|hold)$/.test(objective.id) && objective.text.endsWith('· hold [F]')) variants.add('F9+skip');
       if (objective.id === 'F5-next' && pred.burnPoint?.preset === store.getState().burn.sasMode) variants.add('F5-next-same-preset');
       // LEAD-1 review round 1: a trim the tank can't pay for keeps its WAIT and SKIP while the burn there
       // still saves the ship, and names no ACCEPT that strands it.
       if (objective.id === 'F11-wait' && pred.burnPoint && store.getState().burn.fuelPct < pred.neededPct
-        && !pred.strandedAnyway && objective.text.includes('[F] SKIP') && pred.greenFraction < 0.1) {
+        && !pred.strandedAnyway && objective.text.includes('hold [F]') && pred.greenFraction < 0.1) {
         variants.add('F11-wait-short+skip');
       }
       if (objective.text.length > longest.length) longest = objective.text;

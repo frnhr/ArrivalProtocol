@@ -120,7 +120,7 @@ const long = 'W'.repeat(SEG_NAME_MAX_CHARS);
   const burning = flightObjective({ ...capture, autoburn: { phase: 'burning', sinceSec: 1, armedInTac: 0, end: null }, firing: true, thrustOn: true });
   const done = flightObjective({ ...capture, outcome: 'closed', autoburn: { phase: 'done', sinceSec: 1, armedInTac: 0, end: 'braked' }, inMind: true });
   check('AUTOBURN\'s rows: ARMED (wait, with SKIP), BRAKING (soon), CAPTURED (now, [TAB] in blue), all ≤ 70',
-    armed?.id === 'AUTO-armed' && armed.urgency === 'wait' && fits(armed.text) && armed.text.includes('[F] SKIP')
+    armed?.id === 'AUTO-armed' && armed.urgency === 'wait' && fits(armed.text) && armed.text.includes('hold [F]')
     && burning?.id === 'AUTO-burning' && burning.urgency === 'soon' && done?.id === 'AUTO-done' && done.urgency === 'now' && done.text === AUTOBURN_TEXT.brakedTab,
   `${armed?.text} | ${burning?.text} | ${done?.text}`);
   // Final fix pass (final review): the words keep `[B] to cancel` and `[SPACE] takes over`, but neither key glows as the

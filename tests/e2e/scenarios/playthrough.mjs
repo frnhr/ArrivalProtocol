@@ -2,11 +2,12 @@
 // CORMORANT → LAST LIGHT (the worked route [0, 2, 5, 11, 15, 19]) → the RUN TALLY → NEW RUN, played like a kid who does
 // what the strip says:
 // • the SHIP by keys: SPACE held on `hold [SPACE]` / `KEEP HOLDING` / `NOW` and let go on RELEASE / WAIT / TURN AROUND,
-//   the preset key a line names (`press [S]`), [F] when it offers SKIP, [B] when it offers AUTOBURN, [TAB] when it says so;
+//   the preset key a line names (`press [S]`), [F] held while it offers `hold [F]` (playtest 1: a hold, not a tap), [B]
+//   when it offers AUTOBURN, [TAB] when it says so;
 // • the MIND by clicks: the tool chip the line names (SCAN, REPAIR, DELETE, COPY, SWAP, MOVE), then the block it names
 //   (a file, a pod's driver `POD 02`, the root, a seed);
 // • the landing (slice 1a) by keys and the POD BAY: [L] when the line names [L] (LAUNCH NOW, LAUNCH — WIDE DROP; an
-//   inline confirm after it is answered yes with Enter), [F] when it offers SKIP, and on L12 (NO POD CAN LAUNCH, NO LZ IN
+//   inline confirm after it is answered yes with Enter), [F] held while it offers `hold [F]`, and on L12 (NO POD CAN LAUNCH, NO LZ IN
 //   THE LAUNCH BAND, NO BAY CTRL, NO DROP DOT ON THIS ORBIT) END LANDING in the POD BAY window plus Enter on its confirm;
 // • the screens between ships by their keys and buttons (SPACE on the boot and the LANDING REPORT; on the DESK a click on
 //   the next ship's node, scoped to #deskScreen since the title's chart has [data-slot] nodes too, then ENTER; [1] and
@@ -61,7 +62,7 @@
 // Debugging a ship: PLAY_FROM=6 flies headless to LAST LIGHT after the title (__ap.route along the worked route, a fresh
 // unit carried in; the earlier ships' checks are skipped), PLAY_TRACE=1 logs every strip line the kid reads, with the time
 // and the screen. LAND_BY_STRIP=1,2,3,4,5,6 lands those ships by the strip (default 1,2,6: all six add about 4 minutes).
-import { launch, BASE_URL, SHOTS, checker, pageKit, runKit, viewportFromEnv } from '../lib.mjs';
+import { launch, BASE_URL, SHOTS, checker, pageKit, runKit, viewportFromEnv, holdKey } from '../lib.mjs';
 import { join } from 'node:path';
 
 const SEED = Number(process.env.SEED ?? 7);
@@ -125,7 +126,7 @@ const look = () => st(() => {
   const read = (node) => node.nodeType === Node.TEXT_NODE ? node.textContent
     : node.nodeType !== Node.ELEMENT_NODE ? '' : node.matches('kbd.keycap') ? `[${node.textContent}]` : [...node.childNodes].map(read).join('');
   return {
-    phase: s.run.phase, ship: s.level.shipName, status: s.burn.status, mode: s.ui.mode, pace: s.clock.pace,
+    phase: s.run.phase, ship: s.level.shipName, status: s.burn.status, mode: s.ui.mode, pace: s.clock.pace, ffHeld: ap.fastForward().held,
     line: ap.director().shown?.text ?? '', lineId: ap.director().shown?.id ?? '', dom: read(strip), typing: !document.getElementById('objectiveCaret').hidden,
     fits: strip.scrollWidth <= strip.clientWidth + 1, firing: s.burn.firing, ops: ap.ops().length,
     // Slice 3a: VESPER's ENGINE FAULT: the controller's ghost bursts so far, and whether it can fire them.
@@ -151,6 +152,10 @@ const hold = async (on) => {
   if (!on && holding) await page.keyboard.up('Space');
   holding = on;
 };
+// Playtest 1 (§3.1): [F] is held while the strip offers `hold [F]` and let up as soon as it stops (the hold's own stop, a
+// line that asks for something else), every poll.
+const fKey = holdKey(page, 'KeyF');
+const holdF = (view) => fKey.set(/\[F\]/.test(view.line) && ['flight', 'landing'].includes(view.phase), view.ffHeld);
 let lastTab = 0;
 const toMode = async (mode, now) => { if (now !== mode) { lastTab = Date.now(); await page.keyboard.press('Tab'); } };
 
@@ -321,6 +326,7 @@ let lastBeam = 0;
 const beams = [];
 // One poll of the kid in a flight: the SHIP's keys, or the MIND's clicks when the line asks for a tool.
 async function flyStep(view) {
+  await holdF(view);
   if (await closeReader(view) || await answerDeal(view)) return;
   const text = view.line;
   // The strip names [TAB] only while the kid is on the wrong screen for what it asks; the strip lags a switch by a
@@ -348,7 +354,6 @@ async function flyStep(view) {
   if (preset) { await toMode('tools', view.mode); await page.keyboard.press(`Key${preset[1]}`); }
   if (/hold \[SPACE\]|KEEP HOLDING|NOW/i.test(text) && !/RELEASE/.test(text)) { await toMode('tools', view.mode); await hold(true); }
   if (/\[B\]/.test(text) && view.auto) await page.keyboard.press('KeyB');
-  if (/\[F\]/.test(text) && view.pace !== 'skip') await page.keyboard.press('KeyF');
   if (/tap \[SPACE\]/.test(text)) { await page.keyboard.press('Space'); }
 }
 
@@ -357,8 +362,11 @@ const confirmOpen = () => st(() => !document.getElementById('inlineConfirm').hid
 let lastLaunchKey = 0;
 let lastEnd = 0;
 // One poll of the kid in a landing: [TAB] when asked, [L] when the line names it, END LANDING on L12, the MIND's line,
-// [F] when it offers SKIP. Never SPACE: LAUNCH NOW reads `NOW`, which the flight's rule takes for "hold SPACE".
+// [F] held while it offers `hold [F]`. Never SPACE: LAUNCH NOW reads `NOW`, which the flight's rule takes for "hold SPACE".
 async function landStep(view, tally) {
+  const wasHeld = fKey.down;
+  await holdF(view);
+  if (!wasHeld && fKey.down) tally.fPresses++;
   if (await closeReader(view) || await answerDeal(view)) return;
   const text = view.line;
   if (/\[TAB\]/.test(text) && Date.now() - lastTab > 900) { lastTab = Date.now(); await page.keyboard.press('Tab'); return; }
@@ -392,8 +400,7 @@ async function landStep(view, tally) {
     }
     return;
   }
-  if (await mindAct(view)) return;
-  if (/\[F\]/.test(text) && view.pace !== 'skip') { await page.keyboard.press('KeyF'); tally.fPresses++; }
+  await mindAct(view);
 }
 
 // What the landing shows, in one read: the POD BAY window, the GROUND TRACK, the mini-HUD and the pods' fates.
@@ -624,6 +631,7 @@ for (const [index, name] of SHIPS.entries()) {
     if (paceBefore !== 'skip' && view.pace === 'skip') skips++;
   }
   await hold(false);
+  await fKey.set(false);
   const stuck = view.phase === 'flight' && view.status === 'approaching' && !view.lostCard;
   const flightSec = (Date.now() - flightStart) / 1000;
   const outcome = await st(() => window.__ap.store.getState().burn.status);
@@ -752,6 +760,7 @@ for (const [index, name] of SHIPS.entries()) {
       }
       await page.waitForTimeout(POLL_MS);
     }
+    await fKey.set(false);
     // The pods the player launched: on a ship landed by the strip only the kid's [L] launches (no landAll there).
     const landed = await st(() => ({
       launches: window.__ap.store.getState().landing.pods.filter((pod) => 'launch' in pod.fate && pod.fate.launch.source === 'player').length,

@@ -12,7 +12,7 @@ import {
   secUntil, sweetZone, isFinishingBurn, burnKey, rpRateUnderThrust,
   type Prediction, type PredictOutcome, type BurnPoint, type BurnEvent, type TrimReason,
 } from '@systems/predict';
-import { skipBlockReason } from '@systems/pace';
+import { fastForwardOffered } from '@systems/pace';
 import { goLowReleased, landingBurnOffer, launchRadiusRate, offerInTac } from '@systems/landing-orbit';
 import { LANDING_FLIGHT_LINES } from '@data/landing-text';
 import { controllerSwapOf } from '@systems/tool-targets';
@@ -191,7 +191,7 @@ export function buildFlightContext(state: Readonly<GameState>, pred: Prediction)
     engineFault: engineFault(caps),
     spareController: spareControllerOf(state),
     inMind: state.ui.mode === 'memory',
-    skipAvailable: state.clock.skipWarp === null && skipBlockReason(state, pred) === null,
+    skipAvailable: fastForwardOffered(state, pred),
     burnPoint: burnPoint ? timed(burnPoint) : null,
     offer: offer ? timed(offer) : null,
     goLow: goLowOf(state),
@@ -290,7 +290,8 @@ export const ACCEPT_ONLY_LINE = 'NOT ENOUGH FUEL for a stable orbit — ACCEPT O
 // line is true for both endings rather than promise the empty tank. It must not contain RELEASE, the strip's word
 // for letting go: `until RELEASE or the FUEL runs out` made a kid who reads for that word let go every other tick.
 export const KEEP_TO_EMPTY_LINE = 'KEEP HOLDING — it may take all your FUEL';
-const SKIP_HINT = ' · [F] SKIP';
+// Playtest 1 (§3.1): [F] is held to fast-forward; the tail says so (the phone draws [F] as its ▸▸ button: `hold ▸▸`).
+const SKIP_HINT = ' · hold [F]';
 // WP9: TOO WIDE with a debris cloud on the path: the same IN correction dodges it if it starts in time, and the
 // line counts that time down, then says when it has run out (the lead's note: the kid must see that steering IN
 // EARLY is what saves the rack). The short forms are for the Q/E wording (a damaged Autopilot).

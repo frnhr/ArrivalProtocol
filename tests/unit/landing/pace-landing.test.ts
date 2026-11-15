@@ -66,7 +66,7 @@ check(`the warps switch at the lock: ${flightWarps.join('/')} → ${LANDING_TACT
   check('CRUISE between windows after the lock', state().clock.pace === 'cruise', state().clock.pace);
   check('the window countdown falls smoothly from the lock, no jump', steps.every((step, i) => step > 0 && step <= most + 1e-9
     && (i === 0 || Math.abs(step - steps[i - 1]!) < 0.01)), `${steps.map((step) => step.toFixed(4)).join(' ')} (at most ${most})`);
-  check('the strip says WAIT with [F] to SKIP', table().row === 'L13' && table().keys.includes('F') && /\[F\] to SKIP/.test(table().text), table().text);
+  check('the strip says WAIT with hold [F]', table().row === 'L13' && table().keys.includes('F') && /hold \[F\]/.test(table().text), table().text);
 }
 
 // --- SKIP to the window: 8 tac s before it, one exact conic jump --------------------------------------------------------

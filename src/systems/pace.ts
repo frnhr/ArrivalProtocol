@@ -2,9 +2,12 @@
 // than the state argument. Others ask by message.
 import type { Store } from '@state/store';
 import type { GameState, Pace, LevelState, SkipWaypoint } from '@state/schema';
-import { onPreTick, isActivePhase, setPaused } from '@systems/clock';
+import { onPreTick, isActivePhase, isLivePhase, setPaused, setFastForwardRamp } from '@systems/clock';
+import { onWorldReset } from '@systems/reset';
 import { isBurnHeld, isGhostFiring, ghostDueInSec, laterBurstWindow } from '@systems/orbit-sim';
-import { getPrediction, currentPrediction, secUntil, isFinishingBurn, skipWarp, type Prediction, type ZoneHit } from '@systems/predict';
+import {
+  getPrediction, currentPrediction, secUntil, isFinishingBurn, skipWarp, type BurnPoint, type Prediction, type ZoneHit,
+} from '@systems/predict';
 import { ZONE_WORD } from '@data/zone-text';
 import { ghostBurstsThisPhase, spreadPaused } from '@state/selectors';
 import { capabilitiesNow, ghostRefusesSkip } from '@systems/capabilities';
@@ -12,13 +15,14 @@ import { registerKeys } from '@systems/input';
 import { emit } from '@systems/events';
 import { getDropSolution } from '@systems/drop-cache';
 import { landingMoment, podCounts, type LandingMoment } from '@systems/landing-rules';
-import { controllerLaunchInSec, windowRuleHolds } from '@systems/landing-controller';
-import { offerInTac } from '@systems/landing-orbit';
+import { activeLandingController, controllerLaunchInSec, windowRuleHolds } from '@systems/landing-controller';
+import { offerInTac, landingBurnOffer, declineKey } from '@systems/landing-orbit';
 import type { DropSolution } from '@/types/landing';
 import { LANDING_SKIP_REFUSAL } from '@data/landing-text';
 import {
-  TICK_MS, TACTICAL_LEAD_BURN_TAC, SKIP_END_LEAD_TAC, SKIP_MIN_JUMP_TAC, SKIP_LANDING_TOLERANCE_SEC, DEBUG_WARP_MAX,
+  TICK_MS, TACTICAL_LEAD_BURN_TAC, SKIP_END_LEAD_TAC, SKIP_MIN_JUMP_TAC, SKIP_LANDING_TOLERANCE_SEC, DEBUG_WARP_MAX, SKIP_EASE_OUT_SEC,
   OVERCLOCK_FACTOR, IGNORED_NOW_TAC, ZONE_TACTICAL_LEAD_TAC, DODGE_TACTICAL_LEAD_TAC, WINDOW_TACTICAL_LEAD_TAC,
+  FF_LEG_WALL_SEC, FF_DECADE_SEC, FF_SOFT_DWELL_SEC, FF_ZONE_PASS_WALL_SEC, FF_PASSED_MATCH_TAC,
 } from '@data/tuning';
 
 // The director's pace (§6.1). A kid should never have to discover time warp: the game runs
@@ -233,6 +237,9 @@ function landingSkipInhibitor(state: Readonly<GameState>): string | null {
 }
 
 function nextEvent(state: Readonly<GameState>, pred: Prediction): NextEvent | null {
+  // Playtest 1 (§3.1): a leg of the held [F] runs to the fast-forward's next stop (its soft stops passed this hold left out,
+  // the landing's offers in), so the SKIP engine below lands it there.
+  if (ff.leg) return ffNextStop(state, pred);
   if (isLanding(state)) return landingNextEvent(state, pred);
   const toBurn = isMissedBurnIgnored(state, pred) ? null : burnPointInSec(state, pred);
   const zone = nextZoneEntry(state, pred);
@@ -321,9 +328,13 @@ export function choosePace(state: Readonly<GameState>, pred: Prediction, skipAct
   return skipActive ? 'skip' : 'cruise';
 }
 
-function warpFor(level: LevelState, pace: Pace, skipWarp: number | null, overclock: boolean): number {
+function warpFor(level: LevelState, pace: Pace, skipWarp: number | null, overclock: boolean, fastWarp: number | null): number {
   if (pace === 'tactical') return overclock ? level.tacticalWarp * OVERCLOCK_FACTOR : level.tacticalWarp;
   if (pace === 'cruise') return level.cruiseWarp;
+  if (pace === 'fast') {
+    if (fastWarp === null) throw new Error('warpFor: FAST pace without a capped warp');
+    return fastWarp;
+  }
   if (skipWarp === null) throw new Error('warpFor: SKIP pace without a skip warp');
   return skipWarp;
 }
@@ -392,6 +403,14 @@ function hollowWaking(state: Readonly<GameState>): boolean {
 // rule, which only matters when a skip is requested. null = nothing in the way. A pause is
 // not in here: it freezes a running skip instead of ending it (see mountPace).
 function skipInhibitor(state: Readonly<GameState>, pred: Prediction): string | null {
+  const base = skipInhibitorBase(state, pred);
+  if (base !== null) return base;
+  if (nextEvent(state, pred) === null) return 'NOTHING TO SKIP TO';
+  return null;
+}
+
+// skipInhibitor without its last rule (nothing ahead): the fast-forward finds its own next stop.
+function skipInhibitorBase(state: Readonly<GameState>, pred: Prediction): string | null {
   const landing = isLanding(state);
   if (!landing && state.burn.status !== 'approaching') return 'FLIGHT OVER';
   if (isBurnHeld(state) || isGhostFiring(state)) return 'ENGINE FIRING';
@@ -423,7 +442,6 @@ function skipInhibitor(state: Readonly<GameState>, pred: Prediction): string | n
   // Not while an ACCEPTed DEAL holds HOLLOW's spread and seeds (WP12 p3, WP10 verify): SKIP sat struck out for the
   // whole 60 s pause, dead time with nothing coming; the first seed's clock waits at TACTICAL anyway (hollow.ts).
   if (firstSeedComing(state) && !spreadPaused(state.hollow, state.clock.aiSec)) return SKIP_REFUSAL_SEED_COMING;
-  if (nextEvent(state, pred) === null) return 'NOTHING TO SKIP TO';
   return null;
 }
 
@@ -484,7 +502,10 @@ export function requestSkip(store: Store<GameState>): SkipResult {
 // True when a SKIP was running (and is now stopped). The callers refuse a press while paused (pause is look-only)
 // before they get here. The stop itself is stopSkip's; this name is kept as the presses' one entry point, where the
 // rule above is written down (WP10: stopSkip also serves a later ghost burst that changed the plan).
+// Playtest 1 (§3.1): under a held [F] the press also spends the hold (STOPPED), so the next tick does not start another leg
+// over the kid's own controls; a fresh [F] goes on.
 export function stopSkipOnPress(store: Store<GameState>): boolean {
+  if (ff.held && ff.spent === null) spendHold(store, FF_TEXT.stopped);
   return stopSkip(store);
 }
 
@@ -532,6 +553,434 @@ export function setDebugWarp(store: Store<GameState>, warp: number | null): void
     throw new Error(`setDebugWarp: ${warp} is outside 1..${DEBUG_WARP_MAX}`);
   }
   if (store.getState().clock.debugWarp !== warp) store.update((draft) => { draft.clock.debugWarp = warp; });
+}
+
+// --- Hold [F]: the fast-forward (playtest 1, Fran's notes 6 and 24; docs/phase3/impl/playtest-1-plan.md §3.1) ------------
+// The tap SKIP is gone from the kid's hands: [F] (or the header's ▸▸ HOLD, by pointer) is HELD, and while it is the world
+// fast-forwards from stop to stop. Each leg is a SKIP (the engine above, unchanged: Kepler jumps, its ramp, its ease onto
+// the end point) to the next stop's lead (endLeadTac). Every stop is one of:
+// • HARD, a decision the kid has not made: the flight's planned burn (a missed ▼ until it is ignored), a debris dodge's
+//   deadline, the first entry into each zone on this ship, flying away; in the landing a safety burn or one AUTOBURN is
+//   engaged for, and the awaited window the kid's own hands fly; and, at any moment, an alarm or the first ghost burst.
+//   The hold is SPENT there: the director's pace takes over, holding on does nothing, the button reads the stop
+//   (`BURN AHEAD`, `LZ-B WINDOW`), and a fresh press goes on.
+// • SOFT, a stop the kid may let pass: a ring trim, GO LOWER or the lift the landing offers (note 6), a later entry into a
+//   zone already met on this ship (note 24). The world slows to TACTICAL at its lead for FF_SOFT_DWELL_SEC with the strip
+//   naming it, and the hold goes on: a passed offer is declined (landing.declined, as letting it pass does), a passed
+//   zone entry is remembered.
+// • WAIT, a window an armed controller flies (AUTODROP, the sleeper, MERGE) and its next launch: the director's TACTICAL
+//   plays it, the hold is not spent, and once it has gone by the hold goes on by itself (AUTODROP v3's gaps).
+// CAPPED: inside a zone met on this ship or in its lead, while the engine-fault bursts are due, while the story waits on
+// wall time (the first seed, a coast-tied wake) or while pods fall, the world runs pace 'fast': the normal tick integrator
+// (never the Kepler jump) at a capped warp, so every hit, burst and line is played. In a zone the cap takes the rest of the
+// pass FF_ZONE_PASS_WALL_SEC; otherwise it is CRUISE.
+// Refused (the hold spent at once, the button struck out with the reason): the engine firing, an impact course, an alarm,
+// the HOLD STEADY count, a hand window open, the flight or the landing over, ACCEPT ORBIT the only way on. PAUSED freezes
+// the hold instead. Letting go returns to the director's pace at once.
+// The state is this module's (reset with the world), not the clock's: the clock's keys are pinned in the save shape.
+
+// The button's words where the hold ends or waits (the others are the SKIP's refusals above, none of which names SKIP).
+export const FF_TEXT = {
+  burn: 'BURN AHEAD',
+  window: (lz: string): string => `${lz} WINDOW`,
+  escape: 'FLYING AWAY',
+  holdSteady: 'HOLD STEADY',
+  nothing: 'NOTHING AHEAD',
+  // The engine-fault bursts are due (ghostRefusesSkip): the hold runs at CRUISE at most, so on a coast it adds nothing.
+  engineFault: 'ENGINE FAULT',
+  // A burn input (SPACE, BURN, [B]) pressed under the hold: it ends the hold as it ends a SKIP.
+  stopped: 'STOPPED',
+} as const;
+
+type StopWeight = 'hard' | 'soft' | 'wait';
+
+interface Stop extends NextEvent {
+  weight: StopWeight;
+  key: string;             // what a passed soft stop is remembered by
+  label: string;           // the button's word when the hold ends or waits there
+  zoneId: string | null;   // a zone entry's zone
+  offer: BurnPoint | null; // a landing offer: what passing it declines
+}
+
+interface PassedStop {
+  key: string;
+  atTSec: number;  // the game time the stop fell on
+}
+
+interface FastForward {
+  held: boolean;
+  spent: string | null;    // the stop or refusal that ended this hold (null: it goes on)
+  leg: boolean;            // the running SKIP is this hold's leg (nextEvent is the fast-forward's)
+  dwell: { stop: Stop; untilAi: number; atTSec: number } | null;
+  passed: PassedStop[];    // soft stops passed on this ship
+  met: Set<string>;        // zones entered (or stopped at) on this ship: their later entries are soft
+  zoneCap: { zoneId: string; warp: number } | null;  // the capped warp of the zone pass under way, fixed at its start
+  capWarp: number | null;  // this tick's 'fast' warp (null: not capped)
+}
+
+const ff: FastForward = {
+  held: false, spent: null, leg: false, dwell: null, passed: [], met: new Set(), zoneCap: null, capWarp: null,
+};
+
+function resetFastForward(): void {
+  ff.held = false;
+  ff.spent = null;
+  ff.leg = false;
+  ff.dwell = null;
+  ff.passed = [];
+  ff.met.clear();
+  ff.zoneCap = null;
+  ff.capWarp = null;
+  setFastForwardRamp(null);
+}
+
+function autoEngaged(state: Readonly<GameState>): boolean {
+  const phase = state.burn.auto.phase;
+  return phase === 'armed' || phase === 'pointing' || phase === 'burning';
+}
+
+function stopLeadSec(state: Readonly<GameState>, stop: NextEvent): number {
+  return stop.inSec - endLeadTac(stop) * state.level.tacticalWarp;
+}
+
+// The stop is close enough to count as reached: a leg lands on its lead, and one shorter than a SKIP would be offered
+// (SKIP_MIN_JUMP_TAC) is not worth a leg.
+function stopReached(state: Readonly<GameState>, stop: NextEvent): boolean {
+  return stopLeadSec(state, stop) <= SKIP_MIN_JUMP_TAC * state.level.tacticalWarp;
+}
+
+function zoneStops(state: Readonly<GameState>, pred: Prediction): Stop[] {
+  const stops: Stop[] = [];
+  for (const window of zoneWindows(state, pred)) {
+    if (window.hit.spent || window.toEntry === null || window.toEntry <= 0 || isInside(window)) continue;
+    const met = ff.met.has(window.hit.zoneId);
+    stops.push({
+      kind: 'zone', inSec: window.toEntry, weight: met ? 'soft' : 'hard', key: `zone|${window.hit.zoneId}`,
+      label: skipRefusalZoneAhead(window.hit.kind), zoneId: window.hit.zoneId, offer: null,
+    });
+  }
+  return stops;
+}
+
+function plainStop(kind: NextEvent['kind'], inSec: number, weight: StopWeight, label: string): Stop {
+  return { kind, inSec, weight, key: kind, label, zoneId: null, offer: null };
+}
+
+// Every stop ahead, passed or not, and the escape (a stop only when nothing else is ahead).
+function ffStops(state: Readonly<GameState>, pred: Prediction): { stops: Stop[]; escape: Stop | null } {
+  const stops = zoneStops(state, pred);
+  if (isLanding(state)) {
+    const controller = activeLandingController(state) !== null;
+    const toWindow = windowLaunchInSec(state);
+    const lz = momentNow(state).target?.lz ?? 'LZ';
+    if (toWindow !== null) stops.push(plainStop('window', toWindow, controller ? 'wait' : 'hard', FF_TEXT.window(lz)));
+    const toLaunch = controllerLaunchInSec(state);
+    if (toLaunch !== null) stops.push(plainStop('window', toLaunch, 'wait', FF_TEXT.window(lz)));
+    const offer = landingBurnOffer(state, pred);
+    const toBurnTac = offerInTac(state, pred);
+    if (offer !== null && toBurnTac !== null) {
+      const declinable = offer.reason !== 'capture' && offer.reason !== 'missed' && !autoEngaged(state);
+      stops.push({
+        kind: 'burn', inSec: toBurnTac * state.level.tacticalWarp, weight: declinable ? 'soft' : 'hard',
+        key: `offer|${declineKey(offer)}`, label: FF_TEXT.burn, zoneId: null, offer,
+      });
+    }
+  } else {
+    const toBurn = isMissedBurnIgnored(state, pred) ? null : burnPointInSec(state, pred);
+    if (toBurn !== null) stops.push(plainStop('burn', toBurn, 'hard', FF_TEXT.burn));
+    const toDodge = dodgeDeadlineInSec(state, pred);
+    if (toDodge !== null) stops.push(plainStop('dodge', toDodge, 'hard', dodgeRefusal(state)));
+  }
+  const escape = pred.escapeInSec === null ? null
+    : plainStop('escape', secUntil(pred, pred.escapeInSec, state.clock.tSec), 'hard', FF_TEXT.escape);
+  return { stops, escape };
+}
+
+function wasPassed(state: Readonly<GameState>, stop: Stop): boolean {
+  const atTSec = state.clock.tSec + stop.inSec;
+  const match = FF_PASSED_MATCH_TAC * state.level.tacticalWarp;
+  return ff.passed.some((passed) => passed.key === stop.key && Math.abs(passed.atTSec - atTSec) <= match);
+}
+
+// The hold's next stop: the nearest one not passed, else the escape, else null (nothing ahead).
+function ffNextStop(state: Readonly<GameState>, pred: Prediction): Stop | null {
+  const { stops, escape } = ffStops(state, pred);
+  let best: Stop | null = null;
+  for (const stop of stops) {
+    if (wasPassed(state, stop)) continue;
+    if (best === null || stop.inSec < best.inSec) best = stop;
+  }
+  return best ?? escape;
+}
+
+// The 'fast' warp when the hold runs capped now, or null. A zone's warp is fixed when its pass starts (ff.zoneCap), so the
+// rest of the pass takes FF_ZONE_PASS_WALL_SEC instead of an ever-shrinking share of it.
+// `reason`: the first CRUISE cap's SKIP refusal (null when only a zone caps it).
+interface FfCap {
+  warp: number;
+  zoneId: string | null;
+  reason: string | null;
+}
+
+function ffCapWarp(state: Readonly<GameState>, pred: Prediction): FfCap | null {
+  const { cruiseWarp } = state.level;
+  let warp: number | null = null;
+  let zoneId: string | null = null;
+  let reason: string | null = null;
+  const take = (candidate: number, why: string | null = null): void => {
+    warp = warp === null ? candidate : Math.min(warp, candidate);
+    reason ??= why;
+  };
+  const close = zoneClose(state, pred);
+  if (close !== null && ff.met.has(close.zoneId)) {
+    zoneId = close.zoneId;
+    if (ff.zoneCap?.zoneId === close.zoneId) take(ff.zoneCap.warp);
+    else {
+      const toExit = zoneWindows(state, pred).find((window) => window.hit.zoneId === close.zoneId)?.toExit ?? null;
+      take(Math.max(cruiseWarp, (toExit ?? 0) / FF_ZONE_PASS_WALL_SEC));
+    }
+  }
+  const landing = isLanding(state);
+  if (!landing && state.burn.ghostBursts > 0 && ghostRefusesSkip(state)) take(cruiseWarp, FF_TEXT.engineFault);
+  if (firstSeedComing(state) && !spreadPaused(state.hollow, state.clock.aiSec)) take(cruiseWarp, SKIP_REFUSAL_SEED_COMING);
+  if (hollowWaking(state)) take(cruiseWarp, SKIP_REFUSAL_WAKING);
+  if (landing && podCounts(state).falling > 0) take(cruiseWarp, LANDING_SKIP_REFUSAL.podsInFlight);
+  return warp === null ? null : { warp, zoneId, reason };
+}
+
+// A refusal under the hold: `spend` ends the hold there (false: it waits, and goes on once the refusal clears).
+interface FfRefusal {
+  reason: string;
+  spend: boolean;
+}
+
+function ffRefusal(state: Readonly<GameState>, pred: Prediction): FfRefusal | null {
+  const spend = (reason: string): FfRefusal => ({ reason, spend: true });
+  const landing = isLanding(state);
+  if (!isLivePhase(state)) return spend(landing ? LANDING_SKIP_REFUSAL.over : 'FLIGHT OVER');
+  if (isBurnHeld(state)) return spend('ENGINE FIRING');
+  // The first burst (the alarm moment) or a sticky one; a later one is flown through, as a SKIP flies it.
+  const ghost = state.burn.ghost;
+  if (ghost !== null && (ghost.sticky || ghostBurstsThisPhase(state) <= 1)) return spend('ENGINE FIRING');
+  if (pred.outcome === 'impact' && (!landing || state.landing.ended === null)) return spend('IMPACT COURSE');
+  const alarm = state.alerts.list.find((alert) => alert.severity === 'alarm');
+  if (alarm) return spend(alarm.text);
+  const blocker = state.alerts.list.find((alert) => alert.inhibitsSkip);
+  if (blocker) return spend(blocker.text);
+  if (landing) {
+    if (state.landing.ended !== null) return podCounts(state).falling > 0 ? null : spend(LANDING_SKIP_REFUSAL.over);
+    // The awaited window open: the kid's hands' (HARD, read as the stop it is: `LZ-A WINDOW`) or a controller's (WAIT).
+    if (windowRuleHolds(state) && awaitedWindowOpen(state)) {
+      const hands = activeLandingController(state) === null;
+      return { reason: hands ? FF_TEXT.window(momentNow(state).open?.lz ?? 'LZ') : LANDING_SKIP_REFUSAL.windowOpen, spend: hands };
+    }
+    return null;
+  }
+  if (pred.acceptOnly) return spend(SKIP_REFUSAL_STRANDED);
+  if (pred.fit.inRing || state.burn.lockHoldAiSec > 0) return spend(FF_TEXT.holdSteady);
+  return null;
+}
+
+type FfDecision =
+  | { kind: 'refused'; reason: string; spend: boolean }
+  | { kind: 'reached'; stop: Stop }
+  | { kind: 'capped'; warp: number; zoneId: string | null }
+  | { kind: 'leg'; stop: Stop };
+
+// What holding [F] does now (pure apart from reading the hold's memory: the zones met, the stops passed).
+function ffDecide(state: Readonly<GameState>, pred: Prediction): FfDecision {
+  const refusal = ffRefusal(state, pred);
+  if (refusal !== null) return { kind: 'refused', ...refusal };
+  const stop = ffNextStop(state, pred);
+  if (stop !== null && stopReached(state, stop)) return { kind: 'reached', stop };
+  const cap = ffCapWarp(state, pred);
+  // A CRUISE cap (no zone) where the director runs CRUISE anyway makes nothing faster: the hold waits there (the
+  // button struck out with the SKIP's reason, the strip offering no `hold [F]`), and goes on once the cap lifts.
+  if (cap !== null && cap.zoneId === null && cap.reason !== null && choosePace(state, pred, false, TICK_MS / 1000) !== 'tactical') {
+    return { kind: 'refused', reason: cap.reason, spend: false };
+  }
+  if (cap !== null) {
+    // Ease onto the next stop's lead, as a SKIP eases onto its end point, rather than overshoot it by a tick.
+    const toLead = stop === null ? Infinity : stopLeadSec(state, stop);
+    const warp = Math.min(cap.warp, Math.max(state.level.tacticalWarp, toLead / SKIP_EASE_OUT_SEC));
+    return { kind: 'capped', warp, zoneId: cap.zoneId };
+  }
+  if (stop === null) return { kind: 'refused', reason: FF_TEXT.nothing, spend: true };
+  // A later ghost burst running between ticks (a twitch of a degraded Thrust Ctrl): wait it out, the leg follows.
+  if (isGhostFiring(state)) return { kind: 'refused', reason: 'ENGINE FIRING', spend: false };
+  const inhibitor = skipInhibitorBase(state, pred);
+  if (inhibitor !== null) return { kind: 'refused', reason: inhibitor, spend: true };
+  return { kind: 'leg', stop };
+}
+
+function stopLeg(store: Store<GameState>): void {
+  if (!ff.leg) return;
+  ff.leg = false;
+  stopSkip(store);
+}
+
+// A zone entry the hold stopped at HARD is met, and this entry counts as passed: a fresh press runs through it capped,
+// with no soft dwell on top of the stop.
+function meetZone(state: Readonly<GameState>, stop: Stop | null): void {
+  if (stop?.zoneId == null) return;
+  ff.met.add(stop.zoneId);
+  ff.passed.push({ key: stop.key, atTSec: state.clock.tSec + stop.inSec });
+}
+
+function spendHold(store: Store<GameState>, reason: string, stop: Stop | null = null): void {
+  ff.spent = reason;
+  ff.dwell = null;
+  ff.capWarp = null;
+  ff.zoneCap = null;
+  meetZone(store.getState(), stop);
+  stopLeg(store);
+}
+
+// A soft stop the hold dwelt at goes by: an offer is declined (landing.ts declineTick's record, so neither pace nor the
+// strip leads to it again until a launch or a new reason), anything else is remembered for this ship.
+function passStop(store: Store<GameState>, stop: Stop, atTSec: number): void {
+  const offer = stop.offer;
+  if (offer === null) {
+    ff.passed.push({ key: stop.key, atTSec });
+    return;
+  }
+  const now = landingBurnOffer(store.getState(), getPrediction());
+  if (now === null || declineKey(now) !== declineKey(offer)) return;
+  const untilLz = offer.reason === 'go-low' ? offer.aimLz ?? null : null;
+  store.update((draft) => { draft.landing.declined = { key: declineKey(offer), untilLz }; });
+}
+
+function startLeg(store: Store<GameState>): void {
+  const state = store.getState();
+  // A leg's warp and end point come from a prediction of this very moment, as requestSkip's do.
+  const pred = currentPrediction();
+  const stop = ffNextStop(state, pred);
+  if (stop === null || stopReached(state, stop)) return;
+  const warp = Math.max(state.level.cruiseWarp, stopLeadSec(state, stop) / FF_LEG_WALL_SEC);
+  ff.leg = true;
+  store.update((draft) => { draft.clock.skipWarp = warp; });
+}
+
+// The hold's part of the pre-tick, ahead of the SKIP's own upkeep (mountPace).
+function fastForwardTick(store: Store<GameState>): void {
+  const state = store.getState();
+  const pred = getPrediction();
+  ff.capWarp = null;
+  if (ff.leg && state.clock.skipWarp === null) ff.leg = false;
+  if (isLivePhase(state)) {
+    const inside = zoneInside(state, pred);
+    if (inside !== null) ff.met.add(inside.zoneId);
+  }
+  setFastForwardRamp(ff.held && ff.spent === null ? FF_DECADE_SEC : null);
+  if (!ff.held || ff.spent !== null) return;
+  if (state.clock.paused || !isActivePhase(state.run.phase)) return;
+  const forget = state.clock.tSec - FF_PASSED_MATCH_TAC * state.level.tacticalWarp;
+  if (ff.passed.some((passed) => passed.atTSec < forget)) ff.passed = ff.passed.filter((passed) => passed.atTSec >= forget);
+  if (ff.dwell !== null) {
+    if (state.clock.aiSec < ff.dwell.untilAi) return;
+    const { stop, atTSec } = ff.dwell;
+    ff.dwell = null;
+    passStop(store, stop, atTSec);
+  }
+  // A leg runs until the SKIP's own upkeep lands it on its stop's lead or ends it (an inhibitor, a press): its end point
+  // only moves nearer, and the next tick decides again from where it stopped.
+  if (ff.leg) return;
+  const now = store.getState();
+  const decision = ffDecide(now, getPrediction());
+  if (decision.kind !== 'capped') ff.zoneCap = null;
+  switch (decision.kind) {
+    case 'refused':
+      if (decision.spend) spendHold(store, decision.reason);
+      else stopLeg(store);
+      return;
+    case 'reached': {
+      const { stop } = decision;
+      if (stop.weight === 'hard') spendHold(store, stop.label, stop);
+      else {
+        stopLeg(store);
+        if (stop.weight === 'soft') ff.dwell = { stop, untilAi: now.clock.aiSec + FF_SOFT_DWELL_SEC, atTSec: now.clock.tSec + stop.inSec };
+      }
+      return;
+    }
+    case 'capped':
+      stopLeg(store);
+      if (decision.zoneId !== null && ff.zoneCap?.zoneId !== decision.zoneId) ff.zoneCap = { zoneId: decision.zoneId, warp: decision.warp };
+      ff.capWarp = decision.warp;
+      return;
+    case 'leg':
+      // A SKIP a controller asked for (between AUTODROP's passes) runs on as it is; the hold waits for it.
+      if (now.clock.skipWarp === null) startLeg(store);
+      return;
+  }
+}
+
+// The pace the hold sets this tick, or null for the director's: TACTICAL while it dwells at a soft stop, FAST while capped.
+function fastForwardPace(): Pace | null {
+  if (!ff.held || ff.spent !== null) return null;
+  if (ff.dwell !== null) return 'tactical';
+  if (ff.capWarp !== null) return 'fast';
+  return null;
+}
+
+// [F] down (or the ▸▸ HOLD button pressed). Refused at once with the reason when holding can do nothing (the hold is then
+// spent, so the button reads it while held); PAUSED keeps the hold, frozen, as a pause freezes a SKIP.
+export function startFastForward(store: Store<GameState>): SkipResult {
+  ff.held = true;
+  ff.spent = null;
+  ff.dwell = null;
+  const state = store.getState();
+  if (isLivePhase(state) && state.clock.paused) {
+    emit('refused', { reason: 'PAUSED' });
+    return { ok: false, reason: 'PAUSED' };
+  }
+  const decision = ffDecide(state, currentPrediction());
+  let reason: string | null = null;
+  if (decision.kind === 'refused' && decision.spend) reason = decision.reason;
+  if (decision.kind === 'reached' && decision.stop.weight === 'hard') reason = decision.stop.label;
+  if (reason === null) return { ok: true };
+  ff.spent = reason;
+  if (decision.kind === 'reached') meetZone(state, decision.stop);
+  emit('refused', { reason });
+  return { ok: false, reason };
+}
+
+// [F] up: the director's pace at once (the next tick). The stops passed and the zones met stay for this ship.
+export function endFastForward(store: Store<GameState>): void {
+  ff.held = false;
+  ff.spent = null;
+  ff.dwell = null;
+  ff.capWarp = null;
+  ff.zoneCap = null;
+  stopLeg(store);
+}
+
+export interface FastForwardView {
+  held: boolean;          // [F] or the button is down
+  running: boolean;       // ...and the world is fast-forwarding on it (a leg, a dwell or capped)
+  spent: string | null;   // ...or the hold ended at this stop
+}
+
+export function fastForwardView(): FastForwardView {
+  const live = ff.held && ff.spent === null;
+  return { held: ff.held, running: live && (ff.leg || ff.dwell !== null || ff.capWarp !== null), spent: ff.held ? ff.spent : null };
+}
+
+// The flight's strip offers `hold [F]` (guidance skipAvailable): holding would fast-forward, and no SKIP runs that the kid
+// is not holding for (a controller's, or a headless kid's tap of the engine), as the tap's `[F] SKIP` hid while one ran.
+export function fastForwardOffered(state: Readonly<GameState>, pred: Prediction): boolean {
+  return (state.clock.skipWarp === null || ff.held) && fastForwardBlockReason(state, pred) === null;
+}
+
+// Why holding [F] would do nothing now (null: it would fast-forward): the header button's struck-out reason and the
+// strip's `hold [F]` tails. A hold already running answers null; a spent one, its stop.
+export function fastForwardBlockReason(state: Readonly<GameState>, pred: Prediction): string | null {
+  if (isLivePhase(state) && state.clock.paused) return 'PAUSED';
+  if (ff.held && ff.spent !== null) return ff.spent;
+  if (ff.held && (ff.leg || ff.dwell !== null || ff.capWarp !== null)) return null;
+  const decision = ffDecide(state, pred);
+  if (decision.kind === 'refused') return decision.reason;
+  if (decision.kind === 'reached') return decision.stop.weight === 'soft' ? null : decision.stop.label;
+  return null;
 }
 
 export type CountdownKind = 'impact' | 'burn' | 'peri' | 'apo';
@@ -596,6 +1045,8 @@ export function mountPace(store: Store<GameState>): () => void {
   if (mounted) throw new Error('mountPace: already mounted');
   mounted = true;
   const offPre = onPreTick((dtWall) => {
+    // The held [F] first (§3.1): it may start or end a leg, decline an offer, or choose a capped warp for this tick.
+    fastForwardTick(store);
     const state = store.getState();
     const pred = getPrediction();
 
@@ -624,10 +1075,11 @@ export function mountPace(store: Store<GameState>): () => void {
       }
     }
 
-    const pace = choosePace(state, pred, skipWarp !== null, dtWall);
+    if (ff.leg && skipWarp === null) ff.leg = false;
+    const pace = fastForwardPace() ?? choosePace(state, pred, skipWarp !== null, dtWall);
     const running = !state.clock.paused && isActivePhase(state.run.phase);
     const overclock = running && isOverclocked(state, pace, pred);
-    const target = running ? state.clock.debugWarp ?? warpFor(state.level, pace, skipWarp, overclock) : 0;
+    const target = running ? state.clock.debugWarp ?? warpFor(state.level, pace, skipWarp, overclock, ff.capWarp) : 0;
 
     if (pace !== state.clock.pace || target !== state.clock.speedTarget || skipWarp !== state.clock.skipWarp
         || overclock !== state.clock.overclock) {
@@ -647,24 +1099,29 @@ export function mountPace(store: Store<GameState>): () => void {
       });
     }
   });
-  return () => { offPre(); mounted = false; };
+  const offReset = onWorldReset('pace-ff', resetFastForward, () => ({
+    held: ff.held, spent: ff.spent, leg: ff.leg, dwell: ff.dwell !== null, passed: ff.passed.length, met: ff.met.size,
+    zoneCap: ff.zoneCap, capWarp: ff.capWarp,
+  }));
+  return () => { offPre(); offReset(); resetFastForward(); mounted = false; };
 }
 
 export interface TimeKeyHooks {
-  onSkipRefused?: (reason: string) => void;  // the header flashes the struck-out SKIP button
+  onSkipRefused?: (reason: string) => void;  // the header flashes the struck-out button
 }
 
-// P pauses/resumes, F requests SKIP. Registered by the header time controls (and directly
-// by headless harnesses).
+// P pauses/resumes; F is held to fast-forward (playtest 1, §3.1): down starts the hold, up ends it. Registered by the header
+// time controls (and directly by headless harnesses; their scripted kids tap the SKIP engine itself, requestSkip).
 export function registerTimeKeys(store: Store<GameState>, hooks: TimeKeyHooks = {}): () => void {
   const offPause = registerKeys({ layer: 'game', codes: ['KeyP'], onDown: () => { togglePause(store); } });
-  const offSkip = registerKeys({
+  const offHold = registerKeys({
     layer: 'game',
     codes: ['KeyF'],
     onDown: () => {
-      const result = requestSkip(store);
+      const result = startFastForward(store);
       if (!result.ok) hooks.onSkipRefused?.(result.reason);
     },
+    onUp: () => { endFastForward(store); },
   });
-  return () => { offPause(); offSkip(); };
+  return () => { offPause(); offHold(); };
 }

@@ -122,7 +122,7 @@ while (h.wall() < end && st().burn.status === 'approaching') {
 }
 check('…40 wall seconds pressing F under every WAIT: bursts fired, none inside a SKIP', st().burn.ghostBursts > before && burstsInSkip === 0,
   `${st().burn.ghostBursts - before} bursts, ${burstsInSkip} in a SKIP`);
-check('…the WAIT line offers no [F] SKIP meanwhile', !(st().director.shown?.text ?? '').includes('[F] SKIP'), st().director.shown?.text ?? '');
+check('…the WAIT line offers no hold [F] meanwhile', !(st().director.shown?.text ?? '').includes('hold [F]'), st().director.shown?.text ?? '');
 
 // REPAIR on Thrust Ctrl (the arm's one repairable ship file): a field repair into the degraded band, which leaves a twitch.
 const thrust = (): Segment => getByRole(st(), 'thrust-ctrl')!;

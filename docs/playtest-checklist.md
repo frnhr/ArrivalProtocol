@@ -73,3 +73,17 @@ One ordered walk through a full run, consolidated from every work package's manu
 51. **MANUAL Q/E.** In MANUAL (`▸ manual controls`, MANUAL), hold Q: the ship turns; let go: it stops within a moment (spin `0°/s`) and stays put, at any warp. E the same the other way.
 52. **The belt's sound.** See 49: a steady bed, no huffing; ticks only on hits.
 53. **ERASE ALL RECORDS.** On the title, at the foot: `ERASE ALL RECORDS`. A click asks `ERASE EVERY UNIT, COLONY AND RUN? · THIS CANNOT BE UNDONE` with `ERASE [DEL]` / `KEEP [ENTER]` (ESC keeps). DEL reloads to a first visit: `UNIT-047 · YEAR 2300 …`, RECEIVE TRANSMISSION, no RESUME, no lineage or endings line, and ship 1's tutorial lines.
+
+### Playtest 1, Batch B (B-TIME)
+
+54. **Hold [F].** On any long WAIT the strip ends `· hold [F]` and the header button reads `▸▸ HOLD [F]`. Hold F (or press
+    and hold the button; on a phone, a finger on it): the world speeds up (`FAST ×n ▸▸`) and eases off 15 tac s before the
+    burn, where the hold ends and the button reads `BURN AHEAD`. Holding on does nothing; let go and press again inside
+    those 15 s: refused. Let go mid-way: the world is back at the director's pace at once. A tap of F does nothing.
+55. **Note 6.** In a landing with one LZ landed and a ring trim or GO LOWER offered at ▼, hold F: the world slows for about
+    a second and a half at the offer (TACTICAL, the strip naming it), then goes on and stops at the next LZ's window
+    (`LZ-B WINDOW`), in a few seconds. The trim is not offered again until the next launch.
+56. **Note 24.** On LAST LIGHT with a loop that crosses the belt (`__ap.ship(4)`, an orbit out past 12,000 km): the first
+    hold stops at the belt (`BELT AHEAD`); hold again and the pass takes about 3 s (`FAST`), the hits landing as they
+    would; the next crossing slows for a moment, then the same. Window to window across both crossings in about 15 s.
+    With AUTODROP v3 armed, one hold carries the whole plan: it waits at each window AUTODROP flies and goes on by itself.

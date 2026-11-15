@@ -806,3 +806,48 @@ renumbers them at CLOSE. "Before → after" is the number the change moved; trac
      ledger shows a grant as its own row only when it is this visit's. Today the card is granted at the TRANSMIT ▸ before
      the desk, with the previous visit's number. LEAVE ORBIT grants it at the pick (§3.3.2), and then it gets its own
      `+2 SALVAGE` row with no change to the ledger. `skills/cycles` accepts both forms and checks the sum.
+
+## Playtest 1, Batch B (B-TIME)
+
+123. **[F] is held to fast-forward; the tap SKIP is gone from the kid's hands** (notes 6 and 24, plan §3.1). BUILT,
+     **[FRAN]**. While [F] or the header's `▸▸ HOLD [F]` (a phone's finger too) is down, the world runs legs of the SKIP
+     engine from stop to stop; letting go is the director's pace on the next tick. The SKIP stays inside: controllers and
+     the headless kids still ask for it (`requestSkip`). To reverse: `registerTimeKeys`' F binding back to `requestSkip`
+     on keydown, the button back to a click.
+124. **Which stops are HARD, SOFT and CAPPED** (plan §3.1). BUILT as listed there, **[FRAN]**, with the changes in
+     items 145–147. Fran's two cases as the suite measures them (`tests/unit/pace/fast-forward.test.ts`):
+     - note 6: HALCYON, LZ-B landed, the ring trim due at ▼: one hold dwells 1.5 s on the trim, declines it, and reaches
+       LZ-A's window 665 tac s away in 5.3 wall s (the director alone: about 220 s);
+     - note 24: LAST LIGHT on a 6,000 × 15,000 km loop: each belt crossing (about 3,500 game s, 14–19 hits) takes 2.7 wall
+       s capped; window to window across both crossings in 14.7 wall s (the director alone: about 12 minutes).
+     - To reverse a stop's kind: its `weight` in `pace.ts ffStops`.
+155. **A third kind of stop, WAIT: a window a controller flies.** BUILT. The plan made AUTODROP's windows and launches SOFT
+     (dwell, then on), but passing a window the controller has not flown yet would skip its launches. So the hold waits
+     there, not spent: the director's TACTICAL plays the window, the controller launches, the pods fall (capped at
+     CRUISE), and the hold goes on by itself, with no fresh press. AUTODROP v3's `one [F] per gap` is one hold for the
+     whole plan. To reverse: weight 'soft' for those stops (and lose the launches).
+156. **Anything that refuses the hold ends it.** BUILT. An alarm, the engine firing (the kid's burn, the first ghost
+     burst), an impact course, HOLD STEADY, a hand window opening, the landing's end: the hold is spent with that reason
+     on the button, as at a HARD stop, and a fresh press goes on. A burn input pressed under the hold (SPACE, BURN, [B])
+     spends it too (`STOPPED`). PAUSED only freezes it. Why: a hold that resumed by itself after an alarm would carry the
+     kid past the thing the alarm was for. To reverse: `spend: false` for those refusals in `pace.ts ffRefusal`.
+157. **Not built as SOFT stops: a full LZ's window, a later ghost burst, a drag kick.** None was a stop before (a full
+     LZ's window passes at CRUISE, a SKIP flies a later burst whole through its waypoint and splits its jump at each drag
+     kick), and each as a stop would add a 1.5 s dwell several times a loop, which is note 6 again. Every burst and kick is
+     still flown and shown. The engine-fault ship's frequent bursts (`ghostRefusesSkip`) run capped at CRUISE as planned.
+     To add one: a `Stop` for it in `pace.ts ffStops`, weight 'soft'.
+158. **A CRUISE cap on a coast the director runs at CRUISE anyway is a refusal, not FAST.** BUILT. While the engine-fault
+     bursts are due, the first seed is coming, a coast-tied wake is near or pods fall, the hold runs at CRUISE at most;
+     where the director would run CRUISE there anyway, holding adds nothing, so the button is struck out with the reason
+     (`ENGINE FAULT`, `SOMETHING IS COMING`, …), the strip offers no `hold [F]`, and the hold waits for the cap to lift.
+     Where the director holds TACTICAL (a pod falling), the hold runs FAST at CRUISE. To reverse: drop that branch in
+     `pace.ts ffDecide`.
+159. **The hold's own words.** BUILT. The button reads `▸▸ HOLD [F]`, the pace label `FAST ×n ▸▸` (a leg and the capped
+     pace alike), the strip's tail `· hold [F]`, MIND CLEAR `MIND CLEAR — hold [F] to LZ-B`. Where a hold ends:
+     `BURN AHEAD`, `LZ-B WINDOW` (also an open hand window), `BELT AHEAD`, `FLYING AWAY`, `HOLD STEADY`, `NOTHING AHEAD`,
+     `STOPPED`, and the SKIP's own refusals that do not name SKIP (`DODGE THE DEBRIS FIRST`, `NOT ENOUGH FUEL`, an alarm's
+     text). `pace.ts FF_TEXT`, `guidance.ts SKIP_HINT`, `landing-text.ts`. To reverse: the strings.
+160. **A hold through a landing offer declines it until the next launch.** BUILT, as plan §3.1 says (`landing.declined`,
+     the rule for letting an offer pass). A kid who holds F past a ring trim is not offered it again (no TACTICAL, no stop,
+     no strip lead) until a launch or a new reason. Fran's call whether holding should only pass it for this loop. To
+     reverse: `passStop` remembers the offer in `ff.passed` instead of writing `landing.declined`.

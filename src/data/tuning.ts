@@ -50,6 +50,32 @@ export const SKIP_MIN_JUMP_TAC = 5;
 // that rounding is a few microseconds. A millisecond of game time is far below anything the game shows.
 export const SKIP_LANDING_TOLERANCE_SEC = 1e-3;
 
+// --- Hold [F]: the fast-forward (playtest 1, notes 6 and 24; docs/phase3/impl/playtest-1-plan.md §3.1) -----------------
+// While [F] is held the world runs legs of the SKIP engine from stop to stop (pace.ts): it slows at the stops a kid must
+// decide at (HARD), slows past the ones they may ignore (SOFT), and runs capped, never jumping, through a hazard zone.
+
+// The warp of a leg = the game seconds to its stop's lead / this, at least CRUISE: about this many wall seconds at the
+// leg's warp whatever it crosses (SKIP_DIVISOR's rule, halved: with the ramp up and the ease-out a leg is over in 3–5 s,
+// a WAIT of days included, so holding F across a soft stop and on to the next window stays under ten).
+export const FF_LEG_WALL_SEC = 2;
+// The fast-forward's warp climbs at least one decade in this many wall seconds (the clock's glide, clock.ts
+// setFastForwardRamp), from wherever it is: a capped zone pass from TACTICAL ×30 to ×360 is up in about half a second,
+// not the director's three, so the pass's 3 s are spent fast and not gliding.
+export const FF_DECADE_SEC = 0.5;
+// A SOFT stop (a declinable landing burn, a later entry into a zone already met on this ship): the world slows to TACTICAL
+// at its lead and stays there this many wall (AI) seconds with the strip naming it, then the hold goes on. Long enough to
+// read the line and let go to take it; short enough not to feel like a stop.
+export const FF_SOFT_DWELL_SEC = 1.5;
+// Inside a hazard zone, or within its TACTICAL lead, the hold runs the normal tick integrator (every hit, burst and line
+// played) at the warp that takes the rest of the pass this many wall seconds, at least CRUISE. The damage per game
+// second is unchanged, so a pass costs what it costs: LAST LIGHT's 1,080 game-s belt crossing is ×360, 18 game s a tick,
+// and its 5.4 hits on average come at most one a tick over 60 ticks.
+export const FF_ZONE_PASS_WALL_SEC = 3;
+// A soft stop passed on this hold is not stopped at again: one is the same as a passed one when it is the same kind on
+// the same zone and falls within this many tactical seconds of it (the 10 Hz prediction re-times it by a hair; two
+// entries of one zone are a pass and an arc apart, far more than this).
+export const FF_PASSED_MATCH_TAC = 60;
+
 // (LEAD-2 removed SKIP_BUDGET_WALL_SEC, 120 wall s: the lead's Rule 4 budget. A WAIT the FUEL was to
 // blame for was dropped for ACCEPT ORBIT when SKIP could not cross it in two minutes at the old ceiling.
 // Every SKIP now takes the same few seconds, so it decided nothing; worse, it stranded ships whose tank
