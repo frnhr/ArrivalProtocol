@@ -12,7 +12,7 @@ import {
   secUntil, sweetZone, isFinishingBurn, burnKey, rpRateUnderThrust,
   type Prediction, type PredictOutcome, type BurnPoint, type BurnEvent, type TrimReason,
 } from '@systems/predict';
-import { fastForwardBlockReason } from '@systems/pace';
+import { fastForwardOffered } from '@systems/pace';
 import { goLowReleased, landingBurnOffer, launchRadiusRate, offerInTac } from '@systems/landing-orbit';
 import { LANDING_FLIGHT_LINES } from '@data/landing-text';
 import { controllerSwapOf } from '@systems/tool-targets';
@@ -191,7 +191,7 @@ export function buildFlightContext(state: Readonly<GameState>, pred: Prediction)
     engineFault: engineFault(caps),
     spareController: spareControllerOf(state),
     inMind: state.ui.mode === 'memory',
-    skipAvailable: fastForwardBlockReason(state, pred) === null,
+    skipAvailable: fastForwardOffered(state, pred),
     burnPoint: burnPoint ? timed(burnPoint) : null,
     offer: offer ? timed(offer) : null,
     goLow: goLowOf(state),

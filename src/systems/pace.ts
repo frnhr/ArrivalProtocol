@@ -965,6 +965,12 @@ export function fastForwardView(): FastForwardView {
   return { held: ff.held, running: live && (ff.leg || ff.dwell !== null || ff.capWarp !== null), spent: ff.held ? ff.spent : null };
 }
 
+// The flight's strip offers `hold [F]` (guidance skipAvailable): holding would fast-forward, and no SKIP runs that the kid
+// is not holding for (a controller's, or a headless kid's tap of the engine), as the tap's `[F] SKIP` hid while one ran.
+export function fastForwardOffered(state: Readonly<GameState>, pred: Prediction): boolean {
+  return (state.clock.skipWarp === null || ff.held) && fastForwardBlockReason(state, pred) === null;
+}
+
 // Why holding [F] would do nothing now (null: it would fast-forward): the header button's struck-out reason and the
 // strip's `hold [F]` tails. A hold already running answers null; a spent one, its stop.
 export function fastForwardBlockReason(state: Readonly<GameState>, pred: Prediction): string | null {
