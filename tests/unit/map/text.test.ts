@@ -52,19 +52,15 @@ const lines: [string, string][] = [
   ['card.late', MAP_TEXT.card.late(SLACK)],
   ['card.cost', MAP_TEXT.card.cost(19, 19)],
   ['card.problems', MAP_TEXT.card.problems([MODIFIER_LABEL['too-wide'], MODIFIER_LABEL['sensor-damage'], MODIFIER_LABEL.debris])],
-  ['card.memory', MAP_TEXT.card.memory(384, 'COMPACT', 152)],
+  ['card.room', MAP_TEXT.card.room(152, 'COMPACT', 'CHARGE SQUEEZED: 199 ARRIVES (199 IF SEEDS RIDE)')],
   ['card.fit fits seeds', MAP_TEXT.card.fit({ ...FIT, chargeArrivesMin: 185 })],
   ['card.fit squeezed', MAP_TEXT.card.fit({ ...FIT, chargeArrives: 199, chargeArrivesMin: 185, roomLost: 99, word: 'squeezed' })],
   ['card.fit leave', MAP_TEXT.card.fit({ ...FIT, over: 199, word: 'leave' })],
   ['card.fit no-charge', MAP_TEXT.card.fit({ ...FIT, chargeArrives: 0, chargeArrivesMin: 0, word: 'no-charge' })],
-  ['card.planet', MAP_TEXT.card.planet('GRASSLAND', 'off-site pods score a quarter')],
-  ['card.noGo', MAP_TEXT.card.noGo(['LAVA', 'CLIFFS'])],
-  ['card.lzs', MAP_TEXT.card.lzs(4, 'good')],
-  ['card.beam', MAP_TEXT.card.beam(LY)],
-  ['card.noise', MAP_TEXT.card.noise(3, MAP_TEXT.card.seeds({ min: 0, max: 3 }))],
-  ['card.noise none', MAP_TEXT.card.noise(3, MAP_TEXT.card.seeds(null))],
-  ['card.shipOfRun', MAP_TEXT.card.shipOfRun(7, 1, 6)],
-  ['card.lastOfRun', MAP_TEXT.card.lastOfRun(8)],
+  ['card.landing', MAP_TEXT.card.landing('GRASSLAND', 'STANDARD', 4, 'good', ['LAVA', 'CLIFFS'])],
+  ['card.landing poor', MAP_TEXT.card.landing('VOLCANIC', 'STANDARD', 4, 'poor', ['LAVA', 'CLIFFS'])],
+  ['card.beam', MAP_TEXT.card.beam(LY, 3, MAP_TEXT.card.seeds({ min: 0, max: 3 }))],
+  ['card.beam none', MAP_TEXT.card.beam(LY, 3, MAP_TEXT.card.seeds(null))],
   ['card.timeline', MAP_TEXT.card.timeline(YEAR, YEAR, YEAR)],
   ['packet.headline', MAP_TEXT.packet.headline(SHIP, C, LY, SLACK)],
   ['packet.room', MAP_TEXT.packet.room(152, 199, 12)],
@@ -246,15 +242,16 @@ check('3c\'s sample lines: the launch line, the beacon, the bridge, the history 
 const long = lines.filter(([, text]) => text.length > MAX_LINE_CHARS);
 check(`every map line fits ${MAX_LINE_CHARS} characters with the longest names (${SHIP}, ${WORLD})`, long.length === 0,
   long.map(([key, text]) => `${key} (${text.length}): ${text}`).join(' | '));
-check('the spec\'s sample lines', `${MAP_TEXT.card.beam(55)} · ${MAP_TEXT.card.noise(1, MAP_TEXT.card.seeds({ min: 0, max: 2 }))}` === '55 LY · NOISE LOW · 1 · SEEDS 0–2'
+check('the spec\'s sample lines', MAP_TEXT.card.beam(55, 1, MAP_TEXT.card.seeds({ min: 0, max: 2 })) === '55 LY · NOISE LOW · 1 · SEEDS 0–2'
   && MAP_TEXT.card.cost(4, 1) === '4 HITS ON THE WAY → 1 LANDS'
   && MAP_TEXT.card.sleep(89, 3) === 'YOU SLEEP 89 YRS IN ITS RECEIVER · ECC FIXES 3' && MAP_TEXT.chart.sleep(89) === 'SLEEP 89 YRS'
-  && MAP_TEXT.card.shipOfRun(3, 2, 2) === 'YOUR 3RD SHIP · 2 MORE TO THE FINAL SHIP' && MAP_TEXT.card.lastOfRun(5) === 'YOUR 5TH SHIP · THE LAST'
   && MAP_TEXT.packet.onTheWay(4, 3, 89, 1) === 'ON THE WAY: 4 HITS · 3 FIXED WHILE YOU SLEEP (89 YRS) → 1 LANDS'
   && MAP_TEXT.packet.headline('KESTREL', 1200, 26, 89) === 'NEXT: KESTREL · 1,200 COLONISTS · 26 LY · SLEEP 89 YRS'
   && MAP_TEXT.desk.greyed(2) === '2 SHIPS NOW OUT OF YOUR REACH' && MAP_TEXT.crumb('UNIT-047', 'KESTREL', 2467, 'FLYBY') === 'UNIT-047 / KESTREL · 2467 / FLYBY'
   && MAP_TEXT.boot.sleep('KESTREL', 2378, 2467) === "> ASLEEP IN KESTREL'S RECEIVER · 2378 → 2467 · 89 YEARS"
-  && MAP_TEXT.card.memory(320, 'COMPACT', 152) === 'MEMORY 320 · COMPACT · ROOM FOR YOU 152',
-  MAP_TEXT.card.beam(55));
+  // Playtest 1 (C-UNROLL): the card's merged rows.
+  && MAP_TEXT.card.room(152, 'COMPACT', 'YOU FIT') === '152 · COMPACT · YOU FIT' && MAP_TEXT.card.room(88, 'TIGHT') === '88 · TIGHT'
+  && MAP_TEXT.card.landing('VOLCANIC', 'ROUGH', 3, 'good', ['LAVA', 'LAVA']) === 'VOLCANIC · ROUGH · 3 LZs · NO-GO: LAVA',
+  MAP_TEXT.card.beam(55, 0, MAP_TEXT.card.seeds(null)));
 check('noise words: CLEAN, LOW, NOISY, SEVERE', [0, 1, 2, 3].map((n) => NOISE_WORD[n as 0 | 1 | 2 | 3]).join() === 'CLEAN,LOW,NOISY,SEVERE');
 finish();

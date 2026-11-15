@@ -80,8 +80,9 @@ check('KESTREL: the reply to HALCYON (2381 / 2436) with ring 2\'s policy reminde
   && stamp(byId(all, `reply:${HALCYON}+policy:2`)) === 'SENT 2381 · RECEIVED 2436'
   && INBOX_TEXT.policy[0]!.postscript.every((line) => byId(all, `reply:${HALCYON}+policy:2`)!.body.includes(line)) && stamp(byId(all, `postcard:${ARES}:50`)) === 'SENT 2350 · RECEIVED 2397'
   && stamp(byId(all, 'letter:meridian')) === 'SENT 2351 · RECEIVED 2380', ids(at(all, 3)));
-check('VESPER: RIVERSIDE y200 (2500 / 2600), KESTREL\'s colony y1 + y50, no-address (ring 3), policy (ring 4)',
-  ids(at(all, 4)) === want(`noaddr:3 policy:4 postcard:${ARES}:200 postcard:${KESTREL}:1+50`) && stamp(byId(all, `postcard:${ARES}:200`)) === 'SENT 2500 · RECEIVED 2600',
+// Playtest 1 (C-UNROLL): one policy reminder (ring 2's); ring 4 sends none.
+check('VESPER: RIVERSIDE y200 (2500 / 2600), KESTREL\'s colony y1 + y50, no-address (ring 3), no second policy reminder (ring 4)',
+  ids(at(all, 4)) === want(`noaddr:3 postcard:${ARES}:200 postcard:${KESTREL}:1+50`) && !all.some((message) => message.id.startsWith('policy:4')) && stamp(byId(all, `postcard:${ARES}:200`)) === 'SENT 2500 · RECEIVED 2600',
   ids(at(all, 4)));
 check('CORMORANT: the reply to KESTREL (2522 / 2651, `Dear Unit 46`), HALCYON\'s y200, KESTREL\'s y200, VESPER\'s y1 + y50, no-address (ring 5)',
   ids(at(all, 5)) === want(`noaddr:5 postcard:${HALCYON}:200 postcard:${KESTREL}:200 postcard:${VESPER}:1+50 reply:${KESTREL}`)
@@ -92,7 +93,7 @@ check('LAST LIGHT: the reply to VESPER (2732 / 2912), VESPER\'s y200, CORMORANT\
   && stamp(byId(all, `reply:${VESPER}`)) === 'SENT 2732 · RECEIVED 2912' && stamp(byId(all, 'arm-complete')) === 'SENT 2280 · RECEIVED 2460',
   ids(at(all, 6)));
 check('…no reply to CORMORANT reaches LAST LIGHT (2946 + 180 > 3020)', byId(all, `reply:${CORMORANT}`) === undefined);
-check('20 messages in all (plan risk 7; review m8: one CONTROL memo a boot, from 21)', all.length === 20, String(all.length));
+check('19 messages in all (plan risk 7; review m8: one CONTROL memo a boot, from 21; playtest 1, C-UNROLL: one policy reminder, from 20)', all.length === 19, String(all.length));
 check('…at most one CONTROL reply at any boot', [1, 2, 3, 4, 5, 6].every((depth) => at(all, depth).filter((m) => m.kind === 'reply').length <= 1));
 
 // Stamps and joins.

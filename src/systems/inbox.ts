@@ -161,8 +161,9 @@ function broadcasts(run: Readonly<RunState>, policiesInReplies: ReadonlyMap<numb
   return out;
 }
 
-// 05 §3.3: policy reminders at the boots crossing rings 2 and 4, 046's no-address mail at rings 3 and 5 (acts II and III).
-const POLICY_RINGS: readonly number[] = [2, 4];
+// 05 §3.3: the policy reminder at the boot crossing ring 2 (playtest 1, C-UNROLL: ring 4's second notice folded into it), 046's
+// no-address mail at rings 3 and 5 (acts II and III).
+const POLICY_RINGS: readonly number[] = [2];
 const NO_ADDRESS_RINGS: readonly number[] = [3, 5];
 if (POLICY_RINGS.length !== INBOX_TEXT.policy.length || NO_ADDRESS_RINGS.length !== INBOX_TEXT.noAddress.length) {
   throw new Error('inbox: one policy reminder and one no-address letter per ring that sends one');
