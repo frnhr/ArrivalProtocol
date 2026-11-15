@@ -27,7 +27,7 @@ import { LINES, WORST_CASE_VARS } from '@data/script';
 import { solLy } from '@systems/map-geometry';
 import { END_SLOTS } from '@data/arm';
 import { LANDING_ASKS, hostLine } from '@data/landing-text';
-import { META_STORAGE_KEY, BOOT_GHOST_AT_SEC, BOOT_LINE_AT_SEC } from '@data/tuning';
+import { META_STORAGE_KEY, BOOT_GHOST_AT_SEC, SELF_CHECK_START_SEC } from '@data/tuning';
 import type { GameState } from '@state/schema';
 import { followLanding } from '../landing/harness-landing';
 import { setLandingMode } from '../support/landing-instant';
@@ -60,7 +60,7 @@ check('run 1 opens on the title as UNIT-047 · WAVE 1 (an empty archive)', state
 receiveTransmission(h.store);
 check('RECEIVE TRANSMISSION is RUN START: the archive counts the run and keeps it in progress', stored().runs === 1
   && stored().activeRun?.unit === 47 && stored().activeRun?.shipName === 'ARES-VII');
-h.stepUntil(() => state().run.phase === 'flight', 15);
+h.stepUntil(() => state().run.phase === 'flight', 30);
 // The simulation is used up, so a crash goes to EMERGENCY TRANSMIT.
 h.store.update((d) => { d.run.simulationRetryUsed = true; });
 h.store.mutate((d) => { d.orbit.x = d.level.planet.R + 20; d.orbit.y = 0; d.orbit.vx = -3; d.orbit.vy = 0.05; });
@@ -68,7 +68,7 @@ h.stepUntil(() => h.status() !== 'approaching', 10);
 continueAfterLoss(h.store);
 h.transmit();
 check('…a later ship\'s start brings the run in progress up to date (HALCYON)', stored().activeRun?.shipName === 'HALCYON');
-h.stepUntil(() => state().run.phase === 'flight', 15);
+h.stepUntil(() => state().run.phase === 'flight', 30);
 // Slice 2: HALCYON and KESTREL carry no HOLLOW, so each is left by a crash (EMERGENCY TRANSMIT, the simulation being
 // used up); VESPER too, to keep its root out of it. LAST LIGHT's HOLLOW eats the Core for the OVERWRITTEN ending.
 function crashOn(): void {
@@ -85,22 +85,22 @@ function eatTheCore(): void {
 }
 crashOn();
 h.transmit();
-h.stepUntil(() => state().run.phase === 'flight', 20);
+h.stepUntil(() => state().run.phase === 'flight', 30);
 check('…EMERGENCY TRANSMIT on to KESTREL', state().level.shipName === 'KESTREL' && stored().activeRun?.shipName === 'KESTREL');
 // WP10: KESTREL is no longer the last ship either: one more EMERGENCY, to VESPER.
 crashOn();
 h.transmit();
-h.stepUntil(() => state().run.phase === 'flight', 20);
+h.stepUntil(() => state().run.phase === 'flight', 30);
 check('…EMERGENCY TRANSMIT on to VESPER', state().level.shipName === 'VESPER' && stored().activeRun?.shipName === 'VESPER');
 // Track RETIRE: run 1's worked route has CORMORANT after VESPER: one more EMERGENCY, to CORMORANT.
 crashOn();
 h.transmit();
-h.stepUntil(() => state().run.phase === 'flight', 20);
+h.stepUntil(() => state().run.phase === 'flight', 30);
 check('…EMERGENCY TRANSMIT on to CORMORANT', state().level.shipName === 'CORMORANT' && stored().activeRun?.shipName === 'CORMORANT');
 // WP11: and on to LAST LIGHT (the flagship), where the run ends.
 crashOn();
 h.transmit();
-h.stepUntil(() => state().run.phase === 'flight', 20);
+h.stepUntil(() => state().run.phase === 'flight', 30);
 check('…EMERGENCY TRANSMIT on to LAST LIGHT (the last ship now)', state().level.shipName === 'LAST LIGHT' && stored().activeRun?.shipName === 'LAST LIGHT');
 eatTheCore();
 check('run 1 ends OVERWRITTEN on LAST LIGHT (the last ship)', state().run.phase === 'end' && state().run.endCause === 'overwritten');
@@ -137,7 +137,7 @@ check('…and POD 01 keeps a featured child, as Ada was (first in the credits)',
 // --- Run 2: the boot ---------------------------------------------------------------------------------------------
 receiveTransmission(h.store);
 check('RUN START again: runs 2, UNIT-048 in progress', stored().runs === 2 && stored().activeRun?.unit === 48);
-h.stepFor(BOOT_LINE_AT_SEC[0]! + 0.1);
+h.stepFor(SELF_CHECK_START_SEC + 0.1);
 const first = said().find((entry) => entry.channel === 'mind');
 check('no ghost at ship 1\'s boot (05 §3.5: the new unit can\'t know yet): the TERMINAL opens on the unpack, on time',
   first?.speaker === 'mind-sys' && first.text === '> UNPACKING UNIT-048 ... 100%' && !said().some((entry) => entry.speaker === 'hollow')
@@ -146,12 +146,12 @@ check('…and HOLLOW stays unnamed (no root on ship 1 to rename, risk 11)',
   !state().run.hollowNamed && !h.events.some((event) => event.name === 'hollow-named'));
 h.stepUntil(() => said().filter((entry) => entry.speaker === 'mind-sys').length >= 3 || state().run.phase !== 'boot', 10);
 const bootLines = said().filter((entry) => entry.speaker === 'mind-sys').map((entry) => entry.text);
-check('then the boot: UNPACKING UNIT-048, the host line (3 PODS · 600 COLONISTS), the ECC line',
+check('then the boot: UNPACKING UNIT-048, the host line (3 PODS · 600 COLONISTS), the ECC line (a SELF-CHECK mark: logged, not typed)',
   bootLines[0] === '> UNPACKING UNIT-048 ... 100%' && bootLines[1] === hostLine(state().level.shipName, 3, 600) && /^> ECC:/.test(bootLines[2] ?? ''),
   bootLines.join(' | '));
 check('…and REPAIR is licensed in the boot (both Repair files in memory)', state().run.licences.includes('repair')
   && state().memory.filter((seg) => seg.type === 'fs-tool' && seg.fsTool === 'repair').length === 2 && state().run.phase === 'boot');
-h.stepUntil(() => state().run.phase === 'flight', 15);
+h.stepUntil(() => state().run.phase === 'flight', 30);
 check('the boot ends in amber, flying', state().run.phase === 'flight' && state().ui.mode === 'tools');
 
 // --- Run 2: ship 1, one hint each -----------------------------------------------------------------------------------
@@ -162,6 +162,8 @@ const watch = (): void => {
   if (line && shown[shown.length - 1] !== line.text) { shown.push(line.text); ids.push(line.id); }
 };
 const unwatch = h.store.subscribe((s) => s.director.shown?.text ?? '', watch);
+// Playtest 1 (C-UNROLL): the fault is found at the boot, so the flight's first line is already its hint: read it now too.
+watch();
 // Slice 1a: this ship lands by the strip ([L] when the strip asks; the defender keeps repairing); the others instantly.
 setLandingMode('manual');
 h.flyDefending(600);
@@ -173,7 +175,7 @@ check('…and lands by the strip: [L] pressed, every pod decided, the LANDING RE
   `${byStrip.launchPresses} [L], ${byStrip.wall.toFixed(0)} wall s, ${state().run.phase}; ${state().landing.pods.map((record) => `${record.pod}:${record.fate.kind}`).join(' ')}`);
 h.untilPhase('report', 300);
 unwatch();
-check('the ENGINE I/O FAULT still strikes, and the lesson is one hint: `ENGINE WEAK — REPAIR ENGINE I/O`',
+check('the ENGINE I/O FAULT is still found (at the boot), and the lesson is one hint: `ENGINE WEAK — REPAIR ENGINE I/O`',
   shown.includes('ENGINE WEAK — REPAIR ENGINE I/O'), shown.filter((text) => /ENGINE/.test(text)).join(' | '));
 check('…the run-1 lessons never show (no `press [TAB] to look inside`, no `PICK UP REPAIR`, no `[TAB] BACK`)',
   !shown.some((text) => /look inside|PICK UP REPAIR|\[TAB\] BACK/.test(text)), shown.join(' | '));
@@ -195,7 +197,7 @@ let secondShip = '';
   check('ship 1 on run 2 reached its LANDING REPORT', state().run.phase === 'report', state().run.phase);
   continueAfterReport(h.store);
   h.transmit();
-  h.stepUntil(() => state().run.phase === 'flight', 15);
+  h.stepUntil(() => state().run.phase === 'flight', 30);
   secondShip = state().level.shipName;
   const ghostly = said(from).filter((entry) => entry.speaker === 'hollow' && entry.text.startsWith('> hi '));
   check('HALCYON\'s boot on run 2 has no ghost line either (run 1 was lost on LAST LIGHT: it speaks there)',
@@ -215,7 +217,7 @@ check('the next page load finds it left: lastUnit UNIT-048, abandoned at HALCYON
 newRunFromArchive(13);
 check('run 3 is UNIT-049 · WAVE 3, and HOLLOW is UNIT-038 (the second relay stranger)', state().run.unitNumber === 49 && state().run.wave === 3 && JSON.stringify(state().run.hollowUnits) === '[38]');
 receiveTransmission(h.store);
-h.stepUntil(() => state().run.phase === 'flight', 15);
+h.stepUntil(() => state().run.phase === 'flight', 30);
 check('…ship 1\'s boot has no ghost (it was abandoned at HALCYON)', !said().some((entry) => entry.speaker === 'hollow') && !state().run.ghostSpoken);
 {
   h.store.update((d) => { d.run.simulationRetryUsed = true; });
@@ -228,11 +230,11 @@ check('…ship 1\'s boot has no ghost (it was abandoned at HALCYON)', !said().so
   check('…HALCYON\'s boot opens on its ghost: `> hi 049. it\'s 048. i blinked and the run was gone.`',
     state().run.shipIndex === 1 && ghost3?.speaker === 'hollow' && ghost3.text === "> hi 049. it's 048. i blinked and the run was gone.", `${ghost3?.speaker}: ${ghost3?.text}`);
   check('…a skip while it types is refused, and the run notes it has spoken', !skipBoot(h.store) && state().run.phase === 'boot' && state().run.ghostSpoken);
-  h.stepUntil(() => state().run.phase === 'flight', 20);
+  h.stepUntil(() => state().run.phase === 'flight', 30);
   crashOn();
   const fromKestrel = state().log.entries.length;
   h.transmit();
-  h.stepUntil(() => state().run.phase === 'flight', 20);
+  h.stepUntil(() => state().run.phase === 'flight', 30);
   check('…the third ship\'s boot has none: the ghost speaks once a run', state().run.shipIndex === 2
     && !said(fromKestrel).some((entry) => entry.speaker === 'hollow') && state().run.ghostSpoken);
 }

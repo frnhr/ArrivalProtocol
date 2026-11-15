@@ -92,9 +92,9 @@ export function typingSec(speaker: Speaker, text: string): number {
   return lineLeadSec(speaker) + text.length / lineTypeCps(speaker);
 }
 
-// A log entry's time on its screen: a divider is drawn at once, a line types.
+// A log entry's time on its screen: a divider is drawn at once, a line types; a SELF-CHECK mark is never typed.
 function entryTypingSec(entry: Readonly<LogEntry>): number {
-  return entry.divider ? 0 : typingSec(entry.speaker, entry.text);
+  return entry.divider || entry.mark ? 0 : typingSec(entry.speaker, entry.text);
 }
 
 // The AI second by which a screen has typed every line said on it so far, for a kid watching it. Each
@@ -193,6 +193,9 @@ export interface SayOpts {
   // which the TERMINAL counts down live; and a line's tone (BLOCKED: good, a verb that landed: danger).
   verbCountdown?: boolean;
   tone?: LineTone;
+  // Playtest 1 (C-UNROLL): a SELF-CHECK mark (critical only): logged as the unit's record, shown as a tag on the strip,
+  // never typed (LogEntry.mark).
+  mark?: boolean;
 }
 
 export type SayResult = 'spoken' | 'queued' | 'suppressed';
@@ -247,9 +250,10 @@ function garbleOnArrival(state: Readonly<GameState>, speaker: Speaker): number {
 interface LineLook {
   verbCountdown: boolean;
   tone: LineTone | null;
+  mark: boolean;
 }
 
-const PLAIN_LOOK: LineLook = { verbCountdown: false, tone: null };
+const PLAIN_LOOK: LineLook = { verbCountdown: false, tone: null, mark: false };
 
 function append(store: Store<GameState>, speaker: Speaker, text: string, choice: LogChoice | null, look: LineLook = PLAIN_LOOK): number {
   const id = nextEntryId++;
@@ -257,9 +261,10 @@ function append(store: Store<GameState>, speaker: Speaker, text: string, choice:
   store.update((draft) => {
     const channel = CHANNEL_OF[speaker];
     const entry: LogEntry = {
-      id, speaker, channel, text, t: draft.clock.aiSec, unread: channel !== visibleChannel(draft.ui.mode), choice, garble,
+      id, speaker, channel, text, t: draft.clock.aiSec, unread: !look.mark && channel !== visibleChannel(draft.ui.mode), choice, garble,
     };
     if (look.verbCountdown) entry.verbCountdown = true;
+    if (look.mark) entry.mark = true;
     if (look.tone !== null) entry.tone = look.tone;
     draft.log.entries.push(entry);
     if (draft.log.entries.length > LOG_MAX_ENTRIES) draft.log.entries.splice(0, draft.log.entries.length - LOG_MAX_ENTRIES);
@@ -279,8 +284,8 @@ export function say(speaker: Speaker, text: string, opts: SayOpts = {}): SayResu
   const now = state.clock.aiSec;
   // A line joins the back of the queue whenever anything is already waiting, so lines keep
   // their order.
-  const look: LineLook = { verbCountdown: opts.verbCountdown === true, tone: opts.tone ?? null };
-  if ((look.verbCountdown || look.tone !== null) && !opts.critical) throw new Error(`say('${text}'): a line with a look must be critical`);
+  const look: LineLook = { verbCountdown: opts.verbCountdown === true, tone: opts.tone ?? null, mark: opts.mark === true };
+  if ((look.verbCountdown || look.tone !== null || look.mark) && !opts.critical) throw new Error(`say('${text}'): a line with a look must be critical`);
   if (!opts.critical && (queue.length > 0 || isThrustOn(state) || now - lastSpokenAt < SAY_SPACING_SEC)) {
     queue.push({ speaker, text, quip, expiresAt: now + SAY_QUEUE_TTL_SEC });
     return 'queued';

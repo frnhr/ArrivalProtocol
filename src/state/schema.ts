@@ -778,6 +778,9 @@ export interface LogEntry {
   // WP11 part 2: how the TERMINAL colours a line beyond its speaker: a verb BLOCKED is a win ('good'), one that landed
   // is a loss ('danger').
   tone?: LineTone;
+  // Playtest 1 (C-UNROLL, plan §3.5): a boot line the SELF-CHECK shows as a mark on the strip. It is the unit's record of
+  // what the check found (its words, said at its moment), never typed, never on the ticker, never unread.
+  mark?: true;
 }
 
 // Slice 5: 'resident' (the boot's `RECEIVER CLOSED` line, amber on every resident ship of any kind: plan R9).

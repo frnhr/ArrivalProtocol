@@ -128,7 +128,7 @@ function deal(ids: UpgradeId[], pick?: UpgradeId): void {
   toLeave(5);
   deal(['firewall'], 'firewall');
   h.transmit();
-  h.stepUntil(() => state().run.phase === 'flight', 15);
+  h.stepUntil(() => state().run.phase === 'flight', 30);
   let row = rowOf('firewall');
   check('FIREWALL.sys arrives IDLE: one ■ pip, `MOVE IT INTO A GAP NEXT TO ???`', row !== undefined && row.pips.length === 1
     && row.pips[0]!.look === 'idle' && row.status === SKILLS_TEXT.status.idle('???') && row.tone === 'hint' && row.title === 'FIREWALL.sys', JSON.stringify(row));

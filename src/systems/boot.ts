@@ -1,8 +1,9 @@
 // Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): the SENTRY lines as they are
 // said (a disguised seed named, the FIREWALL compiled), and the ECC seeds line's drop leaving a disguised seed out. Others
-// ask by message.
+// ask by message. Playtest 1 (C-UNROLL): the SELF-CHECK's stage machine.
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
+import type { CheckStage, CheckStep, FirstKind } from '@/types/self-check';
 import { onPostTick } from '@systems/clock';
 import { onWorldReset } from '@systems/reset';
 import { pushModal, registerKeys } from '@systems/input';
@@ -14,8 +15,7 @@ import { emit } from '@systems/events';
 import { archiveRunStarted, ghostLineDue, playWithoutArchive } from '@systems/meta';
 import { installBootLicences, renewRepairAtBoot } from '@systems/licences';
 import { skillBootLines, applySkillBootLine, type SkillBootLine } from '@systems/skill-files';
-import { bootLine, bootLinePlan, bootLineSpeaker, bootLineTone, bootLogEntries, lineVars, BOOT_LINE_MAX, type BootLineKind } from '@data/script';
-import type { Speaker } from '@state/schema';
+import { bootLine, bootLinePlan, bootLineSpeaker, bootLineTone, bootLineTyped, bootLogEntries, lineVars, type BootLineKind } from '@data/script';
 import { beamSeedTarget } from '@systems/beam-seeds';
 import { traceBootLineSaid } from '@systems/trace-gifts';
 import { titleEraseAsking } from '@systems/title';
@@ -25,61 +25,51 @@ import { receiveDeliveryAtBoot } from '@systems/delivery-boot';
 import { newMessagesAtBoot } from '@systems/inbox';
 import { writeRunSave } from '@systems/save-write';
 import { firstShipThreat } from '@systems/threat-plan';
+import { findFault } from '@systems/faults';
+import { palLines } from '@systems/companion';
+import { HOLLOW_STORY } from '@data/hollow-text';
+import { SELF_CHECK_TEXT } from '@data/self-check-text';
 import {
-  BOOT_LINE_AT_SEC, BOOT_KLAXON_AFTER_LAST_LINE_SEC, BOOT_END_AFTER_KLAXON_SEC, BOOT_SKIP_GRACE_SEC,
-  ARRIVAL_HIT_STAGGER_SEC, ARRIVAL_HIT_SEEN_SEC, BOOT_GHOST_AT_SEC, BOOT_AFTER_GHOST_SEC, BOOT_AFTER_HOLLOW_LINE_SEC,
+  planSelfCheck, beginCheckView, setCheckStage, lightFiles, setCheckTag, setCheckHold, endCheckView, resetCheckView, checkSnapshot,
+  checkFault, faultTag, hollowWordSaid, CHECK_FIRST_ID, CHECK_NAMED_HOLLOW,
+} from '@systems/self-check';
+import {
+  BOOT_END_AFTER_KLAXON_SEC, BOOT_SKIP_GRACE_SEC, BOOT_GHOST_AT_SEC, BOOT_AFTER_GHOST_SEC, BOOT_AFTER_HOLLOW_LINE_SEC,
+  SELF_CHECK_START_SEC, SELF_CHECK_LINE_GAP_SEC, SELF_CHECK_FILE_SEC, SELF_CHECK_FINDING_SEC, SELF_CHECK_FAULT_SEC,
+  SELF_CHECK_FIRST_SHIP_PACE, SELF_CHECK_STAGE_GAP_SEC, SELF_CHECK_HOLD_SEC, SELF_CHECK_SENSORS_SEC, SELF_CHECK_SKIP_SEEN_SEC,
 } from '@data/tuning';
+import { playsTutorial } from '@systems/meta';
 
-// The title card and the boot (§5.1, §7.1), DOM-free. The page opens in phase 'title': the
-// clock does not run and an input modal owns the keyboard. RECEIVE TRANSMISSION (a click, or
-// SPACE / ENTER) starts the boot: about five wall seconds in blue while the TERMINAL types the
-// unpack, host and ECC lines, then the klaxon, the cut to amber and phase 'flight'.
-// A click, SPACE or ENTER skips the boot, after a short grace (a double-click on RECEIVE must
-// not skip it). After a transmission a skip never cuts out what the crossing did: the first one
-// jumps to the ECC line (its red flashes start at once), and the cut to amber waits until the last
-// flash has been seen. The modal stays up until the flight starts, so a key held through the boot
-// (SPACE!) needs a fresh press before it does anything in the game.
-// On a later ship the crossing's ECC line flashes the files it hit; the ship's own arrival damage (KESTREL's
-// sensor, WP9) has a line of its own that flashes its file; and a skill trained or restored at the last desk, or retrained
-// by the kid's new demos, says so (slice 4: `> SKILL TRAINED: AUTOBURN.skl v1 · from your 1 capture · ACCURACY 92%`; the
-// lines are skill-files.ts skillBootLines', and saying one records it and fires the ONLINE stamp's 'skill-trained'). The
-// lines are planned once, at the boot's first tick, so a line said (a grant installed) never changes the count.
-// A returning unit (run 2+, §5.2) boots ship 1 differently, so it feels different within seconds: after the ECC line,
-// `> SOUL ARCHIVE · 2,400 · you know what they are`: the slabs crack at once (no STASIS step), and REPAIR is licensed in
-// the same moment (the ENGINE I/O FAULT will want it).
-// Its last unit's ghost (05 §3.5) speaks later, never at ship 1 (the new unit can't know yet): at the boot of the first
-// ship in or past the layer where that unit was lost (systems/meta.ts ghostPlaceReached, ghostLineDue), once a run
-// (run.ghostSpoken). It types first, in HOLLOW's slow pink (`> hi 048. it's 047. 046 ate me. now i'm hungry too.`); the
-// boot's own lines follow (on VESPER the boarding's 108% unpack too), and a skip waits until the ghost has had its say. It
-// names nothing: HOLLOW names itself where it arrives (slice-2-plan risk 11 and its follow-up, Fran's playtest: the ghost
-// line leaves ship 1, where HOLLOW is not; slice 3 keys it by layer).
-//   While the ghost speaks, the strip does not offer the skip (bootSkipWaits), and a press is refused with a
-//   buzz (§6.11), so a kid mashing SPACE hears why nothing happens.
-// On a ship whose HOLLOW asks for charge (VESPER, WP10), its own line closes the boot in its slow pink (`> keep 20
-// charge for me, 047. you'll see.`): the klaxon waits until the TERMINAL has typed it, and a skip jumps to it (after
-// the crossing's flashes) rather than past it, so a kid mashing SPACE still reads the price of a MERGE.
-// RECEIVE TRANSMISSION is RUN START for the archive (runs + 1, the run in progress: systems/meta.ts). An
-// archive that can't be read (CORRUPT) does not hold the run back: RECEIVE plays on without it, as PLAY
-// WITHOUT ARCHIVE does, and its red box stays on the title (the lead's note: the game continues without
-// saving, and says so).
-
-if (BOOT_LINE_AT_SEC.length < BOOT_LINE_MAX) {
-  throw new Error(`boot: BOOT_LINE_AT_SEC has ${BOOT_LINE_AT_SEC.length} times for up to ${BOOT_LINE_MAX} lines`);
-}
-
-// The boot's beats: each line at its time, the klaxon a moment after the last one (ship 1's three lines:
-// 4.5 s), the cut to amber after that. A later ship says what the crossing did, so its boot runs a line or
-// two longer (§4.1: 5–8 s). When HOLLOW's line closes the boot (VESPER), the klaxon waits until it has typed.
-function klaxonAtSec(store: Store<GameState>): number {
-  const lines = linePlan(store).length;
-  const afterLast = lineAtSec(lines - 1) + BOOT_KLAXON_AFTER_LAST_LINE_SEC;
-  const hollowLine = lineIndex(store, 'hollow');
-  return hollowLine < 0 ? afterLast : Math.max(afterLast, lineTypedAtSec(store, hollowLine) + BOOT_AFTER_HOLLOW_LINE_SEC);
-}
-
-function endAtSec(store: Store<GameState>): number {
-  return klaxonAtSec(store) + BOOT_END_AFTER_KLAXON_SEC;
-}
+// The title card and the boot (§5.1, §7.1), DOM-free. The page opens in phase 'title': the clock does not run and an input
+// modal owns the keyboard. RECEIVE TRANSMISSION (a click, or SPACE / ENTER) starts the boot in blue, then the klaxon, the cut
+// to amber and phase 'flight'. The modal stays up until the flight starts, so a key held through the boot (SPACE!) needs a
+// fresh press before it does anything in the game.
+// Playtest 1, C-UNROLL (playtest-1-plan §3.5, Fran's notes 13 and 17): the boot is the SELF-CHECK, the unit coming online and
+// looking around, in six stages (types/self-check.ts): RECEIVE (the racks assemble, the unpack and the host type), SELF (racks
+// E/F a file at a time: what the crossing took, what ECC put back, the charge that came), SHIP (rack A, the ship's own arrival
+// damage, ship 1's ENGINE I/O FAULT found as the check reaches the engine), HOLD (the pod drivers), MANIFEST (what the packet
+// did not carry: 046.log, deliveries, seeds, HOLLOW's blocks; the first of each kind on the run holds the sweep until a click
+// or SELF_CHECK_HOLD_SEC, and is named there: CONTROL says HOLLOW at the first seed), SENSORS, then the klaxon.
+// systems/self-check.ts plans the steps once, at the boot's first tick, from the state and the boot's line plan
+// (data/script.ts bootLinePlan, which keeps every line's words and effects); this file plays them on wall time. A line is
+// said as its step starts: typed on the TERMINAL (bootLineTyped), or as a mark, the unit's record that never types while the
+// strip's tag shows it (say.ts `mark`). Each line's effects fire as it is said, whichever way, so a skipped check still
+// installs a patch, unpacks a delivery, compiles a FIREWALL.
+// A press (click, SPACE, ENTER) after BOOT_SKIP_GRACE_SEC: on a hold, it is the click that lets the sweep go on; else the first
+// press hurries the stage (all of it at once) and the next skips to SENSORS (every step at once). A skip never cuts out what
+// the check found: when it shows a finding the cut to amber waits SELF_CHECK_SKIP_SEEN_SEC (the old ECC flashes' rule).
+// A returning unit (run 2+, §5.2) boots ship 1 differently: REPAIR is licensed as the host line is said, so the chip is there
+// before the ENGINE I/O FAULT asks for it.
+// Its last unit's ghost (05 §3.5) speaks first, at the boot of the first ship in or past the layer where that unit was lost
+// (systems/meta.ts ghostLineDue), once a run (run.ghostSpoken), in HOLLOW's slow pink; the check starts BOOT_AFTER_GHOST_SEC
+// after its last letter. While the ghost speaks, the strip does not offer the skip (bootSkipWaits), and a press is refused
+// with a buzz (§6.11).
+// On a ship whose HOLLOW asks for charge (VESPER, WP10), its own line closes the MANIFEST in its slow pink (`> keep 20 charge
+// for me, 047. you'll see.`): its step lasts until it has typed (plus BOOT_AFTER_HOLLOW_LINE_SEC), and a skip that says it
+// waits for it too, so a kid mashing SPACE still reads the price of a MERGE.
+// RECEIVE TRANSMISSION is RUN START for the archive (runs + 1, the run in progress: systems/meta.ts). An archive that can't be
+// read (CORRUPT) does not hold the run back: RECEIVE plays on without it, as PLAY WITHOUT ARCHIVE does, and its red box stays
+// on the title (the lead's note: the game continues without saving, and says so).
 
 export interface BootHooks {
   // Runs synchronously inside the user gesture that receives the transmission: the only
@@ -95,30 +85,54 @@ interface GhostBeat {
   said: boolean;
 }
 
+// The step being played: when it started and the boot second its wait ends (a hold ends earlier on a press).
+interface ActiveStep {
+  index: number;
+  endsAtSec: number;
+  released: boolean;
+}
+
 let hooks: BootHooks = {};
 let elapsedSec = 0;
-let linesSaid = 0;
-// The lines said so far, with the boot second each was said: the TERMINAL types them one after another (say.ts), so
-// when a line has typed depends on the ones before it (a skip says several at once).
-let saidLines: { speaker: Speaker; text: string; atSec: number }[] = [];
 let klaxonPlayed = false;
 let ghost: GhostBeat | null = null;
 let ghostPlanned = false;
-// The boot's lines, planned at its first tick (bootLinePlan); null before. Its skill lines (slice 4) are planned with it:
-// saying one records it, so they are read once, not re-derived as they are said.
+// The boot's lines (bootLinePlan) and the check's steps (planSelfCheck), planned at its first tick; null before. Its skill
+// lines (slice 4) are planned with it: saying one records it, so they are read once, not re-derived as they are said.
 let plan: BootLineKind[] | null = null;
+let steps: CheckStep[] | null = null;
 let skillLines: SkillBootLine[] = [];
+// The next step to start, the boot second it starts at, the step playing, the stage shown, and once every step has played,
+// the second SENSORS began (the klaxon follows it).
+let cursor = 0;
+let cursorAtSec = 0;
+let active: ActiveStep | null = null;
+let shownStage: CheckStage | null = null;
+let sensorsAtSec: number | null = null;
+// Presses honoured so far (the first hurries a stage, the next skips the rest).
+let hurried = false;
+let skipped = false;
+// The lines said, by plan index (none twice).
+let saidLines = new Set<number>();
 let closeModal: (() => void) | null = null;
 
 function resetBootTimers(): void {
   elapsedSec = 0;
-  linesSaid = 0;
-  saidLines = [];
   klaxonPlayed = false;
   ghost = null;
   ghostPlanned = false;
   plan = null;
+  steps = null;
   skillLines = [];
+  cursor = 0;
+  cursorAtSec = 0;
+  active = null;
+  shownStage = null;
+  sensorsAtSec = null;
+  hurried = false;
+  skipped = false;
+  saidLines = new Set();
+  resetCheckView();
 }
 
 function linePlan(store: Store<GameState>): BootLineKind[] {
@@ -130,9 +144,13 @@ function linePlan(store: Store<GameState>): BootLineKind[] {
   return plan;
 }
 
-// Where a kind of line sits in the plan (-1: this boot has none).
-function lineIndex(store: Store<GameState>, kind: BootLineKind): number {
-  return linePlan(store).indexOf(kind);
+function checkSteps(store: Store<GameState>): CheckStep[] {
+  if (steps === null) {
+    steps = planSelfCheck(store.getState(), linePlan(store));
+    beginCheckView(steps);
+    shownStage = 'receive';
+  }
+  return steps;
 }
 
 // The ghost speaks on the boot of the first ship at or past where the last unit's run ended, once a run (systems/meta.ts
@@ -143,61 +161,19 @@ function planGhost(state: Readonly<GameState>): GhostBeat | null {
   return { text, typedAtSec: BOOT_GHOST_AT_SEC + typingSec('hollow', text), said: false };
 }
 
-function ensureGhostPlanned(store: Store<GameState>): void {
-  if (ghostPlanned) return;
-  ghostPlanned = true;
-  ghost = planGhost(store.getState());
-}
-
-// The boot second by which the TERMINAL has typed line `index` of the plan: the lines said so far type one after
-// another from the moment each was said; a line not said yet is counted from its time, after the ones before it.
-function lineTypedAtSec(store: Store<GameState>, index: number): number {
-  let typedBy = -Infinity;
-  for (let i = 0; i <= index; i++) {
-    const said = saidLines[i];
-    const kind = linePlan(store)[i]!;
-    const text = said?.text ?? plannedText(store, kind, lineOrdinal(store, i));
-    typedBy = Math.max(said?.atSec ?? lineAtSec(i), typedBy) + typingSec(said?.speaker ?? bootLineSpeaker(kind), text);
+function ensurePlanned(store: Store<GameState>): void {
+  if (!ghostPlanned) {
+    ghostPlanned = true;
+    ghost = planGhost(store.getState());
+    cursorAtSec = ghost === null ? SELF_CHECK_START_SEC : ghost.typedAtSec + BOOT_AFTER_GHOST_SEC;
   }
-  return typedBy;
-}
-
-// A line's words before it is said: rendered as it would be now (a skill line's are its planned text).
-function plannedText(store: Store<GameState>, kind: BootLineKind, ordinal: number): string {
-  if (kind === 'skill') return plannedSkillLine(ordinal).text;
-  const state = store.getState();
-  return bootLine(kind, state, lineVars(state, getPrediction()), ordinal);
+  checkSteps(store);
 }
 
 function plannedSkillLine(ordinal: number): SkillBootLine {
   const line = skillLines[ordinal];
   if (line === undefined) throw new Error(`boot: no skill line ${ordinal} in this boot's plan`);
   return line;
-}
-
-// Line `index`'s place among the plan's lines of its kind (phase 3 slice 3b: 'delivery' repeats, one line per group of
-// deliveries; slice 4: 'skill', one per skill line; every other kind is 0).
-function lineOrdinal(store: Store<GameState>, index: number): number {
-  const plan = linePlan(store);
-  const kind = plan[index];
-  if (kind === undefined) throw new Error(`boot: no line ${index} in this boot's plan`);
-  return plan.slice(0, index).filter((other) => other === kind).length;
-}
-
-// The boot's own lines wait for the ghost to finish: line i at its time, shifted past the ghost's last letter.
-function lineShiftSec(): number {
-  return ghost === null ? 0 : ghost.typedAtSec + BOOT_AFTER_GHOST_SEC - BOOT_LINE_AT_SEC[0]!;
-}
-
-// A boot longer than BOOT_LINE_AT_SEC (slice 3a's sleep, receiver and ECC lines can take an arm boot to 13) keeps the same
-// rhythm: each further line one step after the last listed one.
-function lineAtSec(index: number): number {
-  if (!(Number.isInteger(index) && index >= 0)) throw new Error(`boot: line ${index}`);
-  const listed = BOOT_LINE_AT_SEC[index];
-  if (listed !== undefined) return listed + lineShiftSec();
-  const last = BOOT_LINE_AT_SEC.length - 1;
-  const step = BOOT_LINE_AT_SEC[last]! - BOOT_LINE_AT_SEC[last - 1]!;
-  return BOOT_LINE_AT_SEC[last]! + (index - last) * step + lineShiftSec();
 }
 
 // The ghost's line at BOOT_GHOST_AT_SEC (at once, when the boot is finished early). The run notes it has spoken, so no
@@ -223,6 +199,22 @@ export function bootSkipWaits(state: Readonly<GameState>): boolean {
   return elapsedSec < ghostSeenAtSec();
 }
 
+// The SELF-CHECK as the strip's line says it (systems/director.ts): the stage, and whether it holds on the first of a kind.
+export function bootCheckLine(state: Readonly<GameState>): { stage: CheckStage; held: boolean } {
+  if (state.run.phase !== 'boot' || shownStage === null) return { stage: 'receive', held: false };
+  const step = active === null ? null : steps?.[active.index] ?? null;
+  return { stage: shownStage, held: step !== null && step.kind === 'first' && step.hold && !active!.released };
+}
+
+// The check's progress, for the suites and ?debug: the steps planned, how many have started, the stage, the boot second.
+export function bootCheckProgress(): { steps: readonly CheckStep[]; started: number; stage: CheckStage | null; elapsedSec: number; held: boolean } {
+  const step = active === null ? null : steps?.[active.index] ?? null;
+  return {
+    steps: steps ?? [], started: cursor, stage: shownStage, elapsedSec,
+    held: step !== null && step.kind === 'first' && step.hold && active !== null && !active.released,
+  };
+}
+
 // The title and the boot hold the 'title' input layer; the flight releases it.
 function syncModal(store: Store<GameState>): void {
   const phase = store.getState().run.phase;
@@ -234,15 +226,13 @@ function syncModal(store: Store<GameState>): void {
   }
 }
 
-// Each boot line is rendered when it is typed, from the live state: the ECC line names the
-// files that are damaged right then. After a transmission the ECC line is the crossing's: as it is
-// said, the strip flashes each file a hit landed on (WP7 part 2, 'arrival-hits'); the ship's own damage
-// flashes with its own line (WP9).
-function sayNextLine(store: Store<GameState>): void {
+// One boot line said, rendered from the live state (the ECC line names the files damaged right then), typed or as a mark,
+// with its effects. Returns how long its step lasts: a typed line until it has typed (HOLLOW's own line a beat more), a mark
+// no time at all (the sweep's tags show it).
+function sayBootLine(store: Store<GameState>, index: number, kind: BootLineKind, ordinal: number): number {
+  if (saidLines.has(index)) throw new Error(`boot: line ${index} (${kind}) said twice`);
+  saidLines.add(index);
   const state = store.getState();
-  const kind = linePlan(store)[linesSaid];
-  if (kind === undefined) throw new Error(`boot: no line ${linesSaid} in this boot's plan`);
-  const ordinal = lineOrdinal(store, linesSaid);
   let text: string;
   if (kind === 'skill') {
     const line = plannedSkillLine(ordinal);
@@ -252,19 +242,17 @@ function sayNextLine(store: Store<GameState>): void {
     text = bootLine(kind, state, lineVars(state, getPrediction()), ordinal);
   }
   const speaker = bootLineSpeaker(kind);
+  const typed = bootLineTyped(kind, state);
   // Slice 5: the RECEIVER CLOSED line's amber (script.ts bootLineTone); every other line plain, as before.
   const tone = bootLineTone(kind);
-  say(speaker, text, tone === null ? { critical: true } : { critical: true, tone });
-  saidLines.push({ speaker, text, atSec: elapsedSec });
+  say(speaker, text, { critical: true, ...(tone === null ? {} : { tone }), ...(typed ? {} : { mark: true }) });
   const arrival = state.run.arrival;
-  if (kind === 'ecc' && arrival !== null && arrival.hits.length > 0) emit('arrival-hits', { hits: [...arrival.hits] });
-  if (kind === 'scripted' && arrival !== null) emit('arrival-hits', { hits: [...arrival.scripted] });
   // HOLLOW boarded on this beam (phase 3 slice 2, 04 §4): its 108% unpack is the boarding moment (the shake, the tear,
   // the hollowBoard cue hang on the event; Track UI).
   if (kind === 'board' && arrival !== null && arrival.boarded !== null) emit('hollow-boarded', { ...arrival.boarded });
-  // The beam's seeds (phase 3 slice 2, 04 §4): the ECC seeds line names each, and each lands as it is said (the drop, the
-  // flash and the seedLand thunk hang on the event; Track UI). A seed already gone (rm'd in a skipped boot) says nothing;
-  // a stray (the no-room rule) lands next to no file it was named for (targetId null: the review's minor 4).
+  // The beam's seeds (phase 3 slice 2, 04 §4): the ECC seeds line names each, and each is found as it is said (the flash and
+  // the seedLand thunk hang on the event; Track UI). A seed already gone (rm'd in a skipped boot) says nothing; a stray (the
+  // no-room rule) is next to no file it was named for (targetId null: the review's minor 4).
   // Slice 4d (04 §3.6): a disguised seed is not on that line and lands with no thunk; SENTRY v1's own line names it.
   if (kind === 'seeds' && arrival !== null) {
     for (const seed of arrival.seeds) {
@@ -285,19 +273,179 @@ function sayNextLine(store: Store<GameState>): void {
   // the chip is there before the flight, as on every later ship.
   if (kind === 'host' && state.run.arrival === null) installBootLicences(store);
   // The deliveries this line names unpack as it is said (phase 3 slice 3b: the chime and the chip on the 'delivery' event,
-  // the patch's install; systems/delivery-boot.ts). finishBoot says every line, so a skip still unpacks them.
+  // the patch's install; systems/delivery-boot.ts). A skip says every line, so it still unpacks them.
   if (kind === 'delivery') receiveDeliveryAtBoot(store, ordinal);
-  // A unit that crossed with no working REPAIR gets it back with its charge (WP12: licences.ts renewRepairAtBoot).
+  // A unit that crossed with no working REPAIR gets it back with its charge (WP12: licences.ts renewRepairAtBoot). Since
+  // C-UNROLL the charge (SELF) is said before the deliveries (MANIFEST): the renewal happens here, and the first delivery
+  // line's call is the no-op (it leaves the delivered copies out either way, so a patch still upgrades the renewed REPAIR).
   if (kind === 'charge') renewRepairAtBoot(store);
   // Slice 4d: SENTRY v1 names a disguised seed (it is unmasked, and lands with the ECC line's drop); v3 compiles its
   // FIREWALL.sys as its line is said (a line that said NO ROOM writes nothing).
   if (kind === 'sentry-seed') sentrySeedSaid(store, ordinal);
   if (kind === 'firewall') compileFirewall(store);
   // Slice 7c: a trace's line gives what it says (Track TRACE's), a lineage line does its own (Track LINEAGE's: the face takes
-  // the root over). finishBoot says every line, so a skipped boot still gives its gifts.
+  // the root over). A skip says every line, so a skipped boot still gives its gifts.
   if (kind === 'trace-gift' || kind === 'dish-wiped' || kind === 'dish-wild') traceBootLineSaid(store, kind, ordinal);
   if (kind === 'face' || kind === 'lineage-control' || kind === 'stranger') lineageBootLineSaid(store, kind, ordinal);
-  linesSaid++;
+  if (!typed) return 0;
+  const typing = typingSec(speaker, text);
+  return typing + (kind === 'hollow' ? BOOT_AFTER_HOLLOW_LINE_SEC : SELF_CHECK_LINE_GAP_SEC);
+}
+
+// The tutorial run's first ship checks slower (SELF_CHECK_FIRST_SHIP_PACE): the kid's first look at the MIND.
+function pace(state: Readonly<GameState>): number {
+  return playsTutorial(state.run) && state.run.shipIndex === 0 ? SELF_CHECK_FIRST_SHIP_PACE : 1;
+}
+
+// The plan index of a line step (its kind's `ordinal`th line in the plan).
+function lineIndexOf(store: Store<GameState>, kind: BootLineKind, ordinal: number): number {
+  let seen = 0;
+  const lines = linePlan(store);
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i] !== kind) continue;
+    if (seen === ordinal) return i;
+    seen++;
+  }
+  throw new Error(`boot: no '${kind}' line ${ordinal} in this boot's plan`);
+}
+
+// A step starts: its line said, its files lit, its fault found, its hold raised. Returns how long it lasts (a hold: the most
+// it waits).
+function startStep(store: Store<GameState>, step: CheckStep): number {
+  const state = store.getState();
+  const p = pace(state);
+  switch (step.kind) {
+    case 'line': {
+      const kind = step.line as BootLineKind;
+      return sayBootLine(store, lineIndexOf(store, kind, step.ordinal), kind, step.ordinal);
+    }
+    case 'file': {
+      const live = step.segIds.filter((id) => state.memory.some((seg) => seg.id === id));
+      lightFiles(live, step.tag);
+      if (live.length > 0) emit('self-check-step', { cue: step.cue, segIds: live });
+      return (SELF_CHECK_FILE_SEC + (step.tag === null ? 0 : SELF_CHECK_FINDING_SEC)) * p;
+    }
+    case 'fault': {
+      const fault = checkFault(step.faultId);
+      const segId = findFault(store, fault);
+      if (segId !== null) {
+        setCheckTag(segId, faultTag(fault.role, fault.toIntegrity));
+        lightFiles([segId], null);
+        emit('self-check-step', { cue: 'fault', segIds: [segId] });
+      }
+      return SELF_CHECK_FAULT_SEC * p;
+    }
+    case 'first':
+      if (step.hold) {
+        setCheckHold({ first: step.first, segIds: step.segIds });
+        return SELF_CHECK_HOLD_SEC;
+      }
+      return SELF_CHECK_FINDING_SEC * p;
+  }
+}
+
+// A step ends. The first of a kind is named as its hold lets go: 046.log gets PAL's reaction; the first seed its INSPECT words
+// on its tag and ARRIVAL CONTROL's name for it (the first time anyone says HOLLOW), then PAL's.
+function endStep(store: Store<GameState>, step: CheckStep): void {
+  if (step.kind !== 'first') return;
+  setCheckHold(null);
+  nameFirst(store, step.first, step.segIds);
+}
+
+function nameFirst(store: Store<GameState>, first: FirstKind, segIds: readonly string[]): void {
+  const state = store.getState();
+  const pal = palLines(state.run);
+  const ids = [CHECK_FIRST_ID[first]];
+  if (first === 'log') say('companion', pal.mysteryFile, { critical: true });
+  if (first === 'seed') {
+    for (const id of segIds) setCheckTag(id, { text: SELF_CHECK_TEXT.tag.seedNamed, tone: 'seed', stays: true });
+    if (!hollowWordSaid(state)) {
+      say('control', HOLLOW_STORY.fragment, { critical: true });
+      ids.push(CHECK_NAMED_HOLLOW);
+    }
+    say('companion', pal.firstSeed, { critical: true });
+  }
+  store.update((draft) => {
+    for (const id of ids) if (!draft.director.done.includes(id)) draft.director.done.push(id);
+  });
+}
+
+function stepAt(index: number): CheckStep {
+  const step = steps?.[index];
+  if (step === undefined) throw new Error(`boot: no step ${index}`);
+  return step;
+}
+
+// Plays the check up to the boot's clock: the step playing ends when its time is up (a hold when released or timed out), the
+// next starts at the second the last one ended (a new stage after SELF_CHECK_STAGE_GAP_SEC), and once all have played SENSORS
+// runs, then the klaxon and the cut to amber.
+function pump(store: Store<GameState>): void {
+  const all = checkSteps(store);
+  for (;;) {
+    if (active !== null) {
+      const step = stepAt(active.index);
+      if (!active.released && elapsedSec < active.endsAtSec) return;
+      cursorAtSec = active.released ? Math.max(cursorAtSec, Math.min(elapsedSec, active.endsAtSec)) : active.endsAtSec;
+      active = null;
+      endStep(store, step);
+    }
+    if (cursor < all.length) {
+      const step = all[cursor]!;
+      if (step.stage !== shownStage) {
+        // A new stage: its line on the strip at once, its first step after the gap.
+        if (shownStage !== 'receive' || cursor > 0) cursorAtSec += SELF_CHECK_STAGE_GAP_SEC;
+        shownStage = step.stage;
+        setCheckStage(step.stage);
+      }
+      if (elapsedSec < cursorAtSec) return;
+      const index = cursor++;
+      const lasts = startStep(store, step);
+      active = { index, endsAtSec: cursorAtSec + lasts, released: false };
+      continue;
+    }
+    if (sensorsAtSec === null) {
+      sensorsAtSec = cursorAtSec + (shownStage === null ? 0 : SELF_CHECK_STAGE_GAP_SEC);
+      shownStage = 'sensors';
+      setCheckStage('sensors');
+    }
+    const klaxonAt = sensorsAtSec + SELF_CHECK_SENSORS_SEC;
+    if (!klaxonPlayed && elapsedSec >= klaxonAt) {
+      play('klaxon');
+      klaxonPlayed = true;
+    }
+    if (elapsedSec >= klaxonAt + BOOT_END_AFTER_KLAXON_SEC) finishBoot(store);
+    return;
+  }
+}
+
+// Plays every step left in `stage` at once (null: every step left), holds released and named. Returns the boot seconds by
+// which what it said has been seen: `seenAt`, a finding shown (SELF_CHECK_SKIP_SEEN_SEC from now); `typedAt`, HOLLOW's own line
+// typed (it may already be typing). 0 for nothing.
+function playAtOnce(store: Store<GameState>, stage: CheckStage | null): { seenAt: number; typedAt: number } {
+  const all = checkSteps(store);
+  let seenAt = 0;
+  let typedAt = 0;
+  if (active !== null) {
+    const step = stepAt(active.index);
+    if (step.kind === 'line' && step.line === 'hollow') typedAt = active.endsAtSec;
+    active = null;
+    endStep(store, step);
+  }
+  while (cursor < all.length && (stage === null || all[cursor]!.stage === stage)) {
+    const step = all[cursor++]!;
+    if (step.stage !== shownStage) {
+      shownStage = step.stage;
+      setCheckStage(step.stage);
+    }
+    const lasts = startStep(store, step);
+    if (step.kind === 'line' && step.line === 'hollow') typedAt = Math.max(typedAt, elapsedSec + lasts);
+    if ((step.kind === 'file' && step.tag !== null && step.tag.stays) || step.kind === 'fault' || step.kind === 'first') {
+      seenAt = Math.max(seenAt, elapsedSec + SELF_CHECK_SKIP_SEEN_SEC);
+    }
+    endStep(store, step);
+  }
+  cursorAtSec = Math.max(cursorAtSec, elapsedSec);
+  return { seenAt, typedAt };
 }
 
 // Refused while the title holds a save (review fix B2): RESUME ▸ / NEW RUN, or CAN'T RESUME's ABANDON RUN, is the way on
@@ -342,12 +490,14 @@ export function startBootFromTitle(store: Store<GameState>, opts: { countRun: bo
   play('transmitIn');
 }
 
-// The end of the boot, on time or skipped: every line is in the log, the klaxon sounds, the
-// screen cuts to amber and the flight starts.
+// The end of the boot, on time or skipped: every step has played (every line is in the log, every effect done), the klaxon
+// sounds, the screen cuts to amber and the flight starts.
 function finishBoot(store: Store<GameState>): void {
-  ensureGhostPlanned(store);
+  ensurePlanned(store);
   advanceGhost(store, true);
-  while (linesSaid < linePlan(store).length) sayNextLine(store);
+  playAtOnce(store, null);
+  endCheckView();
+  shownStage = null;
   if (!klaxonPlayed) {
     play('klaxon');
     klaxonPlayed = true;
@@ -357,72 +507,61 @@ function finishBoot(store: Store<GameState>): void {
   syncModal(store);
 }
 
-// The boot time before which a skip may not cut to amber: the arrival's last flash seen
-// (ARRIVAL_HIT_SEEN_SEC after it starts, ARRIVAL_HIT_STAGGER_SEC apart from its line on: the crossing's on
-// the ECC line, the ship's own on its line).
-function flashesSeenAtSec(store: Store<GameState>, kind: BootLineKind, flashes: number): number {
-  const index = lineIndex(store, kind);
-  if (flashes === 0 || index < 0) return 0;
-  return lineAtSec(index) + (flashes - 1) * ARRIVAL_HIT_STAGGER_SEC + ARRIVAL_HIT_SEEN_SEC;
-}
-
-function arrivalSeenAtSec(store: Store<GameState>): number {
-  const arrival = store.getState().run.arrival;
-  if (arrival === null) return 0;
-  return Math.max(flashesSeenAtSec(store, 'ecc', arrival.hits.length), flashesSeenAtSec(store, 'scripted', arrival.scripted.length));
-}
-
-// The last line whose flashes the cut to amber waits for (-1: nothing flashes).
-function lastFlashLine(store: Store<GameState>): number {
-  const arrival = store.getState().run.arrival;
-  if (arrival === null) return -1;
-  if (arrival.scripted.length > 0) return lineIndex(store, 'scripted');
-  return arrival.hits.length > 0 ? lineIndex(store, 'ecc') : -1;
-}
-
+// A press during the boot (click, SPACE, ENTER, or ?debug's __ap.skipBoot). True when it did something: let a hold go,
+// hurried a stage, skipped to SENSORS or cut to amber. Refused (false) inside the grace, while the ghost types (with a buzz),
+// and while a skip's findings or HOLLOW's line are still being seen.
 export function skipBoot(store: Store<GameState>): boolean {
   const state = store.getState();
   if (state.run.phase !== 'boot' || elapsedSec < BOOT_SKIP_GRACE_SEC) return false;
-  ensureGhostPlanned(store);
+  ensurePlanned(store);
   if (elapsedSec < ghostSeenAtSec()) {
     play('buzz');
     return false;
   }
-  const seenAt = arrivalSeenAtSec(store);
-  const flashLine = lastFlashLine(store);
-  if (seenAt > 0 && flashLine >= 0 && linesSaid <= flashLine) {
-    // Jump to the line that flashes last: the lines up to it are said now (their flashes start), and the boot
-    // runs on from there.
-    elapsedSec = lineAtSec(flashLine);
-    advanceBoot(store, 0);
-    return true;
-  }
-  if (elapsedSec < seenAt) return false;
-  // HOLLOW's line (VESPER): a skip jumps to it (the lines before it are said now), and the cut waits until it has typed.
-  const hollowLine = lineIndex(store, 'hollow');
-  if (hollowLine >= 0) {
-    if (linesSaid <= hollowLine) {
-      elapsedSec = Math.max(elapsedSec, lineAtSec(hollowLine));
-      advanceBoot(store, 0);
+  // A hold: the press is the click that lets the sweep go on.
+  if (active !== null && !active.released) {
+    const step = stepAt(active.index);
+    if (step.kind === 'first' && step.hold) {
+      active.released = true;
+      pump(store);
       return true;
     }
-    if (elapsedSec < lineTypedAtSec(store, hollowLine)) return false;
   }
-  finishBoot(store);
+  if (skipped) {
+    // Every step has played: the cut waits until what the skip showed has been seen.
+    if (elapsedSec < cursorAtSec) return false;
+    finishBoot(store);
+    return true;
+  }
+  const all = checkSteps(store);
+  if (!hurried && cursor < all.length) {
+    // The first press: the rest of this stage at once.
+    hurried = true;
+    const stage = active !== null ? stepAt(active.index).stage : all[cursor]!.stage;
+    const { seenAt, typedAt } = playAtOnce(store, stage);
+    cursorAtSec = Math.max(elapsedSec, typedAt, seenAt === 0 ? elapsedSec : Math.min(seenAt, elapsedSec + SELF_CHECK_FINDING_SEC));
+    return true;
+  }
+  // The next: every step left at once, then SENSORS once what it showed has been seen.
+  skipped = true;
+  const shown = playAtOnce(store, null);
+  const seenAt = Math.max(shown.seenAt, shown.typedAt);
+  if (seenAt <= elapsedSec) {
+    finishBoot(store);
+    return true;
+  }
+  cursorAtSec = seenAt;
+  sensorsAtSec = seenAt - SELF_CHECK_SENSORS_SEC;
+  shownStage = 'sensors';
+  setCheckStage('sensors');
   return true;
 }
 
 function advanceBoot(store: Store<GameState>, dtWall: number): void {
-  ensureGhostPlanned(store);
+  ensurePlanned(store);
   elapsedSec += dtWall;
   advanceGhost(store, false);
-  const lines = linePlan(store).length;
-  while (linesSaid < lines && elapsedSec >= lineAtSec(linesSaid)) sayNextLine(store);
-  if (!klaxonPlayed && elapsedSec >= klaxonAtSec(store)) {
-    play('klaxon');
-    klaxonPlayed = true;
-  }
-  if (elapsedSec >= endAtSec(store)) finishBoot(store);
+  pump(store);
 }
 
 let mounted = false;
@@ -448,7 +587,8 @@ export function mountBoot(store: Store<GameState>, bootHooks: BootHooks = {}): (
   });
   // A reset (a new ship, the simulation retry, a NEW RUN) starts the boot's clock over.
   const offReset = onWorldReset('boot', resetBootTimers, () => ({
-    elapsedSec, linesSaid, klaxonPlayed, ghost, ghostPlanned, plan, saidLines: saidLines.length,
+    elapsedSec, klaxonPlayed, ghost, ghostPlanned, plan, steps, cursor, active, sensorsAtSec, hurried, skipped,
+    said: saidLines.size, check: checkSnapshot(),
   }));
   // The modal follows the phase: a reset runs before the new ship's slices are in the store
   // (systems/run.ts resetWorldForShip), so a new boot or a NEW RUN's title raises it from here.

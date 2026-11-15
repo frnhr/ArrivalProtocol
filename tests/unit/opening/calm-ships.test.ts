@@ -23,7 +23,7 @@ import { mountStoryLog } from '@systems/story-log';
 import { logEntriesAtBoot, logKnown, logDisplayName } from '@state/log-selectors';
 import { setMode } from '@systems/mode';
 import { pickUpTool } from '@systems/fs-tools';
-import { actionScan } from '@state/actions';
+import { actionScan, setIntegrity } from '@state/actions';
 import { podStreaks } from '@systems/landing-hud';
 import { lineageOf, freshMeta, recordRunStart, recordRunEnd, ghostLine } from '@systems/meta';
 import { createInitialState } from '@state/initial';
@@ -64,6 +64,14 @@ const logTexts = (): string[] => state().log.entries.map((entry) => entry.text);
 const drivers = (): DriverSegment[] => state().memory.filter((seg): seg is DriverSegment => seg.type === 'driver');
 const logSeg = () => state().memory.find((seg) => seg.type === 'log');
 const eventsOf = (name: string) => h.events.filter((event) => event.name === name);
+// Playtest 1 (C-UNROLL): the boot's SELF-CHECK finds ARES-VII's ENGINE I/O FAULT, so the run's first lesson is the engine's
+// REPAIR. The lessons here come after it: the kid has done it (Engine I/O whole), as the strip asked first.
+function repairedEngine(): void {
+  h.store.update((draft) => {
+    for (const seg of draft.memory) if (seg.role === 'engine-io' && 'integrity' in seg) setIntegrity(seg, 100);
+    draft.ui.memoryRev++;
+  });
+}
 function stepUntil(done: () => boolean, maxWall: number): boolean {
   const end = h.wall() + maxWall;
   while (!done() && h.wall() < end) h.step();
@@ -129,6 +137,7 @@ function stepUntil(done: () => boolean, maxWall: number): boolean {
 h.newRun(12);
 receiveTransmission(h.store);
 stepUntil(() => state().run.phase === 'flight', 30);
+repairedEngine();
 {
   const { ring, planet } = state().level;
   const elems = stateFromElements((ring.min + ring.max) / 2, 0.6, 0, Math.PI, planet.mu);
@@ -156,6 +165,7 @@ stepUntil(() => state().run.phase === 'flight', 30);
 h.newRun(11);
 receiveTransmission(h.store);
 stepUntil(() => state().run.phase === 'flight', 30);
+repairedEngine();
 {
   check('ship 1 boots calm: no HOLLOW block in memory, the `???` file in rack F, no key line',
     state().run.phase === 'flight' && !state().memory.some((seg) => seg.type === 'hollow') && logSeg()?.name === LOG_NAME.unknown

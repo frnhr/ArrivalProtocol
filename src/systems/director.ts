@@ -18,7 +18,8 @@ import { say } from '@systems/say';
 import { mindAlertActive } from '@systems/alerts';
 import { capabilitiesNow, type Capabilities } from '@systems/capabilities';
 import { beamOutView } from '@systems/beam-out';
-import { bootSkipWaits } from '@systems/boot';
+import { bootSkipWaits, bootCheckLine } from '@systems/boot';
+import type { CheckStage } from '@/types/self-check';
 import {
   BEATS, GUIDE_RULES, LINES, REFUSAL_LINES, BEAM_OUT_HINT_TARGET, lineVars, type LineVars,
 } from '@data/script';
@@ -75,6 +76,8 @@ export interface DirectorCtx extends TextCtx {
   landing: LandingObjective | null;  // the landing table's line (null outside LANDING, and once the Core is lost)
   skipAvailable: boolean;          // F would start a SKIP right now
   bootSkipWaits: boolean;          // the boot's skip waits for the last unit's ghost (systems/boot.ts)
+  // Playtest 1 (C-UNROLL): the boot's SELF-CHECK stage, and whether it holds on the first of a kind (systems/boot.ts).
+  bootCheck?: { stage: CheckStage; held: boolean };
   events: ReadonlySet<GameEventName>;  // what happened since the previous tick
   phaseEntered: RunPhase | null;   // the phase this tick started, if it just changed
   mindQuietSec: number;            // AI s in blue with no op running and nothing infected
@@ -242,7 +245,8 @@ export function composeObjective(ctx: DirectorCtx, rules: readonly GuideRule[]):
     // While the run-2 ghost speaks, a skip is refused: the strip does not offer one. The same id as the boot's
     // own line, so the switch is not held by the hysteresis (AI time does not run in the boot).
     if (ctx.bootSkipWaits) return { id: 'boot', text: LINES.bootingGhost(), keys: [], urgency: 'wait', layer: 'mind', highlight: null, source: 'boot' };
-    return { id: 'boot', text: LINES.booting(), keys: ['SPACE'], urgency: 'wait', layer: 'mind', highlight: null, source: 'boot' };
+    const check = ctx.bootCheck ?? { stage: 'receive', held: false };
+    return { id: 'boot', text: LINES.booting(check.stage, check.held), keys: ['SPACE'], urgency: 'wait', layer: 'mind', highlight: null, source: 'boot' };
   }
   const status = ctx.state.burn.status;
   // Phase 3 slice 3a: the DESK's two steps (systems/desk.ts deskSteps: a ship, then SET COURSE ▸ it [ENTER]). The desk
@@ -438,6 +442,7 @@ export function buildDirectorCtx(
     landing,
     skipAvailable: flightCtx?.skipAvailable ?? landingCtx?.skipAvailable ?? false,
     bootSkipWaits: bootSkipWaits(state),
+    bootCheck: bootCheckLine(state),
     events: inputs.events,
     phaseEntered: inputs.phaseEntered,
     mindQuietSec: inputs.mindQuietSec,

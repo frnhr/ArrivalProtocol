@@ -63,7 +63,7 @@ function result(index: number, outcome: ShipResult['outcome']): ShipResult {
 // --- The run --------------------------------------------------------------------------------------------------------
 h.newRun(SEED);
 receiveTransmission(h.store);
-h.stepUntil(() => state().run.phase === 'flight', 15);
+h.stepUntil(() => state().run.phase === 'flight', 30);
 const lockAtOnce = (name: string): void => {
   check(`${name} flies`, state().run.phase === 'flight' && state().level.shipName === name, state().level.shipName);
   h.store.update((d) => { d.hollow.phase = 'dormant'; });

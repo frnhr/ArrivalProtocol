@@ -114,7 +114,7 @@ export function mountJuice(store: Store<GameState>): () => void {
       document.body.classList.add('beamed-out');
     }),
     on('firing-start', () => shake(SHAKE_BURN_PX)),
-    on('file-fault', () => shake(SHAKE_FAULT_PX)),
+    on('file-fault', ({ found }) => { if (!found) shake(SHAKE_FAULT_PX); }),
     // WP9 (§7.3): debris slams into a rack (the rack's rows flash red: components/memory-view/RackZoneMarks).
     on('zone-hit', ({ kind }) => { if (kind === 'debris') shake(SHAKE_DEBRIS_PX); }),
     // WP10 (§7.3): 6 px on the ship's first burst (it also stops a SKIP), 3 px on every later one. A later burst a

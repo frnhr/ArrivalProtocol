@@ -1,0 +1,68 @@
+/* Playtest 1, C-UNROLL (plan §3.5): the boot's SELF-CHECK on the memory strip (components/memory-view/SelfCheck.ts).
+ * A file the sweep has not reached is grey and still; it lights as the check reaches it; what the check found sits on it as
+ * a tag over its bottom edge. The first of a kind the check holds on pulses until the click. */
+
+.mem-strip { position: relative; }
+
+.seg.check-pending {
+  filter: grayscale(1) brightness(0.42);
+  opacity: 0.7;
+  transition: none;
+}
+.seg.check-pending * { animation-play-state: paused; }
+
+.seg.check-lit { animation: check-lit 0.5s ease-out; }
+@keyframes check-lit {
+  0% { filter: brightness(2.1); box-shadow: inset 0 0 0 1px var(--accent-bright), 0 0 12px var(--accent); }
+  100% { filter: none; box-shadow: none; }
+}
+
+.seg.check-hold {
+  z-index: 3;
+  animation: check-hold 0.9s ease-in-out infinite;
+  outline: 2px solid var(--beam-seed);
+  outline-offset: 1px;
+}
+@keyframes check-hold {
+  0%, 100% { box-shadow: 0 0 6px var(--beam-seed-static); }
+  50% { box-shadow: 0 0 22px var(--beam-seed); }
+}
+
+.check-tag {
+  position: absolute;
+  z-index: 5;
+  transform: translate(-50%, -100%);
+  margin-top: -3px;
+  max-width: 220px;
+  padding: 1px 5px;
+  pointer-events: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  line-height: 13px;
+  letter-spacing: 0.08em;
+  color: var(--text);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  border: 1px solid var(--accent-dim);
+  animation: check-tag-in 0.35s ease-out both;
+}
+@keyframes check-tag-in {
+  from { opacity: 0; transform: translate(-50%, -60%); }
+  to { opacity: 1; transform: translate(-50%, -100%); }
+}
+.check-tag.shown { animation: none; }
+.check-tag.tone-fault { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 70%, transparent); }
+.check-tag.tone-ecc { color: var(--good); border-color: color-mix(in srgb, var(--good) 60%, transparent); }
+.check-tag.tone-new { color: var(--accent-bright); border-color: var(--accent); }
+.check-tag.tone-foreign { color: var(--text); border-style: dashed; border-color: var(--text-dim); }
+.check-tag.tone-seed { color: var(--beam-seed); border-color: var(--beam-seed); }
+.check-tag.tone-hollow { color: var(--hollow); border-color: var(--hollow); }
+
+/* After the boot the tags that stay are quieter: the flight's own marks come first. */
+.mem-strip-wrap:not(.self-checking) .check-tag { opacity: 0.78; animation: none; }
+
+body.reduced-motion .seg.check-lit,
+body.reduced-motion .seg.check-hold,
+body.reduced-motion .check-tag { animation: none; }

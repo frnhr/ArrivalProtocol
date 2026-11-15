@@ -105,7 +105,9 @@ export function mountStamps(store: Store<GameState>): () => void {
     on('crashed', () => { showStamp(STAMP_TEXT.crashed, 'danger'); }),
     on('escaped', () => { showStamp(STAMP_TEXT.escaped, 'danger'); }),
     // A scripted fault names the file it broke (ENGINE I/O FAULT): the kid's first clue where to look.
-    on('file-fault', ({ role }) => {
+    // Playtest 1 (C-UNROLL): a fault the boot's SELF-CHECK found is named by its tag on the strip, not slammed.
+    on('file-fault', ({ role, found }) => {
+      if (found) return;
       const text = FAULT_STAMP[role];
       if (!text) throw new Error(`Stamp: no FAULT_STAMP for a fault on '${role}'`);
       showStamp(text, 'danger');

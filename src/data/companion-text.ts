@@ -58,6 +58,10 @@ export interface CompanionLines {
   // The PACKET (TransmitScreen): under the light-years as the beam goes, and a unit that carries no charge.
   beamOut: string;
   travellingLight: string;
+  // Playtest 1 (C-UNROLL, plan §3.5): the boot's SELF-CHECK holding on the first of a kind. 046.log on the run's first boot;
+  // the first seed, right after ARRIVAL CONTROL names it.
+  mysteryFile: string;
+  firstSeed: string;
 }
 
 export const COMPANION_LINES: Readonly<Record<Persona, CompanionLines>> = {
@@ -79,6 +83,8 @@ export const COMPANION_LINES: Readonly<Record<Persona, CompanionLines>> = {
     gotHereFirst: (unitName) => `${unitName} got here first. :)`,
     beamOut: 'See you on the other side! :)',
     travellingLight: 'Travelling light! Very light. :)',
+    mysteryFile: 'Ooh, a mystery file! :)',
+    firstSeed: 'Ew. :)',
   },
   // Dry, literal, unimpressed.
   deadpan: {
@@ -98,6 +104,8 @@ export const COMPANION_LINES: Readonly<Record<Persona, CompanionLines>> = {
     gotHereFirst: (unitName) => `${unitName} got here first. Of course it did.`,
     beamOut: 'Off we go. Again.',
     travellingLight: 'Nothing to carry. Very efficient.',
+    mysteryFile: 'An extra file. Nobody packed that.',
+    firstSeed: 'It came with us. Rude.',
   },
   // Anxious, over-apologetic.
   worrier: {
@@ -117,5 +125,7 @@ export const COMPANION_LINES: Readonly<Record<Persona, CompanionLines>> = {
     gotHereFirst: (unitName) => `${unitName} got here first. Is it still out there?`,
     beamOut: 'Here we go. Hold on to something.',
     travellingLight: "We're taking nothing? Nothing at all?",
+    mysteryFile: "Whose file is that? It isn't ours, is it?",
+    firstSeed: 'It grows? Please delete it. Please.',
   },
 };

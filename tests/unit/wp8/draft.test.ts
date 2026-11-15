@@ -196,7 +196,7 @@ function pick(id: UpgradeId): void {
     && targetRefusal(firewall, { state: state(), activeKind: 'scan', pickedSource: null }) === TOOL_REFUSAL.firewallHealth);
   // Into the GAP of 2 between POD 04 and the root. Slice 2: HALCYON is calm (no root slot), so phase 2's geometry is planted
   // in rack B, `P P P P _2 R _1 P _13` (POD 05 moves behind the root), with phase 2's HALCYON HOLLOW (the WALLS stage).
-  h.stepUntil(() => state().run.phase === 'flight', 15);
+  h.stepUntil(() => state().run.phase === 'flight', 30);
   h.store.update(plantHalcyonRoot);
   installTool(h.store, 'move');
   const memory = state().memory;
@@ -261,7 +261,7 @@ function pick(id: UpgradeId): void {
   const expected = Math.max(CHARGE_ARRIVAL_FLOOR, carried + state().run.pendingStarCredit) + CHARGE_CARD_BLOCKS;
   check('+12 REPAIR CHARGE arrives on top of what was carried', chargeLeft(state()) === expected && state().run.arrival?.cardCharge === CHARGE_CARD_BLOCKS,
     `${chargeLeft(state())} vs ${expected}`);
-  h.stepUntil(() => state().run.phase === 'flight', 15);
+  h.stepUntil(() => state().run.phase === 'flight', 30);
   check('…and the boot\'s charge line says `+12 CHARGE (CARD)`', state().log.entries.some((entry) => entry.text.includes(`+${CHARGE_CARD_BLOCKS} CHARGE (CARD)`)),
     state().log.entries.filter((entry) => entry.speaker === 'mind-sys').map((entry) => entry.text).join(' | '));
 }

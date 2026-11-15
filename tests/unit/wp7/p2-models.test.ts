@@ -3,7 +3,8 @@
 //   notes, the locks, drops offered only while charge is left behind (a tight room: +4 CHARGE for
 //   Repair.bak, then Repair is the last copy; playtest 1 note 20: no link), the arrival line's sum; the dropped file stays
 //   behind;
-// • the arrival (item 3): the boot's ECC line emits 'arrival-hits', each naming a file now in memory;
+// • the arrival (item 3): the boot's SELF-CHECK finds each hit file once (playtest 1, C-UNROLL: a 'fault' step and its tag),
+//   each naming a file now in memory;
 // • BEAM OUT (item 6): what the Engine button, COMMS and the strip show (offered, offered-paused, beaming,
 //   hidden on the tutorial ship), and the strip's two BEAM OUT lines (the hopeless offer, the race);
 // • the amber BITE slot (WP6's TODO): HOLLOW awake with something to bite, quiet once it is walled off;
@@ -43,7 +44,7 @@ import { mapAlong, WORKED_ROUTE } from '@systems/arm-fixture';
 import { formatCount } from '@data/format';
 import { MOVE_PREVIEW_TEXT, HOLLOW_HUD_TEXT } from '@data/hollow-text';
 import { MAX_LINE_CHARS, NAME_MAX_CHARS, RANK_FLEET_COLONISTS } from '@data/tuning';
-import type { ShipResult, TransitHit } from '@state/schema';
+import type { ShipResult } from '@state/schema';
 
 const h = createHarness7(21, { soulsFound: false });
 
@@ -144,27 +145,29 @@ check('CONTINUE → TRANSMIT', state().run.phase === 'transmit');
   h.store.update((d) => { d.run.transit!.hop.room = room; });
 }
 
-// --- TRANSMIT ▸: the dropped file stays behind; the ECC line flashes the hit files --------------------
+// --- TRANSMIT ▸: the dropped file stays behind; the SELF-CHECK finds the hit files ----------------------
 {
   const bakId = state().run.transit!.dropped[0]!;
-  const flashed: TransitHit[][] = [];
-  const off = on('arrival-hits', ({ hits }) => { flashed.push([...hits]); });
+  const found: string[][] = [];
+  const off = on('self-check-step', ({ cue, segIds }) => { if (cue === 'fault') found.push([...segIds]); });
   // WP8: PICK ONE TO CARRY is mandatory before the send (harness7.transmit picks the first card the same way).
   h.transmit();
   check('HALCYON boots without the dropped Repair.bak', state().run.phase === 'boot' && !state().memory.some((seg) => seg.id === bakId));
-  h.stepUntil(() => state().run.phase === 'flight', 15);
+  h.stepUntil(() => state().run.phase === 'flight', 30);
   off();
   const arrival = state().run.arrival!;
   // Phase 3 slice 2 (risk 10): HALCYON's Sensor Interp arrives at 62 by its own scripted line, which flashes with it.
   // Track RETIRE: on the worked route (seed 21) ECC corrects one of the hop's three hits, and the two that land take Sensor
   // Interp to 60, under HALCYON's own 62: its arrival damage has nothing left to do, so it says no line and flashes nothing.
   const sensor = state().memory.find((seg) => seg.role === 'sensor');
-  check('the boot\'s ECC line emits the crossing\'s hits once, in order; HALCYON\'s own damage (Sensor Interp to 62) adds no flash when a hit took it lower',
-    flashed.length === 1 && JSON.stringify(flashed[0]) === JSON.stringify(arrival.hits) && arrival.hits.length === 2 && arrival.eccCorrected === 1
-    && arrival.scripted.length === 0 && sensor !== undefined && hasIntegrity(sensor) && sensor.integrity <= 62,
-    `${flashed.length} × ${flashed[0]?.length} · ${arrival.eccCorrected} corrected · scripted ${arrival.scripted.length}`);
+  const hitFiles = [...new Set(arrival.hits.map((hit) => hit.segId))];
+  const unitFound = found.flat().filter((id) => hitFiles.includes(id));
+  check('the SELF-CHECK finds each file the crossing hit once, in memory order; HALCYON\'s own damage (Sensor Interp to 62) adds no finding when a hit took it lower',
+    JSON.stringify([...unitFound].sort()) === JSON.stringify([...hitFiles].sort()) && unitFound.length === hitFiles.length && arrival.hits.length === 2
+    && arrival.eccCorrected === 1 && arrival.scripted.length === 0 && sensor !== undefined && hasIntegrity(sensor) && sensor.integrity <= 62,
+    `${unitFound.length} of ${hitFiles.length} · ${arrival.eccCorrected} corrected · scripted ${arrival.scripted.length}`);
   const lastTo = new Map<string, number>();
-  for (const hit of flashed.flat()) lastTo.set(hit.segId, hit.to);
+  for (const hit of arrival.hits) lastTo.set(hit.segId, hit.to);
   const consistent = [...lastTo].every(([segId, to]) => {
     const seg = state().memory.find((candidate) => candidate.id === segId);
     return seg !== undefined && hasIntegrity(seg) && seg.integrity === to;

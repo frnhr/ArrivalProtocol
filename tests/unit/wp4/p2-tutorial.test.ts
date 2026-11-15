@@ -1,6 +1,6 @@
 // WP4 part 2, item 10 and acceptance 3 (re-run): the ship-1 ENGINE I/O FAULT beat on the strip.
-// • ENGINE WEAK — press [TAB] cuts into the opening correction (KEEP HOLDING), never into a crash
-//   course or a RELEASE; PICK UP REPAIR → CLICK ENGINE I/O lights the chip, then the file;
+// • ENGINE WEAK — press [TAB] cuts into the opening correction (KEEP HOLDING), and since playtest 1 (C-UNROLL: the fault is
+//   arrival damage) into the opening crash course before the first burn, never into a burn under way on it or a RELEASE; PICK UP REPAIR → CLICK ENGINE I/O lights the chip, then the file;
 //   [TAB] BACK — hold [SPACE] once the engine is fixed. Each shows once, none is done by the boot.
 // • The follower that obeys the strip LITERALLY (tutorial lines included: it presses the keys the
 //   line names, clicks what it highlights, and TABs to the screen a line belongs to) gets the
@@ -74,11 +74,13 @@ const settle = (): void => { for (let i = 0; i < 8; i++) h.step(); };
 
 // --- The three steps, each done by doing it ---------------------------------------------------------------
 {
+  // Playtest 1 (C-UNROLL): the fault is arrival damage the SELF-CHECK finds (a flight with no boot finds it on its first tick),
+  // so before any burn the strip's first line is ENGINE WEAK, ahead of DON'T HIT THE PLANET.
   h.resetTo('flight');
-  h.keyDown('Space');
-  while (!done().includes('engine-io-fault') && h.wall() < 10) h.step();
   for (let i = 0; i < 3; i++) h.step();
-  check('the fault strikes mid-correction and the strip says ENGINE WEAK at once', shownId() === 'tut-engine-weak', shownId());
+  check('the fault is there from the start and the strip says ENGINE WEAK at once, before any burn', done().includes('engine-io-fault')
+    && shownId() === 'tut-engine-weak' && h.pred().outcome === 'impact' && h.store.getState().burn.thrustTac === 0, shownId());
+  h.keyDown('Space');
 
   // Paused: the line is PAUSED, the tutorial waits (look-only pause).
   setPaused(h.store, true);

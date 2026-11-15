@@ -377,7 +377,8 @@ export function mountMindTerminal(store: Store<GameState>): () => void {
     for (const entry of entries) {
       if (entry.id <= lastId) continue;
       lastId = entry.id;
-      if (entry.channel === 'mind') addLine(entry);
+      // Playtest 1 (C-UNROLL): a SELF-CHECK mark is shown on the strip, not typed here.
+      if (entry.channel === 'mind' && !entry.mark) addLine(entry);
     }
     // Choices opened or closed (a click, a timeout).
     for (const [entryId, view] of choices) {

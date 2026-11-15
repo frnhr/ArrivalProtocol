@@ -89,7 +89,13 @@ check(`…and every ship's built world past ARES-VII (its ship slices from a bea
 // words (`2 more CYCLES to compile at the desk ahead`, B-DESK's word for the card LEAVE ORBIT now deals) moved only the
 // three desks whose LEAVE ORBIT dealt it (ARES-VII, HALCYON, VESPER: run.leave.offer holds the card's effect line); every
 // boot, flight and the end are the same digests as at 2a57a5ddfef0bcf7.
-const PINNED_RUN = '59f1c49ac857e1bc';
+// Playtest 1, C-UNROLL re-recorded it again (it was 59f1c49ac857e1bc): the boot is the SELF-CHECK. Its marks are logged with
+// `mark: true`, the firsts it named go into director.done (check-first-log on ARES-VII, check-first-seed and
+// check-named-hollow on KESTREL, PAL's two lines and CONTROL's HOLLOW line in the log), the charge's REPAIR renewal comes before
+// the deliveries, and ARES-VII's ENGINE I/O FAULT is found at the boot (Engine I/O 38 from the first tick, not after 2 s of
+// thrust). So every moment from ARES-VII's boot moves; every ship's outcome (all locked) and the run's end (won-merge) are as
+// before.
+const PINNED_RUN = '11140349d6de1264';
 const REQUESTS: readonly (RepoFileId | null)[] = ['mv', 'rm', 'swap', 'cp', null];
 const h = createHarness11(1, { soulsFound: false });
 const state = (): Readonly<GameState> => h.store.getState();
@@ -124,7 +130,7 @@ function flyShip(): void {
 h.newRun(SEED);
 startRun(h.store, SEED, FIRST_RUN_LINEAGE);
 receiveTransmission(h.store);
-h.stepUntil(() => state().run.phase === 'flight', 15);
+h.stepUntil(() => state().run.phase === 'flight', 30);
 record('boot');
 const route = WORKED_ROUTE;
 let guard = 0;

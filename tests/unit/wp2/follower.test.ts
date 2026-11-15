@@ -145,8 +145,14 @@ for (const mistake of mistakes()) {
   check('boot: the page opens on the title', h.store.getState().run.phase === 'title');
   receiveTransmission(h.store);
   h.stepFor(1);
-  h.keyDown('Space');  // skips the boot (the title layer owns the key) and stays held
-  check('boot: SPACE skips the boot', h.store.getState().run.phase === 'flight' && h.store.getState().ui.mode === 'tools');
+  // Playtest 1 (C-UNROLL): the first SPACE hurries the SELF-CHECK's stage, the second skips the rest (the title layer owns
+  // the key) and stays held; the cut to amber waits until the findings it showed have been seen.
+  h.keyDown('Space');
+  h.keyUp('Space');
+  check('boot: the first SPACE hurries the SELF-CHECK (still in blue)', h.store.getState().run.phase === 'boot' && h.store.getState().ui.mode === 'memory');
+  h.keyDown('Space');
+  h.stepFor(1.5);
+  check('boot: the second SPACE skips the boot', h.store.getState().run.phase === 'flight' && h.store.getState().ui.mode === 'tools');
   h.stepFor(2);
   const burn = h.store.getState().burn;
   check('boot: the held SPACE does not burn', !burn.firing && burn.dvDeliveredKmS === 0, `firing ${burn.firing}, Δv ${burn.dvDeliveredKmS}`);
@@ -157,8 +163,9 @@ for (const mistake of mistakes()) {
   h.keyUp('Space');
   const bootLines = h.log().filter((entry) => entry.speaker === 'mind-sys').map((entry) => entry.text);
   // Track RETIRE: on run 1's arm the boot's TERMINAL also says the INBOX line after the three (`> 1 NEW MESSAGE · INBOX`).
-  check('boot: all three TERMINAL lines were said, even when skipped, then the INBOX line', bootLines.length === 4 && bootLines[2]!.startsWith('> ECC:')
-    && bootLines[3]!.endsWith('INBOX'), bootLines.join(' | '));
+  // C-UNROLL: the ECC line is a SELF-CHECK mark (logged, never typed); the other three type.
+  check('boot: all three boot lines were said, even when skipped, then the INBOX line', bootLines.length === 4 && bootLines[2]!.startsWith('> ECC:')
+    && bootLines[3]!.endsWith('INBOX') && h.log().filter((entry) => entry.speaker === 'mind-sys' && entry.mark === true).length === 1, bootLines.join(' | '));
 }
 
 finish();

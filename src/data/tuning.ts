@@ -413,30 +413,38 @@ export const BEEP_JUMP_TAC = 1.5;
 
 // --- Boot (WP2, §5.1, §7.1) -------------------------------------------------------------------
 
-// The boot after RECEIVE TRANSMISSION, in wall seconds: the memory strip assembles over
-// BOOT_ASSEMBLE_SEC while the TERMINAL types its three lines (the TERMINAL types 40 chars/s, so
-// 1.3 s apart lets each finish before the next starts). The klaxon starts in blue a beat before
-// the cut to amber, so the alarm is heard before the red line is seen. About five seconds in all.
-// A later ship's boot (WP7) says two more lines, what the crossing hit and the REPAIR CHARGE that
-// arrived (and a third if charge overflowed), at the same 1.3 s rhythm; the klaxon follows the last line
-// by BOOT_KLAXON_AFTER_LAST_LINE_SEC whatever their number, and the cut to amber BOOT_END_AFTER_KLAXON_SEC
-// after it (ship 1: 4.5 s and 4.9 s, as before). KESTREL (WP9) can say two more again: its own arrival damage
-// (`> ECC: SENSOR INTERP 45% — PATH UNCERTAIN`) and AUTOBURN.skl trained from the kid's captures. VESPER (WP10) closes
-// its boot with HOLLOW's own line, which types slowly: the klaxon waits for it (BOOT_AFTER_HOLLOW_LINE_SEC). Phase 3
-// slice 2 adds up to two more at the same rhythm: the beam seeds' ECC line or HOLLOW's 108% unpack, and `046.log · KEY
-// FOUND`; slice 3a three more on the arm (the sleep, receiver and ECC-while-asleep lines); slice 3b five more (up to three
-// `> DELIVERY:` lines, DELIVERY_BOOT_LINES_MAX, the INBOX line and HOLLOW's reading line: data/script.ts BOOT_LINE_MAX 18),
-// all on the same 1.3 s step (boot.ts checks at load that every possible line has its time). Slice 4d four more: up to three
-// SENTRY `> ECC: cache.tmp IS A SEED` lines (a beam brings at most three seeds, BEAM_SEED_ODDS) and its FIREWALL line (22).
-// Slice 5 one more: the resident ship's `> RECEIVER CLOSED` line (23). Slice 6 one more: a POOR planet's `> SITE DATA POOR`
-// line (24). Slice 7c six more: the traces' lines (up to three on one boot) and the lineage's face lines and CONTROL's (30).
+// The boot after RECEIVE TRANSMISSION, in wall seconds: the memory strip assembles over BOOT_ASSEMBLE_SEC while the TERMINAL
+// types the unpack and the host. Playtest 1 (C-UNROLL, plan §3.5): the rest of the boot is the SELF-CHECK (SELF_CHECK_* below),
+// no longer a timetable of lines. The klaxon starts in blue a beat before the cut to amber, so the alarm is heard before the
+// red line is seen.
 export const BOOT_ASSEMBLE_SEC = 1.5;
-export const BOOT_LINE_AT_SEC: readonly number[] = [
-  0.5, 1.8, 3.1, 4.4, 5.7, 7.0, 8.3, 9.6, 10.9, 12.2, 13.5, 14.8, 16.1, 17.4, 18.7, 20.0, 21.3, 22.6, 23.9, 25.2, 26.5, 27.8,
-  29.1, 30.4, 31.7, 33.0, 34.3, 35.6, 36.9, 38.2,
-];
-export const BOOT_KLAXON_AFTER_LAST_LINE_SEC = 1.4;
 export const BOOT_END_AFTER_KLAXON_SEC = 0.4;
+
+// --- Playtest 1, C-UNROLL: the SELF-CHECK (plan §3.5; systems/self-check.ts, systems/boot.ts) ------------------------------
+// The check sweeps the strip a file at a time, stage by stage, and the first of each new kind on the run holds it. Run 1's
+// ship 1 runs about 12 s with its hold clicked through (16 s if the kid waits it out); a later ship about 5 s plus what is new.
+// The first step after RECEIVE TRANSMISSION (the strip's rows are sliding in).
+export const SELF_CHECK_START_SEC = 0.5;
+// A typed line's step: its typing time (say.ts typingSec) and this beat after it, so the TERMINAL is never behind the sweep.
+export const SELF_CHECK_LINE_GAP_SEC = 0.25;
+// The sweep reaching one file (it lights, a soft tick), and the extra dwell on a file where it found something (the tag and
+// its tone), so a finding is read.
+export const SELF_CHECK_FILE_SEC = 0.11;
+export const SELF_CHECK_FINDING_SEC = 0.5;
+// Ship 1's ENGINE I/O FAULT found at the SHIP stage: the run's first problem, it gets a longer look.
+export const SELF_CHECK_FAULT_SEC = 0.9;
+// The tutorial run's first ship checks this much slower: the kid's first look at the MIND screen.
+export const SELF_CHECK_FIRST_SHIP_PACE = 1.3;
+// The pause between two stages (the strip's line names the next).
+export const SELF_CHECK_STAGE_GAP_SEC = 0.25;
+// The first of a kind on run 1 holds the sweep until a click or a key, or this long (plan §3.5: 4 s); on a later run it is
+// named as the sweep passes, in SELF_CHECK_FINDING_SEC.
+export const SELF_CHECK_HOLD_SEC = 4;
+// SENSORS: the last stage, before the klaxon (the plot's path is the first thing the flight shows).
+export const SELF_CHECK_SENSORS_SEC = 0.7;
+// A skip shows every finding at once; the cut to amber waits this long after it when it showed one, so a kid mashing SPACE
+// still sees what the crossing did (the old ARRIVAL_HIT_SEEN_SEC's rule).
+export const SELF_CHECK_SKIP_SEEN_SEC = 0.9;
 
 // Skip clicks and keys are ignored for this long after RECEIVE TRANSMISSION. Kids double-click
 // buttons, and the second click of a double-click (or a second SPACE) skipped the whole boot:
@@ -765,11 +773,9 @@ export const TELEMETRY_SCRAMBLE_BELOW = 60;
 // heals the Core redraws the static a few times, not on every healed point.
 export const CORRUPTION_STEP = 0.05;
 
-// The ship-1 ENGINE I/O FAULT (§5.1): after this many tactical seconds of delivered thrust the
-// engine crunches and Engine I/O drops to ENGINE_FAULT_INTEGRITY (failing). Two seconds is just
-// after the line peels off the planet (1.1 s), so the kid has already seen a burn work at full
-// power and hears the difference; 38% is failing, the band that sputters at 40%.
-export const ENGINE_FAULT_AFTER_TAC = 2.0;
+// The ship-1 ENGINE I/O FAULT (§5.1): Engine I/O arrives at ENGINE_FAULT_INTEGRITY (failing, the band that sputters at
+// 40%). Playtest 1 (C-UNROLL): found by the boot's SELF-CHECK, not two seconds into the first burn; a burn at 38% still
+// clears ship 1's opening crash course if it starts within about 140 s of its 163 s fall.
 export const ENGINE_FAULT_INTEGRITY = 38;
 
 // A licence's chime lands this long after its transmitIn chirps start: the files arrive, then
@@ -1104,15 +1110,6 @@ export const WHITE_OUT_FADE_SEC = 1.1;
 // before a frame drew any white). This long past WHITE_OUT_IN_SEC the hold starts anyway (a flood that never reports).
 export const WHITE_OUT_FLOOD_GRACE_SEC = 1;
 
-// The arrival's red flashes (§4.1 step 1, §9 WP7 item 3): as the boot's ECC line types, each file a transit
-// hit landed on flashes red with what it lost, one after another, so the kid sees WHERE the crossing hurt.
-export const ARRIVAL_HIT_STAGGER_SEC = 0.32;
-export const ARRIVAL_HIT_FX_MS = 1700;
-// A skip never cuts the crossing's damage out of the boot (WP7 fix round 1): SPACE is also the key that just
-// CONTINUEd and TRANSMITted, so a kid mashing it skipped every arrival straight to amber and heard the hits
-// crackle over nothing. On an arrival boot the first skip jumps to the ECC line (its flashes start at
-// once), and the next is honoured only once the last flash has been on screen this long.
-export const ARRIVAL_HIT_SEEN_SEC = 0.9;
 
 // BEAM OUT (§5.3 signature 14): when the bar fills, the old ship's windows cut to black, and the next
 // screen (TRANSMIT, or RUN END on the last ship) comes up after this long: the moment the unit left.

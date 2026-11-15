@@ -2707,35 +2707,6 @@ body.reduced-motion .tx-bar-card.flash { animation: none; }
 .white-out.fading { transition: opacity var(--wo-fade) ease-out; }
 .white-out.reduced { background: var(--report-bg); }
 
-/* ── The arrival: each file a transit hit landed on flashes red, and what it lost floats off it ── */
-.arrival-fx-layer { position: fixed; inset: 0; pointer-events: none; z-index: 62; }
-.arrival-fx-hit {
-  position: fixed; box-sizing: border-box; border: 2px solid var(--warn);
-  background: color-mix(in srgb, var(--warn) 45%, transparent);
-  box-shadow: 0 0 18px var(--warn);
-  animation: arrival-hit 1.7s ease-out both;
-}
-@keyframes arrival-hit {
-  0% { opacity: 0; } 6% { opacity: 1; background: color-mix(in srgb, var(--warn) 70%, transparent); }
-  40% { opacity: 1; background: color-mix(in srgb, var(--warn) 25%, transparent); }
-  100% { opacity: 0; }
-}
-.arrival-fx-label {
-  position: fixed; transform: translate(-50%, -50%); padding: 0 6px;
-  font-family: 'VT323', monospace; font-size: 26px; letter-spacing: 0.06em; white-space: nowrap;
-  color: var(--warn); background: var(--window-solid); border: 1px solid var(--warn);
-  text-shadow: 0 0 10px var(--warn);
-  animation: arrival-label 1.7s ease-out both;
-}
-@keyframes arrival-label {
-  0% { opacity: 0; transform: translate(-50%, -50%) scale(1.4); }
-  10% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-  70% { opacity: 1; transform: translate(-50%, -50%); }
-  100% { opacity: 0; transform: translate(-50%, -110%); }
-}
-.arrival-fx-layer.reduced .arrival-fx-hit,
-.arrival-fx-layer.reduced .arrival-fx-label { animation: fx-flash 1.7s ease-out both; }
-
 /* ── HOLLOW names itself: `???` decodes into UNIT-046 through static on every hollow block, which pulses
  *    pink; the strip jolts once; the TERMINAL's old `[user: ???]` tags flicker into the name. ── */
 .seg.hollow .seg-name.name-decoding { color: var(--flash-white); text-shadow: 0 0 8px var(--hollow), 0 0 2px var(--hollow); }

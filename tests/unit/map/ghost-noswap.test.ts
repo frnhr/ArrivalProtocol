@@ -36,7 +36,7 @@ const st = (): Readonly<GameState> => h.store.getState();
 h.newRun(3);
 startRun(h.store, 3, FIRST_RUN_LINEAGE);
 receiveTransmission(h.store);
-h.stepUntil(() => st().run.phase === 'flight', 15);
+h.stepUntil(() => st().run.phase === 'flight', 30);
 const asks = ['mv', null] as const;
 [2, 5].forEach((slot, i) => {
   h.store.update((draft) => { draft.run.phase = 'report'; });

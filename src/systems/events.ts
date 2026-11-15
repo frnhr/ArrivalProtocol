@@ -9,7 +9,7 @@
 import type { HollowFate, YouChoice, LastLandingState } from '@/types/ending';
 import type { TraceKind } from '@/types/trace';
 import type {
-  FiringSource, ViewMode, TransitHit, AutoburnPhase, AutoburnEnd, DealOutcome, VerbKind,
+  FiringSource, ViewMode, AutoburnPhase, AutoburnEnd, DealOutcome, VerbKind,
 } from '@state/schema';
 import type { AutodropArm, AutodropEnd, DragKick, LandingEnd, LaunchSource, Place, Touch } from '@/types/landing';
 import type { SegmentRole, InfectionSide } from '@/types/segment';
@@ -22,6 +22,7 @@ import type { PlotMode } from '@systems/capabilities';
 import type { ResidentKind, ResidentDealOutcome, SleeperJob } from '@/types/resident';
 import type { SiteKind, SurveyRunning, BadGround, RevealBy } from '@/types/survey';
 import type { LzGround } from '@/types/landing';
+import type { CheckCue } from '@/types/self-check';
 
 // The game's event bus (§9 WP2): moments, not state. Systems emit what just happened (the line
 // turned green, the flight ended, an input was refused); audio, juice and the director react.
@@ -76,8 +77,9 @@ export interface GameEvents {
   // Phase 3 slice 3b (05 §4): the boot's `> n NEW MESSAGES · INBOX` line was said (systems/boot.ts, beside 'log-key'): the
   // one chime per boot with new mail and the dock badge's pulse hang on it (Track UI).
   'inbox-new': { count: number };
-  // A scripted fault hit a file (ship 1's ENGINE I/O FAULT): its integrity fell from → to.
-  'file-fault': { role: SegmentRole; from: number; to: number };
+  // A scripted fault hit a file (ship 1's ENGINE I/O FAULT): its integrity fell from → to. Playtest 1 (C-UNROLL): `found`,
+  // the boot's SELF-CHECK found it as arrival damage (no crunch, no shake, no stamp: the check's tag and tone say it).
+  'file-fault': { role: SegmentRole; from: number; to: number; found: boolean };
   // SPACE was pressed but the engine can't fire at all (dead or missing driver, no controller).
   'engine-cough': Record<string, never>;
   // A damaged Thrust Ctrl fired the engine by itself (C2), and that burst ended. WP10: `count` is the ship's bursts so
@@ -136,9 +138,10 @@ export interface GameEvents {
   // WP7 part 2: the name flip was seen (in blue: at once, or on the kid's first look), so its sound
   // plays with the picture (like 'crack-shown').
   'hollow-name-shown': { name: string };
-  // The boot typed its ECC line after a transmission: these hits (and the ship's own arrival damage) are
-  // what the crossing did, in order. The strip flashes each file red (components/run/ArrivalFlash).
-  'arrival-hits': { hits: readonly TransitHit[] };
+  // Playtest 1 (C-UNROLL, plan §3.5): the boot's SELF-CHECK reached files (they light; a finding has its tag). The sound of
+  // the step (audio-cues: checkTick, faultFound, eccFixed, the pods' heartbeat, a chime) and the strip's flash hang on it.
+  // (It replaces WP7's 'arrival-hits', the red flashes and crackles of the old boot's ECC line.)
+  'self-check-step': { cue: CheckCue; segIds: readonly string[] };
   // BEAM OUT started (the TRANSMITTING bar), was cancelled, or filled ('abandoned' is the flight's end).
   'beam-out-start': Record<string, never>;
   'beam-out-cancel': Record<string, never>;

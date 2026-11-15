@@ -224,15 +224,17 @@ function bootLastLight(seed: number): void {
 {
   bootLastLight(10);
   const text = bootLine('hollow', state(), lineVars(state(), getPrediction()));
-  // Past the skip grace: a skip jumps to HOLLOW's line (the lines before it are said at once)...
+  // Past the skip grace: the first press hurries the SELF-CHECK's stage (playtest 1, C-UNROLL), the second skips the rest, so
+  // HOLLOW's line (the lines before it too) is said at once...
   h.stepFor(1.2);
+  const hurried = skipBoot(h.store) && state().run.phase === 'boot';
   const jumped = skipBoot(h.store);
   const said = state().log.entries.some((entry) => entry.text === text);
-  check('a skip jumps to HOLLOW\'s line: it is said at once', jumped && said && state().run.phase === 'boot');
-  // ...and a second skip at once does not cut it off: the cut waits until it has typed.
+  check('a skip jumps to HOLLOW\'s line: it is said at once', hurried && jumped && said && state().run.phase === 'boot');
+  // ...and another press at once does not cut it off: the cut waits until it has typed.
   const second = skipBoot(h.store);
   check('…a second skip right away is refused (it is still typing)', !second && state().run.phase === 'boot');
-  h.stepUntil(() => state().run.phase === 'flight', 15);
+  h.stepUntil(() => state().run.phase === 'flight', 30);
   check('…and the boot ends on its own once it has typed', state().run.phase === 'flight');
 }
 

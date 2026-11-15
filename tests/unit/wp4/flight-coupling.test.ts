@@ -4,8 +4,9 @@
 // (b) With 2 busy threads and the Reactor ok, the delivered thrust is 50% ± 1%.
 // (c) The WP2 literal follower with the scripted ENGINE I/O FAULT plus an automated repair (TAB,
 //     the licence arrives, REPAIR on Engine I/O, TAB back) still reaches `locked`.
-// Plus the fault beat itself: when it strikes, that it waits while paused, and that it strikes
-// once and only on ship 1.
+// Plus the fault itself: since playtest 1 (C-UNROLL) arrival damage, found by the boot's SELF-CHECK; a flight started with no
+// boot finds it on its first world tick, with no thrust. That it waits while paused, and that it is found once and only on
+// ship 1.
 import { createInitialState } from '@state/initial';
 import { resetWorld } from '@systems/reset';
 import { check, finish, TICK } from '../wp1/harness';
@@ -15,7 +16,7 @@ import { reserveThread, releaseThread, getOps } from '@systems/ops-core';
 import { pickUpTool, applyTool, cancelTool, type ToolDeps } from '@systems/fs-tools';
 import { isLicensed } from '@systems/licences';
 import { setPaused } from '@systems/clock';
-import { ENGINE_FAULT_AFTER_TAC, ENGINE_FAULT_INTEGRITY } from '@data/tuning';
+import { ENGINE_FAULT_INTEGRITY } from '@data/tuning';
 
 const h = createHarness4(1);
 const deps: ToolDeps = { ask: () => { throw new Error('no question expected'); } };
@@ -81,40 +82,30 @@ function deliveredShare(ticks: number): number {
   check('(b) two busy threads, Reactor ok: 50% ± 1%', Math.abs(two - 0.5) <= 0.01, two.toFixed(4));
 }
 
-// --- The fault beat --------------------------------------------------------------------------------------
+// --- The fault: arrival damage --------------------------------------------------------------------------------
 {
   h.resetTo('flight');
-  h.keyDown('Space');
-  let thrustAtFault: number | null = null;
-  while (h.wall() < 10 && thrustAtFault === null) {
-    h.step();
-    if (h.store.getState().director.done.includes('engine-io-fault')) thrustAtFault = h.store.getState().burn.thrustTac;
-  }
-  h.keyUp('Space');
+  check('fault: not found before the flight\'s first world tick (Engine I/O as the unit arrived, 85)', h.file('engine-io').integrity === 85
+    && !h.store.getState().director.done.includes('engine-io-fault'));
+  h.step();
   const fault = h.events.find((event) => event.name === 'file-fault');
-  check('fault: strikes after 2.0 tactical s of delivered thrust (± one tick)', thrustAtFault !== null
-    && thrustAtFault >= ENGINE_FAULT_AFTER_TAC - 1e-9 && thrustAtFault <= ENGINE_FAULT_AFTER_TAC + TICK + 1e-9, String(thrustAtFault));
-  check('fault: Engine I/O 85 → 38, announced', JSON.stringify(fault?.payload) === JSON.stringify({ role: 'engine-io', from: 85, to: 38 })
-    && h.file('engine-io').integrity === 38 && h.file('engine-io').state === 'corrupt', JSON.stringify(fault?.payload));
+  check('fault: found on the first world tick with no thrust: Engine I/O 85 → 38, announced as found (no crunch)',
+    JSON.stringify(fault?.payload) === JSON.stringify({ role: 'engine-io', from: 85, to: 38, found: true })
+    && h.file('engine-io').integrity === 38 && h.file('engine-io').state === 'corrupt' && h.store.getState().burn.thrustTac === 0, JSON.stringify(fault?.payload));
   check('fault: the engine is now failing (40%, sputtering)', h.caps().engine.band === 'failing' && h.caps().engine.jitter === 0.35);
   h.keyDown('Space');
   for (let i = 0; i < 100; i++) h.step();
   h.keyUp('Space');
-  check('fault: strikes only once', h.events.filter((event) => event.name === 'file-fault').length === 1);
+  check('fault: found only once', h.events.filter((event) => event.name === 'file-fault').length === 1);
 
-  // Paused just before it is due: no world ticks, so it waits.
+  // Paused from the start: no world ticks, so it waits.
   h.resetTo('flight');
-  h.keyDown('Space');
-  while (h.store.getState().burn.thrustTac < ENGINE_FAULT_AFTER_TAC - 3 * TICK) h.step();
   setPaused(h.store, true);
   for (let i = 0; i < 100; i++) h.step();
   check('fault: waits while paused', !h.store.getState().director.done.includes('engine-io-fault') && h.file('engine-io').integrity === 85);
   setPaused(h.store, false);
-  h.keyUp('Space');
-  h.keyDown('Space');
-  for (let i = 0; i < 20; i++) h.step();
-  h.keyUp('Space');
-  check('fault: …and strikes once the burn goes on', h.file('engine-io').integrity === 38);
+  h.step();
+  check('fault: …and is found on the first tick after', h.file('engine-io').integrity === 38);
 
   // Ship 2 (shipIndex 1) has no scripted fault.
   // (Track RETIRE: the fixture world's ship 2, run 1's HALCYON on the worked route, a fresh unit carried in; the classic

@@ -60,8 +60,11 @@ const names = (): string[] => memory().map((seg) => seg.name);
   receiveTransmission(h.store);
   h.stepFor(BOOT_SKIP_GRACE_SEC + 0.1);
   check('licence: not during the boot (blue, but nobody jacked in)', !isLicensed(h.store.getState(), 'repair'));
-  skipBoot(h.store);
-  h.stepFor(0.2);
+  // Playtest 1 (C-UNROLL): a press hurries the SELF-CHECK, the next skips it, and the cut waits for what it showed.
+  for (let i = 0; i < 20 && h.store.getState().run.phase === 'boot'; i++) {
+    skipBoot(h.store);
+    h.stepFor(0.2);
+  }
   check('licence: not in amber at the start of the flight', !isLicensed(h.store.getState(), 'repair') && !names().includes('Repair'));
 
   h.events.length = 0;

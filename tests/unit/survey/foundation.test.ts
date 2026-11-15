@@ -38,7 +38,7 @@ import { createRng } from '@systems/rng';
 import { touchAtTouchdown } from '@systems/landing-rules';
 import { groundAt, groundKnownAt, lzSiteOf, surveyRecordOf, mappedPct, surveyVersion } from '@state/survey-selectors';
 import { mapBootLines } from '@systems/map-boot';
-import { bootLinePlan, bootLine, BOOT_LINE_MAX } from '@data/script';
+import { bootLinePlan, bootLine, bootLineStage, BOOT_MARK_KINDS } from '@data/script';
 import { mountOpsCore, reserveThread, releaseThread, holdsThread, canClaimThread, canStartOp, threadsTotal, threadsBusy } from '@systems/ops-core';
 import { decodeRunSave, migrateRunSave } from '@systems/save-codec';
 import { resumeRun } from '@systems/run-save';
@@ -55,7 +55,6 @@ import { visitNow } from '@systems/skill-levels';
 import { LANDING_ECHO } from '@data/landing-text';
 import {
   RUN_SAVE_VERSION, RUN_SAVE_KEY, META_STORAGE_KEY, MAX_LINE_CHARS, LZ_WIDTH_KM, WET_WIDTH_FACTOR, SURVEY_CELLS, SURVEY_EXTRA_SITES,
-  BOOT_LINE_AT_SEC,
 } from '@data/tuning';
 
 const throws = (run: () => unknown): boolean => { try { run(); return false; } catch { return true; } };
@@ -239,7 +238,9 @@ const PLANET_R = FLIGHT_TEMPLATES.wide.flight.planet.R;
   check('the boot says `> SITE DATA POOR · ARRIVAL CONTROL GUESSED 2 LZs` on a planet that plays POOR, and nothing while POOR is not built',
     !off.map.includes('site-data') && !off.plan.includes('site-data') && on.map.includes('site-data')
     && bootLine('site-data', on.state, {} as never) === '> SITE DATA POOR · ARRIVAL CONTROL GUESSED 2 LZs', on.plan.join(' '));
-  check(`…BOOT_LINE_MAX ${BOOT_LINE_MAX} lines, each with its time`, BOOT_LINE_MAX >= 24 && BOOT_LINE_AT_SEC.length >= BOOT_LINE_MAX && BOOT_LINE_AT_SEC[23] === 30.4);
+  // Playtest 1 (C-UNROLL): the boot's fixed line times are gone; the line types in the SELF-CHECK's SHIP stage.
+  check('…typed (not a mark), in the SELF-CHECK\'s SHIP stage, after the ship\'s own arrival damage', bootLineStage('site-data') === 'ship'
+    && bootLineStage('scripted') === 'ship' && !BOOT_MARK_KINDS.has('site-data'));
 }
 
 // --- The save: the v5 fixtures, the CORMORANT BEAM, the codec's v6 refusals ------------------------------------------------------

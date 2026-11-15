@@ -41,7 +41,7 @@ function crashNow(): void {
 }
 
 function bootToFlight(): void {
-  h.stepUntil(() => state().run.phase === 'flight', 15);
+  h.stepUntil(() => state().run.phase === 'flight', 30);
 }
 
 // --- Run 1, ship 1: the simulation, then the emergency transmit --------------------------------------
