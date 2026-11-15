@@ -73,3 +73,20 @@ One ordered walk through a full run, consolidated from every work package's manu
 51. **MANUAL Q/E.** In MANUAL (`▸ manual controls`, MANUAL), hold Q: the ship turns; let go: it stops within a moment (spin `0°/s`) and stays put, at any warp. E the same the other way.
 52. **The belt's sound.** See 49: a steady bed, no huffing; ticks only on hits.
 53. **ERASE ALL RECORDS.** On the title, at the foot: `ERASE ALL RECORDS`. A click asks `ERASE EVERY UNIT, COLONY AND RUN? · THIS CANNOT BE UNDONE` with `ERASE [DEL]` / `KEEP [ENTER]` (ESC keeps). DEL reloads to a first visit: `UNIT-047 · YEAR 2300 …`, RECEIVE TRANSMISSION, no RESUME, no lineage or endings line, and ship 1's tutorial lines.
+
+### Playtest 1, Batch B (B-ORDER)
+
+54. **LEAVE ORBIT first.** After a LANDING REPORT's CONTINUE: `LEAVE ORBIT`, the ship's name, `SALVAGE · TAKE ONE WITH YOU`
+    and three cards (on run 1's first one the LOG READER opens over it). ENTER before a pick buzzes (`TAKE ONE FIRST`);
+    [1]–[3] or a click picks (it can change), ENTER (`TAKE IT ▸`) takes it and the STAR CHART opens. After a lost ship (a
+    crash, BEAM OUT) the screen reads `LEAVING <SHIP>` with the way out under it (`EMERGENCY TRANSMIT · …`); after BEAM OUT
+    the old ship's windows go black first. Taking `+2 CYCLES` shows in TRAINING's bank at once.
+55. **The PACKET only when it asks.** SET COURSE on a hop where everything fits and no delivery rides: the beam goes at once
+    (the light-years count, no ◀ CHART, no TRANSMIT ▸). With a delivery, files over the room, a TIGHT ship that takes no
+    charge, or a squeezed room with a skill that can PACK AS, the PACKET waits as before. It names the salvage taken
+    (`SALVAGE · …`), and a +12 card the room cannot take whole says so there and on the SHIP CARD (`+12 · ONLY 4 FIT ON …`).
+56. **No link.** The SHIP CARD's BEAM row reads `21 LY` (no `LINK n`), the PACKET has the room bar only, and nothing is
+    `LEFT BEHIND` by a link: all your charge crosses, and only the destination's room can squeeze it (`n WON'T FIT`).
+57. **RESUME.** Reload on LEAVE ORBIT: `RESUME · UNIT-047 · SHIP 1 DONE · LEAVING ORBIT · 2300`, and RESUME brings back the
+    same three cards; reload at the desk after taking one: `… AT THE DESK …`, the pick kept. The title no longer says
+    `runs save between ships`.

@@ -740,3 +740,39 @@ renumbers them at CLOSE. "Before → after" is the number the change moved; trac
        `npm run balance:report -- --quick` after Batch B, with B-ORDER's link change, and reads MERGE's price (OD 108)
        and the arrival charge then.
      - To reverse: the card back inside the `max` in both functions (one line each).
+
+## Playtest 1, Batch B (B-ORDER)
+
+145. **LEAVE ORBIT deals against the largest room in reach.** BUILT. With no hop chosen yet (plan §3.3.2), a file card
+     (FIREWALL.sys, FUEL TRIM) is dealt when its file fits the largest room among the ships in reach, less its charge
+     floor and the unit's files (`draft.ts leaveRoom`, `draftContext.fileRoom`). The deliveries no longer count in the deal
+     (they belong to a hop). A file card can therefore be dealt that a TIGHT destination cannot take: the PACKET then asks
+     `LEAVE FILES BEHIND`, and the SHIP CARD's fit line says so beforehand. To reverse: deal against the smallest room in reach (one `>` in `leaveRoom`).
+146. **+2 CYCLES is granted when ENTER takes it, and is dealt into every hop.** BUILT. The plan said "at the pick"; the
+     pick can change until ENTER, so the grant waits for ENTER (`run.ts leaveOrbit`), and the desk it opens already shows
+     it. The old rule "never into a final ship" (slice-4 plan §7 R12) is gone: the cycles are spent at the desk right
+     after, final ship or not. The first-pick top-up (03 §3.1) is applied before the salvage, as LEAVE ORBIT opens, so a
+     +2 CYCLES taken at the run's first desk comes on top of the floor, as it did when it was granted at TRANSMIT ▸.
+147. **A departed resident's skill card is granted at LEAVE ORBIT too.** BUILT. Its skill is granted when ENTER takes it
+     (`draft.ts applyLeftoverPick`, moved from TRANSMIT ▸) and installs at the next boot as before, the way a sleeper's gift
+     granted mid-ship does; the desk after it sees the grant recorded. The deal's `leftoverSkill` reads no pending
+     purchase any more (none exist before the desk).
+148. **The PACKET's questions are exactly four.** BUILT, **[FRAN]**: files plus the floor over the room, the zero-charge
+     confirm, a delivery riding the hop (SEND ON), and a squeezed room with a skill that can PACK AS (`transmit.ts
+     packetAsks`). HOLLOW boarding the beam, `NO RM`, the TRACE line, an infected file and a plain squeeze with no skill to
+     pack are information, not questions: with none of the four, SET COURSE beams at once and those lines are on screen
+     while the files stream out (about 2 seconds), as is the SHIP CARD before it. A direct beam has no ◀ CHART: SET COURSE
+     is the commitment. To reverse one: add its case to `packetAsks`.
+149. **The +12 card's room note is the taken card's.** BUILT. A-LAND's `+12 · ONLY 4 FIT ON HALCYON` (OD 132) was on the
+     card, picked or not; LEAVE ORBIT has no destination yet, so the note moved to the card taken: the PACKET's new SALVAGE
+     line and a SHIP CARD row (`desk.ts cardModel`, key `salvage`). The SHIP CARD's fit line and TRAINING's preview count
+     the taken card's file and charge.
+150. **A v9 save at the desk resumes with no salvage.** BUILT (plan §3.3.3). Its deal was not made in v9 (it came at the
+     PACKET), so that one beam crosses with no card. Only runs saved before Batch B and resumed at a desk are touched.
+151. **BEAM OUT's blackout plays on LEAVE ORBIT.** BUILT. The old ship's windows go black before the first screen after the
+     ship, which is now LEAVE ORBIT (`desk.ts leaveBlackoutSec`); the desk no longer waits for it.
+152. **`runs save between ships` is cut from the title.** BUILT (plan §3.7; A-WORDS left it for this track). The RESUME
+     block says that a run was kept; a first visit's title says nothing about saving.
+153. **The link slope is no longer a lever.** BUILT with OD 131. OD 108's next lever ("the link slope", R3) went with the
+     link. The worked route on seed 7 (`map/arm-parity`'s strip-following kid) now ends won-merge, not won-purge: with all
+     its charge crossing, the unit reaches LAST LIGHT with MERGE's 16. The lead re-reads MERGE's price after Batch B.
