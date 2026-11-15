@@ -176,6 +176,16 @@ const nextTelegraph = () => st(() => {
     d.hollow.seedMoments = Math.max(1, d.hollow.seedMoments);
   });
 });
+// A telegraph lasts SEED_TELEGRAPH_SEC (2 AI s); the steps between its start and the click on it (the chip, the outline's
+// box, the mouse) take longer than that on a loaded machine. Its clock is held at 30 AI s from the moment it is seen, in
+// the same evaluation, and let go (0.3 AI s left) once what it looks like armed has been read.
+const telegraphHeld = (maxMs) => waitFor(() => {
+  const s = window.__ap.store.getState();
+  if (s.hollow.seedTelegraph === null) return false;
+  window.__ap.store.update((d) => { d.hollow.seedTelegraph.leftSec = 30; });
+  return true;
+}, maxMs, 50);
+const telegraphLetGo = () => st(() => window.__ap.store.update((d) => { if (d.hollow.seedTelegraph) d.hollow.seedTelegraph.leftSec = Math.min(d.hollow.seedTelegraph.leftSec, 0.3); }));
 const outline = () => st(() => {
   const marks = [...document.querySelectorAll('.hollow-mark.seed-telegraph')];
   return { n: marks.length, aimable: marks.some((m) => m.classList.contains('aimable')), armed: marks.some((m) => m.classList.contains('armed')) };
@@ -184,7 +194,7 @@ const outline = () => st(() => {
   await st(() => window.__ap.skill('sentry', 2));
   await page.waitForTimeout(300);
   await nextTelegraph();
-  const blinking = await waitFor(() => window.__ap.store.getState().hollow.seedTelegraph !== null, 5000, 50);
+  const blinking = await telegraphHeld(5000);
   await hold('delete');
   await page.waitForTimeout(150);
   const before = await outline();
@@ -197,6 +207,7 @@ const outline = () => st(() => {
   // Read the state before the screenshot: under load the seed can land while the shot is taken.
   const preempted = await st(() => window.__ap.store.getState().hollow.seedTelegraph?.preempted === true);
   await shot('03-preempt-armed');
+  await telegraphLetGo();
   await waitFor(() => window.__ap.store.getState().hollow.seedTelegraph === null, 10000, 50);
   await page.waitForTimeout(400);
   const echo = `> rm seed 0x${addr?.toString(16).toUpperCase().padStart(3, '0')} ... PRE-EMPTED`;
@@ -207,7 +218,7 @@ const outline = () => st(() => {
 
   // Review m8: armed, then SENTRY falls to v1: the outline is no longer drawn armed, and the seed lands as usual.
   await nextTelegraph();
-  await waitFor(() => window.__ap.store.getState().hollow.seedTelegraph !== null, 5000, 50);
+  await telegraphHeld(5000);
   await hold('delete');
   const again = await st(() => window.__ap.preempt());
   await page.waitForTimeout(150);
@@ -218,6 +229,7 @@ const outline = () => st(() => {
   check('…armed again, then SENTRY down to v1: the outline is no longer drawn armed (review m8)', again === null && armedAgain.armed
     && fallen.n > 0 && !fallen.armed && (await st(() => window.__ap.store.getState().hollow.seedTelegraph?.preempted === true)),
     JSON.stringify({ again, armedAgain, fallen }));
+  await telegraphLetGo();
   await drop();
 }
 
