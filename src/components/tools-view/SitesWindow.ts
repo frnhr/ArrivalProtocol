@@ -1,7 +1,9 @@
 // Slice 6: Track SITES owns this file (docs/phase3/impl/slice-6-plan.md §2.14, §6.2): the SITES window (amber, draggable,
 // docked as SITES, shown only on POOR planets): its header (site data, MAPPED %, the rim strip, SURVEY's state and version,
 // [ PAUSE ]), the LZs first and then the free sites, and a click's pill row (`SET AS LZ-B (800)`, or the refusal dimmed;
-// systems/survey-model.ts assignableLzs, survey.ts assignSite). It paints systems/survey-hud.ts sitesWindowModel.
+// systems/survey-model.ts assignableLzs, survey.ts assignSite). Playtest 1, C-SITES (note 18): once the landing pins the LZs,
+// the row ends with `OPEN AS LZ-C (1,200)` (survey.ts openSite), and a dimmed pill still takes a click, which flashes its
+// reason on the strip (`LZ-B HAS PODS DOWN — OPEN SITE 4 AS LZ-C`). It paints systems/survey-hud.ts sitesWindowModel.
 // index.html holds its container (`#sitesWin`, hidden, class survey-only) and its dock item; this module marks the page
 // `body.survey` while a POOR planet is flown (styles/survey.css shows both then), and closes the window (and a phone's tab)
 // when that ends (review M6). It opens itself (SITES_AUTO_OPEN) at the ship's first find, and once at the boot of a POOR
@@ -9,15 +11,15 @@
 // survey layer, the GROUND TRACK: any `[data-site]` that names one, review B1) selects it here.
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
-import { on } from '@systems/events';
+import { on, emit } from '@systems/events';
 import { onGameTick } from '@systems/clock';
 import { play } from '@systems/audio';
-import { sitesWindowModel, type SitesRow, type SitesWindowModel } from '@systems/survey-hud';
+import { sitesWindowModel, openRefusalWords, type SitesRow, type SitesWindowModel } from '@systems/survey-hud';
 import { surveyVersion } from '@state/survey-selectors';
-import { assignSite, toggleSurveyPause } from '@systems/survey';
+import { assignSite, openSite, toggleSurveyPause } from '@systems/survey';
 import { openToolWindow, closeToolWindow } from '@components/tools-view/ToolsTabs';
 import { requireById, make } from '@components/dom';
-import { SITES_TEXT } from '@data/sites-text';
+import { SITES_TEXT, sitesFlashReason } from '@data/sites-text';
 import { SITES_AUTO_OPEN } from '@data/tuning';
 
 // The site the kid clicked (its pills show under it), shared with the NAV PLOT's layer, which marks it. Cleared by a move, a
@@ -84,10 +86,13 @@ export function mountSitesWindow(store: Store<GameState>): () => void {
   function pillsNode(model: SitesWindowModel): HTMLElement {
     const row = make('div', 'sw-pills');
     for (const pill of model.pills) {
-      const button = make('button', `sw-pill${pill.refusal === null ? '' : ' refused'}`, pill.text);
+      const button = make('button', `sw-pill kind-${pill.kind}${pill.refusal === null ? '' : ' refused'}`, pill.text);
       button.tabIndex = -1;
       button.dataset.lz = pill.lz;
-      button.disabled = pill.refusal !== null;
+      button.dataset.kind = pill.kind;
+      // Not `disabled`: a disabled button takes no click, and a refused pill's click says why on the strip.
+      if (pill.refusal !== null) button.setAttribute('aria-disabled', 'true');
+      if (pill.flash !== null) button.dataset.flash = pill.flash;
       row.appendChild(button);
     }
     return row;
@@ -153,9 +158,29 @@ export function mountSitesWindow(store: Store<GameState>): () => void {
     if (pill) {
       event.stopPropagation();
       const lz = pill.dataset.lz;
-      if (pill.disabled || lz === undefined || selected === null) return;
-      if (assignSite(store, lz, selected) === null) selected = null;
-      else play('buzz');
+      if (lz === undefined || selected === null) return;
+      // A refused pill: its reason on the strip (the 'refused' event also buzzes: audio-cues).
+      if (pill.dataset.flash !== undefined) {
+        emit('refused', { reason: sitesFlashReason(pill.dataset.flash) });
+        return;
+      }
+      const siteId = selected;
+      const site = store.getState().landing.survey.sites.find((one) => one.id === siteId);
+      if (site === undefined) return;
+      if (pill.dataset.kind === 'open') {
+        // Refused at the click (no Core thread free for the commit, or the model was a tick old): its words on the strip.
+        const refusal = openSite(store, siteId);
+        if (refusal === null) selected = null;
+        else emit('refused', { reason: sitesFlashReason(SITES_TEXT.flash(openRefusalWords(store.getState(), site, refusal))) });
+      } else {
+        const refusal = assignSite(store, lz, siteId);
+        if (refusal === null) selected = null;
+        else {
+          const fresh = sitesWindowModel(store.getState(), siteId)?.pills.find((one) => one.kind === 'move' && one.lz === lz);
+          emit('refused', { reason: sitesFlashReason(fresh?.flash ?? refusal) });
+        }
+      }
+      lastKey = '';
       paint();
       return;
     }

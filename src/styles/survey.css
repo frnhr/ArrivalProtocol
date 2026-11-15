@@ -93,8 +93,13 @@ button.sw-row:hover { border-color: var(--edge-bright); background: rgba(255, 16
   cursor: pointer;
   white-space: nowrap;
 }
-.sw-pill:hover:not(:disabled) { background: var(--accent); color: var(--bg); }
-.sw-pill.refused { border-color: var(--edge-bright); background: transparent; color: var(--text-dim); cursor: not-allowed; white-space: normal; text-align: left; border-radius: 3px; }
+.sw-pill:hover:not(.refused) { background: var(--accent); color: var(--bg); }
+/* A refused pill is not `disabled`: its click flashes the reason on the strip (playtest 1, C-SITES). */
+.sw-pill.refused { border-color: var(--edge-bright); background: transparent; color: var(--text-dim); cursor: help; white-space: normal; text-align: left; border-radius: 3px; }
+.sw-pill.refused:hover { color: var(--text); border-color: var(--accent-dim); }
+/* OPEN AS LZ-D: the way out when no LZ can move, a step brighter than a move. */
+.sw-pill.kind-open:not(.refused) { border-color: var(--good); color: var(--good); background: rgba(178, 255, 89, 0.10); }
+.sw-pill.kind-open:not(.refused):hover { background: var(--good); color: var(--bg); }
 .sw-empty, .sw-hint { font-size: 9.5px; letter-spacing: 0.1em; color: var(--text-dim); }
 .sw-hint { color: var(--accent-dim); }
 .sw-empty[hidden], .sw-hint[hidden] { display: none; }

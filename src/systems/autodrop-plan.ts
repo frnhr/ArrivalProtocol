@@ -18,7 +18,8 @@ import type { DriverSegment } from '@/types/segment';
 import type { BayState, DropSolution, LandingView, LaunchRecord, LzState, LzWindow, RepairHint } from '@/types/landing';
 import { capabilitiesNow } from '@systems/capabilities';
 import { dropHalfWidthKm } from '@systems/landing-solve';
-import { bestRepairForDrop, dropFactors, isLaunchable, windowsAsOf } from '@systems/landing-rules';
+import { bestRepairForDrop, dropFactors, isLaunchable, lzOpened, windowsAsOf } from '@systems/landing-rules';
+import { groundKnownAt } from '@state/survey-selectors';
 import { launchDrivers } from '@state/selectors';
 import { demoSkill, AUTODROP_DEMO_TUNING } from '@systems/skill-tree';
 import {
@@ -326,7 +327,11 @@ export interface LandingPlan {
   passes: number;
   perLz: Record<string, number>;
   neverFits: { lz: string; repair: RepairHint | null }[];
-  complete: boolean;        // every LZ with room reaches its count
+  complete: boolean;        // every LZ with room reaches its count (with an opened LZ: every pod that fits lands in plan)
+  // The LZs the check line marks short (`✗ LZ-C`, `✗ B, C`): the never-fits and every LZ left under its count. Playtest 1,
+  // C-SITES: with an LZ opened on a found site the counts add up to more than the pods, so an LZ is short only while some pod
+  // that fits is planned for no LZ with room, and an opened LZ (planned 0) never is.
+  short: string[];
   // Slice 4c (Track DROP): pods with a fitting LZ that lie past AUTODROP_PLAN_MAX_PASSES, as whole passes more (the table's
   // `+n PASSES`); 0 when the plan holds them all.
   laterPasses: number;
@@ -336,7 +341,7 @@ export interface LandingPlan {
   outside: number[];
 }
 
-const EMPTY_PLAN: LandingPlan = { rows: [], passes: 0, perLz: {}, neverFits: [], complete: false, laterPasses: 0, outside: [] };
+const EMPTY_PLAN: LandingPlan = { rows: [], passes: 0, perLz: {}, neverFits: [], complete: false, short: [], laterPasses: 0, outside: [] };
 
 interface PlanPod {
   pod: number;
@@ -370,6 +375,11 @@ function planKey(state: Readonly<GameState>, view: Readonly<LandingView>, pods: 
 // • the schedule: the windows in time order, AUTODROP_PLAN_MAX_PASSES deep, each flown with as many of its LZ's pods as fit
 //   its sure part (their own drop widths) and the bay holds then (bayBy, 20 s reloads), centred as v1's volleys are;
 // • the leftovers (pods no count can use) go into a window of a fitting LZ after every count row, at the wrong-split rate.
+// • Playtest 1, C-SITES (plan §3.13): an LZ the kid opened on a found site (landing-rules lzOpened) was planned to take none
+//   and has its site's ROOM. Once one stands, the LZs are served in three tiers: CONTROL's LZs on ground not known bad, then
+//   the opened ones, then every LZ on ground known ROCKY or WET (each tier by the narrowest-first rule). So the pods CONTROL's
+//   sound LZs still want go there, the pods a bad or never-fitting LZ would have taken go to the opened one, and nothing goes
+//   mislanded while an opened LZ has room.
 export function planLanding(state: Readonly<GameState>, view: Readonly<LandingView>): LandingPlan {
   const cadenceTac = view.bay.cadenceTac;
   const sol = view.solution;
@@ -425,7 +435,15 @@ function computePlan(
   }
   const byHealth = [...pods].sort((a, b) => a.widthFactor - b.widthFactor || a.order - b.order);
   const neverFits: LandingPlan['neverFits'] = [];
-  const order = [...need.keys()].sort((a, b) => (lzOf.get(a)!.widthKm - lzOf.get(b)!.widthKm) || a.localeCompare(b));
+  const opened = new Set(state.landing.lzs.filter((lz) => lzOpened(state.landing, lz.label)).map((lz) => lz.label));
+  // C-SITES' tiers (the header); 0 for every LZ while none is opened, so the order is the narrowest-first one as before.
+  const tier = (label: string): number => {
+    if (opened.size === 0) return 0;
+    const lz = lzOf.get(label)!;
+    if (lz.ground !== 'flat' && groundKnownAt(state.landing, label)) return 2;
+    return opened.has(label) ? 1 : 0;
+  };
+  const order = [...need.keys()].sort((a, b) => tier(a) - tier(b) || (lzOf.get(a)!.widthKm - lzOf.get(b)!.widthKm) || a.localeCompare(b));
   let pool = [...byHealth];
   const assigned = new Map<string, PlanPod[]>();
   let narrowestServed = false;
@@ -492,11 +510,22 @@ function computePlan(
   rows.sort((a, b) => a.atTSec - b.atTSec);
   // Whole passes more for what lies past the table (at least one per BAY_SLOTS pods left that fit).
   const laterPasses = unscheduled > 0 ? Math.ceil(unscheduled / BAY_SLOTS) : 0;
-  const complete = neverFits.length === 0 && [...need].every(([lz, n]) => (perLz[lz] ?? 0) >= n);
+  let complete = neverFits.length === 0 && [...need].every(([lz, n]) => (perLz[lz] ?? 0) >= n);
+  let short = [...new Set([...neverFits.map((never) => never.lz), ...[...need].filter(([lz, n]) => (perLz[lz] ?? 0) < n).map(([lz]) => lz)])].sort();
+  if (opened.size > 0) {
+    // C-SITES: the counts add up to more than the pods. Complete when every pod that fits some LZ is in a count row (not a
+    // leftover's, not past the table), as many as the LZs have room for.
+    const fitting = byHealth.filter((pod) => [...need.keys()].some((lz) => fits(pod, lz))).length;
+    const demand = Math.min(fitting, [...need.values()].reduce((sum, n) => sum + n, 0));
+    const covered = rows.filter((row) => row.mislanded === 0).reduce((sum, row) => sum + row.n, 0);
+    complete = demand > 0 && covered >= demand;
+    short = complete ? [] : short.filter((lz) => !opened.has(lz));
+    if (complete) neverFits.length = 0;
+  }
   const held = new Set([...rows.flatMap((row) => row.pods), ...[...assigned.values()].flatMap((list) => list.map((pod) => pod.pod))]);
   const outside = byHealth.filter((pod) => !held.has(pod.pod)).map((pod) => pod.pod);
   return {
-    rows, passes: rows.reduce((most, row) => Math.max(most, row.pass), 0), perLz, neverFits, complete, laterPasses, outside,
+    rows, passes: rows.reduce((most, row) => Math.max(most, row.pass), 0), perLz, neverFits, complete, short, laterPasses, outside,
   };
 }
 

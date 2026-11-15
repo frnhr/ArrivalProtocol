@@ -16,6 +16,8 @@ import { HARD_WORDS_POOL } from '@data/souls';
 import { COLONISTS_PER_POD, STAR_CHARGE_BONUS } from '@data/tuning';
 import { residentReportRows, type ResidentReportRow } from '@systems/resident-hud';
 import { surveyLzRowSuffix } from '@systems/survey-hud';
+import { SITES_TEXT } from '@data/sites-text';
+import { formatCount } from '@data/format';
 import { reportEndingLine } from '@systems/ending-rules';
 import { restoredCreditTag, restoredReportRow } from '@systems/last-landing-hud';
 
@@ -118,10 +120,13 @@ function reportRows(tally: LandingTally, locked: ReadonlyMap<number, ResidentRep
     const mislanded = tally.pods.filter((pod) => pod.fate === 'down' && pod.lz === row.lz && pod.place === 'mislanded');
     const slots = Math.round(row.count / COLONISTS_PER_POD);
     const icons: PodIcon[] = [...inLz.map(podIcon), ...Array.from({ length: Math.max(0, slots - inLz.length) }, (): PodIcon => 'empty'), ...mislanded.map(podIcon)];
-    const line = LANDING_REPORT_TEXT.lzRow(row.lz, row.landed, row.count) + lzSuffix(row.lz);
-    rows.push({
-      kind: 'lz', label: row.lz, text: line.slice(row.lz.length + 1), icons, tone: row.landed >= row.count ? 'good' : 'short', line, why: null,
-    });
+    // Playtest 1, C-SITES: an LZ opened on a found site counts 0 (landing-rules lzPlannedPods): its row says what landed there
+    // with no `/ count` and no SHORT (` · OPENED ON SITE 4` is its survey tail), good once anyone did.
+    const opened = row.count === 0;
+    const base = opened ? SITES_TEXT.report.openedRow(row.lz, formatCount(row.landed)) : LANDING_REPORT_TEXT.lzRow(row.lz, row.landed, row.count);
+    const line = base + lzSuffix(row.lz);
+    const tone: ReportRow['tone'] = opened ? (row.landed > 0 ? 'good' : 'muted') : row.landed >= row.count ? 'good' : 'short';
+    rows.push({ kind: 'lz', label: row.lz, text: line.slice(row.lz.length + 1), icons, tone, line, why: null });
   }
   const offSite = tally.pods.filter((pod) => pod.fate === 'down' && pod.place === 'off-site');
   if (tally.offSite > 0) {
